@@ -130,6 +130,8 @@ type Syncer struct {
 	ddlDB     *conn.BaseDB
 	ddlDBConn *DBConn
 
+	interleavingDB []*interleavingDB
+
 	jobs               []chan *job
 	jobsClosed         atomic.Bool
 	jobsChanLock       sync.Mutex
@@ -199,6 +201,150 @@ type Syncer struct {
 	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster atomic.Int64             // current task delay second behind upstream
 	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:queueBucketName val: lag
+}
+
+type affectedAndErr struct {
+	affected int
+	err      error
+}
+
+type interleavingDB struct {
+	db *DBConn
+	// protects sqlsX, argsX, ctxX
+	mu sync.Mutex
+
+	// will put zero length sql?
+	sqlsA []string
+	argsA [][]interface{}
+	ctxA  *tcontext.Context
+	sqlsB []string
+	argsB [][]interface{}
+	ctxB  *tcontext.Context
+
+	lastIsA bool
+
+	in      chan struct{}
+	resultA chan affectedAndErr
+	resultB chan affectedAndErr
+	quit    chan struct{}
+}
+
+func newInterleavingDB(db *DBConn) *interleavingDB {
+	ret := &interleavingDB{
+		db:      db,
+		in:      make(chan struct{}, 2),
+		resultA: make(chan affectedAndErr),
+		resultB: make(chan affectedAndErr),
+		quit:    make(chan struct{}),
+	}
+	go ret.run()
+	return ret
+}
+
+func (i *interleavingDB) run() {
+	for {
+		select {
+		case <-i.quit:
+			return
+		// when receive one struct from i.in, one of (i.sqlA, i.sqlB) is set already
+		case <-i.in:
+			var (
+				useA bool
+				sql  []string
+				args [][]interface{}
+				ctx  *tcontext.Context
+			)
+			i.mu.Lock()
+			log.L().Debug("interleavingDB info",
+				zap.Bool("i.lastIsA", i.lastIsA),
+				zap.Strings("sqlsA", i.sqlsA),
+				zap.Strings("sqlsB", i.sqlsB))
+			switch {
+			case len(i.sqlsA) != 0 && len(i.sqlsB) != 0:
+				if i.lastIsA {
+					useA = false
+					sql = i.sqlsB
+					args = i.argsB
+					ctx = i.ctxB
+				} else {
+					useA = true
+					sql = i.sqlsA
+					args = i.argsA
+					ctx = i.ctxA
+				}
+			case len(i.sqlsA) != 0:
+				useA = true
+				sql = i.sqlsA
+				args = i.argsA
+				ctx = i.ctxA
+			case len(i.sqlsB) != 0:
+				useA = false
+				sql = i.sqlsB
+				args = i.argsB
+				ctx = i.ctxB
+			default:
+				log.L().DPanic("should not hanppened",
+					zap.Any("i.sqlsA", i.sqlsA),
+					zap.Any("i.sqlsB", i.sqlsB))
+			}
+			i.mu.Unlock()
+
+			affected, err := i.db.executeSQL(ctx, sql, args...)
+
+			result := affectedAndErr{
+				affected: affected,
+				err:      err,
+			}
+			if useA {
+				i.lastIsA = true
+				i.sqlsA = nil
+				i.resultA <- result
+			} else {
+				i.lastIsA = false
+				i.sqlsB = nil
+				i.resultB <- result
+			}
+		}
+	}
+}
+
+// must be called when all executeSQL are finished.
+func (i *interleavingDB) close() {
+	i.quit <- struct{}{}
+}
+
+func (i *interleavingDB) executeSQL(tctx *tcontext.Context, useA bool, queries []string, args ...[]interface{}) (int, error) {
+	if len(queries) == 0 {
+		return 0, nil
+	}
+
+	i.mu.Lock()
+	if useA {
+		i.sqlsA = queries
+		i.argsA = args
+		i.ctxA = tctx
+	} else {
+		i.sqlsB = queries
+		i.argsB = args
+		i.ctxB = tctx
+	}
+	i.mu.Unlock()
+
+	log.L().Debug("interleavingDB will send i.in", zap.Bool("useA", useA), zap.Any("args", args))
+
+	i.in <- struct{}{}
+
+	// waiting response from i.run
+	var ret affectedAndErr
+	if useA {
+		ret = <-i.resultA
+	} else {
+		ret = <-i.resultB
+	}
+
+	log.L().Debug("interleavingDB received i.result", zap.Bool("useA", useA), zap.Any("args", args))
+
+	return ret.affected, ret.err
 }
 
 // NewSyncer creates a new Syncer.
@@ -458,7 +604,16 @@ func (s *Syncer) reset() {
 		s.streamerController.Close(s.tctx)
 	}
 	// create new job chans
-	s.newJobChans(s.cfg.WorkerCount + 1)
+	s.newJobChans(s.cfg.WorkerCount*2 + 1)
+
+	// bypass test panic
+	for _, db := range s.interleavingDB {
+		db.close()
+	}
+	s.interleavingDB = make([]*interleavingDB, len(s.toDBConns))
+	for i := range s.toDBConns {
+		s.interleavingDB[i] = newInterleavingDB(s.toDBConns[i])
+	}
 
 	s.execError.Store(nil)
 	s.setErrLocation(nil, nil, false)
@@ -1127,7 +1282,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 }
 
 // DML synced in batch by one worker.
-func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
+func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *interleavingDB, jobChan chan *job, i int) {
 	defer s.wg.Done()
 
 	idx := 0
@@ -1137,7 +1292,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 	// clearF is used to reset job queue.
 	clearF := func() {
-		for i := 0; i < idx; i++ {
+		for i2 := 0; i2 < idx; i2++ {
 			s.jobWg.Done()
 		}
 		idx = 0
@@ -1204,7 +1359,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			t := v.(int)
 			time.Sleep(time.Duration(t) * time.Second)
 		})
-		return db.executeSQL(tctx, queries, args...)
+		return db.executeSQL(tctx, i%2 == 0, queries, args...)
 	}
 
 	var err error
@@ -1370,7 +1525,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 
 	s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)
-	for i := 0; i < s.cfg.WorkerCount; i++ {
+	for i := 0; i < s.cfg.WorkerCount*2; i++ {
 		s.wg.Add(1)
 		name := queueBucketName(i)
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
@@ -1378,7 +1533,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		go func(i int, name string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
-			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i])
+			s.syncDML(ctctx, name, s.interleavingDB[i/2], s.jobs[i], i)
 			cancel()
 		}(i, name)
 	}
@@ -2742,6 +2897,10 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 		closeUpstreamConn(s.tctx, s.fromDB) // release resources acquired before return with error
 		return err
 	}
+	s.interleavingDB = make([]*interleavingDB, len(s.toDBConns))
+	for i := range s.toDBConns {
+		s.interleavingDB[i] = newInterleavingDB(s.toDBConns[i])
+	}
 	// baseConn for ddl
 	dbCfg = s.cfg.To
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDDLConnectionTimeout)
@@ -2762,6 +2921,9 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 
 // closeBaseDB closes all opened DBs, rollback for createConns.
 func (s *Syncer) closeDBs() {
+	for _, db := range s.interleavingDB {
+		db.close()
+	}
 	closeUpstreamConn(s.tctx, s.fromDB)
 	closeBaseDB(s.tctx, s.toDB)
 	closeBaseDB(s.tctx, s.ddlDB)
