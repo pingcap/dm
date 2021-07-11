@@ -53,5 +53,5 @@ loaders:
 
 syncers:
   global:
-    worker-count: 16
+    worker-count: 1
     batch: 100

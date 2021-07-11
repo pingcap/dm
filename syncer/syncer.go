@@ -568,8 +568,10 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		// cancel goroutines created in s.Run
 		cancel()
 	}
-	s.closeJobChans()   // Run returned, all jobs sent, we can close s.jobs
-	s.wg.Wait()         // wait for sync goroutine to return
+	s.closeJobChans() // Run returned, all jobs sent, we can close s.jobs
+	log.L().Info("begin to wait ")
+	s.wg.Wait() // wait for sync goroutine to return
+	log.L().Info("end to wait ")
 	close(runFatalChan) // Run returned, all potential fatal sent to s.runFatalChan
 	wg.Wait()           // wait for receive all fatal from s.runFatalChan
 
@@ -1049,6 +1051,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	for {
 		ddlJob, ok := <-ddlJobChan
 		if !ok {
+			s.tctx.L().Info("close syncDDL")
 			return
 		}
 
@@ -1142,7 +1145,14 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 // DML synced in batch by one worker.
 func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
-	defer s.wg.Done()
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(tctx.Ctx)
+	defer func() {
+		cancel()
+		wg.Wait()
+		s.wg.Done()
+		s.tctx.L().Info("exit syncDML")
+	}()
 
 	idx := 0
 	count := s.cfg.Batch
@@ -1198,7 +1208,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		})
 
 		select {
-		case <-tctx.Ctx.Done():
+		case <-ctx.Done():
 			// do not execute queries anymore, because they should be failed with a done context.
 			// and avoid some errors like:
 			//  - `driver: bad connection` for `BEGIN`
@@ -1223,44 +1233,67 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 	var err error
 	var affect int
-	ticker := time.NewTicker(waitTime)
-	defer ticker.Stop()
+
+	compatorCh := make(chan *job, 1)
+	compactor := NewCompactor(s.cfg.Batch, 10*s.cfg.Batch, compatorCh)
+
+	wg.Add(1)
+	go func() {
+		compactor.run(ctx)
+		wg.Done()
+		s.tctx.L().Info("exit compactor")
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				s.tctx.L().Info("exit sql worker")
+				return
+			default:
+				jobs = compactor.getJobs()
+				if len(jobs) == 0 {
+					time.Sleep(waitTime)
+					failpoint.Inject("waitingJob", func() {
+						tctx.L().Info("waiting job")
+					})
+					continue
+				}
+
+				idx = len(jobs)
+				s.tctx.L().Info("get jobs", zap.Int("idx", idx), zap.String("sql", jobs[0].sql))
+
+				if len(jobs) == 1 && jobs[0].tp == flush {
+					jobs = []*job{}
+				}
+
+				for _, sqlJob := range jobs {
+					tpCnt[sqlJob.tp]++
+				}
+
+				affect, err = executeSQLs()
+				if err != nil {
+					fatalF(affect, err)
+					continue
+				}
+				successF()
+				clearF()
+			}
+		}
+	}()
+
 	for {
 		select {
+		case <-tctx.Ctx.Done():
+			return
 		case sqlJob, ok := <-jobChan:
-			queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
 			if !ok {
 				return
 			}
-			idx++
-
-			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
-				jobs = append(jobs, sqlJob)
-				tpCnt[sqlJob.tp]++
-			}
-
-			if idx >= count || sqlJob.tp == flush {
-				affect, err = executeSQLs()
-				if err != nil {
-					fatalF(affect, err)
-					continue
-				}
-				successF()
-				clearF()
-			}
-		case <-ticker.C:
-			if len(jobs) > 0 {
-				failpoint.Inject("syncDMLTicker", func() {
-					tctx.L().Info("job queue not full, executeSQLs by ticker")
-				})
-				affect, err = executeSQLs()
-				if err != nil {
-					fatalF(affect, err)
-					continue
-				}
-				successF()
-				clearF()
-			}
+			queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
+			compactor.in <- sqlJob
 		}
 	}
 }
@@ -1884,6 +1917,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		keys    [][]string
 		args    [][]interface{}
 		jobType opType
+		dmlTps  []dmlType
 	)
 
 	param := &genDMLParam{
@@ -1903,7 +1937,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode.Enable()
-		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
+		sqls, keys, args, dmlTps, err = s.genInsertSQLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
@@ -1917,7 +1951,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode.Enable()
-		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
+		sqls, keys, args, dmlTps, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
@@ -1930,7 +1964,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err2
 		}
 
-		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
+		sqls, keys, args, dmlTps, err = s.genDeleteSQLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
@@ -1952,7 +1986,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if keys != nil {
 			key = keys[i]
 		}
-		err = s.commitJob(jobType, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, &ec)
+		err = s.commitJob(jobType, dmlTps[i], originSchema, originTable, schemaName, tableName, sqls[i], arg, key, &ec)
 		if err != nil {
 			return err
 		}
@@ -2500,7 +2534,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	return nil
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, ec *eventContext) error {
+func (s *Syncer) commitJob(tp opType, dmlTp dmlType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, ec *eventContext) error {
 	startTime := time.Now()
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
@@ -2509,7 +2543,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 	conflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 
-	job := newDMLJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
+	job := newDMLJob(tp, dmlTp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header, keys)
 	return s.addJobFunc(job)
 }
 
@@ -2861,10 +2895,12 @@ func (s *Syncer) Close() {
 // stopSync stops syncing, now it used by Close and Pause
 // maybe we can refine the workflow more clear.
 func (s *Syncer) stopSync() {
+	log.L().Info("begin to stop sync")
 	if s.done != nil {
 		<-s.done // wait Run to return
 	}
 	s.closeJobChans()
+	log.L().Info("close all job")
 	s.wg.Wait() // wait job workers to return
 
 	// before re-write workflow for s.syncer, simply close it

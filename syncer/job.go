@@ -59,7 +59,8 @@ func (t opType) String() string {
 }
 
 type job struct {
-	tp opType
+	tp    opType
+	dmlTp dmlType
 	// ddl in ShardOptimistic and ShardPessimistic will only affect one table at one time but for normal node
 	// we don't have this limit. So we should update multi tables in normal mode.
 	// sql example: drop table `s1`.`t1`, `s2`.`t2`.
@@ -74,7 +75,8 @@ type job struct {
 	startLocation   binlog.Location // start location of the sql in binlog, for handle_error
 	currentLocation binlog.Location // end location of the sql in binlog, for user to skip sql manually by changing checkpoint
 	ddls            []string
-	originSQL       string // show origin sql when error, only DDL now
+	originSQL       string   // show origin sql when error, only DDL now
+	keys            []string // use for compaction
 
 	eventHeader *replication.EventHeader
 }
@@ -84,10 +86,11 @@ func (j *job) String() string {
 	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.startLocation, j.currentLocation)
 }
 
-func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{},
-	key string, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader) *job {
+func newDMLJob(tp opType, dmlTp dmlType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{},
+	key string, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader, keys []string) *job {
 	return &job{
 		tp:           tp,
+		dmlTp:        dmlTp,
 		sourceTbl:    map[string][]string{sourceSchema: {sourceTable}},
 		targetSchema: targetSchema,
 		targetTable:  targetTable,
@@ -100,6 +103,7 @@ func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, 
 		startLocation:   startLocation,
 		currentLocation: cmdLocation,
 		eventHeader:     eventHeader,
+		keys:            keys,
 	}
 }
 
