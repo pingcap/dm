@@ -22,6 +22,7 @@ import (
 	"path"
 	"path/filepath"
 	"sync"
+	"testing"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -34,6 +35,10 @@ import (
 var _ = Suite(&testFileSuite{})
 
 type testFileSuite struct{}
+
+func TestFileSuite(t *testing.T) {
+	TestingT(t)
+}
 
 func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 	var (
@@ -295,7 +300,7 @@ func (t *testFileSuite) TestFileSizeUpdated(c *C) {
 	c.Assert(cmp, Equals, 1)
 }
 
-func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
+func (t *testFileSuite) TestRelaySubDirUpdated(c *C) {
 	var (
 		relayFiles = []string{
 			"mysql-bin.000001",
@@ -333,7 +338,7 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	c.Assert(len(errCh), Equals, 1)
 	c.Assert(len(updatePathCh), Equals, 0)
 	err = <-errCh
-	c.Assert(err, ErrorMatches, ".*not found.*")
+	c.Assert(err, ErrorMatches, ".*no such file or directory*")
 
 	// create the first relay file
 	err = ioutil.WriteFile(relayPaths[0], nil, 0o600)
@@ -422,20 +427,6 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	err = ioutil.WriteFile(relayPaths[2], data, 0o600)
 	c.Assert(err, IsNil)
 	wg.Wait()
-
-	// 6.
-	// directory created will be ignored
-	// invalid binlog name will be ignored
-	// rename file will be ignore
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[2], relayFiles[2], size, updatePathCh, errCh)
-		c.Assert(len(errCh), Equals, 0)
-		c.Assert(len(updatePathCh), Equals, 1)
-		up := <-updatePathCh
-		c.Assert(up, Equals, relayPaths[2])
-	}()
 
 	// wait watcher started, create new directory
 	time.Sleep(2 * watcherInterval)

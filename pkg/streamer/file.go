@@ -213,6 +213,7 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 			cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
 			switch {
 			case err != nil:
+				errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize= %d", latestFilePath, latestFileSize)
 				return
 			case cmp < 0:
 				errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
