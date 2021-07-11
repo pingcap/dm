@@ -1231,11 +1231,11 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	var affect int
 
 	compatorCh := make(chan *job, 1)
-	compactor := NewCompactor(s.cfg.Batch, 10*s.cfg.Batch, compatorCh)
+	compactor := NewCompactor(ctx, s.cfg.Batch, 10*s.cfg.Batch, compatorCh, queueBucket)
 
 	wg.Add(1)
 	go func() {
-		compactor.run(ctx)
+		compactor.run()
 		wg.Done()
 	}()
 
@@ -1247,7 +1247,10 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			case <-ctx.Done():
 				return
 			default:
-				compactorResult := compactor.getResult()
+				compactorResult, ok := compactor.getResult()
+				if !ok {
+					return
+				}
 				queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(compactorResult.remainQueueSize + len(jobChan)))
 				if len(compactorResult.dmlJobs) == 0 {
 					time.Sleep(waitTime)

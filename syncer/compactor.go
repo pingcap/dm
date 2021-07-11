@@ -16,8 +16,6 @@ package syncer
 import (
 	"context"
 	"strings"
-
-	"github.com/pingcap/dm/pkg/log"
 )
 
 type dmlType int
@@ -66,6 +64,7 @@ func NewCompactorResult(dmlJobs []*job, compactSize int, remainQueueSize int) Co
 
 // Compactor compact multiple statements into one statement.
 type Compactor struct {
+	ctx           context.Context
 	compactorJobs []*CompactorJob
 	keyMap        map[string]int
 	batchSize     int
@@ -73,11 +72,13 @@ type Compactor struct {
 	in            chan *job
 	drainNotify   chan struct{}
 	out           chan CompactorResult
+	queueBucket   string
 }
 
 // NewCompactor creates a new Compactor.
-func NewCompactor(batchSize int, bufferSize int, in chan *job) *Compactor {
+func NewCompactor(ctx context.Context, batchSize, bufferSize int, in chan *job, queueBucket string) *Compactor {
 	return &Compactor{
+		ctx:           ctx,
 		batchSize:     batchSize,
 		bufferSize:    bufferSize,
 		compactorJobs: make([]*CompactorJob, 0, bufferSize),
@@ -85,6 +86,7 @@ func NewCompactor(batchSize int, bufferSize int, in chan *job) *Compactor {
 		in:            in,
 		out:           make(chan CompactorResult, 1),
 		drainNotify:   make(chan struct{}),
+		queueBucket:   queueBucket,
 	}
 }
 
@@ -119,11 +121,13 @@ func (c *Compactor) compact(compactorJob *CompactorJob) {
 	c.keyMap[compactorJob.newKey] = curPos
 }
 
-func (c *Compactor) run(ctx context.Context) {
+func (c *Compactor) run() {
+	defer func() {
+		c.close()
+	}()
 	for {
 		select {
-		case <-ctx.Done():
-			log.L().Info("ctx done in run")
+		case <-c.ctx.Done():
 			return
 		case sqlJob, ok := <-c.in:
 			if !ok {
@@ -151,11 +155,17 @@ func (c *Compactor) run(ctx context.Context) {
 	}
 }
 
-func (c *Compactor) getResult() CompactorResult {
+func (c *Compactor) close() {
+	close(c.out)
+	close(c.drainNotify)
+}
+
+func (c *Compactor) getResult() (CompactorResult, bool) {
 	if len(c.out) == 0 {
 		c.drainNotify <- struct{}{}
 	}
-	return <-c.out
+	result, ok := <-c.out
+	return result, ok
 }
 
 func (c *Compactor) sendJob() {
