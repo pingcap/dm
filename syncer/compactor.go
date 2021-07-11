@@ -48,6 +48,22 @@ func NewCompactorJob(dmlJob *job) *CompactorJob {
 	}
 }
 
+// CompactorResult represents compactor result in a batch.
+type CompactorResult struct {
+	dmlJobs         []*job
+	compactSize     int
+	remainQueueSize int
+}
+
+// NewCompactorResult creates a CompactorResult.
+func NewCompactorResult(dmlJobs []*job, compactSize int, remainQueueSize int) CompactorResult {
+	return CompactorResult{
+		dmlJobs:         dmlJobs,
+		compactSize:     compactSize,
+		remainQueueSize: remainQueueSize,
+	}
+}
+
 // Compactor compact multiple statements into one statement.
 type Compactor struct {
 	compactorJobs []*CompactorJob
@@ -56,7 +72,7 @@ type Compactor struct {
 	bufferSize    int
 	in            chan *job
 	drainNotify   chan struct{}
-	out           chan []*job
+	out           chan CompactorResult
 }
 
 // NewCompactor creates a new Compactor.
@@ -67,7 +83,7 @@ func NewCompactor(batchSize int, bufferSize int, in chan *job) *Compactor {
 		compactorJobs: make([]*CompactorJob, 0, bufferSize),
 		keyMap:        make(map[string]int, bufferSize),
 		in:            in,
-		out:           make(chan []*job, 1),
+		out:           make(chan CompactorResult, 1),
 		drainNotify:   make(chan struct{}),
 	}
 }
@@ -135,7 +151,7 @@ func (c *Compactor) run(ctx context.Context) {
 	}
 }
 
-func (c *Compactor) getJobs() []*job {
+func (c *Compactor) getResult() CompactorResult {
 	if len(c.out) == 0 {
 		c.drainNotify <- struct{}{}
 	}
@@ -164,11 +180,11 @@ func (c *Compactor) sendJob() {
 		}
 	}
 
-	c.out <- jobs
+	c.out <- NewCompactorResult(jobs, idx, len(c.compactorJobs))
 }
 
 func (c *Compactor) sendFlushJob(flushJob *job) {
-	c.out <- []*job{flushJob}
+	c.out <- CompactorResult{[]*job{flushJob}, 1, 0}
 }
 
 func extractKeys(dmlTp dmlType, keys []string) (string, string) {

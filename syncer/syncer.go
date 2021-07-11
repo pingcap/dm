@@ -861,6 +861,7 @@ func (s *Syncer) addJob(job *job) error {
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		// ugly code addJob and sync, refine it later
+		log.L().Info("add workercount", zap.Int("count", s.cfg.WorkerCount))
 		s.jobWg.Add(s.cfg.WorkerCount)
 		for i := 0; i < s.cfg.WorkerCount; i++ {
 			startTime := time.Now()
@@ -874,12 +875,14 @@ func (s *Syncer) addJob(job *job) error {
 	case ddl:
 		s.jobWg.Wait()
 		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
+		log.L().Info("add workercount ddl")
 		s.jobWg.Add(1)
 		queueBucket = s.cfg.WorkerCount
 		startTime := time.Now()
 		s.jobs[queueBucket] <- job
 		addJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	case insert, update, del:
+		log.L().Info("add workercount dml")
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
 		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
@@ -1096,6 +1099,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = s.handleEventError(err, ddlJob.startLocation, ddlJob.currentLocation, true, ddlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
+			log.L().Info("del workercount ddl")
 			s.jobWg.Done()
 			continue
 		}
@@ -1134,9 +1138,11 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = s.handleEventError(err, ddlJob.startLocation, ddlJob.currentLocation, true, ddlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
+			log.L().Info("del workercount ddl")
 			s.jobWg.Done()
 			continue
 		}
+		log.L().Info("del workercount ddl")
 		s.jobWg.Done()
 		s.updateReplicationLag(ddlJob, ddlLagKey)
 		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)))
@@ -1146,7 +1152,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 // DML synced in batch by one worker.
 func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
 	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(tctx.Ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
 		cancel()
 		wg.Wait()
@@ -1162,6 +1168,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	// clearF is used to reset job queue.
 	clearF := func() {
 		for i := 0; i < idx; i++ {
+			log.L().Info("del workercount dml")
 			s.jobWg.Done()
 		}
 		idx = 0
@@ -1253,8 +1260,8 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				s.tctx.L().Info("exit sql worker")
 				return
 			default:
-				jobs = compactor.getJobs()
-				if len(jobs) == 0 {
+				compactorResult := compactor.getResult()
+				if len(compactorResult.dmlJobs) == 0 {
 					time.Sleep(waitTime)
 					failpoint.Inject("waitingJob", func() {
 						tctx.L().Info("waiting job")
@@ -1262,15 +1269,17 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 					continue
 				}
 
-				idx = len(jobs)
-				s.tctx.L().Info("get jobs", zap.Int("idx", idx), zap.String("sql", jobs[0].sql))
+				idx = compactorResult.compactSize
 
-				if len(jobs) == 1 && jobs[0].tp == flush {
+				if len(compactorResult.dmlJobs) == 1 && compactorResult.dmlJobs[0].tp == flush {
 					jobs = []*job{}
+				} else {
+					jobs = compactorResult.dmlJobs
 				}
 
 				for _, sqlJob := range jobs {
 					tpCnt[sqlJob.tp]++
+					s.tctx.L().Info("get compactor job", zap.String("sql", sqlJob.sql), zap.String("value", sqlJob.sql))
 				}
 
 				affect, err = executeSQLs()
@@ -1284,17 +1293,10 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		}
 	}()
 
-	for {
-		select {
-		case <-tctx.Ctx.Done():
-			return
-		case sqlJob, ok := <-jobChan:
-			if !ok {
-				return
-			}
-			queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
-			compactor.in <- sqlJob
-		}
+	for sqlJob := range jobChan {
+		queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
+		log.L().Info("sending job", zap.String("sql", sqlJob.sql), zap.Any("vals", sqlJob.args))
+		compactor.in <- sqlJob
 	}
 }
 
@@ -1456,7 +1458,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
 
+		s.tctx.L().Info("begin with job")
 		s.jobWg.Wait()
+		s.tctx.L().Info("begin flush checkpoint job")
 		if err2 := s.flushCheckPoints(); err2 != nil {
 			tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
 		}
