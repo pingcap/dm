@@ -161,6 +161,10 @@ type Syncer struct {
 	totalTps  atomic.Int64
 	tps       atomic.Int64
 
+	filteredInsert atomic.Int64
+	filteredUpdate atomic.Int64
+	filteredDelete atomic.Int64
+
 	done chan struct{}
 
 	checkpoint CheckPoint
@@ -1010,6 +1014,16 @@ func (s *Syncer) flushCheckPoints() error {
 	if err != nil {
 		return err
 	}
+
+	s.tctx.L().Info("after last flushing checkpoint, DM has ignored row changes by expression filter",
+		zap.Int64("number of filtered insert", s.filteredInsert.Load()),
+		zap.Int64("number of filtered update", s.filteredUpdate.Load()),
+		zap.Int64("number of filtered delete", s.filteredDelete.Load()))
+
+	s.filteredInsert.Store(0)
+	s.filteredUpdate.Store(0)
+	s.filteredDelete.Store(0)
+
 	return nil
 }
 
@@ -1869,7 +1883,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode.Enable()
-		sqls, keys, args, err = genInsertSQLs(param, exprFilter)
+		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
@@ -1883,7 +1897,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode.Enable()
-		sqls, keys, args, err = genUpdateSQLs(param, oldExprFilter, newExprFilter)
+		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
@@ -1896,7 +1910,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err2
 		}
 
-		sqls, keys, args, err = genDeleteSQLs(param, exprFilter)
+		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
