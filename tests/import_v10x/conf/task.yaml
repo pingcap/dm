@@ -90,6 +90,7 @@ syncers:
     batch: 100
     queue-size: 1024
     checkpoint-flush-interval: 30
+    safe-mode-duration: 0
     max-retry: 0
     auto-fix-gtid: false
     enable-gtid: false
@@ -102,6 +103,7 @@ syncers:
     batch: 100
     queue-size: 1024
     checkpoint-flush-interval: 30
+    safe-mode-duration: 0
     max-retry: 0
     auto-fix-gtid: false
     enable-gtid: true
