@@ -21,7 +21,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/pingcap/tidb-tools/pkg/watcher"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
@@ -200,127 +199,48 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 }
 
 // relaySubDirUpdated checks whether the relay sub directory updated
-// including file changed, created, removed, etc.
+// including file changed, created.
 func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir string,
 	latestFilePath, latestFile string, latestFileSize int64, updatePathCh chan string, errCh chan error) {
-	var err error
-	defer func() {
-		if err != nil {
-			errCh <- err
-		}
-	}()
+	// watch current relay log file size and newer relay log  create event to check whether need to reparse or parse next file
+	ticker := time.NewTicker(watcherInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			if err := ctx.Err(); err != nil {
+				errCh <- err
+			}
+			return
+		case <-ticker.C:
 
-	// create polling watcher
-	watcher2 := watcher.NewWatcher()
-
-	// Add before Start
-	// no need to Remove, it will be closed and release when return
-	err = watcher2.Add(dir)
-	if err != nil {
-		err = terror.ErrAddWatchForRelayLogDir.Delegate(err, dir)
-		return
-	}
-
-	err = watcher2.Start(watcherInterval)
-	if err != nil {
-		err = terror.ErrWatcherStart.Delegate(err, dir)
-		return
-	}
-	defer watcher2.Close()
-
-	type watchResult struct {
-		updatePath string
-		err        error
-	}
-
-	result := make(chan watchResult, 1) // buffered chan to ensure not block the sender even return in the halfway
-	newCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go func() {
-		for {
-			select {
-			case <-newCtx.Done():
-				result <- watchResult{
-					updatePath: "",
-					err:        newCtx.Err(),
-				}
+			// check the latest relay log file whether updated when adding watching and collecting newer
+			cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
+			switch {
+			case err != nil:
 				return
-			case err2, ok := <-watcher2.Errors:
-				if !ok {
-					result <- watchResult{
-						updatePath: "",
-						err:        terror.ErrWatcherChanClosed.Generate("errors", dir),
-					}
-				} else {
-					result <- watchResult{
-						updatePath: "",
-						err:        terror.ErrWatcherChanRecvError.Delegate(err2, dir),
-					}
-				}
+			case cmp < 0:
+				errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
 				return
-			case event, ok := <-watcher2.Events:
-				if !ok {
-					result <- watchResult{
-						updatePath: "",
-						err:        terror.ErrWatcherChanClosed.Generate("events", dir),
-					}
+			case cmp > 0:
+				updatePathCh <- latestFilePath
+				return
+			default: // no new write
+				newerFiles, err := CollectBinlogFilesCmp(dir, latestFile, FileCmpBigger)
+				if err != nil {
+					errCh <- terror.Annotatef(err, "collect newer files from %s in dir %s", latestFile, dir)
 					return
 				}
-				log.L().Debug("watcher receive event", zap.Reflect("event", event))
-				if event.IsDirEvent() {
-					log.L().Debug("skip watched event for directory", zap.Reflect("event", event))
-					continue
-				} else if !event.HasOps(watcher.Modify, watcher.Create) {
-					log.L().Debug("skip uninterested event", zap.Stringer("operation", event.Op), zap.String("path", event.Path))
-					continue
+				if len(newerFiles) > 0 {
+					// check whether newer relay log file exists
+					nextFilePath := filepath.Join(dir, newerFiles[0])
+					log.L().Info("newer relay log file is already generated, start parse from it", zap.String("new file", nextFilePath))
+					updatePathCh <- nextFilePath
+					return
 				}
-				baseName := filepath.Base(event.Path)
-				if !binlog.VerifyFilename(baseName) {
-					log.L().Debug("skip watcher event for invalid relay log file", zap.Reflect("event", event))
-					continue // not valid binlog created, updated
-				}
-				result <- watchResult{
-					updatePath: event.Path,
-					err:        nil,
-				}
-				return
 			}
 		}
-	}()
-
-	// try collect newer relay log file to check whether newer exists before watching
-	newerFiles, err := CollectBinlogFilesCmp(dir, latestFile, FileCmpBigger)
-	if err != nil {
-		err = terror.Annotatef(err, "collect newer files from %s in dir %s", latestFile, dir)
-		return
 	}
-
-	// check the latest relay log file whether updated when adding watching and collecting newer
-	cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
-	switch {
-	case err != nil:
-		return
-	case cmp < 0:
-		err = terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
-		return
-	case cmp > 0:
-		updatePathCh <- latestFilePath
-		return
-	case len(newerFiles) > 0:
-		// check whether newer relay log file exists
-		nextFilePath := filepath.Join(dir, newerFiles[0])
-		log.L().Info("newer relay log file is already generated, start parse from it", zap.String("new file", nextFilePath))
-		updatePathCh <- nextFilePath
-		return
-	}
-
-	res := <-result
-	if res.err != nil {
-		err = res.err
-		return
-	}
-
-	updatePathCh <- res.updatePath
 }
 
 // needSwitchSubDir checks whether the reader need to switch to next relay sub directory.
