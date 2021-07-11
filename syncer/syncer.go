@@ -568,10 +568,8 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		// cancel goroutines created in s.Run
 		cancel()
 	}
-	s.closeJobChans() // Run returned, all jobs sent, we can close s.jobs
-	log.L().Info("begin to wait ")
-	s.wg.Wait() // wait for sync goroutine to return
-	log.L().Info("end to wait ")
+	s.closeJobChans()   // Run returned, all jobs sent, we can close s.jobs
+	s.wg.Wait()         // wait for sync goroutine to return
 	close(runFatalChan) // Run returned, all potential fatal sent to s.runFatalChan
 	wg.Wait()           // wait for receive all fatal from s.runFatalChan
 
@@ -861,7 +859,6 @@ func (s *Syncer) addJob(job *job) error {
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		// ugly code addJob and sync, refine it later
-		log.L().Info("add workercount", zap.Int("count", s.cfg.WorkerCount))
 		s.jobWg.Add(s.cfg.WorkerCount)
 		for i := 0; i < s.cfg.WorkerCount; i++ {
 			startTime := time.Now()
@@ -875,14 +872,12 @@ func (s *Syncer) addJob(job *job) error {
 	case ddl:
 		s.jobWg.Wait()
 		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
-		log.L().Info("add workercount ddl")
 		s.jobWg.Add(1)
 		queueBucket = s.cfg.WorkerCount
 		startTime := time.Now()
 		s.jobs[queueBucket] <- job
 		addJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	case insert, update, del:
-		log.L().Info("add workercount dml")
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
 		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
@@ -1054,7 +1049,6 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	for {
 		ddlJob, ok := <-ddlJobChan
 		if !ok {
-			s.tctx.L().Info("close syncDDL")
 			return
 		}
 
@@ -1099,7 +1093,6 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = s.handleEventError(err, ddlJob.startLocation, ddlJob.currentLocation, true, ddlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
-			log.L().Info("del workercount ddl")
 			s.jobWg.Done()
 			continue
 		}
@@ -1138,11 +1131,9 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				err = s.handleEventError(err, ddlJob.startLocation, ddlJob.currentLocation, true, ddlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
 			}
-			log.L().Info("del workercount ddl")
 			s.jobWg.Done()
 			continue
 		}
-		log.L().Info("del workercount ddl")
 		s.jobWg.Done()
 		s.updateReplicationLag(ddlJob, ddlLagKey)
 		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)))
@@ -1157,7 +1148,6 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		cancel()
 		wg.Wait()
 		s.wg.Done()
-		s.tctx.L().Info("exit syncDML")
 	}()
 
 	idx := 0
@@ -1168,7 +1158,6 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	// clearF is used to reset job queue.
 	clearF := func() {
 		for i := 0; i < idx; i++ {
-			log.L().Info("del workercount dml")
 			s.jobWg.Done()
 		}
 		idx = 0
@@ -1248,7 +1237,6 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	go func() {
 		compactor.run(ctx)
 		wg.Done()
-		s.tctx.L().Info("exit compactor")
 	}()
 
 	wg.Add(1)
@@ -1257,10 +1245,10 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		for {
 			select {
 			case <-ctx.Done():
-				s.tctx.L().Info("exit sql worker")
 				return
 			default:
 				compactorResult := compactor.getResult()
+				queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(compactorResult.remainQueueSize + len(jobChan)))
 				if len(compactorResult.dmlJobs) == 0 {
 					time.Sleep(waitTime)
 					failpoint.Inject("waitingJob", func() {
@@ -1279,7 +1267,6 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 				for _, sqlJob := range jobs {
 					tpCnt[sqlJob.tp]++
-					s.tctx.L().Info("get compactor job", zap.String("sql", sqlJob.sql), zap.String("value", sqlJob.sql))
 				}
 
 				affect, err = executeSQLs()
@@ -1294,8 +1281,6 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 	}()
 
 	for sqlJob := range jobChan {
-		queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
-		log.L().Info("sending job", zap.String("sql", sqlJob.sql), zap.Any("vals", sqlJob.args))
 		compactor.in <- sqlJob
 	}
 }
@@ -1458,9 +1443,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
 
-		s.tctx.L().Info("begin with job")
 		s.jobWg.Wait()
-		s.tctx.L().Info("begin flush checkpoint job")
 		if err2 := s.flushCheckPoints(); err2 != nil {
 			tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
 		}
@@ -2899,12 +2882,10 @@ func (s *Syncer) Close() {
 // stopSync stops syncing, now it used by Close and Pause
 // maybe we can refine the workflow more clear.
 func (s *Syncer) stopSync() {
-	log.L().Info("begin to stop sync")
 	if s.done != nil {
 		<-s.done // wait Run to return
 	}
 	s.closeJobChans()
-	log.L().Info("close all job")
 	s.wg.Wait() // wait job workers to return
 
 	// before re-write workflow for s.syncer, simply close it
