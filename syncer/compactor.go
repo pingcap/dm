@@ -122,9 +122,6 @@ func (c *Compactor) compact(compactorJob *CompactorJob) {
 }
 
 func (c *Compactor) run() {
-	defer func() {
-		c.close()
-	}()
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -153,11 +150,6 @@ func (c *Compactor) run() {
 			c.sendJob()
 		}
 	}
-}
-
-func (c *Compactor) close() {
-	close(c.out)
-	close(c.drainNotify)
 }
 
 func (c *Compactor) getResult() (CompactorResult, bool) {
@@ -190,11 +182,19 @@ func (c *Compactor) sendJob() {
 		}
 	}
 
-	c.out <- NewCompactorResult(jobs, idx, len(c.compactorJobs))
+	select {
+	case <-c.ctx.Done():
+		return
+	case c.out <- NewCompactorResult(jobs, idx, len(c.compactorJobs)):
+	}
 }
 
 func (c *Compactor) sendFlushJob(flushJob *job) {
-	c.out <- CompactorResult{[]*job{flushJob}, 1, 0}
+	select {
+	case <-c.ctx.Done():
+		return
+	case c.out <- CompactorResult{[]*job{flushJob}, 1, 0}:
+	}
 }
 
 func extractKeys(dmlTp dmlType, keys []string) (string, string) {
