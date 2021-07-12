@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package syncer
+package onlineddl
 
 import (
 	"strings"
@@ -31,7 +31,7 @@ import (
 // _*_ghc ghost changelog table
 // _*_del ghost transh table.
 type Ghost struct {
-	storge *OnlineDDLStorage
+	storge *Storage
 }
 
 // NewGhost returns gh-oat online plugin.
@@ -56,33 +56,33 @@ func (g *Ghost) Apply(tctx *tcontext.Context, tables []*filter.Table, statement 
 	tp := g.TableType(table)
 
 	switch tp {
-	case realTable:
+	case RealTable:
 		if _, ok := stmt.(*ast.RenameTableStmt); ok {
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
 			}
 
 			tp1 := g.TableType(tables[1].Name)
-			if tp1 == trashTable {
+			if tp1 == TrashTable {
 				return nil, "", "", nil
-			} else if tp1 == ghostTable {
+			} else if tp1 == GhostTable {
 				return nil, "", "", terror.ErrSyncerUnitGhostRenameToGhostTable.Generate(statement)
 			}
 		}
 		return []string{statement}, schema, table, nil
-	case trashTable:
-		// ignore trashTable
+	case TrashTable:
+		// ignore TrashTable
 		if _, ok := stmt.(*ast.RenameTableStmt); ok {
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
 			}
 
 			tp1 := g.TableType(tables[1].Name)
-			if tp1 == ghostTable {
+			if tp1 == GhostTable {
 				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
 			}
 		}
-	case ghostTable:
+	case GhostTable:
 		// record ghost table ddl changes
 		switch stmt.(type) {
 		case *ast.CreateTableStmt:
@@ -101,13 +101,13 @@ func (g *Ghost) Apply(tctx *tcontext.Context, tables []*filter.Table, statement 
 			}
 
 			tp1 := g.TableType(tables[1].Name)
-			if tp1 == realTable {
+			if tp1 == RealTable {
 				ghostInfo := g.storge.Get(schema, table)
 				if ghostInfo != nil {
 					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
 				}
 				return nil, "", "", terror.ErrSyncerUnitGhostOnlineDDLOnGhostTbl.Generate(schema, table)
-			} else if tp1 == ghostTable {
+			} else if tp1 == GhostTable {
 				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
 			}
 
@@ -142,21 +142,21 @@ func (g *Ghost) TableType(table string) TableType {
 	// 5 is _ _gho/ghc/del
 	if len(table) > 5 && table[0] == '_' {
 		if strings.HasSuffix(table, "_gho") {
-			return ghostTable
+			return GhostTable
 		}
 
 		if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") {
-			return trashTable
+			return TrashTable
 		}
 	}
 
-	return realTable
+	return RealTable
 }
 
 // RealName implements interface.
 func (g *Ghost) RealName(schema, table string) (string, string) {
 	tp := g.TableType(table)
-	if tp == trashTable || tp == ghostTable {
+	if tp == TrashTable || tp == GhostTable {
 		table = table[1 : len(table)-4]
 	}
 

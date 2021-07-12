@@ -21,6 +21,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
 
 func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string) (bool, error) {
@@ -87,7 +88,7 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 	// filter ghost table
 	if s.onlineDDL != nil {
 		tp := s.onlineDDL.TableType(table)
-		if tp != realTable {
+		if tp != onlineddl.RealTable {
 			return true, nil
 		}
 	}

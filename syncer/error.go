@@ -31,6 +31,7 @@ import (
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 func ignoreDDLError(err error) bool {
@@ -65,7 +66,7 @@ func isDropColumnWithIndexError(err error) bool {
 }
 
 // handleSpecialDDLError handles special errors for DDL execution.
-func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn) error {
+func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls []string, index int, conn *dbconn.DBConn) error {
 	// We use default parser because ddls are came from *Syncer.handleDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 	parser2 := parser.New()
 
@@ -75,7 +76,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 	// if we have other methods to judge the DDL dispatched but timeout for executing, we can update this method.
 	// NOTE: we must ensure other PK/UK exists for correctness.
 	// NOTE: when we are refactoring the shard DDL algorithm, we also need to consider supporting non-blocking `ADD INDEX`.
-	invalidConnF := func(tctx *tcontext.Context, err error, ddls []string, index int, conn *DBConn) error {
+	invalidConnF := func(tctx *tcontext.Context, err error, ddls []string, index int, conn *dbconn.DBConn) error {
 		// must ensure only the last statement executed failed with the `invalid connection` error
 		if len(ddls) == 0 || index != len(ddls)-1 || errors.Cause(err) != mysql.ErrInvalidConn {
 			return err // return the original error
@@ -89,7 +90,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 
 		handle := func() {
 			tctx.L().Warn("ignore special error for DDL", zap.String("DDL", ddl2), log.ShortError(err))
-			err2 := conn.resetConn(tctx) // also reset the `invalid connection` for later use.
+			err2 := conn.ResetConn(tctx) // also reset the `invalid connection` for later use.
 			if err2 != nil {
 				tctx.L().Warn("reset connection failed", log.ShortError(err2))
 			}
@@ -120,7 +121,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 	// for DROP COLUMN with its single-column index, try drop index first then drop column
 	// TiDB will support DROP COLUMN with index soon. After its support, executing that SQL will not have an error,
 	// so this function will not trigger and cause some trouble
-	dropColumnF := func(tctx *tcontext.Context, originErr error, ddls []string, index int, conn *DBConn) error {
+	dropColumnF := func(tctx *tcontext.Context, originErr error, ddls []string, index int, conn *dbconn.DBConn) error {
 		if !isDropColumnWithIndexError(originErr) {
 			return originErr
 		}
@@ -153,7 +154,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		// check if dependent index is single-column index on this column
 		sql2 := "SELECT INDEX_NAME FROM information_schema.statistics WHERE TABLE_SCHEMA = ? and TABLE_NAME = ? and COLUMN_NAME = ?"
 		var rows *sql.Rows
-		rows, err2 = conn.querySQL(tctx, sql2, schema, table, col)
+		rows, err2 = conn.QuerySQL(tctx, sql2, schema, table, col)
 		if err2 != nil {
 			return originErr
 		}
@@ -179,7 +180,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 
 		sql2 = "SELECT count(*) FROM information_schema.statistics WHERE TABLE_SCHEMA = ? and TABLE_NAME = ? and INDEX_NAME = ?"
 		for _, idx := range idx2Check {
-			rows, err2 = conn.querySQL(tctx, sql2, schema, table, idx)
+			rows, err2 = conn.QuerySQL(tctx, sql2, schema, table, idx)
 			if err2 != nil || !rows.Next() || rows.Scan(&count) != nil || count != 1 {
 				tctx.L().Warn("can't auto drop index", zap.String("index", idx))
 				if rows != nil {
@@ -199,13 +200,13 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		for i, idx := range idx2Drop {
 			sqls[i] = fmt.Sprintf("ALTER TABLE %s DROP INDEX %s", dbutil.TableName(schema, table), dbutil.ColumnName(idx))
 		}
-		if _, err2 = conn.executeSQL(tctx, sqls); err2 != nil {
+		if _, err2 = conn.ExecuteSQL(tctx, sqls); err2 != nil {
 			tctx.L().Warn("auto drop index failed", log.ShortError(err2))
 			return originErr
 		}
 
 		tctx.L().Info("drop index success, now try to drop column", zap.Strings("index", idx2Drop))
-		if _, err2 = conn.executeSQLWithIgnore(tctx, ignoreDDLError, ddls[index:]); err2 != nil {
+		if _, err2 = conn.ExecuteSQLWithIgnore(tctx, ignoreDDLError, ddls[index:]); err2 != nil {
 			return err2
 		}
 
@@ -215,7 +216,7 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 	// TODO: add support for downstream alter pk without schema
 
 	retErr := err
-	toHandle := []func(*tcontext.Context, error, []string, int, *DBConn) error{
+	toHandle := []func(*tcontext.Context, error, []string, int, *dbconn.DBConn) error{
 		dropColumnF,
 		invalidConnF,
 	}

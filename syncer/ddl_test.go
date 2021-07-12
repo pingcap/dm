@@ -22,6 +22,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
+	online_ddl_tools "github.com/pingcap/dm/syncer/online-ddl-tools"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
@@ -392,7 +393,7 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 	p := parser.New()
 
 	for _, ca := range cases {
-		fn := OnlineDDLSchemes[ca.onlineType]
+		fn := online_ddl_tools.OnlineDDLSchemes[ca.onlineType]
 		plugin, err := fn(tctx, s.cfg)
 		c.Assert(err, IsNil)
 		syncer := NewSyncer(s.cfg, nil)
@@ -479,7 +480,7 @@ func (m mockOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) e
 	return nil
 }
 
-func (m mockOnlinePlugin) TableType(table string) TableType {
+func (m mockOnlinePlugin) TableType(table string) online_ddl_tools.TableType {
 	return ""
 }
 
