@@ -27,7 +27,12 @@ function real_run() {
 	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/ExitAfterSaveOnlineDDL=return()"
+
+  inject_points=(
+		"github.com/pingcap/dm/syncer/online-ddl-tools/ExitAfterSaveOnlineDDL=return()"
+		"github.com/pingcap/dm/syncer/ExitAfterSaveOnlineDDL=return()"
+	)
+	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 	export GO_FAILPOINTS=""
