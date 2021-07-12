@@ -1,9 +1,15 @@
 import sys
 
 
-def check_worker_ticker_interval(logpath, min_interval):
+def check_worker_ticker_interval(log_path, min_interval):
+    """
+    check the time interval between dm-worker updates when the queue is empty
+
+    log_path: dm-worker-log path
+    min_interval: min interval
+    """
     logs = []
-    with open(logpath, "r") as f:
+    with open(log_path, "r") as f:
         for line in f.readlines()[::-1]:
             if len(logs) == 2:
                 break
