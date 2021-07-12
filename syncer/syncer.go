@@ -203,6 +203,7 @@ type Syncer struct {
 	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster atomic.Int64             // current task delay second behind upstream
 	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:queueBucketName val: lag
+	workerLagMapIniting atomic.Bool
 }
 
 // NewSyncer creates a new Syncer.
@@ -239,7 +240,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	}
 	syncer.recordedActiveRelayLog = false
 	syncer.workerLagMap = make(map[string]*atomic.Int64)
-
+	syncer.workerLagMapIniting = atomic.Bool{}
 	return syncer
 }
 
@@ -1223,9 +1224,19 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 	var err error
 	var affect int
-	ticker := time.NewTicker(waitTime)
+	tickerInterval := waitTime
+	failpoint.Inject("changeTickerInterval", func(val failpoint.Value) {
+		t := val.(int)
+		tickerInterval = time.Duration(t) * time.Second
+		tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
+	})
+
+	ticker := time.NewTicker(tickerInterval)
 	defer ticker.Stop()
 	for {
+		// resets the time interval for each loop to prevent a certain amount of time being spent on the previous ticker
+		// execution to `executeSQLs` resulting in the next tikcer not waiting for the full waitTime.
+		ticker.Reset(tickerInterval)
 		select {
 		case sqlJob, ok := <-jobChan:
 			queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
@@ -1249,7 +1260,8 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				clearF()
 			}
 		case <-ticker.C:
-			if len(jobs) > 0 {
+			currentJobCnt := len(jobs)
+			if currentJobCnt > 0 {
 				failpoint.Inject("syncDMLTicker", func() {
 					tctx.L().Info("job queue not full, executeSQLs by ticker")
 				})
@@ -1260,6 +1272,10 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				}
 				successF()
 				clearF()
+			} else if currentJobCnt == 0 && !s.workerLagMapIniting.Load() {
+				// update lag metric even if there is no job in the queue
+				// metric will only be updated when all wokers have been initialised to avoid data races.
+				s.updateReplicationLag(nil, queueBucket)
 			}
 		}
 	}
@@ -1396,6 +1412,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			cancel()
 		}(i, name)
 	}
+	s.workerLagMapIniting.Toggle()
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
