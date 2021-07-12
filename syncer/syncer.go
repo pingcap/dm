@@ -203,7 +203,7 @@ type Syncer struct {
 	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster atomic.Int64             // current task delay second behind upstream
 	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:queueBucketName val: lag
-	workerLagMapIniting atomic.Bool
+	workerLagMapIniting atomic.Bool              // used to mark if all workers are starting to `syncDML`
 }
 
 // NewSyncer creates a new Syncer.
@@ -240,7 +240,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	}
 	syncer.recordedActiveRelayLog = false
 	syncer.workerLagMap = make(map[string]*atomic.Int64)
-	syncer.workerLagMapIniting = atomic.Bool{}
+	syncer.workerLagMapIniting = *atomic.NewBool(false)
 	return syncer
 }
 
