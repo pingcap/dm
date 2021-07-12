@@ -16,6 +16,12 @@ package syncer
 import (
 	"context"
 	"strings"
+	"time"
+
+	"github.com/pingcap/failpoint"
+	"go.uber.org/atomic"
+
+	"github.com/pingcap/dm/pkg/log"
 )
 
 type dmlType int
@@ -54,8 +60,8 @@ type CompactorResult struct {
 }
 
 // NewCompactorResult creates a CompactorResult.
-func NewCompactorResult(dmlJobs []*job, compactSize int, remainQueueSize int) CompactorResult {
-	return CompactorResult{
+func NewCompactorResult(dmlJobs []*job, compactSize int, remainQueueSize int) *CompactorResult {
+	return &CompactorResult{
 		dmlJobs:         dmlJobs,
 		compactSize:     compactSize,
 		remainQueueSize: remainQueueSize,
@@ -70,8 +76,8 @@ type Compactor struct {
 	batchSize     int
 	bufferSize    int
 	in            chan *job
-	drainNotify   chan struct{}
-	out           chan CompactorResult
+	out           chan *CompactorResult
+	drain         atomic.Bool
 	queueBucket   string
 }
 
@@ -84,8 +90,7 @@ func NewCompactor(ctx context.Context, batchSize, bufferSize int, in chan *job, 
 		compactorJobs: make([]*CompactorJob, 0, bufferSize),
 		keyMap:        make(map[string]int, bufferSize),
 		in:            in,
-		out:           make(chan CompactorResult, 1),
-		drainNotify:   make(chan struct{}),
+		out:           make(chan *CompactorResult, 1),
 		queueBucket:   queueBucket,
 	}
 }
@@ -122,6 +127,7 @@ func (c *Compactor) compact(compactorJob *CompactorJob) {
 }
 
 func (c *Compactor) run() {
+	defer c.close()
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -146,21 +152,32 @@ func (c *Compactor) run() {
 			if len(c.compactorJobs) >= c.bufferSize {
 				c.sendJob()
 			}
-		case <-c.drainNotify:
-			c.sendJob()
+		case <-time.After(waitTime):
+			if c.drain.Load() {
+				failpoint.Inject("waitingJob", func() {
+					log.L().Info("waiting job")
+				})
+				c.sendJob()
+			}
 		}
 	}
 }
 
-func (c *Compactor) getResult() (CompactorResult, bool) {
-	if len(c.out) == 0 {
-		c.drainNotify <- struct{}{}
-	}
+func (c *Compactor) close() {
+	close(c.out)
+}
+
+func (c *Compactor) getResult() (*CompactorResult, bool) {
+	defer c.drain.Store(false)
+	c.drain.Store(true)
 	result, ok := <-c.out
 	return result, ok
 }
 
 func (c *Compactor) sendJob() {
+	if len(c.compactorJobs) == 0 {
+		return
+	}
 	jobs := make([]*job, 0, c.batchSize)
 	idx := 0
 	for _, compactorJob := range c.compactorJobs {
@@ -193,7 +210,7 @@ func (c *Compactor) sendFlushJob(flushJob *job) {
 	select {
 	case <-c.ctx.Done():
 		return
-	case c.out <- CompactorResult{[]*job{flushJob}, 1, 0}:
+	case c.out <- NewCompactorResult([]*job{flushJob}, 1, 0):
 	}
 }
 

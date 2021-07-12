@@ -1252,14 +1252,6 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 					return
 				}
 				queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(compactorResult.remainQueueSize + len(jobChan)))
-				if len(compactorResult.dmlJobs) == 0 {
-					time.Sleep(waitTime)
-					failpoint.Inject("waitingJob", func() {
-						tctx.L().Info("waiting job")
-					})
-					continue
-				}
-
 				idx = compactorResult.compactSize
 
 				if len(compactorResult.dmlJobs) == 1 && compactorResult.dmlJobs[0].tp == flush {
