@@ -203,7 +203,7 @@ type Syncer struct {
 	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster atomic.Int64             // current task delay second behind upstream
 	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:queueBucketName val: lag
-	workerLagMapIniting atomic.Bool              // used to mark if all workers are starting to `syncDML`
+	workerIniting       atomic.Bool              // used to mark if all workers are starting to `syncDML`
 }
 
 // NewSyncer creates a new Syncer.
@@ -240,7 +240,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	}
 	syncer.recordedActiveRelayLog = false
 	syncer.workerLagMap = make(map[string]*atomic.Int64)
-	syncer.workerLagMapIniting = *atomic.NewBool(false)
+	syncer.workerIniting = *atomic.NewBool(true)
 	return syncer
 }
 
@@ -1272,9 +1272,11 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				}
 				successF()
 				clearF()
-			} else if currentJobCnt == 0 && !s.workerLagMapIniting.Load() {
+			} else if currentJobCnt == 0 && !s.workerIniting.Load() {
 				// update lag metric even if there is no job in the queue
 				// metric will only be updated when all wokers have been initialised to avoid data races.
+				tctx.L().Debug("no job in queue, update lag to zero",
+					zap.String("queueName", queueBucket), zap.Int("current ts", int(time.Now().Unix())))
 				s.updateReplicationLag(nil, queueBucket)
 			}
 		}
@@ -1412,7 +1414,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			cancel()
 		}(i, name)
 	}
-	s.workerLagMapIniting.Toggle()
+	s.workerIniting.Toggle()
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
