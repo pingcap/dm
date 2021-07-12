@@ -1074,7 +1074,7 @@ var (
 	ErrMasterHostPortNotValid       = New(codeMasterHostPortNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "host:port '%s' not valid", "Please check the `master-addr` config in master configuration file.")
 	ErrMasterGetHostnameFail        = New(codeMasterGetHostnameFail, ClassDMMaster, ScopeInternal, LevelHigh, "get hostname fail", "")
 	ErrMasterGenEmbedEtcdConfigFail = New(codeMasterGenEmbedEtcdConfigFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to generate config item %s for embed etcd", "Please check configs in master configuration file.")
-	ErrMasterStartEmbedEtcdFail     = New(codeMasterStartEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to start embed etcd", "")
+	ErrMasterStartEmbedEtcdFail     = New(codeMasterStartEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to start embed etcd", "Please check all dm-master of `initial-cluster` in configuration file is up, and check the log for a detailed error.")
 	ErrMasterParseURLFail           = New(codeMasterParseURLFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to parse URL %s", "Please check configs in master configuration file.")
 	ErrMasterJoinEmbedEtcdFail      = New(codeMasterJoinEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to join embed etcd: %s", "Please check configs in master configuration file.")
 	ErrMasterInvalidOperateOp       = New(codeMasterInvalidOperateOp, ClassDMMaster, ScopeInternal, LevelMedium, "invalid op %s on %s", "")
