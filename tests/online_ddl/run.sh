@@ -27,8 +27,7 @@ function real_run() {
 	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
-
-  inject_points=(
+	inject_points=(
 		"github.com/pingcap/dm/syncer/online-ddl-tools/ExitAfterSaveOnlineDDL=return()"
 		"github.com/pingcap/dm/syncer/ExitAfterSaveOnlineDDL=return()"
 	)
