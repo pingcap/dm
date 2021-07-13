@@ -1,7 +1,5 @@
 drop database if exists `fake_rotate_event`;
 
-reset master;
-
 create database `fake_rotate_event`;
 
 use `fake_rotate_event`;
