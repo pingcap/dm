@@ -129,7 +129,7 @@ func (t *testTCPReaderSuite) TestSyncPos(c *C) {
 			Port:           uint16(t.port),
 			User:           t.user,
 			Password:       t.password,
-			UseDecimal:     true,
+			UseDecimal:     false,
 			VerifyChecksum: true,
 		}
 		pos gmysql.Position // empty position
@@ -217,7 +217,7 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 			Port:           uint16(t.port),
 			User:           t.user,
 			Password:       t.password,
-			UseDecimal:     true,
+			UseDecimal:     false,
 			VerifyChecksum: true,
 		}
 		gSet gtid.Set // nil GTID set
