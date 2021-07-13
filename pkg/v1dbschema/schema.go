@@ -62,7 +62,7 @@ func UpdateSchema(tctx *tcontext.Context, db *conn.BaseDB, cfg *config.SubTaskCo
 		Port:           uint16(cfg.From.Port),
 		User:           cfg.From.User,
 		Password:       cfg.From.Password, // plaintext.
-		UseDecimal:     true,
+		UseDecimal:     false,
 		VerifyChecksum: true,
 	}
 	tcpReader := reader.NewTCPReader(syncCfg)
