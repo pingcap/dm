@@ -202,8 +202,7 @@ type Syncer struct {
 
 	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster atomic.Int64             // current task delay second behind upstream
-	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:queueBucketName val: lag
-	workerIniting       atomic.Bool              // used to mark if all workers are starting to `syncDML`
+	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:WorkerLagKey val: lag
 }
 
 // NewSyncer creates a new Syncer.
@@ -240,7 +239,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	}
 	syncer.recordedActiveRelayLog = false
 	syncer.workerLagMap = make(map[string]*atomic.Int64)
-	syncer.workerIniting = *atomic.NewBool(true)
 	return syncer
 }
 
@@ -763,11 +761,11 @@ func (s *Syncer) calcReplicationLag(headerTS int64) int64 {
 
 // updateReplicationLag calculates syncer's replication lag by job, it is called after every batch dml job / one skip job / one ddl
 // job is committed.
-func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
+func (s *Syncer) updateReplicationLag(job *job, lagKey string) {
 	var lag int64
 	// when job is nil mean no job in this bucket, need do reset this bucket lag to 0
 	if job == nil {
-		s.workerLagMap[queueBucketName].Store(0)
+		s.workerLagMap[lagKey].Store(0)
 	} else {
 		failpoint.Inject("BlockSyncerUpdateLag", func(v failpoint.Value) {
 			args := strings.Split(v.(string), ",")
@@ -785,7 +783,7 @@ func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 			lag = s.calcReplicationLag(int64(job.eventHeader.Timestamp))
 		default: // dml job
 			// NOTE workerlagmap already init all dml key(queueBucketName) before syncer running.
-			s.workerLagMap[queueBucketName].Store(s.calcReplicationLag(int64(job.eventHeader.Timestamp)))
+			s.workerLagMap[lagKey].Store(s.calcReplicationLag(int64(job.eventHeader.Timestamp)))
 		}
 	}
 	// find all job queue lag choose the max one
@@ -1142,13 +1140,14 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 }
 
 // DML synced in batch by one worker.
-func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
+func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job, workerID int) {
 	defer s.wg.Done()
 
 	idx := 0
 	count := s.cfg.Batch
 	jobs := make([]*job, 0, count)
 	tpCnt := make(map[opType]int64)
+	workerLagKey := dmlWorkerLagKey(workerID)
 
 	// clearF is used to reset job queue.
 	clearF := func() {
@@ -1166,9 +1165,9 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			// every event before this job's event in this queue has already commit.
 			// and we can use this job to maintain the oldest binlog event ts among all workers.
 			j := jobs[0]
-			s.updateReplicationLag(j, queueBucket)
+			s.updateReplicationLag(j, workerLagKey)
 		} else {
-			s.updateReplicationLag(nil, queueBucket)
+			s.updateReplicationLag(nil, workerLagKey)
 		}
 		// calculate tps
 		for tpName, v := range tpCnt {
@@ -1260,8 +1259,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				clearF()
 			}
 		case <-ticker.C:
-			currentJobCnt := len(jobs)
-			if currentJobCnt > 0 {
+			if len(jobs) > 0 {
 				failpoint.Inject("syncDMLTicker", func() {
 					tctx.L().Info("job queue not full, executeSQLs by ticker")
 				})
@@ -1272,12 +1270,12 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				}
 				successF()
 				clearF()
-			} else if currentJobCnt == 0 && !s.workerIniting.Load() {
+			} else {
 				// update lag metric even if there is no job in the queue
 				// metric will only be updated when all wokers have been initialised to avoid data races.
 				tctx.L().Debug("no job in queue, update lag to zero",
-					zap.String("queueName", queueBucket), zap.Int("current ts", int(time.Now().Unix())))
-				s.updateReplicationLag(nil, queueBucket)
+					zap.String("workerLagKey", workerLagKey), zap.Int("current ts", int(time.Now().Unix())))
+				s.updateReplicationLag(nil, workerLagKey)
 			}
 		}
 	}
@@ -1406,15 +1404,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.wg.Add(1)
 		name := queueBucketName(i)
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
-		s.workerLagMap[name] = atomic.NewInt64(0)
+		s.workerLagMap[dmlWorkerLagKey(i)] = atomic.NewInt64(0)
 		go func(i int, name string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
-			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i])
+			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i], i)
 			cancel()
 		}(i, name)
 	}
-	s.workerIniting.Toggle()
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
