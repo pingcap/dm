@@ -79,7 +79,7 @@ func (s *testDBSuite) resetBinlogSyncer(c *C) {
 		Port:           uint16(s.cfg.From.Port),
 		User:           s.cfg.From.User,
 		Password:       s.cfg.From.Password,
-		UseDecimal:     true,
+		UseDecimal:     false,
 		VerifyChecksum: true,
 	}
 	cfg.TimestampStringLocation = time.UTC
