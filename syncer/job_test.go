@@ -89,7 +89,7 @@ func (t *testJobSuite) TestJob(c *C) {
 		jobStr string
 	}{
 		{
-			newDMLJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", location, location, location, ec.header),
+			newDMLJob(insert, insertDML, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", location, location, location, ec.header, []string{"1`t1`.`test`"}),
 			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: 1, ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newDDLJob(ddlInfo, []string{"create database test"}, binlog.NewLocation(""), binlog.NewLocation(""), binlog.NewLocation(""), nil, "create database test", ec.header),

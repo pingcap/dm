@@ -49,7 +49,7 @@ func extractValueFromData(data []interface{}, columns []*model.ColumnInfo) []int
 	return value
 }
 
-func (s *Syncer) genInsertSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
+func (s *Syncer) genInsertSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, []dmlType, error) {
 	var (
 		qualifiedName   = dbutil.TableName(param.schema, param.table)
 		dataSeq         = param.data
@@ -59,18 +59,21 @@ func (s *Syncer) genInsertSQLs(param *genDMLParam, filterExprs []expression.Expr
 		sqls            = make([]string, 0, len(dataSeq))
 		keys            = make([][]string, 0, len(dataSeq))
 		values          = make([][]interface{}, 0, len(dataSeq))
+		dmlTps          = make([]dmlType, 0, len(dataSeq))
 	)
 
 	insertOrReplace := "INSERT INTO"
+	dmlTp := insertDML
 	if param.safeMode {
 		insertOrReplace = "REPLACE INTO"
+		dmlTp = replaceDML
 	}
 	sql := genInsertReplace(insertOrReplace, qualifiedName, columns)
 
 RowLoop:
 	for dataIdx, data := range dataSeq {
 		if len(data) != len(columns) {
-			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(data))
+			return nil, nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(data))
 		}
 
 		value := extractValueFromData(data, columns)
@@ -82,7 +85,7 @@ RowLoop:
 		for _, expr := range filterExprs {
 			skip, err := SkipDMLByExpression(originalValue, expr, ti.Columns)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, err
 			}
 			if skip {
 				s.filteredInsert.Add(1)
@@ -94,16 +97,17 @@ RowLoop:
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
+		dmlTps = append(dmlTps, dmlTp)
 	}
 
-	return sqls, keys, values, nil
+	return sqls, keys, values, dmlTps, nil
 }
 
 func (s *Syncer) genUpdateSQLs(
 	param *genDMLParam,
 	oldValueFilters []expression.Expression,
 	newValueFilters []expression.Expression,
-) ([]string, [][]string, [][]interface{}, error) {
+) ([]string, [][]string, [][]interface{}, []dmlType, error) {
 	var (
 		qualifiedName       = dbutil.TableName(param.schema, param.table)
 		data                = param.data
@@ -115,6 +119,7 @@ func (s *Syncer) genUpdateSQLs(
 		sqls                = make([]string, 0, len(data)/2)
 		keys                = make([][]string, 0, len(data)/2)
 		values              = make([][]interface{}, 0, len(data)/2)
+		dmlTps              = make([]dmlType, 0, len(data)/2)
 	)
 
 	if param.safeMode {
@@ -129,11 +134,11 @@ RowLoop:
 		oriChangedData := originalData[i+1]
 
 		if len(oldData) != len(changedData) {
-			return nil, nil, nil, terror.ErrSyncerUnitDMLOldNewValueMismatch.Generate(len(oldData), len(changedData))
+			return nil, nil, nil, nil, terror.ErrSyncerUnitDMLOldNewValueMismatch.Generate(len(oldData), len(changedData))
 		}
 
 		if len(oldData) != len(columns) {
-			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(oldData))
+			return nil, nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(oldData))
 		}
 
 		oldValues := extractValueFromData(oldData, columns)
@@ -153,11 +158,11 @@ RowLoop:
 			oldExpr, newExpr := oldValueFilters[j], newValueFilters[j]
 			skip1, err := SkipDMLByExpression(oriOldValues, oldExpr, ti.Columns)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, err
 			}
 			skip2, err := SkipDMLByExpression(oriChangedValues, newExpr, ti.Columns)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, err
 			}
 			if skip1 && skip2 {
 				s.filteredUpdate.Add(1)
@@ -170,19 +175,21 @@ RowLoop:
 			defaultIndexColumns = getAvailableIndexColumn(ti, oriOldValues)
 		}
 
-		ks := genMultipleKeys(ti, oriOldValues, qualifiedName)
-		ks = append(ks, genMultipleKeys(ti, oriChangedValues, qualifiedName)...)
+		oldKs := genMultipleKeys(ti, oriOldValues, qualifiedName)
+		newKs := genMultipleKeys(ti, oriChangedValues, qualifiedName)
 
 		if param.safeMode {
 			// generate delete sql from old data
 			sql, value := genDeleteSQL(qualifiedName, oriOldValues, ti.Columns, defaultIndexColumns)
 			sqls = append(sqls, sql)
 			values = append(values, value)
-			keys = append(keys, ks)
+			keys = append(keys, oldKs)
+			dmlTps = append(dmlTps, deleteDML)
 			// generate replace sql from new data
 			sqls = append(sqls, replaceSQL)
 			values = append(values, changedValues)
-			keys = append(keys, ks)
+			keys = append(keys, newKs)
+			dmlTps = append(dmlTps, replaceDML)
 			continue
 		}
 
@@ -212,13 +219,15 @@ RowLoop:
 		sql := genUpdateSQL(qualifiedName, updateColumns, whereColumns, whereValues)
 		sqls = append(sqls, sql)
 		values = append(values, value)
-		keys = append(keys, ks)
+		key := append(oldKs, newKs...)
+		keys = append(keys, key)
+		dmlTps = append(dmlTps, updateDML)
 	}
 
-	return sqls, keys, values, nil
+	return sqls, keys, values, dmlTps, nil
 }
 
-func (s *Syncer) genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
+func (s *Syncer) genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, []dmlType, error) {
 	var (
 		qualifiedName       = dbutil.TableName(param.schema, param.table)
 		dataSeq             = param.originalData
@@ -227,12 +236,13 @@ func (s *Syncer) genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expr
 		sqls                = make([]string, 0, len(dataSeq))
 		keys                = make([][]string, 0, len(dataSeq))
 		values              = make([][]interface{}, 0, len(dataSeq))
+		dmlTps              = make([]dmlType, 0, len(dataSeq))
 	)
 
 RowLoop:
 	for _, data := range dataSeq {
 		if len(data) != len(ti.Columns) {
-			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(ti.Columns), len(data))
+			return nil, nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(ti.Columns), len(data))
 		}
 
 		value := extractValueFromData(data, ti.Columns)
@@ -240,7 +250,7 @@ RowLoop:
 		for _, expr := range filterExprs {
 			skip, err := SkipDMLByExpression(value, expr, ti.Columns)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, err
 			}
 			if skip {
 				s.filteredDelete.Add(1)
@@ -257,9 +267,10 @@ RowLoop:
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
+		dmlTps = append(dmlTps, deleteDML)
 	}
 
-	return sqls, keys, values, nil
+	return sqls, keys, values, dmlTps, nil
 }
 
 // genInsertReplace generates a DML for `INSERT INTO` or `REPLCATE INTO`.

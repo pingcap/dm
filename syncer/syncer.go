@@ -1142,7 +1142,13 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 // DML synced in batch by one worker.
 func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
-	defer s.wg.Done()
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		wg.Wait()
+		s.wg.Done()
+	}()
 
 	idx := 0
 	count := s.cfg.Batch
@@ -1198,7 +1204,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		})
 
 		select {
-		case <-tctx.Ctx.Done():
+		case <-ctx.Done():
 			// do not execute queries anymore, because they should be failed with a done context.
 			// and avoid some errors like:
 			//  - `driver: bad connection` for `BEGIN`
@@ -1223,36 +1229,41 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 	var err error
 	var affect int
-	ticker := time.NewTicker(waitTime)
-	defer ticker.Stop()
-	for {
-		select {
-		case sqlJob, ok := <-jobChan:
-			queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
-			if !ok {
+
+	compatorCh := make(chan *job, 1)
+	compactor := NewCompactor(ctx, s.cfg.Batch, 10*s.cfg.Batch, compatorCh, queueBucket)
+
+	wg.Add(1)
+	go func() {
+		compactor.run()
+		wg.Done()
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
 				return
-			}
-			idx++
-
-			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
-				jobs = append(jobs, sqlJob)
-				tpCnt[sqlJob.tp]++
-			}
-
-			if idx >= count || sqlJob.tp == flush {
-				affect, err = executeSQLs()
-				if err != nil {
-					fatalF(affect, err)
-					continue
+			default:
+				compactorResult, ok := compactor.getResult()
+				if !ok {
+					return
 				}
-				successF()
-				clearF()
-			}
-		case <-ticker.C:
-			if len(jobs) > 0 {
-				failpoint.Inject("syncDMLTicker", func() {
-					tctx.L().Info("job queue not full, executeSQLs by ticker")
-				})
+				queueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(compactorResult.remainQueueSize + len(jobChan)))
+				idx = compactorResult.compactSize
+
+				if len(compactorResult.dmlJobs) == 1 && compactorResult.dmlJobs[0].tp == flush {
+					jobs = []*job{}
+				} else {
+					jobs = compactorResult.dmlJobs
+				}
+
+				for _, sqlJob := range jobs {
+					tpCnt[sqlJob.tp]++
+				}
+
 				affect, err = executeSQLs()
 				if err != nil {
 					fatalF(affect, err)
@@ -1262,6 +1273,10 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				clearF()
 			}
 		}
+	}()
+
+	for sqlJob := range jobChan {
+		compactor.in <- sqlJob
 	}
 }
 
@@ -1884,6 +1899,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		keys    [][]string
 		args    [][]interface{}
 		jobType opType
+		dmlTps  []dmlType
 	)
 
 	param := &genDMLParam{
@@ -1903,7 +1919,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode.Enable()
-		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
+		sqls, keys, args, dmlTps, err = s.genInsertSQLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
@@ -1917,7 +1933,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode.Enable()
-		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
+		sqls, keys, args, dmlTps, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
@@ -1930,7 +1946,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err2
 		}
 
-		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
+		sqls, keys, args, dmlTps, err = s.genDeleteSQLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
@@ -1952,7 +1968,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if keys != nil {
 			key = keys[i]
 		}
-		err = s.commitJob(jobType, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, &ec)
+		err = s.commitJob(jobType, dmlTps[i], originSchema, originTable, schemaName, tableName, sqls[i], arg, key, &ec)
 		if err != nil {
 			return err
 		}
@@ -2500,7 +2516,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	return nil
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, ec *eventContext) error {
+func (s *Syncer) commitJob(tp opType, dmlTp dmlType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, ec *eventContext) error {
 	startTime := time.Now()
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
@@ -2509,7 +2525,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 	conflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 
-	job := newDMLJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
+	job := newDMLJob(tp, dmlTp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header, keys)
 	return s.addJobFunc(job)
 }
 
