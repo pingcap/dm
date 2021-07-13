@@ -20,11 +20,7 @@ function run() {
 	# operate mysql config to worker
 	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
-
-	# start DM task in all mode
-	# schemaTracker create table from dump data
 	dmctl_start_task_standalone "$cur/conf/dm-task.yaml" "--remove-meta"
-
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
 		"\"result\": true" 2 \
@@ -33,9 +29,9 @@ function run() {
 	# make binlog rotate
 	run_sql_source1 "flush logs;"
 	run_sql_source1 "use $db; insert into $tb values (3, 3, 3)"
-	run_sql_tidb_with_retry "select count(1) from ${db}.${tb}" "count(1): 3"
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	echo "kill dm-worker1"
+	echo "kill dm-worker"
 	ps aux | grep dm-worker1 | awk '{print $2}' | xargs kill || true
 	check_port_offline $WORKER1_PORT 20
 
@@ -48,12 +44,15 @@ function run() {
 	run_sql_source1 "flush logs;"
 	run_sql_source1 "use $db;alter table $tb add column info2 varchar(40);" # trigger a flush job
 	run_sql_source1 "use $db; insert into $tb values (4, 4, 4,'info')"
-	run_sql_tidb_with_retry "select count(1) from ${db}.${tb}" "count(1): 4"
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	$PWD/bin/dmctl.test DEVEL --master-addr=127.0.0.1:$MASTER_PORT query-status test >$WORK_DIR/binlog-status.log
-	# and check syncer's binlog filename same with fake rotate file name
-	check_log_contains $WORK_DIR/binlog-status.log "mysql-bin.000001"
+	# check syncer's binlog filename same with fake rotate file name
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"result\": true" 2 \
+		"mysql-bin.000001" 1
 
+	export GO_FAILPOINTS=''
 }
 
 cleanup_data fake_rotate_event
