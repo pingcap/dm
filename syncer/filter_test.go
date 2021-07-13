@@ -22,7 +22,6 @@ import (
 	"github.com/pingcap/parser"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/shopspring/decimal"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
@@ -318,12 +317,6 @@ create table t (
 }
 
 func (s *testFilterSuite) TestAllBinaryProtocolTypes(c *C) {
-	skippedDec, err := decimal.NewFromString("10.10")
-	c.Assert(err, IsNil)
-	passedDec, err := decimal.NewFromString("10.11")
-
-	// https://github.com/go-mysql-org/go-mysql/blob/a18ba90219c438df600fd3e4a64edb7e344c75aa/replication/row_event.go#L994
-	c.Assert(err, IsNil)
 	cases := []struct {
 		exprStr    string
 		tableStr   string
@@ -391,15 +384,14 @@ create table t (
 			[]interface{}{int64(200000000)},
 		},
 		// MYSQL_TYPE_NEWDECIMAL
-		// DM always set UseDecimal to true
 		{
 			"c = 10.1",
 			`
 create table t (
 	c decimal(5,2)
 );`,
-			[]interface{}{skippedDec},
-			[]interface{}{passedDec},
+			[]interface{}{"10.10"},
+			[]interface{}{"10.11"},
 		},
 		// MYSQL_TYPE_FLOAT
 		{
