@@ -179,6 +179,6 @@ func (g *Ghost) ResetConn(tctx *tcontext.Context) error {
 }
 
 // Check try to check and fix the schema/table case-sensitive issue.
-func (g *Ghost) Check(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
-	return g.storge.Check(tctx, schemas, tables, g.RealName)
+func (g *Ghost) CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
+	return g.storge.CheckAndUpdate(tctx, schemas, tables, g.RealName)
 }

@@ -726,7 +726,7 @@ func (k *ShardingGroupKeeper) LoadShardMeta(flavor string, enableGTID bool) (map
 
 // Check try to check and fix the schema/table case-sensitive issue.
 //
-// NOTE: Check is called before sharding groups are inited.
+// NOTE: CheckAndFix is called before sharding groups are inited.
 func (k *ShardingGroupKeeper) CheckAndFix(metas map[string]*shardmeta.ShardingMeta, schemaMap map[string]string, tablesMap map[string]map[string]string) error {
 	k.Lock()
 	defer k.Unlock()

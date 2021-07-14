@@ -179,7 +179,7 @@ func (p *PT) ResetConn(tctx *tcontext.Context) error {
 	return p.storge.ResetConn(tctx)
 }
 
-// Check try to check and fix the schema/table case-sensitive issue.
-func (p *PT) Check(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
-	return p.storge.Check(tctx, schemas, tables, p.RealName)
+// CheckAndUpdate try to check and fix the schema/table case-sensitive issue.
+func (p *PT) CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
+	return p.storge.CheckAndUpdate(tctx, schemas, tables, p.RealName)
 }

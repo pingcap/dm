@@ -284,7 +284,7 @@ func deleteOperationOp(op Operation) clientv3.Op {
 }
 
 // CheckOperations try to check and fix all the schema and table names for operation infos.
-func CheckOperations(cli *clientv3.Client, source string, schemaMap map[string]string, talesMap map[string]map[string]string) error {
+func CheckOperations(cli *clientv3.Client, source string, schemaMap map[string]string, tablesMap map[string]map[string]string) error {
 	allOperations, rev, err := GetAllOperations(cli)
 	if err != nil {
 		return err
@@ -301,7 +301,7 @@ func CheckOperations(cli *clientv3.Client, source string, schemaMap map[string]s
 				realSchema = schema
 			}
 
-			tblMap := talesMap[schema]
+			tblMap := tablesMap[schema]
 			for tbl, info := range tblOps {
 				realTable, tblChange := tblMap[tbl]
 				if !tblChange {

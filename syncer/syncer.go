@@ -428,27 +428,31 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 func buildLowerCaseTableNamesMap(tables map[string][]string) (map[string]string, map[string]map[string]string) {
 	schemaMap := make(map[string]string)
 	tablesMap := make(map[string]map[string]string)
-	lowerCaseSchemaSet := make(map[string]struct{})
+	lowerCaseSchemaSet := make(map[string]string)
 	for schema, tableNames := range tables {
 		lcSchema := strings.ToLower(schema)
 		// track if there are multiple schema names with the same lower case name.
 		// just skip this kind of schemas.
-		if _, ok := lowerCaseSchemaSet[lcSchema]; ok {
+		if rawSchema, ok := lowerCaseSchemaSet[lcSchema]; ok {
 			delete(schemaMap, lcSchema)
 			delete(tablesMap, lcSchema)
+			log.L().Warn("skip check schema with same lower case value",
+				zap.Strings("schemas", []string{schema, rawSchema}))
 			continue
 		}
-		lowerCaseSchemaSet[lcSchema] = struct{}{}
+		lowerCaseSchemaSet[lcSchema] = schema
 
 		if lcSchema != schema {
 			schemaMap[lcSchema] = schema
 		}
 		tblsMap := make(map[string]string)
-		lowerCaseTableSet := make(map[string]struct{})
+		lowerCaseTableSet := make(map[string]string)
 		for _, tb := range tableNames {
-			lcTbl := strings.ToLower(schema)
-			if _, ok := lowerCaseTableSet[lcTbl]; ok {
+			lcTbl := strings.ToLower(tb)
+			if rawTbl, ok := lowerCaseTableSet[lcTbl]; ok {
 				delete(tblsMap, lcTbl)
+				log.L().Warn("skip check tables with same lower case value", zap.String("schema", schema),
+					zap.Strings("table", []string{tb, rawTbl}))
 				continue
 			}
 			if lcTbl != tb {

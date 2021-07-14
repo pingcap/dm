@@ -116,7 +116,7 @@ func deleteSourceDroppedColumnsOp(lockID, column, source, upSchema, upTable stri
 }
 
 // CheckColumns try to check and fix all the schema and table names for delete columns infos.
-func CheckColumns(cli *clientv3.Client, source string, schemaMap map[string]string, talesMap map[string]map[string]string) error {
+func CheckColumns(cli *clientv3.Client, source string, schemaMap map[string]string, tablesMap map[string]map[string]string) error {
 	allColInfos, _, err := GetAllDroppedColumns(cli)
 	if err != nil {
 		return err
@@ -124,35 +124,34 @@ func CheckColumns(cli *clientv3.Client, source string, schemaMap map[string]stri
 
 	for lockID, colDropInfo := range allColInfos {
 		for columnName, sourceDropInfo := range colDropInfo {
-			for sourceID, tableInfos := range sourceDropInfo {
-				if sourceID != source {
-					continue
+			tableInfos, ok := sourceDropInfo[source]
+			if !ok {
+				continue
+			}
+			for schema, tableDropInfo := range tableInfos {
+				realSchema, hasChange := schemaMap[schema]
+				if !hasChange {
+					realSchema = schema
 				}
-				for schema, tableDropInfo := range tableInfos {
-					realSchema, hasChange := schemaMap[schema]
-					if !hasChange {
-						realSchema = schema
+				tableMap := tablesMap[schema]
+				for table, stage := range tableDropInfo {
+					realTable, tblChange := tableMap[table]
+					if !tblChange {
+						realTable = table
+						tblChange = hasChange
 					}
-					tableMap := talesMap[schema]
-					for table, stage := range tableDropInfo {
-						realTable, tblChange := tableMap[table]
-						if !tblChange {
-							realTable = table
-							tblChange = hasChange
+					if tblChange {
+						key := common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(lockID, columnName, source, realSchema, realTable)
+						val, err := json.Marshal(stage)
+						if err != nil {
+							return err
 						}
-						if tblChange {
-							key := common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(lockID, columnName, source, realSchema, realTable)
-							val, err := json.Marshal(stage)
-							if err != nil {
-								return err
-							}
-							opPut := clientv3.OpPut(key, string(val))
-							opDel := deleteSourceDroppedColumnsOp(lockID, columnName, source, schema, table)
+						opPut := clientv3.OpPut(key, string(val))
+						opDel := deleteSourceDroppedColumnsOp(lockID, columnName, source, schema, table)
 
-							_, _, err = etcdutil.DoOpsInOneTxnWithRetry(cli, opPut, opDel)
-							if err != nil {
-								return err
-							}
+						_, _, err = etcdutil.DoOpsInOneTxnWithRetry(cli, opPut, opDel)
+						if err != nil {
+							return err
 						}
 					}
 				}

@@ -522,7 +522,7 @@ func (m mockOnlinePlugin) Clear(tctx *tcontext.Context) error {
 func (m mockOnlinePlugin) Close() {
 }
 
-func (m mockOnlinePlugin) Check(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
+func (m mockOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
 	return nil
 }
 

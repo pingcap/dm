@@ -335,8 +335,8 @@ func (meta *ShardingMeta) Check(targetID string, schemaMap map[string]string, ta
 			seqs := meta.sources[oldID]
 			delete(meta.sources, oldID)
 			meta.sources[newID] = seqs
-			removeSql, arg := meta.genRemoveSQL(oldID, targetID)
-			sqls = append(sqls, removeSql)
+			removeSQL, arg := meta.genRemoveSQL(oldID, targetID)
+			sqls = append(sqls, removeSQL)
 			args = append(args, arg)
 		}
 		log.L().Info("fix sharding meta", zap.String("old", oldID), zap.String("new", newID))

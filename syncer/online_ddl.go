@@ -60,7 +60,7 @@ type OnlinePlugin interface {
 	// Close closes online ddl plugin
 	Close()
 	// Check try to check and fix the shcema/table case-sensitive issue
-	Check(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error
+	CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error
 }
 
 // TableType is type of table.
@@ -320,12 +320,12 @@ func (s *OnlineDDLStorage) createTable(tctx *tcontext.Context) error {
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
-// Check try to check and fix the schema/table case-sensitive issue.
-func (s *OnlineDDLStorage) Check(
+// CheckAndUpdate try to check and fix the schema/table case-sensitive issue.
+func (s *OnlineDDLStorage) CheckAndUpdate(
 	tctx *tcontext.Context,
 	schemaMap map[string]string,
 	tablesMap map[string]map[string]string,
-	realNameFn func(schema, table string) (string, string),
+	realNameFn func(table string) string,
 ) error {
 	s.Lock()
 	defer s.Unlock()
@@ -346,8 +346,7 @@ func (s *OnlineDDLStorage) Check(
 				tableChange = hasChange
 			}
 			if tableChange {
-				targetSchema, targetTable := realNameFn(realSchema, realTbl)
-				ddlInfos.Schema = targetSchema
+				targetTable := realNameFn(realTbl)
 				ddlInfos.Table = targetTable
 				err := s.saveToDB(tctx, realSchema, realTbl, ddlInfos)
 				if err != nil {

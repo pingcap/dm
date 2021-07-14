@@ -165,19 +165,6 @@ const (
 	LCTableNamesMixed = 2
 )
 
-func parseLowerCaseTableNamesFlavorFrom(s string) (LowerCaseTableNamesFlavor, error) {
-	switch s {
-	case "0":
-		return LCTableNamesSensitive, nil
-	case "1":
-		return LCTableNamesInsensitive, nil
-	case "2":
-		return LCTableNamesMixed, nil
-	default:
-		return LCTableNamesSensitive, terror.ErrDBUnExpect.Generate(fmt.Sprintf("invalid `lower_case_table_names` value '%s'", s))
-	}
-}
-
 // FetchLowerCaseTableNamesSetting return the `lower_case_table_names` setting of target db.
 func FetchLowerCaseTableNamesSetting(ctx context.Context, conn *sql.Conn) (LowerCaseTableNamesFlavor, error) {
 	query := "SELECT @@lower_case_table_names;"
@@ -185,11 +172,14 @@ func FetchLowerCaseTableNamesSetting(ctx context.Context, conn *sql.Conn) (Lower
 	if row.Err() != nil {
 		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(row.Err(), query)
 	}
-	var res string
+	var res uint8
 	if err := row.Scan(&res); err != nil {
 		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(err, query)
 	}
-	return parseLowerCaseTableNamesFlavorFrom(res)
+	if res > LCTableNamesMixed {
+		return LCTableNamesSensitive, terror.ErrDBUnExpect.Generate(fmt.Sprintf("invalid `lower_case_table_names` value '%s'", res))
+	}
+	return LowerCaseTableNamesFlavor(res), nil
 }
 
 // CompareShardingDDLs compares s and t ddls
