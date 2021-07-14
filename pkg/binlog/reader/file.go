@@ -82,7 +82,7 @@ func (s *FileReaderStatus) String() string {
 func NewFileReader(cfg *FileReaderConfig) Reader {
 	parser := replication.NewBinlogParser()
 	parser.SetVerifyChecksum(true)
-	parser.SetUseDecimal(true)
+	parser.SetUseDecimal(false)
 	parser.SetRawMode(cfg.EnableRawMode)
 	if cfg.Timezone != nil {
 		parser.SetTimestampStringLocation(cfg.Timezone)

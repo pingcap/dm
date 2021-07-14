@@ -369,7 +369,7 @@ ErrMasterHandleHTTPApis,[code=38034:class=dm-master:scope=internal:level=high], 
 ErrMasterHostPortNotValid,[code=38035:class=dm-master:scope=internal:level=high], "Message: host:port '%s' not valid, Workaround: Please check the `master-addr` config in master configuration file."
 ErrMasterGetHostnameFail,[code=38036:class=dm-master:scope=internal:level=high], "Message: get hostname fail"
 ErrMasterGenEmbedEtcdConfigFail,[code=38037:class=dm-master:scope=internal:level=high], "Message: fail to generate config item %s for embed etcd, Workaround: Please check configs in master configuration file."
-ErrMasterStartEmbedEtcdFail,[code=38038:class=dm-master:scope=internal:level=high], "Message: fail to start embed etcd"
+ErrMasterStartEmbedEtcdFail,[code=38038:class=dm-master:scope=internal:level=high], "Message: fail to start embed etcd, Workaround: Please check all dm-master of `initial-cluster` in configuration file is up, and check the log for a detailed error."
 ErrMasterParseURLFail,[code=38039:class=dm-master:scope=internal:level=high], "Message: fail to parse URL %s, Workaround: Please check configs in master configuration file."
 ErrMasterJoinEmbedEtcdFail,[code=38040:class=dm-master:scope=internal:level=high], "Message: fail to join embed etcd: %s, Workaround: Please check configs in master configuration file."
 ErrMasterInvalidOperateOp,[code=38041:class=dm-master:scope=internal:level=medium], "Message: invalid op %s on %s"
