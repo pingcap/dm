@@ -11,8 +11,6 @@ create table t2 (
     PRIMARY KEY (id)
 );
 
-;
-
 insert into
     t2 (name, ts)
 values

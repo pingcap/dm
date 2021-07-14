@@ -238,7 +238,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
 	syncer.recordedActiveRelayLog = false
-	syncer.workerLagMap = make(map[string]*atomic.Int64)
+	syncer.workerLagMap = make(map[string]*atomic.Int64, cfg.WorkerCount+2) // map size = WorkerCount + ddlkey + skipkey
 	return syncer
 }
 
@@ -1140,14 +1140,13 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 }
 
 // DML synced in batch by one worker.
-func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job, workerID int) {
+func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job, workerLagKey string) {
 	defer s.wg.Done()
 
 	idx := 0
 	count := s.cfg.Batch
 	jobs := make([]*job, 0, count)
 	tpCnt := make(map[opType]int64)
-	workerLagKey := dmlWorkerLagKey(workerID)
 
 	// clearF is used to reset job queue.
 	clearF := func() {
@@ -1274,7 +1273,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				// update lag metric even if there is no job in the queue
 				// metric will only be updated when all wokers have been initialised to avoid data races.
 				tctx.L().Debug("no job in queue, update lag to zero",
-					zap.String("workerLagKey", workerLagKey), zap.Int("current ts", int(time.Now().Unix())))
+					zap.String("workerLagKey", workerLagKey), zap.Int64("current ts", time.Now().Unix()))
 				s.updateReplicationLag(nil, workerLagKey)
 			}
 		}
@@ -1408,7 +1407,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		go func(i int, name string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
-			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i], i)
+			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i], dmlWorkerLagKey(i))
 			cancel()
 		}(i, name)
 	}

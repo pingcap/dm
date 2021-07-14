@@ -18,10 +18,9 @@ function check_secondsBehindMaster() {
 	fi
 }
 
-function test_syncer_metrics() {
+function run() {
 	# add changeTickerInterval to keep metric from updating to zero too quickly when there is no work in the queue.
 	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/BlockSyncerUpdateLag=return(\"ddl,1\");github.com/pingcap/dm/syncer/changeTickerInterval=return(10)"
-	cp $cur/conf/dm-master.toml $WORK_DIR/dm-master.toml
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
@@ -106,10 +105,6 @@ function test_syncer_metrics() {
 	cleanup_data metrics
 	cleanup_process $*
 	export GO_FAILPOINTS=''
-}
-
-function run() {
-	test_syncer_metrics
 }
 
 cleanup_data metrics
