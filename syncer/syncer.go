@@ -1983,7 +1983,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema))
 		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
 
-		// we try to insert an empty SQL to s.onlineDDL, because ignoring it will cause a "not found" error
+		// we try to insert an empty SQL to s.onlineDDL, because user may configure a filter to skip it, but simply
+		// ignoring it will cause a "not found" error when DM see RENAME of the ghost table
 		if s.onlineDDL == nil {
 			return s.recordSkipSQLsLocation(&ec)
 		}
@@ -2031,16 +2032,13 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	ec.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation))
 	*ec.lastLocation = *ec.currentLocation // update lastLocation, because we have checked `isDDL`
 
-	var (
-		sqls                []string
-		onlineDDLTableNames map[string]*filter.Table
-	)
-
+	// TiDB can't handle multi schema change DDL, so we split it here.
 	// for DDL, we don't apply operator until we try to execute it. so can handle sharding cases
 	// We use default parser because inside function where need parser, sqls are came from parserpkg.SplitDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.tctx, parser.New(), parseResult.stmt, usedSchema)
+	// TODO: save stmt, tableName to avoid parse the sql to get them again
+	sqls, onlineDDLTableNames, err := s.splitAndFilterDDL(ec, parser.New(), parseResult.stmt, usedSchema)
 	if err != nil {
-		ec.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
+		ec.tctx.L().Error("fail to split statement", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
 		return err
 	}
 	ec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", originSQL), zap.Strings("statements", sqls), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), zap.Stringer("location", ec.currentLocation))
@@ -2069,15 +2067,15 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		needTrackDDLs  = make([]trackedDDL, 0, len(sqls))
 		sourceTbls     = make(map[string]map[string]struct{}) // db name -> tb name
 	)
+
+	// handle one-schema change DDL
 	for _, sql := range sqls {
-		// We use default parser because sqls are came from above *Syncer.resolveDDLSQL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		sqlDDL, tableNames, stmt, handleErr := s.handleDDL(parser.New(), usedSchema, sql)
+		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
+		sqlDDL, tableNames, stmt, handleErr := s.routeDDL(parser.New(), usedSchema, sql)
 		if handleErr != nil {
 			return handleErr
 		}
 		if len(sqlDDL) == 0 {
-			skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
-			ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema))
 			continue
 		}
 
