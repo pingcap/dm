@@ -2779,6 +2779,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 				}
 			}
 			s.cfg.To.Session["sql_mode"] = strings.Join(waitEnable, ",")
+		}
 	}
 
 	dbCfg = s.cfg.To
