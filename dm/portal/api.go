@@ -69,7 +69,7 @@ type CommonResult struct {
 	Error  string `json:"error"`
 }
 
-// CheckResult is the result of CheckAndUpdate.
+// CheckResult is the result of Check.
 type CheckResult struct {
 	CommonResult
 }
@@ -100,7 +100,7 @@ type AnalyzeResult struct {
 
 // Check checks database can be connected.
 func (p *Handler) Check(w http.ResponseWriter, req *http.Request) {
-	log.L().Info("receive CheckAndUpdate request")
+	log.L().Info("receive Check request")
 
 	db, addr, err := getDBConnFunc(req, p.timeout)
 	if err != nil {

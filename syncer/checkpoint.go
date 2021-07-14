@@ -235,7 +235,7 @@ type CheckPoint interface {
 	FlushedGlobalPoint() binlog.Location
 
 	// CheckGlobalPoint checks whether we should save global checkpoint
-	// corresponding to Meta.CheckAndUpdate
+	// corresponding to Meta.Check
 	CheckGlobalPoint() bool
 
 	// GetFlushedTableInfo gets flushed table info
