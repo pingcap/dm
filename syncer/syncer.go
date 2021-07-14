@@ -387,7 +387,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		}
 
 		if s.onlineDDL != nil {
-			if err = s.onlineDDL.Check(s.tctx, schemaMap, tableMap); err != nil {
+			if err = s.onlineDDL.CheckAndUpdate(s.tctx, schemaMap, tableMap); err != nil {
 				return err
 			}
 		}

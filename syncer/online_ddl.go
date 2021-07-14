@@ -59,7 +59,7 @@ type OnlinePlugin interface {
 	Clear(tctx *tcontext.Context) error
 	// Close closes online ddl plugin
 	Close()
-	// Check try to check and fix the shcema/table case-sensitive issue
+	// CheckAndUpdate try to check and fix the shcema/table case-sensitive issue
 	CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error
 }
 
