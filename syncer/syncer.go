@@ -1260,7 +1260,8 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				clearF()
 			}
 		case <-ticker.C:
-			if len(jobs) > 0 {
+			jobCnt := len(jobs)
+			if jobCnt > 0 {
 				failpoint.Inject("syncDMLTicker", func() {
 					tctx.L().Info("job queue not full, executeSQLs by ticker")
 				})
@@ -1271,14 +1272,12 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				}
 				successF()
 				clearF()
-			} else {
-				if !s.workerLagMapIniting.Load() {
-					// update lag metric even if there is no job in the queue
-					// metric will only be updated when all wokers have been initialised to avoid data races.
-					tctx.L().Debug("no job in queue, update lag to zero",
-						zap.String("workerLagKey", workerLagKey), zap.Int64("current ts", time.Now().Unix()))
-					s.updateReplicationLag(nil, workerLagKey)
-				}
+			} else if jobCnt == 0 && !s.workerLagMapIniting.Load() {
+				// update lag metric even if there is no job in the queue
+				// metric will only be updated when all wokers have been initialised to avoid data races.
+				tctx.L().Debug("no job in queue, update lag to zero",
+					zap.String("workerLagKey", workerLagKey), zap.Int64("current ts", time.Now().Unix()))
+				s.updateReplicationLag(nil, workerLagKey)
 			}
 		}
 	}
