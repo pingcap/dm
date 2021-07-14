@@ -282,8 +282,8 @@ func (meta *ShardingMeta) genRemoveSQL(sourceID, tableID string) (string, []inte
 	return sql, []interface{}{sourceID, tableID}
 }
 
-// Check check and fix schema and table names for all the sharding groups.
-func (meta *ShardingMeta) Check(targetID string, schemaMap map[string]string, tablesMap map[string]map[string]string) ([]string, [][]interface{}, error) {
+// CheckAndUpdate check and fix schema and table names for all the sharding groups.
+func (meta *ShardingMeta) CheckAndUpdate(targetID string, schemaMap map[string]string, tablesMap map[string]map[string]string) ([]string, [][]interface{}, error) {
 	if len(schemaMap) == 0 && len(tablesMap) == 0 {
 		return nil, nil, nil
 	}

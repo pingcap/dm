@@ -146,7 +146,7 @@ const (
 
 var UnitType_name = map[int32]string{
 	0:   "InvalidUnit",
-	1:   "Check",
+	1:   "CheckAndUpdate",
 	2:   "Dump",
 	3:   "Load",
 	4:   "Sync",
@@ -155,7 +155,7 @@ var UnitType_name = map[int32]string{
 
 var UnitType_value = map[string]int32{
 	"InvalidUnit": 0,
-	"Check":       1,
+	"CheckAndUpdate":       1,
 	"Dump":        2,
 	"Load":        3,
 	"Sync":        4,
@@ -7645,7 +7645,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 7:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Check", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field CheckAndUpdate", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -8788,7 +8788,7 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 5:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Check", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field CheckAndUpdate", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {

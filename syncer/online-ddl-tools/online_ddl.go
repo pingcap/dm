@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package syncer
+package onlineddl
 
 import (
 	"encoding/json"
@@ -25,6 +25,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -37,6 +38,11 @@ var OnlineDDLSchemes = map[string]func(*tcontext.Context, *config.SubTaskConfig)
 	config.PT:    NewPT,
 	config.GHOST: NewGhost,
 }
+
+// refactor to reduce duplicate later.
+var (
+	maxCheckPointTimeout = "1m"
+)
 
 // OnlinePlugin handles online ddl solutions like pt, gh-ost.
 type OnlinePlugin interface {
@@ -66,10 +72,11 @@ type OnlinePlugin interface {
 // TableType is type of table.
 type TableType string
 
+// below variables will be explained later.
 const (
-	realTable  TableType = "real table"
-	ghostTable TableType = "ghost table"
-	trashTable TableType = "trash table" // means we should ignore these tables
+	RealTable  TableType = "real table"
+	GhostTable TableType = "ghost table"
+	TrashTable TableType = "trash table" // means we should ignore these tables
 )
 
 // GhostDDLInfo stores ghost information and ddls.
@@ -80,14 +87,14 @@ type GhostDDLInfo struct {
 	DDLs []string `json:"ddls"`
 }
 
-// OnlineDDLStorage stores sharding group online ddls information.
-type OnlineDDLStorage struct {
+// Storage stores sharding group online ddls information.
+type Storage struct {
 	sync.RWMutex
 
 	cfg *config.SubTaskConfig
 
 	db        *conn.BaseDB
-	dbConn    *DBConn
+	dbConn    *dbconn.DBConn
 	schema    string // schema name, set through task config
 	tableName string // table name with schema, now it's task name
 	id        string // the source ID of the upstream MySQL/MariaDB replica.
@@ -99,8 +106,8 @@ type OnlineDDLStorage struct {
 }
 
 // NewOnlineDDLStorage creates a new online ddl storager.
-func NewOnlineDDLStorage(logCtx *tcontext.Context, cfg *config.SubTaskConfig) *OnlineDDLStorage {
-	s := &OnlineDDLStorage{
+func NewOnlineDDLStorage(logCtx *tcontext.Context, cfg *config.SubTaskConfig) *Storage {
+	s := &Storage{
 		cfg:       cfg,
 		schema:    dbutil.ColumnName(cfg.MetaSchema),
 		tableName: dbutil.TableName(cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)),
@@ -113,10 +120,10 @@ func NewOnlineDDLStorage(logCtx *tcontext.Context, cfg *config.SubTaskConfig) *O
 }
 
 // Init initials online handler.
-func (s *OnlineDDLStorage) Init(tctx *tcontext.Context) error {
+func (s *Storage) Init(tctx *tcontext.Context) error {
 	onlineDB := s.cfg.To
 	onlineDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
-	db, dbConns, err := createConns(tctx, s.cfg, onlineDB, 1)
+	db, dbConns, err := dbconn.CreateConns(tctx, s.cfg, onlineDB, 1)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -132,12 +139,12 @@ func (s *OnlineDDLStorage) Init(tctx *tcontext.Context) error {
 }
 
 // Load loads information from storage.
-func (s *OnlineDDLStorage) Load(tctx *tcontext.Context) error {
+func (s *Storage) Load(tctx *tcontext.Context) error {
 	s.Lock()
 	defer s.Unlock()
 
 	query := fmt.Sprintf("SELECT `ghost_schema`, `ghost_table`, `ddls` FROM %s WHERE `id`= ?", s.tableName)
-	rows, err := s.dbConn.querySQL(tctx, query, s.id)
+	rows, err := s.dbConn.QuerySQL(tctx, query, s.id)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -174,7 +181,7 @@ func (s *OnlineDDLStorage) Load(tctx *tcontext.Context) error {
 }
 
 // Get returns ddls by given schema/table.
-func (s *OnlineDDLStorage) Get(ghostSchema, ghostTable string) *GhostDDLInfo {
+func (s *Storage) Get(ghostSchema, ghostTable string) *GhostDDLInfo {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -194,7 +201,7 @@ func (s *OnlineDDLStorage) Get(ghostSchema, ghostTable string) *GhostDDLInfo {
 }
 
 // Save saves online ddl information.
-func (s *OnlineDDLStorage) Save(tctx *tcontext.Context, ghostSchema, ghostTable, realSchema, realTable, ddl string) error {
+func (s *Storage) Save(tctx *tcontext.Context, ghostSchema, ghostTable, realSchema, realTable, ddl string) error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -224,15 +231,14 @@ func (s *OnlineDDLStorage) Save(tctx *tcontext.Context, ghostSchema, ghostTable,
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
-func (s *OnlineDDLStorage) saveToDB(tctx *tcontext.Context, ghostSchema, ghostTable string, ddl *GhostDDLInfo) error {
+func (s *Storage) saveToDB(tctx *tcontext.Context, ghostSchema, ghostTable string, ddl *GhostDDLInfo) error {
 	ddlsBytes, err := json.Marshal(ddl)
 	if err != nil {
 		return terror.ErrSyncerUnitOnlineDDLInvalidMeta.Delegate(err)
 	}
 
 	query := fmt.Sprintf("REPLACE INTO %s(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES (?, ?, ?, ?)", s.tableName)
-
-	_, err = s.dbConn.executeSQL(tctx, []string{query}, []interface{}{s.id, ghostSchema, ghostTable, string(ddlsBytes)})
+	_, err = s.dbConn.ExecuteSQL(tctx, []string{query}, []interface{}{s.id, ghostSchema, ghostTable, string(ddlsBytes)})
 	failpoint.Inject("ExitAfterSaveOnlineDDL", func() {
 		tctx.L().Info("failpoint ExitAfterSaveOnlineDDL")
 		panic("ExitAfterSaveOnlineDDL")
@@ -241,13 +247,13 @@ func (s *OnlineDDLStorage) saveToDB(tctx *tcontext.Context, ghostSchema, ghostTa
 }
 
 // Delete deletes online ddl informations.
-func (s *OnlineDDLStorage) Delete(tctx *tcontext.Context, ghostSchema, ghostTable string) error {
+func (s *Storage) Delete(tctx *tcontext.Context, ghostSchema, ghostTable string) error {
 	s.Lock()
 	defer s.Unlock()
 	return s.delete(tctx, ghostSchema, ghostTable)
 }
 
-func (s *OnlineDDLStorage) delete(tctx *tcontext.Context, ghostSchema, ghostTable string) error {
+func (s *Storage) delete(tctx *tcontext.Context, ghostSchema, ghostTable string) error {
 	mSchema, ok := s.ddls[ghostSchema]
 	if !ok {
 		return nil
@@ -255,7 +261,7 @@ func (s *OnlineDDLStorage) delete(tctx *tcontext.Context, ghostSchema, ghostTabl
 
 	// delete all checkpoints
 	sql := fmt.Sprintf("DELETE FROM %s WHERE `id` = ? and `ghost_schema` = ? and `ghost_table` = ?", s.tableName)
-	_, err := s.dbConn.executeSQL(tctx, []string{sql}, []interface{}{s.id, ghostSchema, ghostTable})
+	_, err := s.dbConn.ExecuteSQL(tctx, []string{sql}, []interface{}{s.id, ghostSchema, ghostTable})
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -265,13 +271,13 @@ func (s *OnlineDDLStorage) delete(tctx *tcontext.Context, ghostSchema, ghostTabl
 }
 
 // Clear clears online ddl information from storage.
-func (s *OnlineDDLStorage) Clear(tctx *tcontext.Context) error {
+func (s *Storage) Clear(tctx *tcontext.Context) error {
 	s.Lock()
 	defer s.Unlock()
 
 	// delete all checkpoints
 	sql := fmt.Sprintf("DELETE FROM %s WHERE `id` = ?", s.tableName)
-	_, err := s.dbConn.executeSQL(tctx, []string{sql}, []interface{}{s.id})
+	_, err := s.dbConn.ExecuteSQL(tctx, []string{sql}, []interface{}{s.id})
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -281,19 +287,19 @@ func (s *OnlineDDLStorage) Clear(tctx *tcontext.Context) error {
 }
 
 // ResetConn implements OnlinePlugin.ResetConn.
-func (s *OnlineDDLStorage) ResetConn(tctx *tcontext.Context) error {
-	return s.dbConn.resetConn(tctx)
+func (s *Storage) ResetConn(tctx *tcontext.Context) error {
+	return s.dbConn.ResetConn(tctx)
 }
 
 // Close closes database connection.
-func (s *OnlineDDLStorage) Close() {
+func (s *Storage) Close() {
 	s.Lock()
 	defer s.Unlock()
 
-	closeBaseDB(s.logCtx, s.db)
+	dbconn.CloseBaseDB(s.logCtx, s.db)
 }
 
-func (s *OnlineDDLStorage) prepare(tctx *tcontext.Context) error {
+func (s *Storage) prepare(tctx *tcontext.Context) error {
 	if err := s.createSchema(tctx); err != nil {
 		return err
 	}
@@ -301,13 +307,13 @@ func (s *OnlineDDLStorage) prepare(tctx *tcontext.Context) error {
 	return s.createTable(tctx)
 }
 
-func (s *OnlineDDLStorage) createSchema(tctx *tcontext.Context) error {
+func (s *Storage) createSchema(tctx *tcontext.Context) error {
 	sql := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", s.schema)
-	_, err := s.dbConn.executeSQL(tctx, []string{sql})
+	_, err := s.dbConn.ExecuteSQL(tctx, []string{sql})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
-func (s *OnlineDDLStorage) createTable(tctx *tcontext.Context) error {
+func (s *Storage) createTable(tctx *tcontext.Context) error {
 	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 			id VARCHAR(32) NOT NULL,
 			ghost_schema VARCHAR(128) NOT NULL,
@@ -316,12 +322,12 @@ func (s *OnlineDDLStorage) createTable(tctx *tcontext.Context) error {
 			update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			UNIQUE KEY uk_id_schema_table (id, ghost_schema, ghost_table)
 		)`, s.tableName)
-	_, err := s.dbConn.executeSQL(tctx, []string{sql})
+	_, err := s.dbConn.ExecuteSQL(tctx, []string{sql})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
 // CheckAndUpdate try to check and fix the schema/table case-sensitive issue.
-func (s *OnlineDDLStorage) CheckAndUpdate(
+func (s *Storage) CheckAndUpdate(
 	tctx *tcontext.Context,
 	schemaMap map[string]string,
 	tablesMap map[string]map[string]string,

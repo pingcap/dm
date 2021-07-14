@@ -26,6 +26,7 @@ import (
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/metrics"
 )
 
 // parseDDLResult represents the result of parseDDLSQL.
@@ -155,7 +156,7 @@ func (s *Syncer) splitAndFilterDDL(
 			return nil, nil, err2
 		}
 		if shouldSkip {
-			skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+			metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 			ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", schema))
 			continue
 		}

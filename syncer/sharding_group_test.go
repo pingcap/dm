@@ -32,6 +32,7 @@ import (
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 var _ = Suite(&testShardingGroupSuite{})
@@ -238,7 +239,7 @@ func (t *testShardingGroupSuite) TestKeeper(c *C) {
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 	k.db = conn.NewBaseDB(db, func() {})
-	k.dbConn = &DBConn{cfg: t.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	k.dbConn = &dbconn.DBConn{Cfg: t.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 
 	mock.ExpectBegin()
 	mock.ExpectExec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", t.cfg.MetaSchema)).WillReturnResult(sqlmock.NewResult(1, 1))
