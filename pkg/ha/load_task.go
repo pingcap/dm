@@ -94,8 +94,10 @@ func GetAllLoadTask(cli *clientv3.Client) (map[string]map[string]string, int64, 
 // This function should often be called by DM-master.
 func WatchLoadTask(ctx context.Context, cli *clientv3.Client, revision int64,
 	outCh chan<- LoadTask, errCh chan<- error) {
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	// NOTE: WithPrevKV used to get a valid `ev.PrevKv` for deletion.
-	ch := cli.Watch(ctx, common.LoadTaskKeyAdapter.Path(),
+	ch := cli.Watch(wCtx, common.LoadTaskKeyAdapter.Path(),
 		clientv3.WithPrefix(), clientv3.WithRev(revision), clientv3.WithPrevKV())
 
 	for {

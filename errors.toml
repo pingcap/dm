@@ -2227,7 +2227,7 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38038]
 message = "fail to start embed etcd"
 description = ""
-workaround = ""
+workaround = "Please check all dm-master of `initial-cluster` in configuration file is up, and check the log for a detailed error."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38039]

@@ -67,7 +67,7 @@ func isDropColumnWithIndexError(err error) bool {
 
 // handleSpecialDDLError handles special errors for DDL execution.
 func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls []string, index int, conn *dbconn.DBConn) error {
-	// We use default parser because ddls are came from *Syncer.handleDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
+	// We use default parser because ddls are came from *Syncer.routeDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 	parser2 := parser.New()
 
 	// it only ignore `invalid connection` error (timeout or other causes) for `ADD INDEX`.

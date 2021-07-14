@@ -52,7 +52,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 	}
 
 	schema, table := tables[0].Schema, tables[0].Name
-	targetSchema, targetTable := p.RealName(schema, table)
+	targetTable := p.RealName(table)
 	tp := p.TableType(table)
 
 	switch tp {
@@ -118,7 +118,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 			}
 
 		default:
-			err := p.storge.Save(tctx, schema, table, targetSchema, targetTable, statement)
+			err := p.storge.Save(tctx, schema, table, schema, targetTable, statement)
 			if err != nil {
 				return nil, "", "", err
 			}
@@ -154,14 +154,14 @@ func (p *PT) TableType(table string) TableType {
 }
 
 // RealName implements interface.
-func (p *PT) RealName(schema, table string) (string, string) {
+func (p *PT) RealName(table string) string {
 	tp := p.TableType(table)
 	if tp == TrashTable || tp == GhostTable {
 		table = strings.TrimLeft(table, "_")
 		table = table[:len(table)-4]
 	}
 
-	return schema, table
+	return table
 }
 
 // Clear clears online ddl information.

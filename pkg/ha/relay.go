@@ -196,7 +196,9 @@ func deleteRelayConfigOp(worker string) clientv3.Op {
 // For the DELETE operations, it returns an nil source config.
 func WatchRelayConfig(ctx context.Context, cli *clientv3.Client,
 	worker string, revision int64, outCh chan<- RelaySource, errCh chan<- error) {
-	ch := cli.Watch(ctx, common.UpstreamRelayWorkerKeyAdapter.Encode(worker), clientv3.WithRev(revision))
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ch := cli.Watch(wCtx, common.UpstreamRelayWorkerKeyAdapter.Encode(worker), clientv3.WithRev(revision))
 
 	for {
 		select {
