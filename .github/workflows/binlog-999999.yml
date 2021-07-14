@@ -67,6 +67,15 @@ jobs:
           sudo bash -c "echo './mysql-bin.999998' > /tmp/mysql2-data/mysql-bin.index"
           docker-compose -f ./tests/binlog_999999/docker-compose.yml up -d
 
+          while ! mysqladmin -h127.0.0.1 -P3306 -p123456 -uroot ping --connect-timeout=1 > /dev/null 2>&1 ; do
+            echo "wait mysql"
+            sleep 1
+          done
+          while ! mysqladmin -h127.0.0.1 -P3307 -p123456 -uroot ping --connect-timeout=1 > /dev/null 2>&1 ; do
+            echo "wait mysql"
+            sleep 1
+          done
+
       - name: Run test cases
         run: |
           RESET_MASTER=false make integration_test CASE=incremental_mode
