@@ -5,7 +5,7 @@ on:
     branches:
       - master
       - release-2.0
-      - feishu
+      - test-ci # please keep this branch for testing
   pull_request:
     branches:
       - master
@@ -82,7 +82,7 @@ jobs:
 
       - name: Feishu notification
         if: ${{ failure() }}
-        uses: whatwewant/action-robot-feishu@v0.0.1
+        uses: whatwewant/action-robot-feishu@v0.0.10
         with:
           url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
           title: FIX ME PLEASE
@@ -98,17 +98,6 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v2
-
-      - name: Feishu notification
-        uses: whatwewant/action-robot-feishu@v0.0.10
-        with:
-          url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
-          title: FIX ME
-          text: |
-            repository: ${{ github.repository }}
-            committer: ${{ github.actor }}
-            compare: ${{ github.event.compare }}
-            job status: ${{ job.status }}
 
       - name: GolangCI Lint
         uses: golangci/golangci-lint-action@v2

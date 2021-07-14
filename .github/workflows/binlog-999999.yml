@@ -113,7 +113,7 @@ jobs:
 
       - name: Feishu notification
         if: ${{ failure() }}
-        uses: whatwewant/action-robot-feishu@v0.0.1
+        uses: whatwewant/action-robot-feishu@v0.0.10
         with:
           url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
           title: FIX ME PLEASE
