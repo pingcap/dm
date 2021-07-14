@@ -2742,6 +2742,11 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 		if err2 != nil {
 			s.tctx.L().Warn("cannot get sql_mode from upstream database", log.ShortError(err2))
 		} else {
+			// When upstream's datatime is 2020-00-00, 2020-00-01, 2020-06-00
+			// and so on, downstream will be 2019-11-30, 2019-12-01, 2020-05-31,
+			// as if set the 'NO_ZERO_IN_DATE', 'NO_ZERO_DATE'.
+			// This is because the implementation of go-mysql, that you can see
+			// https://github.com/go-mysql-org/go-mysql/blob/master/replication/row_event.go#L1063-L1087
 			sqlModes := strings.Split(sqlMode, ",")
 			needDisable := []string{
 				"NO_ZERO_IN_DATE",
