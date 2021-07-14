@@ -1012,6 +1012,60 @@ description = ""
 workaround = "Please check the configuration files."
 tags = ["internal", "high"]
 
+[error.DM-config-20039]
+message = "expression filter can only specify one of (insert, update, delete) expressions, but %s has specified %v"
+description = ""
+workaround = "If you want to filter by A or B, please write two filters."
+tags = ["internal", "high"]
+
+[error.DM-config-20040]
+message = "mysql-instance(%d)'s expression-filters %s not exist in expression-filter"
+description = ""
+workaround = "Please check the `expression-filters` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20041]
+message = "expression-filter name(%s) SQL(%s) has wrong grammar: %v"
+description = ""
+workaround = "Please check the `expression-filters` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20042]
+message = "expression-filter %s has empty %s"
+description = ""
+workaround = "Please check the `expression-filters` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20043]
+message = "`backoff-max` value %v is less than `backoff-min` value %v"
+description = ""
+workaround = "Please increase `backoff-max` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20044]
+message = "generate block allow list error"
+description = ""
+workaround = "Please check the `block-allow-list` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20045]
+message = "generate table router error"
+description = ""
+workaround = "Please check the `routes` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20046]
+message = "generate column mapping error"
+description = ""
+workaround = "Please check the `column-mappings` config in task configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20047]
+message = "invalid `chunk-filesize` %v"
+description = ""
+workaround = "Please check the `chunk-filesize` config in task configuration file."
+tags = ["internal", "high"]
+
 [error.DM-binlog-op-22001]
 message = ""
 description = ""
@@ -2173,7 +2227,7 @@ tags = ["internal", "high"]
 [error.DM-dm-master-38038]
 message = "fail to start embed etcd"
 description = ""
-workaround = ""
+workaround = "Please check all dm-master of `initial-cluster` in configuration file is up, and check the log for a detailed error."
 tags = ["internal", "high"]
 
 [error.DM-dm-master-38039]

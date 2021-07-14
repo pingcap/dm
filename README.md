@@ -45,7 +45,7 @@ When DM is built successfully, you can find binaries in the `bin` directory.
 
 Run all tests, including unit tests and integration tests:
 
-See [test/README.md](./test/README.md) for a more detailed guidance.
+See [test/README.md](./tests/README.md) for a more detailed guidance.
 
 ```bash
 make test

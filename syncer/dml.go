@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/types"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb/expression"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -48,7 +49,7 @@ func extractValueFromData(data []interface{}, columns []*model.ColumnInfo) []int
 	return value
 }
 
-func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
+func (s *Syncer) genInsertSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		qualifiedName   = dbutil.TableName(param.schema, param.table)
 		dataSeq         = param.data
@@ -66,6 +67,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 	}
 	sql := genInsertReplace(insertOrReplace, qualifiedName, columns)
 
+RowLoop:
 	for dataIdx, data := range dataSeq {
 		if len(data) != len(columns) {
 			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(data))
@@ -77,6 +79,17 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			originalValue = extractValueFromData(originalDataSeq[dataIdx], ti.Columns)
 		}
 
+		for _, expr := range filterExprs {
+			skip, err := SkipDMLByExpression(originalValue, expr, ti.Columns)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			if skip {
+				s.filteredInsert.Add(1)
+				continue RowLoop
+			}
+		}
+
 		ks := genMultipleKeys(ti, originalValue, qualifiedName)
 		sqls = append(sqls, sql)
 		values = append(values, value)
@@ -86,7 +99,11 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 	return sqls, keys, values, nil
 }
 
-func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
+func (s *Syncer) genUpdateSQLs(
+	param *genDMLParam,
+	oldValueFilters []expression.Expression,
+	newValueFilters []expression.Expression,
+) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		qualifiedName       = dbutil.TableName(param.schema, param.table)
 		data                = param.data
@@ -104,6 +121,7 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		replaceSQL = genInsertReplace("REPLACE INTO", qualifiedName, columns)
 	}
 
+RowLoop:
 	for i := 0; i < len(data); i += 2 {
 		oldData := data[i]
 		changedData := data[i+1]
@@ -128,6 +146,24 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		} else {
 			oriOldValues = extractValueFromData(oriOldData, ti.Columns)
 			oriChangedValues = extractValueFromData(oriChangedData, ti.Columns)
+		}
+
+		for j := range oldValueFilters {
+			// AND logic
+			oldExpr, newExpr := oldValueFilters[j], newValueFilters[j]
+			skip1, err := SkipDMLByExpression(oriOldValues, oldExpr, ti.Columns)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			skip2, err := SkipDMLByExpression(oriChangedValues, newExpr, ti.Columns)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			if skip1 && skip2 {
+				s.filteredUpdate.Add(1)
+				// TODO: we skip generating the UPDATE SQL, so we left the old value here. Is this expected?
+				continue RowLoop
+			}
 		}
 
 		if defaultIndexColumns == nil {
@@ -182,7 +218,7 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 	return sqls, keys, values, nil
 }
 
-func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
+func (s *Syncer) genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		qualifiedName       = dbutil.TableName(param.schema, param.table)
 		dataSeq             = param.originalData
@@ -193,12 +229,24 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		values              = make([][]interface{}, 0, len(dataSeq))
 	)
 
+RowLoop:
 	for _, data := range dataSeq {
 		if len(data) != len(ti.Columns) {
 			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(ti.Columns), len(data))
 		}
 
 		value := extractValueFromData(data, ti.Columns)
+
+		for _, expr := range filterExprs {
+			skip, err := SkipDMLByExpression(value, expr, ti.Columns)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			if skip {
+				s.filteredDelete.Add(1)
+				continue RowLoop
+			}
+		}
 
 		if defaultIndexColumns == nil {
 			defaultIndexColumns = getAvailableIndexColumn(ti, value)

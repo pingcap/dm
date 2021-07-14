@@ -7,7 +7,7 @@ LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.GoVersion=$(shell go version)"
 CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
-GOTEST   := CGO_ENABLED=1 $(GO) test
+GOTEST   := CGO_ENABLED=1 $(GO) test -gcflags="all=-N -l"
 PACKAGE_NAME := github.com/pingcap/dm
 PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pb|pbmock|_tools')
 PACKAGE_DIRECTORIES := $$(echo "$(PACKAGES)" | sed 's/github.com\/pingcap\/dm\/*//')
@@ -168,6 +168,15 @@ dm_integration_test_build: tools_setup
 	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-syncer.test github.com/pingcap/dm/cmd/dm-syncer \
+		|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(FAILPOINT_DISABLE)
+	tests/prepare_tools.sh
+
+dm_integration_test_build_worker: tools_setup
+	$(FAILPOINT_ENABLE)
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dm-worker.test github.com/pingcap/dm/cmd/dm-worker \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 	tests/prepare_tools.sh

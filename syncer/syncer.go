@@ -137,10 +137,11 @@ type Syncer struct {
 
 	c *causality
 
-	tableRouter   *router.Table
-	binlogFilter  *bf.BinlogEvent
-	columnMapping *cm.Mapping
-	baList        *filter.Filter
+	tableRouter     *router.Table
+	binlogFilter    *bf.BinlogEvent
+	columnMapping   *cm.Mapping
+	baList          *filter.Filter
+	exprFilterGroup *ExprFilterGroup
 
 	closed atomic.Bool
 
@@ -159,6 +160,10 @@ type Syncer struct {
 	count     atomic.Int64
 	totalTps  atomic.Int64
 	tps       atomic.Int64
+
+	filteredInsert atomic.Int64
+	filteredUpdate atomic.Int64
+	filteredDelete atomic.Int64
 
 	done chan struct{}
 
@@ -312,6 +317,8 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	if err != nil {
 		return terror.ErrSyncerUnitGenBinlogEventFilter.Delegate(err)
 	}
+
+	s.exprFilterGroup = NewExprFilterGroup(s.cfg.ExprFilter)
 
 	if len(s.cfg.ColumnMappingRules) > 0 {
 		s.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
@@ -756,6 +763,20 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origSchema
 		createStmt.Table.Schema = model.NewCIStr(origSchema)
 		createStmt.Table.Name = model.NewCIStr(origTable)
 
+		// schema tracker sets non-clustered index, so can't handle auto_random.
+		if v, _ := s.schemaTracker.GetSystemVar(schema.TiDBClusteredIndex); v == "OFF" {
+			for _, col := range createStmt.Cols {
+				for i, opt := range col.Options {
+					if opt.Tp == ast.ColumnOptionAutoRandom {
+						// col.Options is unordered
+						col.Options[i] = col.Options[len(col.Options)-1]
+						col.Options = col.Options[:len(col.Options)-1]
+						break
+					}
+				}
+			}
+		}
+
 		var newCreateSQLBuilder strings.Builder
 		restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &newCreateSQLBuilder)
 		if err = createStmt.Restore(restoreCtx); err != nil {
@@ -1079,6 +1100,16 @@ func (s *Syncer) flushCheckPoints() error {
 	if err != nil {
 		return err
 	}
+
+	s.tctx.L().Info("after last flushing checkpoint, DM has ignored row changes by expression filter",
+		zap.Int64("number of filtered insert", s.filteredInsert.Load()),
+		zap.Int64("number of filtered update", s.filteredUpdate.Load()),
+		zap.Int64("number of filtered delete", s.filteredDelete.Load()))
+
+	s.filteredInsert.Store(0)
+	s.filteredUpdate.Store(0)
+	s.filteredDelete.Store(0)
+
 	return nil
 }
 
@@ -1456,7 +1487,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	defer func() {
 		if err1 := recover(); err1 != nil {
-			tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("statck"))
+			failpoint.Inject("ExitAfterSaveOnlineDDL", func() {
+				tctx.L().Info("force panic")
+				panic("ExitAfterSaveOnlineDDL")
+			})
+			tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("stack"))
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
 
@@ -1917,7 +1952,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	var (
-		applied bool
 		sqls    []string
 		keys    [][]string
 		args    [][]interface{}
@@ -1935,33 +1969,42 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	switch ec.header.EventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		if !applied {
-			param.safeMode = ec.safeMode.Enable()
-			sqls, keys, args, err = genInsertSQLs(param)
-			if err != nil {
-				return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
-			}
+		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originSchema, originTable, ti)
+		if err2 != nil {
+			return err2
+		}
+
+		param.safeMode = ec.safeMode.Enable()
+		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
+		if err != nil {
+			return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
 		binlogEvent.WithLabelValues("write_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		if !applied {
-			param.safeMode = ec.safeMode.Enable()
-			sqls, keys, args, err = genUpdateSQLs(param)
-			if err != nil {
-				return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
-			}
+		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originSchema, originTable, ti)
+		if err2 != nil {
+			return err2
+		}
+
+		param.safeMode = ec.safeMode.Enable()
+		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
+		if err != nil {
+			return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
 		binlogEvent.WithLabelValues("update_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		if !applied {
-			sqls, keys, args, err = genDeleteSQLs(param)
-			if err != nil {
-				return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
-			}
+		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originSchema, originTable, ti)
+		if err2 != nil {
+			return err2
+		}
+
+		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
+		if err != nil {
+			return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
 		}
 		binlogEvent.WithLabelValues("delete_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = del
@@ -2012,7 +2055,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema))
 		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
 
-		// we try to insert an empty SQL to s.onlineDDL, because ignoring it will cause a "not found" error
+		// we try to insert an empty SQL to s.onlineDDL, because user may configure a filter to skip it, but simply
+		// ignoring it will cause a "not found" error when DM see RENAME of the ghost table
 		if s.onlineDDL == nil {
 			return s.recordSkipSQLsLocation(&ec)
 		}
@@ -2060,16 +2104,13 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	ec.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation))
 	*ec.lastLocation = *ec.currentLocation // update lastLocation, because we have checked `isDDL`
 
-	var (
-		sqls                []string
-		onlineDDLTableNames map[string]*filter.Table
-	)
-
+	// TiDB can't handle multi schema change DDL, so we split it here.
 	// for DDL, we don't apply operator until we try to execute it. so can handle sharding cases
 	// We use default parser because inside function where need parser, sqls are came from parserpkg.SplitDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.tctx, parser.New(), parseResult.stmt, usedSchema)
+	// TODO: save stmt, tableName to avoid parse the sql to get them again
+	sqls, onlineDDLTableNames, err := s.splitAndFilterDDL(ec, parser.New(), parseResult.stmt, usedSchema)
 	if err != nil {
-		ec.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
+		ec.tctx.L().Error("fail to split statement", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
 		return err
 	}
 	ec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", originSQL), zap.Strings("statements", sqls), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), zap.Stringer("location", ec.currentLocation))
@@ -2098,20 +2139,20 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		needTrackDDLs  = make([]trackedDDL, 0, len(sqls))
 		sourceTbls     = make(map[string]map[string]struct{}) // db name -> tb name
 	)
+
+	// handle one-schema change DDL
 	for _, sql := range sqls {
-		// We use default parser because sqls are came from above *Syncer.resolveDDLSQL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		sqlDDL, tableNames, stmt, handleErr := s.handleDDL(parser.New(), usedSchema, sql)
+		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
+		sqlDDL, tableNames, stmt, handleErr := s.routeDDL(parser.New(), usedSchema, sql)
 		if handleErr != nil {
 			return handleErr
 		}
 		if len(sqlDDL) == 0 {
-			skipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
-			ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema))
 			continue
 		}
 
 		// DDL is sequentially synchronized in this syncer's main process goroutine
-		// ignore DDL that is older or same as table checkpoint, to try-sync again for already synced DDLs
+		// ignore DDL that is older or same as table checkpoint, to avoid sync again for already synced DDLs
 		if s.checkpoint.IsOlderThanTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, *ec.currentLocation, true) {
 			ec.tctx.L().Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation))
 			continue
@@ -2523,6 +2564,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			ec.tctx.L().Error("cannot track DDL", zap.String("schema", usedSchema), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
 			return terror.ErrSchemaTrackerCannotExecDDL.Delegate(err, sql)
 		}
+		s.exprFilterGroup.ResetExprs(srcTable.Schema, srcTable.Name)
 	}
 
 	return nil
