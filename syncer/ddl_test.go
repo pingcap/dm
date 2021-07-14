@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"go.uber.org/zap"
 )
 
 func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
@@ -86,7 +88,11 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := &Syncer{}
-	sqls, _, err := syncer.resolveDDLSQL(tcontext.Background(), parser, stmt, "schemadb")
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestCommentQuote")))
+	ec := eventContext{
+		tctx: tctx,
+	}
+	sqls, _, err := syncer.splitAndFilterDDL(ec, parser, stmt, "schemadb")
 	c.Assert(err, IsNil)
 	c.Assert(len(sqls), Equals, 1)
 	c.Assert(sqls[0], Equals, expectedSQL)
@@ -106,11 +112,12 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 		"create table `t1` (id int)",
 		"create table `t1` like `t2`",
 		"create table `s1`.`t1` like `t2`",
+		"create table `s1`.`t1` like `s1`.`t2`",
 		"create table `t1` like `xx`.`t2`",
 		"truncate table `t1`",
 		"truncate table `s1`.`t1`",
 		"rename table `s1`.`t1` to `s2`.`t2`",
-		"rename table `t1` to `t2`, `s1`.`t1` to `t2`",
+		"rename table `t1` to `t2`, `s1`.`t1` to `s1`.`t2`",
 		"drop index i1 on `s1`.`t1`",
 		"drop index i1 on `t1`",
 		"create index i1 on `t1`(`c1`)",
@@ -126,24 +133,25 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 		{"DROP DATABASE IF EXISTS `s1`"},
 		{"DROP DATABASE IF EXISTS `s1`"},
 		{"DROP TABLE IF EXISTS `s1`.`t1`"},
-		{"DROP TABLE IF EXISTS `s1`.`t1`", "DROP TABLE IF EXISTS `s2`.`t2`"},
-		{"DROP TABLE IF EXISTS `s1`.`t1`", "DROP TABLE IF EXISTS `s2`.`t2`", "DROP TABLE IF EXISTS `test`.`xx`"},
+		{"DROP TABLE IF EXISTS `s1`.`t1`"},
+		{"DROP TABLE IF EXISTS `s1`.`t1`"},
 		{"CREATE TABLE IF NOT EXISTS `s1`.`t1` (`id` INT)"},
-		{"CREATE TABLE IF NOT EXISTS `test`.`t1` (`id` INT)"},
-		{"CREATE TABLE IF NOT EXISTS `test`.`t1` LIKE `test`.`t2`"},
-		{"CREATE TABLE IF NOT EXISTS `s1`.`t1` LIKE `test`.`t2`"},
-		{"CREATE TABLE IF NOT EXISTS `test`.`t1` LIKE `xx`.`t2`"},
-		{"TRUNCATE TABLE `test`.`t1`"},
+		{},
+		{},
+		{},
+		{"CREATE TABLE IF NOT EXISTS `s1`.`t1` LIKE `s1`.`t2`"},
+		{},
+		{},
 		{"TRUNCATE TABLE `s1`.`t1`"},
-		{"RENAME TABLE `s1`.`t1` TO `s2`.`t2`"},
-		{"RENAME TABLE `test`.`t1` TO `test`.`t2`", "RENAME TABLE `s1`.`t1` TO `test`.`t2`"},
+		{},
+		{"RENAME TABLE `s1`.`t1` TO `s1`.`t2`"},
 		{"DROP INDEX IF EXISTS `i1` ON `s1`.`t1`"},
-		{"DROP INDEX IF EXISTS `i1` ON `test`.`t1`"},
-		{"CREATE INDEX `i1` ON `test`.`t1` (`c1`)"},
+		{},
+		{},
 		{"CREATE INDEX `i1` ON `s1`.`t1` (`c1`)"},
-		{"ALTER TABLE `test`.`t1` ADD COLUMN `c1` INT", "ALTER TABLE `test`.`t1` DROP COLUMN `c2`"},
-		{"ALTER TABLE `s1`.`t1` ADD COLUMN `c1` INT", "ALTER TABLE `s1`.`t1` RENAME AS `test`.`t2`", "ALTER TABLE `test`.`t2` DROP COLUMN `c2`"},
-		{"ALTER TABLE `s1`.`t1` ADD COLUMN `c1` INT", "ALTER TABLE `s1`.`t1` RENAME AS `xx`.`t2`", "ALTER TABLE `xx`.`t2` DROP COLUMN `c2`"},
+		{},
+		{"ALTER TABLE `s1`.`t1` ADD COLUMN `c1` INT"},
+		{"ALTER TABLE `s1`.`t1` ADD COLUMN `c1` INT"},
 	}
 
 	targetSQLs := [][]string{
@@ -152,24 +160,25 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 		{"DROP DATABASE IF EXISTS `xs1`"},
 		{"DROP DATABASE IF EXISTS `xs1`"},
 		{"DROP TABLE IF EXISTS `xs1`.`t1`"},
-		{"DROP TABLE IF EXISTS `xs1`.`t1`", ""},
-		{"DROP TABLE IF EXISTS `xs1`.`t1`", "", ""},
+		{"DROP TABLE IF EXISTS `xs1`.`t1`"},
+		{"DROP TABLE IF EXISTS `xs1`.`t1`"},
 		{"CREATE TABLE IF NOT EXISTS `xs1`.`t1` (`id` INT)"},
-		{""},
-		{""},
-		{""},
-		{""},
-		{""},
+		{},
+		{},
+		{},
+		{"CREATE TABLE IF NOT EXISTS `xs1`.`t1` LIKE `xs1`.`t2`"},
+		{},
+		{},
 		{"TRUNCATE TABLE `xs1`.`t1`"},
-		{""},
-		{"", ""},
+		{},
+		{"RENAME TABLE `xs1`.`t1` TO `xs1`.`t2`"},
 		{"DROP INDEX IF EXISTS `i1` ON `xs1`.`t1`"},
-		{""},
-		{""},
+		{},
+		{},
 		{"CREATE INDEX `i1` ON `xs1`.`t1` (`c1`)"},
-		{"", ""},
-		{"ALTER TABLE `xs1`.`t1` ADD COLUMN `c1` INT", "", ""},
-		{"ALTER TABLE `xs1`.`t1` ADD COLUMN `c1` INT", "", ""},
+		{},
+		{"ALTER TABLE `xs1`.`t1` ADD COLUMN `c1` INT"},
+		{"ALTER TABLE `xs1`.`t1` ADD COLUMN `c1` INT"},
 	}
 
 	p := parser.New()
@@ -191,18 +200,24 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 	})
 	c.Assert(err, IsNil)
 
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveDDLSQL")))
+	ec := eventContext{
+		tctx: tctx,
+	}
+
 	for i, sql := range sqls {
 		result, err := syncer.parseDDLSQL(sql, p, "test")
 		c.Assert(err, IsNil)
 		c.Assert(result.ignore, IsFalse)
 		c.Assert(result.isDDL, IsTrue)
 
-		statements, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, "test")
+		statements, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, "test")
 		c.Assert(err, IsNil)
 		c.Assert(statements, DeepEquals, expectedSQLs[i])
+		c.Assert(targetSQLs[i], HasLen, len(statements))
 
 		for j, statement := range statements {
-			s, _, _, err := syncer.handleDDL(p, "test", statement)
+			s, _, _, err := syncer.routeDDL(p, "test", statement)
 			c.Assert(err, IsNil)
 			c.Assert(s, Equals, targetSQLs[i][j])
 		}
@@ -358,11 +373,16 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	parser, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveGeneratedColumnSQL")))
+	ec := eventContext{
+		tctx: tctx,
+	}
+
 	for _, tc := range testCases {
 		ast1, err := parser.ParseOneStmt(tc.sql, "", "")
 		c.Assert(err, IsNil)
 
-		sqls, _, err := syncer.resolveDDLSQL(tcontext.Background(), parser, ast1, "test")
+		sqls, _, err := syncer.splitAndFilterDDL(ec, parser, ast1, "test")
 		c.Assert(err, IsNil)
 
 		c.Assert(len(sqls), Equals, 1)
@@ -388,8 +408,12 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 			"_t1_new",
 		},
 	}
-	tctx := tcontext.Background()
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveOnlineDDL")))
 	p := parser.New()
+
+	ec := eventContext{
+		tctx: tctx,
+	}
 
 	for _, ca := range cases {
 		fn := OnlineDDLSchemes[ca.onlineType]
@@ -403,7 +427,7 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		sql := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
 		stmt, err := p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err := syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		sqls, tables, err := syncer.splitAndFilterDDL(ec, p, stmt, "test")
 		c.Assert(err, IsNil)
 		c.Assert(sqls, HasLen, 1)
 		c.Assert(sqls[0], Equals, sql)
@@ -413,7 +437,7 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		sql = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `test`.`%s` (`n` INT)", ca.trashName)
 		stmt, err = p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
 		c.Assert(err, IsNil)
 		c.Assert(sqls, HasLen, 0)
 		c.Assert(tables, HasLen, 0)
@@ -423,14 +447,14 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		newSQL := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
 		stmt, err = p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
 		c.Assert(err, IsNil)
 		c.Assert(sqls, HasLen, 0)
 		c.Assert(tables, HasLen, 0)
 		sql = fmt.Sprintf("RENAME TABLE `test`.`%s` TO `test`.`t1`", ca.ghostname)
 		stmt, err = p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.resolveDDLSQL(tctx, p, stmt, "test")
+		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
 		c.Assert(err, IsNil)
 		c.Assert(sqls, HasLen, 1)
 		c.Assert(sqls[0], Equals, newSQL)
@@ -483,8 +507,8 @@ func (m mockOnlinePlugin) TableType(table string) TableType {
 	return ""
 }
 
-func (m mockOnlinePlugin) RealName(schema, table string) (string, string) {
-	return "", ""
+func (m mockOnlinePlugin) RealName(table string) string {
+	return ""
 }
 
 func (m mockOnlinePlugin) ResetConn(tctx *tcontext.Context) error {
