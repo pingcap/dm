@@ -2742,8 +2742,38 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 		if err2 != nil {
 			s.tctx.L().Warn("cannot get sql_mode from upstream database", log.ShortError(err2))
 		} else {
-			s.cfg.To.Session["sql_mode"] = sqlMode
-		}
+			sqlModes := strings.Split(sqlMode, ",")
+			needDisable := []string{
+				"NO_ZERO_IN_DATE",
+				"NO_ZERO_DATE",
+				"ERROR_FOR_DIVISION_BY_ZERO",
+				"NO_AUTO_CREATE_USER",
+				"STRICT_TRANS_TABLES",
+				"STRICT_ALL_TABLES",
+			}
+			for _, disable := range needDisable {
+				for i, sqlMode := range sqlModes {
+					if disable == sqlMode {
+						sqlModes = append(sqlModes[:i], sqlModes[i+1:]...)
+						break
+					}
+				}
+			}
+			needEnable := []string{
+				"IGNORE_SPACE",
+				"NO_AUTO_VALUE_ON_ZERO",
+				"ALLOW_INVALID_DATES",
+			}
+			waitEnable := sqlModes
+			for _, enable := range needEnable {
+				for _, sqlMode := range sqlModes {
+					if enable != sqlMode {
+						waitEnable = append(waitEnable, enable)
+						break
+					}
+				}
+			}
+			s.cfg.To.Session["sql_mode"] = strings.Join(waitEnable, ",")
 	}
 
 	dbCfg = s.cfg.To

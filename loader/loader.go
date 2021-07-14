@@ -529,7 +529,39 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 		}
 	}
 	if !hasSQLMode {
-		lcfg.To.Session["sql_mode"] = l.cfg.LoaderConfig.SQLMode
+		sqlModes := strings.Split(l.cfg.LoaderConfig.SQLMode, ",")
+		needDisable := []string{
+			"NO_ZERO_IN_DATE",
+			"NO_ZERO_DATE",
+			"ERROR_FOR_DIVISION_BY_ZERO",
+			"NO_AUTO_CREATE_USER",
+			"STRICT_TRANS_TABLES",
+			"STRICT_ALL_TABLES",
+		}
+		for _, disable := range needDisable {
+			for i, sqlMode := range sqlModes {
+				if disable == sqlMode {
+					sqlModes = append(sqlModes[:i], sqlModes[i+1:]...)
+					break
+				}
+			}
+		}
+		needEnable := []string{
+			"IGNORE_SPACE",
+			"NO_AUTO_VALUE_ON_ZERO",
+			"ALLOW_INVALID_DATES",
+		}
+		waitEnable := sqlModes
+		for _, enable := range needEnable {
+			for _, sqlMode := range sqlModes {
+				if enable != sqlMode {
+					waitEnable = append(waitEnable, enable)
+					break
+				}
+			}
+		}
+		lcfg.To.Session["sql_mode"] = strings.Join(waitEnable, ",")
+		l.logger.Info("loader's sql_mode is ", zap.String("sqlmode", lcfg.To.Session["sql_mode"]))
 	}
 
 	l.toDB, l.toDBConns, err = createConns(tctx, lcfg, l.cfg.PoolSize)
