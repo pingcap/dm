@@ -108,6 +108,8 @@ service Master {
     rpc TransferSource(TransferSourceRequest) returns(TransferSourceResponse) {}
 
     rpc OperateRelay(OperateRelayRequest) returns(OperateRelayResponse) {}
+
+    rpc ImportExportCfgs(ImportExportCfgsRequest) returns(ImportExportCfgsResponse) {}
 }
 
 message StartTaskRequest {
@@ -458,4 +460,26 @@ enum RelayOpV2 {
     InvalidRelayOpV2 = 0;
     StartRelayV2 = 1;
     StopRelayV2 = 2;
+}
+
+message ImportExportCfgsRequest {
+    CfgsOp op = 1;
+    string dir = 2;
+}
+
+message Config {
+    string name = 1;
+    string content = 2; 
+}
+
+message ImportExportCfgsResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated Config sources = 3;
+    repeated Config tasks = 4;
+}
+
+enum CfgsOp {
+    Export = 0;
+    Import = 1;
 }
