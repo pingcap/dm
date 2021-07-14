@@ -22,7 +22,6 @@ function run() {
 	# manually create the route table
 	run_sql 'CREATE DATABASE IF NOT EXISTS `UPPER_DB_ROUTE`' $TIDB_PORT $TIDB_PASSWORD
 
-
 	# start DM worker and master
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
@@ -105,7 +104,7 @@ function run() {
 	check_contains "do_table_route"
 	check_not_contains "Do_table_ignore"
 
-  run_sql "select count(*) from UPPER_DB_ROUTE.do_table_route" $TIDB_PORT $TIDB_PASSWORD
+	run_sql "select count(*) from UPPER_DB_ROUTE.do_table_route" $TIDB_PORT $TIDB_PASSWORD
 	# ensure the truncate is ignored and the new row is inserted
 	check_contains "count(*): 5"
 	# test binlog event filter

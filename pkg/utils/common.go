@@ -177,7 +177,7 @@ func FetchLowerCaseTableNamesSetting(ctx context.Context, conn *sql.Conn) (Lower
 		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(err, query)
 	}
 	if res > LCTableNamesMixed {
-		return LCTableNamesSensitive, terror.ErrDBUnExpect.Generate(fmt.Sprintf("invalid `lower_case_table_names` value '%s'", res))
+		return LCTableNamesSensitive, terror.ErrDBUnExpect.Generate(fmt.Sprintf("invalid `lower_case_table_names` value '%d'", res))
 	}
 	return LowerCaseTableNamesFlavor(res), nil
 }

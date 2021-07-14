@@ -20,6 +20,3 @@ use `Upper_Db_IGNORE`;
 insert into ignore_table (id) values (0);
 alter table ignore_table add column description varchar(32);
 insert into ignore_table (id, description) values (0, 'ignored');
-
-
-

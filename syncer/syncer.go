@@ -347,9 +347,9 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	var schemaMap map[string]string
 	var tableMap map[string]map[string]string
 	if s.SourceTableNamesFlavor == utils.LCTableNamesSensitive {
-		allTables, err := utils.FetchAllDoTables(ctx, s.fromDB.BaseDB.DB, s.baList)
-		if err != nil {
-			return err
+		allTables, err1 := utils.FetchAllDoTables(ctx, s.fromDB.BaseDB.DB, s.baList)
+		if err1 != nil {
+			return err1
 		}
 		schemaMap, tableMap = buildLowerCaseTableNamesMap(allTables)
 	}
@@ -506,7 +506,6 @@ func (s *Syncer) initShardingGroups(ctx context.Context, needCheck bool) error {
 			return err2
 		}
 	}
-
 
 	// add sharding group
 	for targetSchema, mSchema := range mapper {
