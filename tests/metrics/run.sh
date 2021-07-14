@@ -25,7 +25,7 @@ function run() {
 	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
 	# start DM worker and master
-	run_dm_master $WORK_DIR/master $MASTER_PORT $WORK_DIR/dm-master.toml
+	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
 	# operate mysql config to worker
@@ -97,7 +97,7 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 	sleep 3 # we need sleep 3 because current ticker interval is 1 and we need at least 2 ticker's log
-	python2 $cur/../_utils/check_ticker_interval.py $WORK_DIR/worker1/log/dm-worker.log 1
+	$cur/../_utils/check_ticker_interval.py $WORK_DIR/worker1/log/dm-worker.log 1
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"stop-task test" \
 		"\"result\": true" 3

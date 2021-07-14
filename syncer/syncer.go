@@ -203,6 +203,7 @@ type Syncer struct {
 	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster atomic.Int64             // current task delay second behind upstream
 	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:WorkerLagKey val: lag
+	workerLagMapIniting atomic.Bool              // whether workerLagMap is in initing
 }
 
 // NewSyncer creates a new Syncer.
@@ -239,6 +240,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	}
 	syncer.recordedActiveRelayLog = false
 	syncer.workerLagMap = make(map[string]*atomic.Int64, cfg.WorkerCount+2) // map size = WorkerCount + ddlkey + skipkey
+	syncer.workerLagMapIniting = *atomic.NewBool(true)
 	return syncer
 }
 
@@ -1270,11 +1272,13 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *DBConn,
 				successF()
 				clearF()
 			} else {
-				// update lag metric even if there is no job in the queue
-				// metric will only be updated when all wokers have been initialised to avoid data races.
-				tctx.L().Debug("no job in queue, update lag to zero",
-					zap.String("workerLagKey", workerLagKey), zap.Int64("current ts", time.Now().Unix()))
-				s.updateReplicationLag(nil, workerLagKey)
+				if !s.workerLagMapIniting.Load() {
+					// update lag metric even if there is no job in the queue
+					// metric will only be updated when all wokers have been initialised to avoid data races.
+					tctx.L().Debug("no job in queue, update lag to zero",
+						zap.String("workerLagKey", workerLagKey), zap.Int64("current ts", time.Now().Unix()))
+					s.updateReplicationLag(nil, workerLagKey)
+				}
 			}
 		}
 	}
@@ -1403,14 +1407,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.wg.Add(1)
 		name := queueBucketName(i)
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
-		s.workerLagMap[dmlWorkerLagKey(i)] = atomic.NewInt64(0)
+		workerLagKey := dmlWorkerLagKey(i)
+		s.workerLagMap[workerLagKey] = atomic.NewInt64(0)
 		go func(i int, name string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
-			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i], dmlWorkerLagKey(i))
+			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i], workerLagKey)
 			cancel()
 		}(i, name)
 	}
+	s.workerLagMapIniting.Toggle()
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
