@@ -557,7 +557,7 @@ func AdjustSQLModeCompatible(sqlModes string) (string, error) {
 	}
 	mode = (mode &^ disableMode) | enableMode
 
-	return GetSQLModeByStr(mode), nil
+	return GetSQLModeStrBySQLMode(mode), nil
 }
 
 // SQLMode2Str is the sql_mode to string represent of sql_mode map.
@@ -597,7 +597,8 @@ var SQLMode2Str = map[tmysql.SQLMode]string{
 	tmysql.ModeAllowInvalidDates:      "ALLOW_INVALID_DATES",
 }
 
-func GetSQLModeByStr(sqlMode tmysql.SQLMode) string {
+// GetSQLModeByStr get string represent of sql_mode by sql_mode
+func GetSQLModeStrBySQLMode(sqlMode tmysql.SQLMode) string {
 	var sqlModeStr []string
 	for SQLMode, str := range SQLMode2Str {
 		if sqlMode&SQLMode != 0 {
