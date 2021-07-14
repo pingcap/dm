@@ -524,3 +524,85 @@ func AddGSetWithPurged(ctx context.Context, gset gtid.Set, conn *sql.Conn) (gtid
 	_ = ret.Set(newGset)
 	return ret, nil
 }
+
+// AdjustSQLModeCompatible adjust downstream sql mode to compatible
+func AdjustSQLModeCompatible(sqlModes string) (string, error) {
+	needDisable := []string{
+		"NO_ZERO_IN_DATE",
+		"NO_ZERO_DATE",
+		"ERROR_FOR_DIVISION_BY_ZERO",
+		"NO_AUTO_CREATE_USER",
+		"STRICT_TRANS_TABLES",
+		"STRICT_ALL_TABLES",
+	}
+	needEnable := []string{
+		"IGNORE_SPACE",
+		"NO_AUTO_VALUE_ON_ZERO",
+		"ALLOW_INVALID_DATES",
+	}
+	disable := strings.Join(needDisable, ",")
+	enable := strings.Join(needEnable, ",")
+
+	mode, err := tmysql.GetSQLMode(sqlModes)
+	if err != nil {
+		return "", err
+	}
+	disableMode, err2 := tmysql.GetSQLMode(disable)
+	if err2 != nil {
+		return "", err2
+	}
+	enableMode, err3 := tmysql.GetSQLMode(enable)
+	if err3 != nil {
+		return "", err3
+	}
+	mode = (mode &^ disableMode) | enableMode
+
+	return GetSQLModeByStr(mode), nil
+}
+
+// SQLMode2Str is the sql_mode to string represent of sql_mode map.
+var SQLMode2Str = map[tmysql.SQLMode]string{
+	tmysql.ModeRealAsFloat:            "REAL_AS_FLOAT",
+	tmysql.ModePipesAsConcat:          "PIPES_AS_CONCAT",
+	tmysql.ModeANSIQuotes:             "ANSI_QUOTES",
+	tmysql.ModeIgnoreSpace:            "IGNORE_SPACE",
+	tmysql.ModeNotUsed:                "NOT_USED",
+	tmysql.ModeOnlyFullGroupBy:        "ONLY_FULL_GROUP_BY",
+	tmysql.ModeNoUnsignedSubtraction:  "NO_UNSIGNED_SUBTRACTION",
+	tmysql.ModeNoDirInCreate:          "NO_DIR_IN_CREATE",
+	tmysql.ModePostgreSQL:             "POSTGRESQL",
+	tmysql.ModeOracle:                 "ORACLE",
+	tmysql.ModeMsSQL:                  "MSSQL",
+	tmysql.ModeDb2:                    "DB2",
+	tmysql.ModeMaxdb:                  "MAXDB",
+	tmysql.ModeNoKeyOptions:           "NO_KEY_OPTIONS",
+	tmysql.ModeNoTableOptions:         "NO_TABLE_OPTIONS",
+	tmysql.ModeNoFieldOptions:         "NO_FIELD_OPTIONS",
+	tmysql.ModeMySQL323:               "MYSQL323",
+	tmysql.ModeMySQL40:                "MYSQL40",
+	tmysql.ModeANSI:                   "ANSI",
+	tmysql.ModeNoAutoValueOnZero:      "NO_AUTO_VALUE_ON_ZERO",
+	tmysql.ModeNoBackslashEscapes:     "NO_BACKSLASH_ESCAPES",
+	tmysql.ModeStrictTransTables:      "STRICT_TRANS_TABLES",
+	tmysql.ModeStrictAllTables:        "STRICT_ALL_TABLES",
+	tmysql.ModeNoZeroInDate:           "NO_ZERO_IN_DATE",
+	tmysql.ModeNoZeroDate:             "NO_ZERO_DATE",
+	tmysql.ModeInvalidDates:           "INVALID_DATES",
+	tmysql.ModeErrorForDivisionByZero: "ERROR_FOR_DIVISION_BY_ZERO",
+	tmysql.ModeTraditional:            "TRADITIONAL",
+	tmysql.ModeNoAutoCreateUser:       "NO_AUTO_CREATE_USER",
+	tmysql.ModeHighNotPrecedence:      "HIGH_NOT_PRECEDENCE",
+	tmysql.ModeNoEngineSubstitution:   "NO_ENGINE_SUBSTITUTION",
+	tmysql.ModePadCharToFullLength:    "PAD_CHAR_TO_FULL_LENGTH",
+	tmysql.ModeAllowInvalidDates:      "ALLOW_INVALID_DATES",
+}
+
+func GetSQLModeByStr(sqlMode tmysql.SQLMode) string {
+	var sqlModeStr []string
+	for SQLMode, str := range SQLMode2Str {
+		if sqlMode&SQLMode != 0 {
+			sqlModeStr = append(sqlModeStr, str)
+		}
+	}
+	return strings.Join(sqlModeStr, ",")
+}
