@@ -6,7 +6,7 @@
 # parameter 5: db
 # parameter 6: online ddl tool, pt or gh-ost
 
-set -eux
+set -eu
 
 line=$1
 host=$2
