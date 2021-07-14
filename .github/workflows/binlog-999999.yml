@@ -5,7 +5,6 @@ on:
     branches:
       - master
       - release-2.0
-      - feishu
   schedule:
     - cron: "3 22 * * *" # run at minute 06:03 UTC+8
 
@@ -113,8 +112,8 @@ jobs:
           args: "chaos job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
 
       - name: Feishu notification
-        # if: ${{ failure() }}
-        uses: foxundermoon/feishu-action@v1
+        if: ${{ failure() }}
+        uses: whatwewant/action-robot-feishu@v0.0.1
         with:
           url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
           title: FIX ME PLEASE

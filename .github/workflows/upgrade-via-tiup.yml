@@ -1,9 +1,6 @@
 name: Upgrade via TiUP
 
 on:
-  push:
-    branches:
-      - feishu
   pull_request:
     branches:
       - master
@@ -57,8 +54,8 @@ jobs:
           args: "upgrade job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
 
       - name: Feishu notification
-        # if: ${{ failure() }}
-        uses: foxundermoon/feishu-action@v1
+        if: ${{ failure() }}
+        uses: whatwewant/action-robot-feishu@v0.0.1
         with:
           url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
           title: FIX ME PLEASE
@@ -177,8 +174,8 @@ jobs:
           args: "upgrade-via-tiup job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
 
       - name: Feishu notification
-        # if: ${{ failure() }}
-        uses: foxundermoon/feishu-action@v1
+        if: ${{ failure() }}
+        uses: whatwewant/action-robot-feishu@v0.0.1
         with:
           url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
           title: FIX ME PLEASE
@@ -247,8 +244,8 @@ jobs:
           args: "upgrade job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
 
       - name: Feishu notification
-        # if: ${{ failure() }}
-        uses: foxundermoon/feishu-action@v1
+        if: ${{ failure() }}
+        uses: whatwewant/action-robot-feishu@v0.0.1
         with:
           url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
           title: FIX ME PLEASE
