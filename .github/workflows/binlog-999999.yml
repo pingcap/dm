@@ -113,7 +113,7 @@ jobs:
           args: "chaos job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
 
       - name: Feishu notification
-        if: ${{ failure() }}
+        # if: ${{ failure() }}
         uses: foxundermoon/feishu-action@v1
         with:
           url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
