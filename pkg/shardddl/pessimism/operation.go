@@ -219,13 +219,15 @@ func WatchOperationDelete(ctx context.Context, cli *clientv3.Client, task, sourc
 func watchOperation(ctx context.Context, cli *clientv3.Client, watchType mvccpb.Event_EventType,
 	task, source string, revision int64,
 	outCh chan<- Operation, errCh chan<- error) {
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	var ch clientv3.WatchChan
 	// caller may use empty keys to expect a prefix watch
 	if source == "" {
-		ch = cli.Watch(ctx, common.ShardDDLPessimismOperationKeyAdapter.Path(), clientv3.WithPrefix(),
+		ch = cli.Watch(wCtx, common.ShardDDLPessimismOperationKeyAdapter.Path(), clientv3.WithPrefix(),
 			clientv3.WithRev(revision), clientv3.WithPrevKV())
 	} else {
-		ch = cli.Watch(ctx, common.ShardDDLPessimismOperationKeyAdapter.Encode(task, source),
+		ch = cli.Watch(wCtx, common.ShardDDLPessimismOperationKeyAdapter.Encode(task, source),
 			clientv3.WithRev(revision), clientv3.WithPrevKV())
 	}
 

@@ -364,7 +364,9 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 		e.campaignMu.Unlock()
 	}()
 
-	wch := e.cli.Watch(ctx, key)
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	wch := e.cli.Watch(wCtx, key)
 
 	for {
 		if e.evictLeader.Load() {
