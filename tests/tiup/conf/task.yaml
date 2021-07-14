@@ -22,18 +22,18 @@ mysql-instances:
 
 black-white-list:
   instance:
-    do-dbs: ["~^Sharding[\\d]+"]
+    do-dbs: ["~^[sS]harding[\\d]+"]
     do-tables:
-    -  db-name: "~^Sharding[\\d]+"
-       tbl-name: "~^T[\\d]+"
+    -  db-name: "~^[sS]harding[\\d]+"
+       tbl-name: "~^[tT][\\d]+"
 
 routes:
   sharding-route-rules-table:
-    schema-pattern: Sharding*
-    table-pattern: T*
+    schema-pattern: "[sS]harding*"
+    table-pattern: "[tT]*"
     target-schema: db_target
     target-table: t_target
 
   sharding-route-rules-schema:
-    schema-pattern: Sharding*
+    schema-pattern: "[sS]harding*"
     target-schema: db_target

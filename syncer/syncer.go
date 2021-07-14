@@ -337,21 +337,29 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return err
 	}
 
+	var schemaMap map[string]string
+	var tableMap map[string]map[string]string
+	if s.SourceTableNamesFlavor == utils.LCTableNamesSensitive {
+		allTables, err := utils.FetchAllDoTables(ctx, s.fromDB.BaseDB.DB, s.baList)
+		if err != nil {
+			return err
+		}
+		schemaMap, tableMap = buildLowerCaseTableNamesMap(allTables)
+	}
+
 	switch s.cfg.ShardMode {
 	case config.ShardPessimistic:
 		err = s.sgk.Init()
 		if err != nil {
 			return err
 		}
-
-		err = s.initShardingGroups(ctx)
+		err = s.initShardingGroups(ctx, true)
 		if err != nil {
 			return err
 		}
 		rollbackHolder.Add(fr.FuncRollback{Name: "close-sharding-group-keeper", Fn: s.sgk.Close})
 	case config.ShardOptimistic:
-		err = s.initOptimisticShardDDL(ctx)
-		if err != nil {
+		if err = s.initOptimisticShardDDL(ctx); err != nil {
 			return err
 		}
 	}
@@ -367,25 +375,12 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return err
 	}
 	if s.SourceTableNamesFlavor == utils.LCTableNamesSensitive {
-		var allTables map[string][]string
-		allTables, err = utils.FetchAllDoTables(ctx, s.fromDB.BaseDB.DB, s.baList)
-		if err != nil {
-			return err
-		}
-		schemaMap, tableMap := buildLowerCaseTableNamesMap(allTables)
 		if err = s.checkpoint.CheckAndUpdate(ctx, schemaMap, tableMap); err != nil {
 			return err
 		}
-		if err = s.optimist.CheckPersistentData(s.cfg.SourceID, schemaMap, tableMap); err != nil {
-			return err
-		}
+
 		if s.onlineDDL != nil {
 			if err = s.onlineDDL.Check(s.tctx, schemaMap, tableMap); err != nil {
-				return err
-			}
-		}
-		if s.sgk != nil {
-			if err = s.sgk.Check(schemaMap, tableMap); err != nil {
 				return err
 			}
 		}
@@ -462,7 +457,7 @@ func buildLowerCaseTableNamesMap(tables map[string][]string) (map[string]string,
 
 // initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
 // NOTE: now we don't support modify router rules after task has started.
-func (s *Syncer) initShardingGroups(ctx context.Context) error {
+func (s *Syncer) initShardingGroups(ctx context.Context, needCheck bool) error {
 	// fetch tables from source and filter them
 	sourceTables, err := s.fromDB.fetchAllDoTables(ctx, s.baList)
 	if err != nil {
@@ -493,6 +488,14 @@ func (s *Syncer) initShardingGroups(ctx context.Context) error {
 	if err2 != nil {
 		return err2
 	}
+	if needCheck && s.SourceTableNamesFlavor == utils.LCTableNamesSensitive {
+		// try fix persistent data before init
+		schemaMap, tableMap := buildLowerCaseTableNamesMap(sourceTables)
+		if err2 = s.sgk.CheckAndFix(loadMeta, schemaMap, tableMap); err2 != nil {
+			return err2
+		}
+	}
+
 
 	// add sharding group
 	for targetSchema, mSchema := range mapper {
@@ -3033,7 +3036,7 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 			return err
 		}
 
-		err = s.initShardingGroups(context.Background()) // FIXME: fix context when re-implementing `Update`
+		err = s.initShardingGroups(context.Background(), false) // FIXME: fix context when re-implementing `Update`
 		if err != nil {
 			return err
 		}

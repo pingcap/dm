@@ -725,36 +725,13 @@ func (k *ShardingGroupKeeper) LoadShardMeta(flavor string, enableGTID bool) (map
 }
 
 // Check try to check and fix the schema/table case-sensitive issue.
-func (k *ShardingGroupKeeper) Check(schemaMap map[string]string, tablesMap map[string]map[string]string) error {
+//
+// NOTE: Check is called before sharding groups are inited.
+func (k *ShardingGroupKeeper) CheckAndFix(metas map[string]*shardmeta.ShardingMeta, schemaMap map[string]string, tablesMap map[string]map[string]string) error {
 	k.Lock()
 	defer k.Unlock()
-	for targetID, group := range k.groups {
-		newSources := make(map[string]string)
-		for source := range group.sources {
-			schemaName, tblName := utils.UnpackTableID(source)
-			realSchema, hasSchema := schemaMap[schemaName]
-			if !hasSchema {
-				realSchema = schemaName
-			}
-			tblMap := tablesMap[schemaName]
-			realTable, hasTbl := tblMap[tblName]
-			if !hasTbl {
-				realTable = tblName
-				hasTbl = hasSchema
-			}
-			if hasTbl {
-				newID, _ := utils.GenTableID(realSchema, realTable)
-				newSources[newID] = source
-			}
-		}
-
-		for newID, oldID := range newSources {
-			isSynced := group.sources[oldID]
-			delete(group.sources, oldID)
-			group.sources[newID] = isSynced
-		}
-
-		sqls, args, err := group.meta.Check(group.sourceID, targetID, schemaMap, tablesMap)
+	for targetID, meta := range metas {
+		sqls, args, err := meta.Check(targetID, schemaMap, tablesMap)
 		if err != nil {
 			return err
 		}
