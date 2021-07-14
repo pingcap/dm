@@ -26,6 +26,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 func newMysqlErr(number uint16, message string) *mysql.MySQLError {
@@ -55,7 +56,7 @@ func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 	var (
 		syncer = NewSyncer(s.cfg, nil)
 		tctx   = tcontext.Background()
-		conn2  = &DBConn{cfg: s.cfg, resetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
+		conn2  = &dbconn.DBConn{Cfg: s.cfg, ResetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
 			return nil, nil
 		}}
 		customErr           = errors.New("custom error")
@@ -176,7 +177,7 @@ func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 	c.Assert(err, IsNil)
 	conn1, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
-	conn2.baseConn = conn.NewBaseConn(conn1, nil)
+	conn2.BaseConn = conn.NewBaseConn(conn1, nil)
 
 	// dropColumnF test successful
 	mock.ExpectQuery("SELECT INDEX_NAME FROM information_schema.statistics WHERE.*").WillReturnRows(
