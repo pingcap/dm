@@ -81,7 +81,6 @@ dm-portal-frontend:
 	tools/bin/statik -src=./dm/portal/frontend/build -dest=./dm/portal/
 
 tools_setup:
-	@chmod +x tests/_utils/*.py
 	@echo "setup tools"
 	@cd tools && make
 
