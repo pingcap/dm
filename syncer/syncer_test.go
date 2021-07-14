@@ -485,16 +485,18 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		{false},
 		{false},
 		{false},
+		{true},
+		{true},
+
+		{false},
+		{true},
+		{true},
+		{false},
 
 		{true},
 		{true},
 		{false},
-		{true},
-		{true},
-		{false},
-		{true},
-		{true},
-		{false},
+
 		{true},
 		{true},
 		{false},
@@ -1553,7 +1555,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 
 	p := parser.New()
 	for _, ca := range cases {
-		ddlSQL, filter, stmt, err := syncer.handleDDL(p, testDB, ca.sql)
+		ddlSQL, filter, stmt, err := syncer.routeDDL(p, testDB, ca.sql)
 		c.Assert(err, IsNil)
 
 		ca.callback()
@@ -1567,6 +1569,10 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 
 func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.BinlogEvent, p *parser.Parser, res [][]bool) {
 	i := 0
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "checkEventWithTableResult")))
+	ec := eventContext{
+		tctx: tctx,
+	}
 	for _, e := range allEvents {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
@@ -1577,9 +1583,12 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 			if !result.isDDL {
 				continue // BEGIN event
 			}
-			querys, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, string(ev.Schema))
+			querys, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
+				c.Assert(res[i], HasLen, 1)
+				c.Assert(res[i][0], Equals, true)
+				i++
 				continue
 			}
 

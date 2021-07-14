@@ -51,7 +51,7 @@ type OnlinePlugin interface {
 	// TableType returns ghhost/real table
 	TableType(table string) TableType
 	// RealName returns real table name that removed ghost suffix and handled by table router
-	RealName(schema, table string) (string, string)
+	RealName(table string) string
 	// ResetConn reset db connection
 	ResetConn(tctx *tcontext.Context) error
 	// Clear clears all online information
