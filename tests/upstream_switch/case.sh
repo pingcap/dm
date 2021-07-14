@@ -148,7 +148,7 @@ function gen_incr_data() {
 		exec_sql $host2 "insert into ${db}.${tb} values($i,$i,$i);"
 	done
 
-	# make  master slave switch
+	# make master slave switch
 	docker-compose -f $CUR/docker-compose.yml pause mysql57_master
 	docker-compose -f $CUR/docker-compose.yml pause mysql8_master
 	wait_mysql $host1 2
@@ -239,7 +239,7 @@ function test_binlog_filename_change_when_enable_gtid() {
 	run_dm_components_and_create_sources
 	start_task
 
-	# flush mysql8 master binlog files -> mysql-bin.000002
+	# flush mysql57 master binlog files -> mysql-bin.000002
 	exec_sql $host1 "flush logs;"
 	# flush mysql8 master binlog files -> mysql-bin.000004
 	exec_sql $host2 "flush logs;"
@@ -263,7 +263,6 @@ function test_binlog_filename_change_when_enable_gtid() {
 	docker-compose -f $CUR/docker-compose.yml unpause mysql8_master
 	clean_task
 	echo "CASE=test_binlog_filename_change_when_enable_gtid success"
-
 }
 
 function run() {
