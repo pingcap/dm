@@ -67,7 +67,7 @@ import (
 	"github.com/pingcap/dm/syncer/dbconn"
 	operator "github.com/pingcap/dm/syncer/err-operator"
 	"github.com/pingcap/dm/syncer/metrics"
-	online_ddl_tools "github.com/pingcap/dm/syncer/online-ddl-tools"
+	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/shardddl"
 )
@@ -171,7 +171,7 @@ type Syncer struct {
 	done chan struct{}
 
 	checkpoint CheckPoint
-	onlineDDL  online_ddl_tools.OnlinePlugin
+	onlineDDL  onlineddl.OnlinePlugin
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
@@ -328,7 +328,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 
 	if s.cfg.OnlineDDLScheme != "" {
-		fn, ok := online_ddl_tools.OnlineDDLSchemes[s.cfg.OnlineDDLScheme]
+		fn, ok := onlineddl.OnlineDDLSchemes[s.cfg.OnlineDDLScheme]
 		if !ok {
 			return terror.ErrSyncerUnitOnlineDDLSchemeNotSupport.Generate(s.cfg.OnlineDDLScheme)
 		}
