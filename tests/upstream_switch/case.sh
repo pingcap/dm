@@ -36,6 +36,14 @@ function clean_data() {
 	exec_tidb $tidb_host "drop database if exists ${db};"
 }
 
+function cleanup_process() {
+	echo "-------cleanup_process--------"
+	pkill -hup dm-worker.test 2>/dev/null || true
+	pkill -hup dm-master.test 2>/dev/null || true
+	pkill -hup dm-syncer.test 2>/dev/null || true
+
+}
+
 function prepare_binlogs() {
 	echo "-------prepare_binlogs--------"
 
@@ -140,6 +148,7 @@ function gen_incr_data() {
 		exec_sql $host2 "insert into ${db}.${tb} values($i,$i,$i);"
 	done
 
+	# make  master slave switch
 	docker-compose -f $CUR/docker-compose.yml pause mysql57_master
 	docker-compose -f $CUR/docker-compose.yml pause mysql8_master
 	wait_mysql $host1 2
@@ -204,7 +213,8 @@ function check_master() {
 	wait_mysql $host2 1
 }
 
-function test() {
+function test_relay() {
+	cleanup_process
 	check_master
 	install_sync_diff
 	clean_data
@@ -217,6 +227,48 @@ function test() {
 	gen_incr_data
 	verify_result
 	clean_task
+	echo "CASE=test_relay success"
 }
 
-test
+function test_binlog_filename_change_when_enable_gtid() {
+	cleanup_process
+	check_master
+	clean_data
+	setup_replica
+	gen_full_data
+	run_dm_components_and_create_sources
+	start_task
+
+	# flush mysql8 master binlog files -> mysql-bin.000002
+	exec_sql $host1 "flush logs;"
+	# flush mysql8 master binlog files -> mysql-bin.000004
+	exec_sql $host2 "flush logs;"
+	exec_sql $host2 "flush logs;"
+	exec_sql $host2 "flush logs;"
+
+	# make mysql8 master slave switch
+	docker-compose -f $CUR/docker-compose.yml pause mysql8_master
+	wait_mysql $host2 2
+
+	# make a flush job to dm
+	exec_sql $host1 "alter table ${db}.${tb} add column c int;"
+	exec_sql $host2 "alter table ${db}.${tb} add column c int;"
+
+	check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
+	# mysql8 new master's binlog file still is mysql-bin.000001
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status task_pessimistic " \
+		"mysql-bin.000001" 2
+
+	docker-compose -f $CUR/docker-compose.yml unpause mysql8_master
+	clean_task
+	echo "CASE=test_binlog_filename_change_when_enable_gtid success"
+
+}
+
+function run() {
+	test_relay
+	test_binlog_filename_change_when_enable_gtid
+}
+
+run
