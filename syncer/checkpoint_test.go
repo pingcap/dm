@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -124,7 +125,7 @@ func (s *testCheckpointSuite) TestCheckPoint(c *C) {
 
 	dbConn, err := db.Conn(tcontext.Background().Context())
 	c.Assert(err, IsNil)
-	conn := &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	conn := &dbconn.DBConn{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 
 	cp.(*RemoteCheckPoint).dbConn = conn
 	err = cp.(*RemoteCheckPoint).prepare(tctx)
