@@ -61,7 +61,7 @@ spec:
         name: mysql57
       spec:
         accessModes:
-        - ReadWriteOnce
+          - ReadWriteOnce
         resources:
           requests:
             storage: 5Gi
@@ -87,7 +87,7 @@ spec:
     spec:
       containers:
         - name: mysql8
-          image: mysql:8.0.23
+          image: mysql:8.0.23 # use latest after TiDB support utf8mb3
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: "/var/lib/mysql"
@@ -109,7 +109,7 @@ spec:
         name: mysql8
       spec:
         accessModes:
-        - ReadWriteOnce
+          - ReadWriteOnce
         resources:
           requests:
             storage: 5Gi
@@ -135,7 +135,7 @@ spec:
     spec:
       containers:
         - name: mariadb
-          image: mariadb:latest
+          image: mariadb:10.6.0 # use latest after TiDB support utf8mb3
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: "/var/lib/mysql"
@@ -155,7 +155,7 @@ spec:
         name: mariadb
       spec:
         accessModes:
-        - ReadWriteOnce
+          - ReadWriteOnce
         resources:
           requests:
             storage: 5Gi
