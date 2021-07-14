@@ -18,7 +18,7 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.16
-    
+
     - name: Check out code
       uses: actions/checkout@v2
 
@@ -27,7 +27,7 @@ jobs:
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-dm-${{ hashFiles('**/go.sum') }}
-    
+
     - name: Cache tools
       uses: actions/cache@v2
       with:
@@ -37,7 +37,7 @@ jobs:
 
     - name: Build DM binary
       run: make dm_integration_test_build
-    
+
     - name: Setup containers
       run: |
           docker-compose -f ./tests/upstream_switch/docker-compose.yml up -d
@@ -45,7 +45,7 @@ jobs:
     - name: Run test cases
       run: |
         bash ./tests/upstream_switch/case.sh
-        
+
     - name: Copy logs to hack permission
       if: ${{ always() }}
       run: |
@@ -74,6 +74,20 @@ jobs:
       uses: Ilshidur/action-slack@2.1.0
       with:
         args: "upstream-switch job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
+
+
+    - name: Feishu notification
+      if: ${{ failure() }}
+      uses: foxundermoon/feishu-action@v1
+      with:
+        url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+        title: FIX ME PLEASE
+        text: |
+          repository: ${{ github.repository }}
+          committer: ${{ github.actor }}
+          compare: ${{ github.event.compare }}
+          job status: ${{ job.status }}
+
 
     # Debug via SSH if previous steps failed
     - name: Set up tmate session

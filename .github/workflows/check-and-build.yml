@@ -5,6 +5,7 @@ on:
     branches:
     - master
     - release-2.0
+    - feishu
   pull_request:
     branches:
     - master
@@ -82,6 +83,17 @@ jobs:
       with:
         args: "chaos job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
 
+    - name: Feishu notification
+      # if: ${{ failure() }}
+      uses: foxundermoon/feishu-action@v1
+      with:
+        url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+        title: FIX ME PLEASE
+        text: |
+          repository: ${{ github.repository }}
+          committer: ${{ github.actor }}
+          compare: ${{ github.event.compare }}
+          job status: ${{ job.status }}
 
   lint:
     name: Lint

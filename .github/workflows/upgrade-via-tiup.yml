@@ -53,6 +53,18 @@ jobs:
       with:
         args: "upgrade job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
 
+    - name: Feishu notification
+      if: ${{ failure() }}
+      uses: foxundermoon/feishu-action@v1
+      with:
+        url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+        title: FIX ME PLEASE
+        text: |
+          repository: ${{ github.repository }}
+          committer: ${{ github.actor }}
+          compare: ${{ github.event.compare }}
+          job status: ${{ job.status }}
+
     # Debug via SSH if previous steps failed
     - name: Set up tmate session
       if: ${{ failure() }}
@@ -162,6 +174,18 @@ jobs:
       with:
         args: "upgrade-via-tiup job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
 
+    - name: Feishu notification
+      if: ${{ failure() }}
+      uses: foxundermoon/feishu-action@v1
+      with:
+        url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+        title: FIX ME PLEASE
+        text: |
+          repository: ${{ github.repository }}
+          committer: ${{ github.actor }}
+          compare: ${{ github.event.compare }}
+          job status: ${{ job.status }}
+
     # Debug via SSH if previous steps failed
     - name: Set up tmate session
       if: ${{ failure() }}
@@ -178,12 +202,12 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.16
-    
+
     - name: Check out code
       uses: actions/checkout@v2
       with:
         path: go/src/github.com/pingcap/dm
-    
+
     # TODO: support more versions
     - name: Setup containers
       working-directory: ${{ env.working-directory }}
@@ -197,7 +221,7 @@ jobs:
       run: |
         cd ${{ env.working-directory }}/tests/tiup/docker
         docker-compose exec -T control bash -c "cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-tidb.sh before_upgrade nightly"
-    
+
     - name: Upgrade TiDB
       working-directory: ${{ env.working-directory }}
       run: |
@@ -220,6 +244,18 @@ jobs:
       uses: Ilshidur/action-slack@2.1.0
       with:
         args: "upgrade job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
+
+    - name: Feishu notification
+      if: ${{ failure() }}
+      uses: foxundermoon/feishu-action@v1
+      with:
+        url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+        title: FIX ME PLEASE
+        text: |
+          repository: ${{ github.repository }}
+          committer: ${{ github.actor }}
+          compare: ${{ github.event.compare }}
+          job status: ${{ job.status }}
 
     # Debug via SSH if previous steps failed
     - name: Set up tmate session
