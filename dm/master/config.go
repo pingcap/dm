@@ -43,6 +43,7 @@ const (
 	defaultInitialClusterState     = embed.ClusterStateFlagNew
 	defaultAutoCompactionMode      = "periodic"
 	defaultAutoCompactionRetention = "1h"
+	defaultMaxTxnOps               = 2048
 	defaultQuotaBackendBytes       = 2 * 1024 * 1024 * 1024 // 2GB
 	quotaBackendBytesLowerBound    = 500 * 1024 * 1024      // 500MB
 )
@@ -78,6 +79,8 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.PeerUrls, "peer-urls", defaultPeerUrls, "URLs for peer traffic")
 	fs.StringVar(&cfg.AdvertisePeerUrls, "advertise-peer-urls", "", `advertise URLs for peer traffic (default "${peer-urls}")`)
 	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: cluster's "${master-addr}" list, e.g. "127.0.0.1:8261,127.0.0.1:18261"`)
+	fs.UintVar(&cfg.MaxTxnOps, "max-txn-ops", defaultMaxTxnOps, `etcd's max-txn-ops, default value is 2048`)
+	fs.UintVar(&cfg.MaxRequestBytes, "max-request-bytes", embed.DefaultMaxRequestBytes, `etcd's max-request-bytes`)
 	fs.StringVar(&cfg.AutoCompactionMode, "auto-compaction-mode", defaultAutoCompactionMode, `etcd's auto-compaction-mode, either 'periodic' or 'revision'`)
 	fs.StringVar(&cfg.AutoCompactionRetention, "auto-compaction-retention", defaultAutoCompactionRetention, `etcd's auto-compaction-retention, accept values like '5h' or '5' (5 hours in 'periodic' mode or 5 revisions in 'revision')`)
 	fs.Int64Var(&cfg.QuotaBackendBytes, "quota-backend-bytes", defaultQuotaBackendBytes, `etcd's storage quota in bytes`)
@@ -121,6 +124,8 @@ type Config struct {
 	InitialCluster          string `toml:"initial-cluster" json:"initial-cluster"`
 	InitialClusterState     string `toml:"initial-cluster-state" json:"initial-cluster-state"`
 	Join                    string `toml:"join" json:"join"` // cluster's client address (endpoints), not peer address
+	MaxTxnOps               uint   `toml:"max-txn-ops" json:"max-txn-ops"`
+	MaxRequestBytes         uint   `toml:"max-request-bytes" json:"max-request-bytes"`
 	AutoCompactionMode      string `toml:"auto-compaction-mode" json:"auto-compaction-mode"`
 	AutoCompactionRetention string `toml:"auto-compaction-retention" json:"auto-compaction-retention"`
 	QuotaBackendBytes       int64  `toml:"quota-backend-bytes" json:"quota-backend-bytes"`
@@ -363,6 +368,8 @@ func (c *Config) genEmbedEtcdConfig(cfg *embed.Config) (*embed.Config, error) {
 	cfg.AutoCompactionMode = c.AutoCompactionMode
 	cfg.AutoCompactionRetention = c.AutoCompactionRetention
 	cfg.QuotaBackendBytes = c.QuotaBackendBytes
+	cfg.MaxTxnOps = c.MaxTxnOps
+	cfg.MaxRequestBytes = c.MaxRequestBytes
 
 	err = cfg.Validate() // verify & trigger the builder
 	if err != nil {
