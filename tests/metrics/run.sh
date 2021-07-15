@@ -101,8 +101,8 @@ function run() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-	echo "sleep 5s"
-	sleep 5
+	echo "sleep 6s"
+	sleep 6
 	echo "make a dml job"
 	run_sql_source1 "use metrics;insert into t1 (id, name, ts) values (1004, 'zmj4', '2022-05-11 12:01:05')"
 	echo "sleep 5s"
