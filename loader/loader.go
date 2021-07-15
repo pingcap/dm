@@ -521,22 +521,27 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 	}
 	lcfg.To.Session["time_zone"] = "+00:00"
 
+	hasSQLMode := false
 	for k := range l.cfg.To.Session {
 		if strings.ToLower(k) == "sql_mode" {
-			l.logger.Info("your confiured sql_mode will be adjusted to compatible")
+			hasSQLMode = true
 			break
 		}
 	}
-	// When upstream's datatime is 2020-00-00, 2020-00-01, 2020-06-00
-	// and so on, downstream will be 2019-11-30, 2019-12-01, 2020-05-31,
-	// as if set the 'NO_ZERO_IN_DATE', 'NO_ZERO_DATE'.
-	// This is because the implementation of go-mysql, that you can see
-	// https://github.com/go-mysql-org/go-mysql/blob/master/replication/row_event.go#L1063-L1087
-	sqlModes, err3 := utils.AdjustSQLModeCompatible(l.cfg.LoaderConfig.SQLMode)
-	if err3 != nil {
-		l.logger.Warn("cannot adjust sql_mode compatible", log.ShortError(err3))
+
+	if !hasSQLMode {
+		// When upstream's datatime is 2020-00-00, 2020-00-01, 2020-06-00
+		// and so on, downstream will be 2019-11-30, 2019-12-01, 2020-05-31,
+		// as if set the 'NO_ZERO_IN_DATE', 'NO_ZERO_DATE'.
+		// This is because the implementation of go-mysql, that you can see
+		// https://github.com/go-mysql-org/go-mysql/blob/master/replication/row_event.go#L1063-L1087
+		sqlModes, err3 := utils.AdjustSQLModeCompatible(l.cfg.LoaderConfig.SQLMode)
+		if err3 != nil {
+			l.logger.Warn("cannot adjust sql_mode compatible", log.ShortError(err3))
+		}
+		lcfg.To.Session["sql_mode"] = sqlModes
 	}
-	lcfg.To.Session["sql_mode"] = sqlModes
+
 	l.logger.Info("loader's sql_mode is ", zap.String("sqlmode", lcfg.To.Session["sql_mode"]))
 
 	l.toDB, l.toDBConns, err = createConns(tctx, lcfg, l.cfg.PoolSize)
