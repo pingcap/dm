@@ -238,6 +238,39 @@ function test_binlog_filename_change_when_enable_gtid() {
 	setup_replica
 	gen_full_data
 	run_dm_components_and_create_sources
+	start_task
+
+	# flush mysql8 master binlog files -> mysql-bin.000004
+	exec_sql $host2 "flush logs;"
+	exec_sql $host2 "flush logs;"
+	exec_sql $host2 "flush logs;"
+
+	# make mysql8 master slave switch
+	docker-compose -f $CUR/docker-compose.yml pause mysql8_master
+	wait_mysql $host2 2
+
+	# make a flush job to dm
+	exec_sql $host1 "alter table ${db}.${tb} add column c int;"
+	exec_sql $host2 "alter table ${db}.${tb} add column c int;"
+
+	check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
+	# mysql8 new master's binlog file still is mysql-bin.000001
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status task_pessimistic " \
+		"mysql-bin.000001" 4 # source-1 have match 2, source-2 match 2
+
+	docker-compose -f $CUR/docker-compose.yml unpause mysql8_master
+	clean_task
+	echo "CASE=test_binlog_filename_change_when_enable_gtid success"
+}
+
+function test_binlog_filename_change_when_enable_relay_and_gtid() {
+	cleanup_process
+	check_master
+	clean_data
+	setup_replica
+	gen_full_data
+	run_dm_components_and_create_sources
 	start_relay
 	start_task
 
@@ -262,12 +295,13 @@ function test_binlog_filename_change_when_enable_gtid() {
 
 	docker-compose -f $CUR/docker-compose.yml unpause mysql8_master
 	clean_task
-	echo "CASE=test_binlog_filename_change_when_enable_gtid success"
+	echo "CASE=test_binlog_filename_change_when_enable_relay_and_gtid success"
 }
 
 function run() {
 	test_relay
 	test_binlog_filename_change_when_enable_gtid
+	test_binlog_filename_change_when_enable_relay_and_gtid
 }
 
 run
