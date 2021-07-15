@@ -147,12 +147,12 @@ func newSkipJob(ec *eventContext) *job {
 	}
 }
 
-func newXIDJob(location, startLocation, cmdLocation binlog.Location) *job {
+func newXIDJob(location, startLocation, currentLocation binlog.Location) *job {
 	return &job{
 		tp:              xid,
 		location:        location,
 		startLocation:   startLocation,
-		currentLocation: cmdLocation,
+		currentLocation: currentLocation,
 	}
 }
 
