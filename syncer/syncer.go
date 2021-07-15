@@ -1762,7 +1762,7 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 	})
 
 	if utils.IsFakeRotateEvent(ec.header) {
-		if fileName := string(ev.NextLogName); fileName <= ec.lastLocation.Position.Name {
+		if fileName := string(ev.NextLogName); mysql.CompareBinlogFileName(fileName, ec.lastLocation.Position.Name) == 0 {
 			// NOTE A fake rotate event is also generated when a master-slave switch occurs upstream, and the binlog filename may be rolled back in this case
 			// when the DM is updating based on the GTID, we also update the filename of the lastLocation
 			if s.cfg.EnableGTID {
