@@ -27,7 +27,11 @@ function real_run() {
 	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/ExitAfterSaveOnlineDDL=return()"
+	inject_points=(
+		"github.com/pingcap/dm/syncer/online-ddl-tools/ExitAfterSaveOnlineDDL=return()"
+		"github.com/pingcap/dm/syncer/ExitAfterSaveOnlineDDL=return()"
+	)
+	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 	export GO_FAILPOINTS=""
@@ -37,6 +41,13 @@ function real_run() {
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"start-relay -s $SOURCE_ID2 worker2" \
 		"\"result\": true" 1
+
+	# imitate a DM task is started during the running of online DDL tool
+	if [ "$online_ddl_scheme" == "gh-ost" ]; then
+		run_sql_source1 "create table online_ddl.ignore (c int); create table online_ddl._ignore_gho (c int);"
+	elif [ "$online_ddl_scheme" == "pt" ]; then
+		run_sql_source1 "create table online_ddl.ignore (c int); create table online_ddl._ignore_new (c int);"
+	fi
 
 	# start DM task only
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task-${online_ddl_scheme}.yaml
@@ -59,12 +70,27 @@ function real_run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
+	# imitate a DM task is started during the processing of online DDL tool
+	if [ "$online_ddl_scheme" == "gh-ost" ]; then
+		run_sql_source1 "rename /* gh-ost */ table online_ddl.ignore to online_ddl._ignore_del, online_ddl._ignore_gho to online_ddl.ignore;"
+	elif [ "$online_ddl_scheme" == "pt" ]; then
+		run_sql_source1 "rename table online_ddl.ignore to online_ddl._ignore_old, online_ddl._ignore_new to online_ddl.ignore;"
+	fi
+
 	run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl $online_ddl_scheme
 	run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl $online_ddl_scheme
 
-	# manually create index to pass check_sync_diff
+	for ((k = 0; k < 10; k++)); do
+		run_sql_tidb "show create table online_ddl.t_target"
+		check_contains "info_json" && break || true
+		sleep 1
+	done
+	check_contains "info_json"
+
 	run_sql_tidb "show create table online_ddl.t_target"
 	check_not_contains "KEY \`name\`"
+
+	# manually create index to pass check_sync_diff
 	run_sql_tidb "alter table online_ddl.t_target add key name (name)"
 
 	echo "use sync_diff_inspector to check increment data"
