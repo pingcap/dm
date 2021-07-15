@@ -555,52 +555,17 @@ func AdjustSQLModeCompatible(sqlModes string) (string, error) {
 	if err3 != nil {
 		return "", err3
 	}
+	// About this bit manipulation, details can be seen
+	// https://github.com/pingcap/dm/pull/1869#discussion_r669771966
 	mode = (mode &^ disableMode) | enableMode
 
 	return GetSQLModeStrBySQLMode(mode), nil
 }
 
-// SQLMode2Str is the sql_mode to string represent of sql_mode map.
-var SQLMode2Str = map[tmysql.SQLMode]string{
-	tmysql.ModeRealAsFloat:            "REAL_AS_FLOAT",
-	tmysql.ModePipesAsConcat:          "PIPES_AS_CONCAT",
-	tmysql.ModeANSIQuotes:             "ANSI_QUOTES",
-	tmysql.ModeIgnoreSpace:            "IGNORE_SPACE",
-	tmysql.ModeNotUsed:                "NOT_USED",
-	tmysql.ModeOnlyFullGroupBy:        "ONLY_FULL_GROUP_BY",
-	tmysql.ModeNoUnsignedSubtraction:  "NO_UNSIGNED_SUBTRACTION",
-	tmysql.ModeNoDirInCreate:          "NO_DIR_IN_CREATE",
-	tmysql.ModePostgreSQL:             "POSTGRESQL",
-	tmysql.ModeOracle:                 "ORACLE",
-	tmysql.ModeMsSQL:                  "MSSQL",
-	tmysql.ModeDb2:                    "DB2",
-	tmysql.ModeMaxdb:                  "MAXDB",
-	tmysql.ModeNoKeyOptions:           "NO_KEY_OPTIONS",
-	tmysql.ModeNoTableOptions:         "NO_TABLE_OPTIONS",
-	tmysql.ModeNoFieldOptions:         "NO_FIELD_OPTIONS",
-	tmysql.ModeMySQL323:               "MYSQL323",
-	tmysql.ModeMySQL40:                "MYSQL40",
-	tmysql.ModeANSI:                   "ANSI",
-	tmysql.ModeNoAutoValueOnZero:      "NO_AUTO_VALUE_ON_ZERO",
-	tmysql.ModeNoBackslashEscapes:     "NO_BACKSLASH_ESCAPES",
-	tmysql.ModeStrictTransTables:      "STRICT_TRANS_TABLES",
-	tmysql.ModeStrictAllTables:        "STRICT_ALL_TABLES",
-	tmysql.ModeNoZeroInDate:           "NO_ZERO_IN_DATE",
-	tmysql.ModeNoZeroDate:             "NO_ZERO_DATE",
-	tmysql.ModeInvalidDates:           "INVALID_DATES",
-	tmysql.ModeErrorForDivisionByZero: "ERROR_FOR_DIVISION_BY_ZERO",
-	tmysql.ModeTraditional:            "TRADITIONAL",
-	tmysql.ModeNoAutoCreateUser:       "NO_AUTO_CREATE_USER",
-	tmysql.ModeHighNotPrecedence:      "HIGH_NOT_PRECEDENCE",
-	tmysql.ModeNoEngineSubstitution:   "NO_ENGINE_SUBSTITUTION",
-	tmysql.ModePadCharToFullLength:    "PAD_CHAR_TO_FULL_LENGTH",
-	tmysql.ModeAllowInvalidDates:      "ALLOW_INVALID_DATES",
-}
-
-// GetSQLModeByStr get string represent of sql_mode by sql_mode
+// GetSQLModeStrBySQLMode get string represent of sql_mode by sql_mode
 func GetSQLModeStrBySQLMode(sqlMode tmysql.SQLMode) string {
 	var sqlModeStr []string
-	for SQLMode, str := range SQLMode2Str {
+	for str, SQLMode := range tmysql.Str2SQLMode {
 		if sqlMode&SQLMode != 0 {
 			sqlModeStr = append(sqlModeStr, str)
 		}
