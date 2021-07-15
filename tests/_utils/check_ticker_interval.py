@@ -18,7 +18,7 @@ def check_worker_ticker_interval(log_path, min_interval):
                 logs.append(line)
     ts1 = logs[0].split('"current ts"=')[1].split("]")[0]
     ts2 = logs[1].split('"current ts"=')[1].split("]")[0]
-    if abs(int(ts2) - int(ts1)) < int(min_interval):
+    if int(ts1) -int(ts2) < int(min_interval):
         raise Exception(
             "check_worker_ticker_interval faild ts1={} ts2={} min_interval={}".format(
                 ts1, ts2, min_interval
