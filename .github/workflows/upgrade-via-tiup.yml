@@ -58,7 +58,7 @@ jobs:
         uses: whatwewant/action-robot-feishu@v0.0.10
         with:
           url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
-          title: FIX ME PLEASE
+          title: FIX ME
           text: |
             repository: ${{ github.repository }}
             committer: ${{ github.actor }}
@@ -178,7 +178,7 @@ jobs:
         uses: whatwewant/action-robot-feishu@v0.0.10
         with:
           url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
-          title: FIX ME PLEASE
+          title: FIX ME
           text: |
             repository: ${{ github.repository }}
             committer: ${{ github.actor }}
@@ -248,7 +248,7 @@ jobs:
         uses: whatwewant/action-robot-feishu@v0.0.10
         with:
           url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
-          title: FIX ME PLEASE
+          title: FIX ME
           text: |
             repository: ${{ github.repository }}
             committer: ${{ github.actor }}

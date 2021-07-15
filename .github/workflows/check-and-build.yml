@@ -85,12 +85,13 @@ jobs:
         uses: whatwewant/action-robot-feishu@v0.0.10
         with:
           url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
-          title: FIX ME PLEASE
+          title: FIX ME
           text: |
             repository: ${{ github.repository }}
             committer: ${{ github.actor }}
             compare: ${{ github.event.compare }}
             job status: ${{ job.status }}
+            job_url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
 
   lint:
     name: Lint
@@ -98,6 +99,18 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v2
+
+      - name: Feishu notification
+        uses: whatwewant/action-robot-feishu@v0.0.10
+        with:
+          url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+          title: FIX ME
+          text: |
+            repository: ${{ github.repository }}
+            committer: ${{ github.actor }}
+            compare: ${{ github.event.compare }}
+            job status: ${{ job.status }}
+            job_url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
 
       - name: GolangCI Lint
         uses: golangci/golangci-lint-action@v2
