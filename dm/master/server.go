@@ -2071,56 +2071,6 @@ func (s *Server) GetCfg(ctx context.Context, req *pb.GetCfgRequest) (*pb.GetCfgR
 	}, nil
 }
 
-func (s *Server) exportCfgs() ([]*pb.Config, []*pb.Config) {
-	subTaskCfgsMap := s.scheduler.GetSubTaskCfgs()
-	sourceCfgsMap := s.scheduler.GetSourceCfgs()
-	taskCfgs := make([]*pb.Config, 0, len(subTaskCfgsMap))
-	sourceCfgs := make([]*pb.Config, 0, len(sourceCfgsMap))
-
-	for task, subTaskCfgs := range subTaskCfgsMap {
-		subTaskCfgList := make([]*config.SubTaskConfig, 0, len(subTaskCfgs))
-		for _, subTaskCfg := range subTaskCfgs {
-			clone := subTaskCfg
-			subTaskCfgList = append(subTaskCfgList, &clone)
-		}
-		sort.Slice(subTaskCfgList, func(i, j int) bool {
-			return subTaskCfgList[i].SourceID < subTaskCfgList[j].SourceID
-		})
-		taskCfg := config.FromSubTaskConfigs(subTaskCfgList...)
-		taskCfgs = append(taskCfgs, &pb.Config{Name: task, Content: taskCfg.String()})
-	}
-
-	for sourceID, sourceCfg := range sourceCfgsMap {
-		sourceCfgs = append(sourceCfgs, &pb.Config{Name: sourceID, Content: sourceCfg.String()})
-	}
-
-	return taskCfgs, sourceCfgs
-}
-
-// ImportExportCfgs implements MasterServer.ImportExportCfgs.
-func (s *Server) ImportExportCfgs(ctx context.Context, req *pb.ImportExportCfgsRequest) (*pb.ImportExportCfgsResponse, error) {
-	var (
-		resp = &pb.ImportExportCfgsResponse{}
-		err2 error
-	)
-	shouldRet := s.sharedLogic(ctx, req, &resp, &err2)
-	if shouldRet {
-		return resp, err2
-	}
-
-	switch req.Op {
-	case pb.CfgsOp_Import:
-		resp.Tasks, resp.Sources = s.exportCfgs()
-	case pb.CfgsOp_Export:
-	default:
-		resp.Msg = fmt.Sprintf("invalid configs op '%s'", req.Op)
-		return resp, nil
-	}
-
-	resp.Result = true
-	return resp, nil
-}
-
 // HandleError implements MasterServer.HandleError.
 func (s *Server) HandleError(ctx context.Context, req *pb.HandleErrorRequest) (*pb.HandleErrorResponse, error) {
 	var (

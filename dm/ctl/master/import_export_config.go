@@ -14,15 +14,16 @@
 package master
 
 import (
-	"context"
 	"io/ioutil"
 	"os"
 	"path"
+	"sort"
 
 	"github.com/spf13/cobra"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/ha"
 )
 
 var (
@@ -50,66 +51,94 @@ func exportCfgFunc(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
-	defer cancel()
-
-	resp := &pb.ImportExportCfgsResponse{}
-	err = common.SendRequest(
-		ctx,
-		"ImportExportCfgs",
-		&pb.ImportExportCfgsRequest{
-			Op:  pb.CfgsOp_Export,
-			Dir: dir,
-		},
-		&resp,
-	)
-
+	// get all source cfgs
+	sourceCfgsMap, _, err := ha.GetSourceCfg(common.GlobalCtlClient.EtcdClient, "", 0)
 	if err != nil {
-		common.PrintLinesf("can not export configs to %s", dir)
+		common.PrintLinesf("can not get source configs from etcd")
+		return err
+	}
+	// try to get all source cfgs before v2.0.2
+	if len(sourceCfgsMap) == 0 {
+		sourceCfgsMap, _, err = ha.GetAllSourceCfgBeforeV202(common.GlobalCtlClient.EtcdClient)
+		if err != nil {
+			common.PrintLinesf("can not get source configs from etcd")
+			return err
+		}
+	}
+
+	// get all task configs.
+	subTaskCfgsMap, _, err := ha.GetAllSubTaskCfg(common.GlobalCtlClient.EtcdClient)
+	if err != nil {
+		common.PrintLinesf("can not get subtask configs from etcd")
 		return err
 	}
 
-	if !resp.Result {
-		common.PrettyPrintResponse(resp)
-		return nil
+	taskCfgsMap := make(map[string]string, len(subTaskCfgsMap))
+	subTaskCfgsListMap := make(map[string][]*config.SubTaskConfig, len(subTaskCfgsMap))
+
+	// from source => task => subtask to task => source => subtask
+	for _, subTaskCfgs := range subTaskCfgsMap {
+		for task, subTaskCfg := range subTaskCfgs {
+			clone := subTaskCfg
+			if subTaskCfgList, ok := subTaskCfgsListMap[task]; ok {
+				subTaskCfgsListMap[task] = append(subTaskCfgList, &clone)
+			} else {
+				subTaskCfgsListMap[task] = []*config.SubTaskConfig{&clone}
+			}
+		}
+	}
+	// from task => source => subtask to task => taskCfg
+	for task, subTaskCfgs := range subTaskCfgsListMap {
+		sort.Slice(subTaskCfgs, func(i, j int) bool {
+			return subTaskCfgs[i].SourceID < subTaskCfgs[j].SourceID
+		})
+		taskCfg := config.FromSubTaskConfigs(subTaskCfgs...)
+		taskCfgsMap[task] = taskCfg.String()
 	}
 
+	// create directory
 	if err = os.MkdirAll(dir, 0o755); err != nil {
-		common.PrintLinesf("can not create directory %s", dir)
+		common.PrintLinesf("can not create directory `%s`", dir)
 		return err
 	}
-
 	taskDir := path.Join(dir, taskDirname)
 	if err = os.MkdirAll(taskDir, 0o755); err != nil {
-		common.PrintLinesf("can not create directory of task configs %s", taskDir)
+		common.PrintLinesf("can not create directory of task configs `%s`", taskDir)
 		return err
 	}
-
 	sourceDir := path.Join(dir, sourceDirname)
-	if err = os.MkdirAll(sourceDirname, 0o755); err != nil {
-		common.PrintLinesf("can not create directory of source configs %s", path.Join(dir+sourceDir))
+	if err = os.MkdirAll(sourceDir, 0o755); err != nil {
+		common.PrintLinesf("can not create directory of source configs `%s`", sourceDir)
 		return err
 	}
 
-	for _, taskCfg := range resp.Tasks {
-		taskFile := path.Join(taskDir, taskCfg.Name)
-		taskFile += yamlSuffix
-		err = ioutil.WriteFile(taskFile, []byte(taskCfg.Content), 0o644)
-		if err != nil {
-			common.PrintLinesf("can not write task config to file %s", taskFile)
-			return err
-		}
-	}
-
-	for _, sourceCfg := range resp.Sources {
-		sourceFile := path.Join(sourceDir, sourceCfg.Name, ".yaml")
+	// write sourceCfg files
+	for source, sourceCfg := range sourceCfgsMap {
+		sourceFile := path.Join(sourceDir, source)
 		sourceFile += yamlSuffix
-		err = ioutil.WriteFile(sourceFile, []byte(sourceCfg.Content), 0o644)
+		fileContent, err2 := sourceCfg.Yaml()
+		if err2 != nil {
+			common.PrintLinesf("fail to marshal source config of `%s`", source)
+			return err2
+		}
+		err = ioutil.WriteFile(sourceFile, []byte(fileContent), 0o644)
 		if err != nil {
-			common.PrintLinesf("can not write source config to file %s", sourceFile)
+			common.PrintLinesf("fail to write source config to file `%s`", sourceFile)
 			return err
 		}
 	}
 
+	// write taskCfg files
+	for task, taskCfg := range taskCfgsMap {
+		taskFile := path.Join(taskDir, task)
+		taskFile += yamlSuffix
+		err = ioutil.WriteFile(taskFile, []byte(taskCfg), 0o644)
+		if err != nil {
+			common.PrintLinesf("can not write task config to file `%s`", taskFile)
+			return err
+		}
+	}
+
+	common.PrintLinesf("export configs to directory `%s` succeed", dir)
 	return nil
 }
