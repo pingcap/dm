@@ -89,19 +89,29 @@ function run() {
 		"\"secondsBehindMaster\": \"0\"" 2
 	echo "check zero job done!"
 
-	# check the time interval between dm-worker updates when the queue is empty, the desired time interval is 1s
+
 	kill_dm_worker
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/changeTickerInterval=return(1)"
+	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/changeTickerInterval=return(5)"
+	# First set the ticker interval to 5s -> expect the execSQL interval to be greater than 5s
+	# At 5s, the first no job log will appear in the log
+	# At 6s, the ticker has already waited 1s and the ticker goes to 1/5th of the way
+	# At 6s, a dml job is added to jobchan and the ticker is reset
+	# At 11s the ticker  wirte the log of the second nojob
+	# Check that the interval between the two ticker logs is > 5s
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-	sleep 3 # we need sleep 3 because current ticker interval is 1 and we need at least 2 ticker's log
-	$cur/../_utils/check_ticker_interval.py $WORK_DIR/worker1/log/dm-worker.log 1
+	echo "sleep 5s"
+	sleep 5
+	echo "make a dml job"
+	run_sql_source1 "use metrics;insert into t1 (id, name, ts) values (1004, 'zmj4', '2022-05-11 12:01:05')"
+	echo "sleep 5s"
+	sleep 5
+	$cur/../_utils/check_ticker_interval.py $WORK_DIR/worker1/log/dm-worker.log 5
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"stop-task test" \
 		"\"result\": true" 3
-
 	cleanup_data metrics
 	cleanup_process $*
 	export GO_FAILPOINTS=''
