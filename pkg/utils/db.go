@@ -525,7 +525,7 @@ func AddGSetWithPurged(ctx context.Context, gset gtid.Set, conn *sql.Conn) (gtid
 	return ret, nil
 }
 
-// AdjustSQLModeCompatible adjust downstream sql mode to compatible
+// AdjustSQLModeCompatible adjust downstream sql mode to compatible.
 func AdjustSQLModeCompatible(sqlModes string) (string, error) {
 	needDisable := []string{
 		"NO_ZERO_IN_DATE",
@@ -562,7 +562,7 @@ func AdjustSQLModeCompatible(sqlModes string) (string, error) {
 	return GetSQLModeStrBySQLMode(mode), nil
 }
 
-// GetSQLModeStrBySQLMode get string represent of sql_mode by sql_mode
+// GetSQLModeStrBySQLMode get string represent of sql_mode by sql_mode.
 func GetSQLModeStrBySQLMode(sqlMode tmysql.SQLMode) string {
 	var sqlModeStr []string
 	for str, SQLMode := range tmysql.Str2SQLMode {
