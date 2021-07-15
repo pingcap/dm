@@ -82,6 +82,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/syncer/dbconn"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
 
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -391,7 +392,7 @@ type ShardingGroupKeeper struct {
 	shardMetaTableName string
 
 	db     *conn.BaseDB
-	dbConn *DBConn
+	dbConn *dbconn.DBConn
 
 	tctx *tcontext.Context
 }
@@ -447,7 +448,7 @@ func (k *ShardingGroupKeeper) Init() error {
 	k.clear()
 	sgkDB := k.cfg.To
 	sgkDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
-	db, dbConns, err := createConns(k.tctx, k.cfg, sgkDB, 1)
+	db, dbConns, err := dbconn.CreateConns(k.tctx, k.cfg, sgkDB, 1)
 	if err != nil {
 		return err
 	}
@@ -680,12 +681,12 @@ func (k *ShardingGroupKeeper) prepare() error {
 
 // Close closes sharding group keeper.
 func (k *ShardingGroupKeeper) Close() {
-	closeBaseDB(k.tctx, k.db)
+	dbconn.CloseBaseDB(k.tctx, k.db)
 }
 
 func (k *ShardingGroupKeeper) createSchema() error {
 	stmt := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", k.shardMetaSchema)
-	_, err := k.dbConn.executeSQL(k.tctx, []string{stmt})
+	_, err := k.dbConn.ExecuteSQL(k.tctx, []string{stmt})
 	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
@@ -702,7 +703,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 		update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		UNIQUE KEY uk_source_id_table_id_source (source_id, target_table_id, source_table_id)
 	)`, k.shardMetaTableName)
-	_, err := k.dbConn.executeSQL(k.tctx, []string{stmt})
+	_, err := k.dbConn.ExecuteSQL(k.tctx, []string{stmt})
 	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
@@ -710,7 +711,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 // LoadShardMeta implements CheckPoint.LoadShardMeta.
 func (k *ShardingGroupKeeper) LoadShardMeta(flavor string, enableGTID bool) (map[string]*shardmeta.ShardingMeta, error) {
 	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM %s WHERE `source_id`='%s'", k.shardMetaTableName, k.cfg.SourceID)
-	rows, err := k.dbConn.querySQL(k.tctx, query)
+	rows, err := k.dbConn.QuerySQL(k.tctx, query)
 	if err != nil {
 		return nil, terror.WithScope(err, terror.ScopeDownstream)
 	}
