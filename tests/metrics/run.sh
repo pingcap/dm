@@ -89,7 +89,6 @@ function run() {
 		"\"secondsBehindMaster\": \"0\"" 2
 	echo "check zero job done!"
 
-
 	kill_dm_worker
 	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/changeTickerInterval=return(5)"
 	# First set the ticker interval to 5s -> expect the execSQL interval to be greater than 5s
