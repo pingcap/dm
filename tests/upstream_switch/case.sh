@@ -34,6 +34,7 @@ function clean_data() {
 	exec_tidb $tidb_host "drop database if exists db1;"
 	exec_tidb $tidb_host "drop database if exists db2;"
 	exec_tidb $tidb_host "drop database if exists ${db};"
+	rm -rf /tmp/dm_test
 }
 
 function cleanup_process() {
@@ -205,7 +206,6 @@ function clean_task() {
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"operate-source stop mysql-replica-02" \
 		"\result\": true" 2
-	docker-compose -f $CUR/docker-compose.yml unpause mysql57_master
 }
 
 function check_master() {
@@ -227,6 +227,7 @@ function test_relay() {
 	gen_incr_data
 	verify_result
 	clean_task
+	docker-compose -f $CUR/docker-compose.yml unpause mysql57_master
 	echo "CASE=test_relay success"
 }
 
@@ -237,10 +238,9 @@ function test_binlog_filename_change_when_enable_gtid() {
 	setup_replica
 	gen_full_data
 	run_dm_components_and_create_sources
+	start_relay
 	start_task
 
-	# flush mysql57 master binlog files -> mysql-bin.000002
-	exec_sql $host1 "flush logs;"
 	# flush mysql8 master binlog files -> mysql-bin.000004
 	exec_sql $host2 "flush logs;"
 	exec_sql $host2 "flush logs;"
@@ -258,7 +258,7 @@ function test_binlog_filename_change_when_enable_gtid() {
 	# mysql8 new master's binlog file still is mysql-bin.000001
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status task_pessimistic " \
-		"mysql-bin.000001" 2
+		"mysql-bin.000001" 5 # source-1 have match 2, source-2 match 3 (relay 2 + task's masterBinlog 1)
 
 	docker-compose -f $CUR/docker-compose.yml unpause mysql8_master
 	clean_task
