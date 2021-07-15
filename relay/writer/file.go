@@ -32,6 +32,7 @@ import (
 	bw "github.com/pingcap/dm/pkg/binlog/writer"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // FileConfig is the configuration used by the FileWriter.
@@ -252,7 +253,7 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result Resu
 	}()
 
 	// write the RotateEvent if not fake
-	if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 {
+	if utils.IsFakeRotateEvent(ev.Header) {
 		// skip fake rotate event
 		return Result{
 			Ignore:       true,

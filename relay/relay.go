@@ -494,8 +494,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			continue
 		}
 
-		// fake rotate event
-		if _, ok := e.Event.(*replication.RotateEvent); ok && e.Header.Timestamp == 0 && e.Header.LogPos == 0 {
+		if _, ok := e.Event.(*replication.RotateEvent); ok && utils.IsFakeRotateEvent(e.Header) {
 			isNew, err2 := isNewServer(ctx, r.meta.UUID(), r.db.DB, r.cfg.Flavor)
 			if err2 != nil {
 				return err2
