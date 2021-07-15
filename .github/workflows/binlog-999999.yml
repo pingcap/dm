@@ -122,6 +122,7 @@ jobs:
             committer: ${{ github.actor }}
             compare: ${{ github.event.compare }}
             job status: ${{ job.status }}
+            job url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
 
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
