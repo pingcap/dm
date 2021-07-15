@@ -136,26 +136,6 @@ func (mr *MockMasterClientMockRecorder) HandleError(arg0, arg1 interface{}, arg2
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleError", reflect.TypeOf((*MockMasterClient)(nil).HandleError), varargs...)
 }
 
-// ImportExportCfgs mocks base method.
-func (m *MockMasterClient) ImportExportCfgs(arg0 context.Context, arg1 *pb.ImportExportCfgsRequest, arg2 ...grpc.CallOption) (*pb.ImportExportCfgsResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "ImportExportCfgs", varargs...)
-	ret0, _ := ret[0].(*pb.ImportExportCfgsResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ImportExportCfgs indicates an expected call of ImportExportCfgs.
-func (mr *MockMasterClientMockRecorder) ImportExportCfgs(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImportExportCfgs", reflect.TypeOf((*MockMasterClient)(nil).ImportExportCfgs), varargs...)
-}
-
 // ListMember mocks base method.
 func (m *MockMasterClient) ListMember(arg0 context.Context, arg1 *pb.ListMemberRequest, arg2 ...grpc.CallOption) (*pb.ListMemberResponse, error) {
 	m.ctrl.T.Helper()
@@ -572,21 +552,6 @@ func (m *MockMasterServer) HandleError(arg0 context.Context, arg1 *pb.HandleErro
 func (mr *MockMasterServerMockRecorder) HandleError(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleError", reflect.TypeOf((*MockMasterServer)(nil).HandleError), arg0, arg1)
-}
-
-// ImportExportCfgs mocks base method.
-func (m *MockMasterServer) ImportExportCfgs(arg0 context.Context, arg1 *pb.ImportExportCfgsRequest) (*pb.ImportExportCfgsResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ImportExportCfgs", arg0, arg1)
-	ret0, _ := ret[0].(*pb.ImportExportCfgsResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ImportExportCfgs indicates an expected call of ImportExportCfgs.
-func (mr *MockMasterServerMockRecorder) ImportExportCfgs(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ImportExportCfgs", reflect.TypeOf((*MockMasterServer)(nil).ImportExportCfgs), arg0, arg1)
 }
 
 // ListMember mocks base method.
