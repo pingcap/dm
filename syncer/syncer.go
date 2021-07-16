@@ -180,9 +180,7 @@ type Syncer struct {
 
 	heartbeat *Heartbeat
 
-	readerHub *streamer.ReaderHub
-	// when user starts a new task with GTID and no binlog file name, we can't know active relay log at init time
-	// at this case, we update active relay log when receive fake rotate event
+	readerHub              *streamer.ReaderHub
 	recordedActiveRelayLog bool
 
 	errOperatorHolder *operator.Holder
@@ -1832,10 +1830,23 @@ type eventContext struct {
 
 // TODO: Further split into smaller functions and group common arguments into a context struct.
 func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) error {
-	if ec.header.Timestamp == 0 || ec.header.LogPos == 0 { // fake rotate event
-		if string(ev.NextLogName) <= ec.lastLocation.Position.Name {
+	failpoint.Inject("MakeFakeRotateEvent", func(val failpoint.Value) {
+		ec.header.LogPos = 0
+		ev.NextLogName = []byte(val.(string))
+		ec.tctx.L().Info("MakeFakeRotateEvent", zap.String("fake file name", string(ev.NextLogName)))
+	})
+
+	if utils.IsFakeRotateEvent(ec.header) {
+		if fileName := string(ev.NextLogName); mysql.CompareBinlogFileName(fileName, ec.lastLocation.Position.Name) <= 0 {
+			// NOTE A fake rotate event is also generated when a master-slave switch occurs upstream, and the binlog filename may be rolled back in this case
+			// when the DM is updating based on the GTID, we also update the filename of the lastLocation
+			if s.cfg.EnableGTID {
+				ec.lastLocation.Position.Name = fileName
+			}
 			return nil // not rotate to the next binlog file, ignore it
 		}
+		// when user starts a new task with GTID and no binlog file name, we can't know active relay log at init time
+		// at this case, we update active relay log when receive fake rotate event
 		if !s.recordedActiveRelayLog {
 			if err := s.updateActiveRelayLog(mysql.Position{
 				Name: string(ev.NextLogName),
@@ -3278,7 +3289,7 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 			zap.String("adjusted_gtid", gs.String()), zap.Error(err))
 		return false, err
 	}
-	s.checkpoint.SaveGlobalPoint(location)
+	s.saveGlobalPoint(location)
 	// redirect streamer for new gtid set location
 	err = s.streamerController.RedirectStreamer(tctx, location)
 	if err != nil {
