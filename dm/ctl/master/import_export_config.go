@@ -205,7 +205,7 @@ func writeSourceCfgs(sourceDir string, sourceCfgsMap map[string]*config.SourceCo
 	for source, sourceCfg := range sourceCfgsMap {
 		sourceFile := path.Join(sourceDir, source)
 		sourceFile += yamlSuffix
-		fileContent, err := sourceCfg.Yaml()
+		fileContent, err := sourceCfg.YamlForDowngrade()
 		if err != nil {
 			common.PrintLinesf("fail to marshal source config of `%s`", source)
 			return err
@@ -241,7 +241,11 @@ func writeTaskCfgs(taskDir string, subTaskCfgsMap map[string]map[string]config.S
 
 		taskFile := path.Join(taskDir, task)
 		taskFile += yamlSuffix
-		if err := ioutil.WriteFile(taskFile, []byte(taskCfg.String()), 0o644); err != nil {
+		taskContent, err := taskCfg.YamlForDowngrade()
+		if err != nil {
+			common.PrintLinesf("fail to marshal source config of `%s`", task)
+		}
+		if err := ioutil.WriteFile(taskFile, []byte(taskContent), 0o644); err != nil {
 			common.PrintLinesf("can not write task config to file `%s`", taskFile)
 			return err
 		}
