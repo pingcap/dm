@@ -105,8 +105,8 @@ function run() {
 	sleep 6
 	echo "make a dml job"
 	run_sql_source1 "use metrics;insert into t1 (id, name, ts) values (1004, 'zmj4', '2022-05-11 12:01:05')"
-	echo "sleep 5s"
-	sleep 5
+	echo "sleep 6s"
+	sleep 6
 	$cur/../_utils/check_ticker_interval.py $WORK_DIR/worker1/log/dm-worker.log 5
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"stop-task test" \
