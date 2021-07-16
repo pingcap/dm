@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/syncer/metrics"
 )
 
 // privileges: SELECT, UPDATE,  optionaly INSERT, optionaly CREATE.
@@ -259,7 +260,7 @@ func (h *Heartbeat) run(ctx context.Context) {
 		case <-updateTicker.C:
 			err := h.updateTS()
 			if err != nil {
-				heartbeatUpdateErr.WithLabelValues(strconv.Itoa(int(h.cfg.serverID))).Inc()
+				metrics.HeartbeatUpdateErr.WithLabelValues(strconv.Itoa(int(h.cfg.serverID))).Inc()
 				h.logger.Error("update heartbeat ts", zap.Error(err))
 			}
 
@@ -329,7 +330,7 @@ func (h *Heartbeat) calculateLag(ctx context.Context) error {
 }
 
 func reportLag(taskName string, lag float64) {
-	replicationLagGauge.WithLabelValues(taskName).Set(lag)
+	metrics.ReplicationLagGauge.WithLabelValues(taskName).Set(lag)
 }
 
 func (h *Heartbeat) getPrimaryTS() (float64, error) {

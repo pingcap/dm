@@ -15,6 +15,7 @@ package upgrade
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -24,13 +25,21 @@ import (
 	"github.com/pingcap/dm/dm/common"
 )
 
-var etcdTestCli *clientv3.Client
+var (
+	etcdTestCli   *clientv3.Client
+	bigTxnTestCli *clientv3.Client
+)
 
 func TestUpgrade(t *testing.T) {
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer mockCluster.Terminate(t)
 
 	etcdTestCli = mockCluster.RandClient()
+
+	bigCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1, MaxTxnOps: 2048})
+	defer bigCluster.Terminate(t)
+
+	bigTxnTestCli = bigCluster.RandClient()
 
 	TestingT(t)
 }
@@ -136,4 +145,20 @@ func (t *testForEtcd) TestUpgradeToVer3(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(resp.Kvs, HasLen, 1)
 	c.Assert(string(resp.Kvs[0].Value), Equals, newVal)
+
+	for i := 0; i < 500; i++ {
+		key := common.UpstreamConfigKeyAdapterV1.Encode(fmt.Sprintf("%s-%d", source, i))
+		val := fmt.Sprintf("%s-%d", oldVal, i)
+		_, err := etcdTestCli.Put(ctx, key, val)
+		c.Assert(err, IsNil)
+	}
+	c.Assert(upgradeToVer3(ctx, etcdTestCli), ErrorMatches, ".*too many operations in txn request.*")
+
+	for i := 0; i < 1000; i++ {
+		key := common.UpstreamConfigKeyAdapterV1.Encode(fmt.Sprintf("%s-%d", source, i))
+		val := fmt.Sprintf("%s-%d", oldVal, i)
+		_, err := bigTxnTestCli.Put(ctx, key, val)
+		c.Assert(err, IsNil)
+	}
+	c.Assert(upgradeToVer3(ctx, bigTxnTestCli), IsNil)
 }

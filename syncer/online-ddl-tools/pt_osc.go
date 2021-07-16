@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package syncer
+package onlineddl
 
 import (
 	"strings"
@@ -31,7 +31,7 @@ import (
 // (_*).*_old ghost trash table
 // we don't support `--new-table-name` flag.
 type PT struct {
-	storge *OnlineDDLStorage
+	storge *Storage
 }
 
 // NewPT returns pt online schema changes plugin.
@@ -52,37 +52,37 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 	}
 
 	schema, table := tables[0].Schema, tables[0].Name
-	targetSchema, targetTable := p.RealName(schema, table)
+	targetTable := p.RealName(table)
 	tp := p.TableType(table)
 
 	switch tp {
-	case realTable:
+	case RealTable:
 		if _, ok := stmt.(*ast.RenameTableStmt); ok {
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
 
 			tp1 := p.TableType(tables[1].Name)
-			if tp1 == trashTable {
+			if tp1 == TrashTable {
 				return nil, "", "", nil
-			} else if tp1 == ghostTable {
+			} else if tp1 == GhostTable {
 				return nil, "", "", terror.ErrSyncerUnitPTRenameToPTTable.Generate(statement)
 			}
 		}
 		return []string{statement}, schema, table, nil
-	case trashTable:
-		// ignore trashTable
+	case TrashTable:
+		// ignore TrashTable
 		if _, ok := stmt.(*ast.RenameTableStmt); ok {
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
 				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
 
 			tp1 := p.TableType(tables[1].Name)
-			if tp1 == ghostTable {
+			if tp1 == GhostTable {
 				return nil, "", "", terror.ErrSyncerUnitPTRenamePTTblToOther.Generate(statement)
 			}
 		}
-	case ghostTable:
+	case GhostTable:
 		// record ghost table ddl changes
 		switch stmt.(type) {
 		case *ast.CreateTableStmt:
@@ -101,13 +101,13 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 			}
 
 			tp1 := p.TableType(tables[1].Name)
-			if tp1 == realTable {
+			if tp1 == RealTable {
 				ghostInfo := p.storge.Get(schema, table)
 				if ghostInfo != nil {
 					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
 				}
 				return nil, "", "", terror.ErrSyncerUnitPTOnlineDDLOnPTTbl.Generate(schema, table)
-			} else if tp1 == ghostTable {
+			} else if tp1 == GhostTable {
 				return nil, "", "", terror.ErrSyncerUnitPTRenamePTTblToOther.Generate(statement)
 			}
 
@@ -118,7 +118,7 @@ func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement str
 			}
 
 		default:
-			err := p.storge.Save(tctx, schema, table, targetSchema, targetTable, statement)
+			err := p.storge.Save(tctx, schema, table, schema, targetTable, statement)
 			if err != nil {
 				return nil, "", "", err
 			}
@@ -142,26 +142,26 @@ func (p *PT) TableType(table string) TableType {
 	// 5 is _ _old/new
 	if len(table) > 5 {
 		if strings.HasPrefix(table, "_") && strings.HasSuffix(table, "_new") {
-			return ghostTable
+			return GhostTable
 		}
 
 		if strings.HasPrefix(table, "_") && strings.HasSuffix(table, "_old") {
-			return trashTable
+			return TrashTable
 		}
 	}
 
-	return realTable
+	return RealTable
 }
 
 // RealName implements interface.
-func (p *PT) RealName(schema, table string) (string, string) {
+func (p *PT) RealName(table string) string {
 	tp := p.TableType(table)
-	if tp == trashTable || tp == ghostTable {
+	if tp == TrashTable || tp == GhostTable {
 		table = strings.TrimLeft(table, "_")
 		table = table[:len(table)-4]
 	}
 
-	return schema, table
+	return table
 }
 
 // Clear clears online ddl information.

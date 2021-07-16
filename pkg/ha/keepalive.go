@@ -193,7 +193,9 @@ func revokeLease(cli *clientv3.Client, id clientv3.LeaseID) (*clientv3.LeaseRevo
 // this function will output the worker event to evCh, output the error to errCh.
 func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, outCh chan<- WorkerEvent, errCh chan<- error) {
 	watcher := clientv3.NewWatcher(cli)
-	ch := watcher.Watch(ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix(), clientv3.WithRev(rev))
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ch := watcher.Watch(wCtx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix(), clientv3.WithRev(rev))
 
 	for {
 		select {

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	gmysql "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/errno"
@@ -218,4 +219,13 @@ func WrapSchemesForInitialCluster(s string, https bool) string {
 		output = append(output, kv[0]+"="+wrapScheme(kv[1], https))
 	}
 	return strings.Join(output, ",")
+}
+
+// IsFakeRotateEvent return true if is this event is a fake rotate event
+// If log pos equals zero then the received event is a fake rotate event and
+// contains only a name of the next binlog file
+// See https://github.com/mysql/mysql-server/blob/8e797a5d6eb3a87f16498edcb7261a75897babae/sql/rpl_binlog_sender.h#L235
+// and https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/rpl_binlog_sender.cc#L899
+func IsFakeRotateEvent(header *replication.EventHeader) bool {
+	return header.Timestamp == 0 || header.LogPos == 0
 }

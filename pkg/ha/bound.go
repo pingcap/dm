@@ -259,9 +259,10 @@ func GetSourceBoundConfig(cli *clientv3.Client, worker string) (SourceBound, *co
 // WatchSourceBound watches PUT & DELETE operations for the bound relationship of the specified DM-worker.
 // For the DELETE operations, it returns an empty bound relationship.
 // nolint:dupl
-func WatchSourceBound(ctx context.Context, cli *clientv3.Client,
-	worker string, revision int64, outCh chan<- SourceBound, errCh chan<- error) {
-	ch := cli.Watch(ctx, common.UpstreamBoundWorkerKeyAdapter.Encode(worker), clientv3.WithRev(revision))
+func WatchSourceBound(ctx context.Context, cli *clientv3.Client, worker string, revision int64, outCh chan<- SourceBound, errCh chan<- error) {
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ch := cli.Watch(wCtx, common.UpstreamBoundWorkerKeyAdapter.Encode(worker), clientv3.WithRev(revision))
 
 	for {
 		select {
