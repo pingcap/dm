@@ -1400,12 +1400,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 
 	s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)
+	// before starting syncDML, we should initialise the workerLagMap to prevent data races.
+	// for example, while thread 1 is setting the key of s.workerLagMap
+	// thread-2 might be calling s.updateReplicationLag( to get the key from s.workerLagMap)
+	for i := 0; i < s.cfg.WorkerCount; i++ {
+		s.workerLagMap[dmlWorkerLagKey(i)] = atomic.NewInt64(0)
+	}
 	for i := 0; i < s.cfg.WorkerCount; i++ {
 		s.wg.Add(1)
 		name := queueBucketName(i)
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
 		workerLagKey := dmlWorkerLagKey(i)
-		s.workerLagMap[workerLagKey] = atomic.NewInt64(0)
 		go func(i int, name, workerLagKey string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
