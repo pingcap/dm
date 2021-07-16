@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/errors"
 
@@ -70,115 +71,27 @@ func exportCfgFunc(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cli := common.GlobalCtlClient.EtcdClient
-	// get all source cfgs
-	sourceCfgsMap, _, err := ha.GetSourceCfg(cli, "", 0)
+	// get all configs
+	sourceCfgsMap, subTaskCfgsMap, relayWorkersSet, err := getAllCfgs(common.GlobalCtlClient.EtcdClient)
 	if err != nil {
-		common.PrintLinesf("can not get source configs from etcd")
 		return err
 	}
-	// try to get all source cfgs before v2.0.2
-	if len(sourceCfgsMap) == 0 {
-		sourceCfgsMap, _, err = ha.GetAllSourceCfgBeforeV202(cli)
-		if err != nil {
-			common.PrintLinesf("can not get source configs from etcd")
-			return err
-		}
-	}
-
-	// get all task configs.
-	subTaskCfgsMap, _, err := ha.GetAllSubTaskCfg(cli)
-	if err != nil {
-		common.PrintLinesf("can not get subtask configs from etcd")
-		return err
-	}
-
-	// get all relay configs.
-	relayWorkers, _, err := ha.GetAllRelayConfig(cli)
-	if err != nil {
-		common.PrintLinesf("can not get relay workers from etcd")
-		return err
-	}
-
-	taskCfgsMap := make(map[string]string, len(subTaskCfgsMap))
-	subTaskCfgsListMap := make(map[string][]*config.SubTaskConfig, len(subTaskCfgsMap))
-
-	// from source => task => subtask to task => source => subtask
-	for _, subTaskCfgs := range subTaskCfgsMap {
-		for task, subTaskCfg := range subTaskCfgs {
-			clone := subTaskCfg
-			if subTaskCfgList, ok := subTaskCfgsListMap[task]; ok {
-				subTaskCfgsListMap[task] = append(subTaskCfgList, &clone)
-			} else {
-				subTaskCfgsListMap[task] = []*config.SubTaskConfig{&clone}
-			}
-		}
-	}
-	// from task => source => subtask to task => taskCfg
-	for task, subTaskCfgs := range subTaskCfgsListMap {
-		sort.Slice(subTaskCfgs, func(i, j int) bool {
-			return subTaskCfgs[i].SourceID < subTaskCfgs[j].SourceID
-		})
-		taskCfg := config.FromSubTaskConfigs(subTaskCfgs...)
-		taskCfgsMap[task] = taskCfg.String()
-	}
-
 	// create directory
-	if err = os.MkdirAll(dir, 0o755); err != nil {
-		common.PrintLinesf("can not create directory `%s`", dir)
+	taskDir, sourceDir, err := createDirectory(dir)
+	if err != nil {
 		return err
 	}
-	taskDir := path.Join(dir, taskDirname)
-	if err = os.MkdirAll(taskDir, 0o755); err != nil {
-		common.PrintLinesf("can not create directory of task configs `%s`", taskDir)
-		return err
-	}
-	sourceDir := path.Join(dir, sourceDirname)
-	if err = os.MkdirAll(sourceDir, 0o755); err != nil {
-		common.PrintLinesf("can not create directory of source configs `%s`", sourceDir)
-		return err
-	}
-
 	// write sourceCfg files
-	for source, sourceCfg := range sourceCfgsMap {
-		sourceFile := path.Join(sourceDir, source)
-		sourceFile += yamlSuffix
-		fileContent, err2 := sourceCfg.Yaml()
-		if err2 != nil {
-			common.PrintLinesf("fail to marshal source config of `%s`", source)
-			return err2
-		}
-		err = ioutil.WriteFile(sourceFile, []byte(fileContent), 0o644)
-		if err != nil {
-			common.PrintLinesf("fail to write source config to file `%s`", sourceFile)
-			return err
-		}
+	if err = writeSourceCfgs(sourceDir, sourceCfgsMap); err != nil {
+		return err
 	}
-
 	// write taskCfg files
-	for task, taskCfg := range taskCfgsMap {
-		taskFile := path.Join(taskDir, task)
-		taskFile += yamlSuffix
-		err = ioutil.WriteFile(taskFile, []byte(taskCfg), 0o644)
-		if err != nil {
-			common.PrintLinesf("can not write task config to file `%s`", taskFile)
-			return err
-		}
+	if err = writeTaskCfgs(taskDir, subTaskCfgsMap); err != nil {
+		return err
 	}
-
-	if len(relayWorkers) > 0 {
-		relayWorkers, err := json.Marshal(relayWorkers)
-		if err != nil {
-			common.PrintLinesf("fail to marshal relay workers")
-			return err
-		}
-
-		relayWorkersFile := path.Join(dir, relayWorkersFilename)
-		err = ioutil.WriteFile(relayWorkersFile, relayWorkers, 0o644)
-		if err != nil {
-			common.PrintLinesf("can not write relay workers to file `%s`", relayWorkersFile)
-			return err
-		}
+	// write relayWorkers
+	if err = writeRelayWorkers(path.Join(dir, relayWorkersFilename), relayWorkersSet); err != nil {
+		return err
 	}
 
 	common.PrintLinesf("export configs to directory `%s` succeed", dir)
@@ -193,130 +106,22 @@ func importCfgFunc(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// get all source cfgs
-	if !utils.IsDirExists(dir) {
-		return errors.Errorf("config directory `%s` not exists", dir)
+	sourceCfgs, taskCfgs, relayWorkers, err := collectCfgs(dir)
+	if err != nil {
+		return err
 	}
 
-	var (
-		sourceCfgs        []string
-		taskCfgs          []string
-		relayWorkers      map[string]map[string]struct{}
-		taskDir           = path.Join(dir, taskDirname)
-		taskDirExist      = utils.IsDirExists(taskDir)
-		sourceDir         = path.Join(dir, sourceDirname)
-		sourceDirExist    = utils.IsDirExists(sourceDir)
-		relayWorkersFile  = path.Join(dir, relayWorkersFilename)
-		relayWorkersExist = utils.IsFileExists(relayWorkersFile)
-		sourceResp        = &pb.OperateSourceResponse{}
-		taskResp          = &pb.StartTaskResponse{}
-	)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	if sourceDirExist {
-		if sourceCfgs, err = collectDirCfgs(sourceDir); err != nil {
-			common.PrintLinesf("fail to collect source config files from source configs directory `%s`", sourceDir)
-			return err
-		}
+	if err := createSources(ctx, sourceCfgs); err != nil {
+		return err
 	}
-	if taskDirExist {
-		if taskCfgs, err = collectDirCfgs(taskDir); err != nil {
-			common.PrintLinesf("fail to collect task config files from task configs directory `%s`", taskDir)
-			return err
-		}
+	if err := createTasks(ctx, taskCfgs); err != nil {
+		return err
 	}
-	if relayWorkersExist {
-		content, err2 := common.GetFileContent(relayWorkersFile)
-		if err2 != nil {
-			common.PrintLinesf("fail to read relay workers config `%s`", relayWorkersFile)
-			return err2
-		}
-		err = json.Unmarshal(content, &relayWorkers)
-		if err != nil {
-			common.PrintLinesf("fail to unmarshal relay workers config `%s`", relayWorkersFile)
-			return err
-		}
-	}
-
-	if len(sourceCfgs) > 0 {
-		common.PrintLinesf("start creating sources")
-	}
-
-	// Do not use batch for `operate-source start source1, source2` if we want to support idemponent import-config.
-	// Because `operate-source start` will revert all batch sources if any source error.
-	// e.g. ErrSchedulerSourceCfgExist
-	for _, sourceCfg := range sourceCfgs {
-		err = common.SendRequest(
-			ctx,
-			"OperateSource",
-			&pb.OperateSourceRequest{
-				Config: []string{sourceCfg},
-				Op:     pb.SourceOp_StartSource,
-			},
-			&sourceResp,
-		)
-
-		if err != nil {
-			common.PrintLinesf("fail to create sources")
-			return err
-		}
-
-		if !sourceResp.Result && !strings.Contains(sourceResp.Msg, "already exist") {
-			common.PrettyPrintResponse(sourceResp)
-			return errors.Errorf("fail to create sources")
-		}
-	}
-
-	if len(taskCfgs) > 0 {
-		common.PrintLinesf("start creating tasks")
-	}
-
-	for _, taskCfg := range taskCfgs {
-		err = common.SendRequest(
-			ctx,
-			"StartTask",
-			&pb.StartTaskRequest{
-				Task: taskCfg,
-			},
-			&taskResp,
-		)
-
-		if err != nil {
-			common.PrintLinesf("fail to create tasks")
-			return err
-		}
-
-		if !taskResp.Result && !strings.Contains(taskResp.Msg, "already exist") {
-			common.PrettyPrintResponse(taskResp)
-			return errors.Errorf("fail to create tasks")
-		}
-	}
-
 	if len(relayWorkers) > 0 {
-		common.PrintLinesf("start creating relay workers")
-	}
-
-	for source, workerSet := range relayWorkers {
-		workers := make([]string, 0, len(workerSet))
-		for worker := range workerSet {
-			workers = append(workers, worker)
-		}
-		resp := &pb.OperateRelayResponse{}
-		err = common.SendRequest(
-			ctx,
-			"OperateRelay",
-			&pb.OperateRelayRequest{
-				Op:     pb.RelayOpV2_StartRelayV2,
-				Source: source,
-				Worker: workers,
-			},
-			&resp,
-		)
-
-		if err != nil {
-			return err
-		}
+		common.PrintLinesf("The original relay workers have been exported to `%s`.", path.Join(dir, relayWorkersFilename))
+		common.PrintLinesf("Currently unsupport recover relay workers. You may need to execute `transfer-source` and `start-relay` command manually.")
 	}
 
 	common.PrintLinesf("import configs from directory `%s` succeed", dir)
@@ -338,4 +143,237 @@ func collectDirCfgs(dir string) ([]string, error) {
 		cfgs = append(cfgs, string(cfg))
 	}
 	return cfgs, nil
+}
+
+// getSourceCfgs gets all source cfgs.
+func getSourceCfgs(cli *clientv3.Client) (map[string]*config.SourceConfig, error) {
+	sourceCfgsMap, _, err := ha.GetSourceCfg(cli, "", 0)
+	if err != nil {
+		return nil, err
+	}
+	// try to get all source cfgs before v2.0.2
+	if len(sourceCfgsMap) == 0 {
+		sourceCfgsMap, _, err = ha.GetAllSourceCfgBeforeV202(cli)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return sourceCfgsMap, nil
+}
+
+func getAllCfgs(cli *clientv3.Client) (map[string]*config.SourceConfig, map[string]map[string]config.SubTaskConfig, map[string]map[string]struct{}, error) {
+	// get all source cfgs
+	sourceCfgsMap, err := getSourceCfgs(cli)
+	if err != nil {
+		common.PrintLinesf("can not get source configs from etcd")
+		return nil, nil, nil, err
+	}
+	// get all task cfgs
+	subTaskCfgsMap, _, err := ha.GetAllSubTaskCfg(cli)
+	if err != nil {
+		common.PrintLinesf("can not get subtask configs from etcd")
+		return nil, nil, nil, err
+	}
+	// get all relay configs.
+	relayWorkers, _, err := ha.GetAllRelayConfig(cli)
+	if err != nil {
+		common.PrintLinesf("can not get relay workers from etcd")
+		return nil, nil, nil, err
+	}
+	return sourceCfgsMap, subTaskCfgsMap, relayWorkers, nil
+}
+
+func createDirectory(dir string) (string, string, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		common.PrintLinesf("can not create directory `%s`", dir)
+		return "", "", err
+	}
+	taskDir := path.Join(dir, taskDirname)
+	if err := os.MkdirAll(taskDir, 0o755); err != nil {
+		common.PrintLinesf("can not create directory of task configs `%s`", taskDir)
+		return "", "", err
+	}
+	sourceDir := path.Join(dir, sourceDirname)
+	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+		common.PrintLinesf("can not create directory of source configs `%s`", sourceDir)
+		return "", "", err
+	}
+	return taskDir, sourceDir, nil
+}
+
+func writeSourceCfgs(sourceDir string, sourceCfgsMap map[string]*config.SourceConfig) error {
+	for source, sourceCfg := range sourceCfgsMap {
+		sourceFile := path.Join(sourceDir, source)
+		sourceFile += yamlSuffix
+		fileContent, err := sourceCfg.Yaml()
+		if err != nil {
+			common.PrintLinesf("fail to marshal source config of `%s`", source)
+			return err
+		}
+		err = ioutil.WriteFile(sourceFile, []byte(fileContent), 0o644)
+		if err != nil {
+			common.PrintLinesf("fail to write source config to file `%s`", sourceFile)
+			return err
+		}
+	}
+	return nil
+}
+
+func writeTaskCfgs(taskDir string, subTaskCfgsMap map[string]map[string]config.SubTaskConfig) error {
+	subTaskCfgsListMap := make(map[string][]*config.SubTaskConfig, len(subTaskCfgsMap))
+	// from source => task => subtask to task => source => subtask
+	for _, subTaskCfgs := range subTaskCfgsMap {
+		for task, subTaskCfg := range subTaskCfgs {
+			clone := subTaskCfg
+			if subTaskCfgList, ok := subTaskCfgsListMap[task]; ok {
+				subTaskCfgsListMap[task] = append(subTaskCfgList, &clone)
+			} else {
+				subTaskCfgsListMap[task] = []*config.SubTaskConfig{&clone}
+			}
+		}
+	}
+	// from task => source => subtask to task => taskCfg
+	for task, subTaskCfgs := range subTaskCfgsListMap {
+		sort.Slice(subTaskCfgs, func(i, j int) bool {
+			return subTaskCfgs[i].SourceID < subTaskCfgs[j].SourceID
+		})
+		taskCfg := config.FromSubTaskConfigs(subTaskCfgs...)
+
+		taskFile := path.Join(taskDir, task)
+		taskFile += yamlSuffix
+		if err := ioutil.WriteFile(taskFile, []byte(taskCfg.String()), 0o644); err != nil {
+			common.PrintLinesf("can not write task config to file `%s`", taskFile)
+			return err
+		}
+	}
+	return nil
+}
+
+func writeRelayWorkers(relayWorkersFile string, relayWorkersSet map[string]map[string]struct{}) error {
+	if len(relayWorkersSet) == 0 {
+		return nil
+	}
+
+	// from source => workerSet to source => workerList
+	relayWorkers := make(map[string][]string, len(relayWorkersSet))
+	for source, workerSet := range relayWorkersSet {
+		workers := make([]string, 0, len(workerSet))
+		for worker := range workerSet {
+			workers = append(workers, worker)
+		}
+		relayWorkers[source] = workers
+	}
+
+	content, err := json.Marshal(relayWorkers)
+	if err != nil {
+		common.PrintLinesf("fail to marshal relay workers")
+		return err
+	}
+
+	err = ioutil.WriteFile(relayWorkersFile, content, 0o644)
+	if err != nil {
+		common.PrintLinesf("can not write relay workers to file `%s`", relayWorkersFile)
+		return err
+	}
+	return nil
+}
+
+func collectCfgs(dir string) (sourceCfgs []string, taskCfgs []string, relayWorkers map[string][]string, err error) {
+	var (
+		sourceDir        = path.Join(dir, sourceDirname)
+		taskDir          = path.Join(dir, taskDirname)
+		relayWorkersFile = path.Join(dir, relayWorkersFilename)
+		content          []byte
+	)
+	if !utils.IsDirExists(dir) {
+		return nil, nil, nil, errors.Errorf("config directory `%s` not exists", dir)
+	}
+
+	if utils.IsDirExists(sourceDir) {
+		if sourceCfgs, err = collectDirCfgs(sourceDir); err != nil {
+			common.PrintLinesf("fail to collect source config files from source configs directory `%s`", sourceDir)
+			return
+		}
+	}
+	if utils.IsDirExists(taskDir) {
+		if taskCfgs, err = collectDirCfgs(taskDir); err != nil {
+			common.PrintLinesf("fail to collect task config files from task configs directory `%s`", taskDir)
+			return
+		}
+	}
+	if utils.IsFileExists(relayWorkersFile) {
+		content, err = common.GetFileContent(relayWorkersFile)
+		if err != nil {
+			common.PrintLinesf("fail to read relay workers config `%s`", relayWorkersFile)
+			return
+		}
+		err = json.Unmarshal(content, &relayWorkers)
+		if err != nil {
+			common.PrintLinesf("fail to unmarshal relay workers config `%s`", relayWorkersFile)
+			return
+		}
+	}
+	// nolint:nakedret
+	return
+}
+
+func createSources(ctx context.Context, sourceCfgs []string) error {
+	if len(sourceCfgs) == 0 {
+		return nil
+	}
+	common.PrintLinesf("start creating sources")
+
+	sourceResp := &pb.OperateSourceResponse{}
+	// Do not use batch for `operate-source start source1, source2` if we want to support idemponent import-config.
+	// Because `operate-source start` will revert all batch sources if any source error.
+	// e.g. ErrSchedulerSourceCfgExist
+	for _, sourceCfg := range sourceCfgs {
+		err := common.SendRequest(
+			ctx,
+			"OperateSource",
+			&pb.OperateSourceRequest{
+				Config: []string{sourceCfg},
+				Op:     pb.SourceOp_StartSource,
+			},
+			&sourceResp,
+		)
+		if err != nil {
+			common.PrintLinesf("fail to create sources")
+			return err
+		}
+
+		if !sourceResp.Result && !strings.Contains(sourceResp.Msg, "already exist") {
+			common.PrettyPrintResponse(sourceResp)
+			return errors.Errorf("fail to create sources")
+		}
+	}
+	return nil
+}
+
+func createTasks(ctx context.Context, taskCfgs []string) error {
+	if len(taskCfgs) == 0 {
+		return nil
+	}
+	common.PrintLinesf("start creating tasks")
+
+	taskResp := &pb.StartTaskResponse{}
+	for _, taskCfg := range taskCfgs {
+		err := common.SendRequest(
+			ctx,
+			"StartTask",
+			&pb.StartTaskRequest{
+				Task: taskCfg,
+			},
+			&taskResp,
+		)
+		if err != nil {
+			common.PrintLinesf("fail to create tasks")
+			return err
+		}
+		if !taskResp.Result && !strings.Contains(taskResp.Msg, "already exist") {
+			common.PrettyPrintResponse(taskResp)
+			return errors.Errorf("fail to create tasks")
+		}
+	}
+	return nil
 }
