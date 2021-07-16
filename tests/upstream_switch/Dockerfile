@@ -1,8 +1,7 @@
 ARG version
 From mysql:$version
 
-RUN apt-get update &&
-     apt-get -y install keepalived net-tools
+RUN apt-get update && apt-get -y install keepalived net-tools
 
 ADD init.sh /init.sh
 ADD chk_mysql.sh /chk_mysql.sh
