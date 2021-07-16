@@ -147,12 +147,12 @@ func newSkipJob(ec *eventContext) *job {
 	}
 }
 
-func newXIDJob(location, startLocation, cmdLocation binlog.Location) *job {
+func newXIDJob(location, startLocation, currentLocation binlog.Location) *job {
 	return &job{
 		tp:              xid,
 		location:        location,
 		startLocation:   startLocation,
-		currentLocation: cmdLocation,
+		currentLocation: currentLocation,
 	}
 }
 
@@ -165,4 +165,8 @@ func newFlushJob() *job {
 // put queues into bucket to monitor them.
 func queueBucketName(queueID int) string {
 	return fmt.Sprintf("q_%d", queueID%defaultBucketCount)
+}
+
+func dmlWorkerLagKey(queueID int) string {
+	return fmt.Sprintf("lag_%d", queueID)
 }
