@@ -8,4 +8,10 @@ only_dml
 adjust_gtid
 load_task
 downstream_more_column
+<<<<<<< HEAD
 expression_filter
+=======
+expression_filter
+fake_rotate_event
+metrics
+>>>>>>> 4c89a2580 (syncer: update lag metric calculation logic (#1855))
