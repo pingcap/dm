@@ -106,7 +106,7 @@ func (conn *DBConn) QuerySQL(tctx *tcontext.Context, query string, args ...inter
 					return err, ret.Err()
 				}
 				cost := time.Since(startTime)
-				metrics.QueryHistogram.WithLabelValues(conn.Cfg.Name).Observe(cost.Seconds())
+				metrics.QueryHistogram.WithLabelValues(conn.Cfg.Name, conn.Cfg.WorkerName, conn.Cfg.SourceID).Observe(cost.Seconds())
 				if cost.Seconds() > 1 {
 					ctx.L().Warn("query statement",
 						zap.String("query", utils.TruncateString(query, -1)),
@@ -183,7 +183,10 @@ func (conn *DBConn) ExecuteSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 			ret, err := conn.BaseConn.ExecuteSQLWithIgnoreError(ctx, metrics.StmtHistogram, conn.Cfg.Name, ignoreError, queries, args...)
 			if err == nil {
 				cost := time.Since(startTime)
-				metrics.TxnHistogram.WithLabelValues(conn.Cfg.Name).Observe(cost.Seconds())
+				metrics.TxnHistogram.WithLabelValues(conn.Cfg.Name, conn.Cfg.WorkerName, conn.Cfg.SourceID).Observe(cost.Seconds())
+				// calculate idealJobCount metric: connection count * 1/ (one sql cost time)
+				qps := float64(conn.Cfg.WorkerCount) * float64(1) / (cost.Seconds() / float64(len(queries)))
+				metrics.IdealQPS.WithLabelValues(conn.Cfg.Name, conn.Cfg.WorkerName, conn.Cfg.SourceID).Set(qps)
 				if cost.Seconds() > 1 {
 					ctx.L().Warn("execute transaction",
 						zap.String("query", utils.TruncateInterface(queries, -1)),

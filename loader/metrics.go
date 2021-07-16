@@ -45,7 +45,7 @@ var (
 			Name:      "txn_duration_time",
 			Help:      "Bucketed histogram of processing time (s) of a txn.",
 			Buckets:   prometheus.ExponentialBuckets(0.000005, 2, 25),
-		}, []string{"task", "source_id"})
+		}, []string{"task", "worker", "source_id", "target_schema", "target_table"})
 
 	stmtHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -96,6 +96,14 @@ var (
 			Name:      "exit_with_error_count",
 			Help:      "counter for loader exits with error",
 		}, []string{"task", "source_id"})
+
+	remainingTimeGauge = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "loader",
+			Name:      "remaining_time",
+			Help:      "the remaining time in second to finish load process",
+		}, []string{"task", "worker", "source_id", "source_schema", "source_table"})
 )
 
 // RegisterMetrics registers metrics.
@@ -109,6 +117,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(dataSizeGauge)
 	registry.MustRegister(progressGauge)
 	registry.MustRegister(loaderExitWithErrorCounter)
+	registry.MustRegister(remainingTimeGauge)
 }
 
 func (l *Loader) removeLabelValuesWithTaskInMetrics(task string) {
@@ -121,4 +130,5 @@ func (l *Loader) removeLabelValuesWithTaskInMetrics(task string) {
 	dataSizeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	progressGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	loaderExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	remainingTimeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }
