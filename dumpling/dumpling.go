@@ -231,6 +231,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	if cfg.Threads > 0 {
 		dumpConfig.Threads = cfg.Threads
 	}
+	dumpConfig.WriteSpeedLimit = cfg.WriteSpeedLimit
 	if cfg.ChunkFilesize != "" {
 		dumpConfig.FileSize, err = dutils.ParseFileSize(cfg.ChunkFilesize, export.UnspecifiedSize)
 		if err != nil {
