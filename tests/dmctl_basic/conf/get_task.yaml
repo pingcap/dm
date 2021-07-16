@@ -29,6 +29,7 @@ mysql-instances:
   route-rules:
   - route-01
   - route-02
+  expression-filters: []
   black-white-list: ""
   block-allow-list: balist-01
   mydumper-config-name: dump-01
@@ -49,6 +50,7 @@ mysql-instances:
   route-rules:
   - route-01
   - route-02
+  expression-filters: []
   black-white-list: ""
   block-allow-list: balist-01
   mydumper-config-name: dump-01
@@ -98,6 +100,7 @@ column-mappings:
     - "1"
     - ""
     - t_
+    - ""
     create-table-query: ""
   cm-02:
     schema-pattern: dmctl
@@ -109,7 +112,9 @@ column-mappings:
     - "2"
     - ""
     - t_
+    - ""
     create-table-query: ""
+expression-filter: {}
 black-white-list: {}
 block-allow-list:
   balist-01:

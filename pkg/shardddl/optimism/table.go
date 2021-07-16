@@ -230,7 +230,9 @@ func GetAllSourceTables(cli *clientv3.Client) (map[string]map[string]SourceTable
 // This function should often be called by DM-master.
 func WatchSourceTables(ctx context.Context, cli *clientv3.Client, revision int64,
 	outCh chan<- SourceTables, errCh chan<- error) {
-	ch := cli.Watch(ctx, common.ShardDDLOptimismSourceTablesKeyAdapter.Path(),
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ch := cli.Watch(wCtx, common.ShardDDLOptimismSourceTablesKeyAdapter.Path(),
 		clientv3.WithPrefix(), clientv3.WithRev(revision))
 
 	for {

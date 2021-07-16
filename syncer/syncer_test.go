@@ -44,6 +44,7 @@ import (
 	"github.com/pingcap/dm/pkg/schema"
 	streamer2 "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
@@ -485,16 +486,18 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		{false},
 		{false},
 		{false},
+		{true},
+		{true},
+
+		{false},
+		{true},
+		{true},
+		{false},
 
 		{true},
 		{true},
 		{false},
-		{true},
-		{true},
-		{false},
-		{true},
-		{true},
-		{false},
+
 		{true},
 		{true},
 		{false},
@@ -876,10 +879,10 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	c.Assert(err, IsNil)
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
 	syncer.ddlDB = syncer.fromDB.BaseDB
-	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
-	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+	syncer.ddlDBConn = &dbconn.DBConn{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.toDBConns = []*dbconn.DBConn{{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	c.Assert(syncer.setSyncCfg(), IsNil)
-	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
+	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.BaseConn)
 	c.Assert(err, IsNil)
 	syncer.reset()
 
@@ -924,18 +927,18 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				}
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-					sqls, _, args, err = genInsertSQLs(param)
+					sqls, _, args, err = syncer.genInsertSQLs(param, nil)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
 				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 					// test with sql_mode = false only
-					sqls, _, args, err = genUpdateSQLs(param)
+					sqls, _, args, err = syncer.genUpdateSQLs(param, nil, nil)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
 				case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-					sqls, _, args, err = genDeleteSQLs(param)
+					sqls, _, args, err = syncer.genDeleteSQLs(param, nil)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
@@ -1052,12 +1055,13 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.cfg.CheckpointFlushInterval = 30
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
-	syncer.toDBConns = []*DBConn{
-		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
-		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+	syncer.toDBConns = []*dbconn.DBConn{
+		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 	}
-	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
-	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
+	syncer.ddlDBConn = &dbconn.DBConn{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.BaseConn)
+	syncer.exprFilterGroup = NewExprFilterGroup(nil)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
 
@@ -1151,7 +1155,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			"",
 			nil,
 		}, {
-			// in first minute, safe mode is true, will split update to delete + replace
+			// in the first minute, safe mode is true, will split update to delete + replace
 			update,
 			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
 			[]interface{}{int64(580981944116838402)},
@@ -1287,12 +1291,13 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
-	syncer.toDBConns = []*DBConn{
-		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
-		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+	syncer.toDBConns = []*dbconn.DBConn{
+		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 	}
-	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
-	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
+	syncer.ddlDBConn = &dbconn.DBConn{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.BaseConn)
+	syncer.exprFilterGroup = NewExprFilterGroup(nil)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
 
@@ -1341,7 +1346,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan pb.ProcessResult)
 
-	// disable 5-minute safe mode
+	// disable 1-minute safe mode
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds", "return(0)"), IsNil)
 	go syncer.Process(ctx, resultCh)
 
@@ -1462,13 +1467,14 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg, nil)
-	syncer.toDBConns = []*DBConn{
-		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
-		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+	syncer.toDBConns = []*dbconn.DBConn{
+		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 	}
-	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
-	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
-	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.baseConn)
+	syncer.ddlDBConn = &dbconn.DBConn{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &dbconn.DBConn{Cfg: s.cfg, BaseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
+	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.BaseConn)
+	syncer.exprFilterGroup = NewExprFilterGroup(nil)
 	c.Assert(syncer.genRouter(), IsNil)
 	c.Assert(err, IsNil)
 
@@ -1548,7 +1554,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 
 	p := parser.New()
 	for _, ca := range cases {
-		ddlSQL, filter, stmt, err := syncer.handleDDL(p, testDB, ca.sql)
+		ddlSQL, filter, stmt, err := syncer.routeDDL(p, testDB, ca.sql)
 		c.Assert(err, IsNil)
 
 		ca.callback()
@@ -1562,6 +1568,10 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 
 func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.BinlogEvent, p *parser.Parser, res [][]bool) {
 	i := 0
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "checkEventWithTableResult")))
+	ec := eventContext{
+		tctx: tctx,
+	}
 	for _, e := range allEvents {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
@@ -1572,9 +1582,12 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 			if !result.isDDL {
 				continue // BEGIN event
 			}
-			querys, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, string(ev.Schema))
+			querys, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
+				c.Assert(res[i], HasLen, 1)
+				c.Assert(res[i][0], Equals, true)
+				i++
 				continue
 			}
 
@@ -1700,7 +1713,7 @@ func (s *Syncer) setupMockCheckpoint(c *C, checkPointDBConn *sql.Conn, checkPoin
 	checkPointMock.ExpectCommit()
 
 	// mock syncer.checkpoint.Init() function
-	s.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
+	s.checkpoint.(*RemoteCheckPoint).dbConn = &dbconn.DBConn{Cfg: s.cfg, BaseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
 	c.Assert(s.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background()), IsNil)
 }
 
@@ -1714,7 +1727,7 @@ func (s *testSyncerSuite) TestTrackDownstreamTableWontOverwrite(c *C) {
 	dbConn, err := db.Conn(ctx)
 	c.Assert(err, IsNil)
 	baseConn := conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})
-	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: baseConn}
+	syncer.ddlDBConn = &dbconn.DBConn{Cfg: s.cfg, BaseConn: baseConn}
 	syncer.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, defaultTestSessionCfg, baseConn)
 	c.Assert(err, IsNil)
 
@@ -1738,4 +1751,82 @@ func (s *testSyncerSuite) TestTrackDownstreamTableWontOverwrite(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(newTi, DeepEquals, ti)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
+
+func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
+	syncer := Syncer{}
+	ctx := context.Background()
+	tctx := tcontext.Background()
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(ctx)
+	c.Assert(err, IsNil)
+	baseConn := conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})
+	syncer.ddlDBConn = &dbconn.DBConn{Cfg: s.cfg, BaseConn: baseConn}
+	syncer.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, defaultTestSessionCfg, baseConn)
+	c.Assert(err, IsNil)
+
+	schemaName := "test"
+	tableName := "tbl"
+
+	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+	// create table t (c bigint primary key auto_random);
+	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow(tableName, " CREATE TABLE `"+tableName+"` (\n  `c` bigint(20) NOT NULL /*T![auto_rand] AUTO_RANDOM(5) */,\n  PRIMARY KEY (`c`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+
+	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(schemaName), IsNil)
+	c.Assert(syncer.trackTableInfoFromDownstream(tctx, schemaName, tableName, schemaName, tableName), IsNil)
+	ti, err := syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	c.Assert(err, IsNil)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	c.Assert(syncer.schemaTracker.DropTable("test", "tbl"), IsNil)
+	sql := "create table tbl (c bigint primary key);"
+	c.Assert(syncer.schemaTracker.Exec(ctx, schemaName, sql), IsNil)
+	ti2, err := syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	c.Assert(err, IsNil)
+
+	ti.ID = ti2.ID
+	ti.UpdateTS = ti2.UpdateTS
+
+	c.Assert(ti, DeepEquals, ti2)
+
+	// test if user set ON clustered index, no need to modify
+	sessionCfg := map[string]string{
+		"sql_mode":                "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION",
+		"tidb_skip_utf8_check":    "0",
+		schema.TiDBClusteredIndex: "ON",
+	}
+	syncer.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, sessionCfg, baseConn)
+	c.Assert(err, IsNil)
+	v, ok := syncer.schemaTracker.GetSystemVar(schema.TiDBClusteredIndex)
+	c.Assert(v, Equals, "ON")
+	c.Assert(ok, IsTrue)
+
+	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
+	// create table t (c bigint primary key auto_random);
+	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow(tableName, " CREATE TABLE `"+tableName+"` (\n  `c` bigint(20) NOT NULL /*T![auto_rand] AUTO_RANDOM(5) */,\n  PRIMARY KEY (`c`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+
+	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(schemaName), IsNil)
+	c.Assert(syncer.trackTableInfoFromDownstream(tctx, schemaName, tableName, schemaName, tableName), IsNil)
+	ti, err = syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	c.Assert(err, IsNil)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+
+	c.Assert(syncer.schemaTracker.DropTable("test", "tbl"), IsNil)
+	sql = "create table tbl (c bigint primary key auto_random);"
+	c.Assert(syncer.schemaTracker.Exec(ctx, schemaName, sql), IsNil)
+	ti2, err = syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	c.Assert(err, IsNil)
+
+	ti.ID = ti2.ID
+	ti.UpdateTS = ti2.UpdateTS
+
+	c.Assert(ti, DeepEquals, ti2)
 }

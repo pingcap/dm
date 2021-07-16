@@ -27,6 +27,7 @@ import (
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/pkg/dumpling"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -164,6 +165,7 @@ type SubTaskConfig struct {
 	RouteRules         []*router.TableRule   `toml:"route-rules" json:"route-rules"`
 	FilterRules        []*bf.BinlogEventRule `toml:"filter-rules" json:"filter-rules"`
 	ColumnMappingRules []*column.Rule        `toml:"mapping-rule" json:"mapping-rule"`
+	ExprFilter         []*ExpressionFilter   `yaml:"expression-filter" toml:"expression-filter" json:"expression-filter"`
 
 	// black-white-list is deprecated, use block-allow-list instead
 	BWList *filter.Rules `toml:"black-white-list" json:"black-white-list"`
@@ -250,7 +252,7 @@ func (c *SubTaskConfig) Decode(data string, verifyDecryptPassword bool) error {
 	return c.Adjust(verifyDecryptPassword)
 }
 
-// Adjust adjusts configs.
+// Adjust adjusts and verifies configs.
 func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if c.Name == "" {
 		return terror.ErrConfigTaskNameEmpty.Generate()
@@ -309,6 +311,24 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if c.BAList == nil && c.BWList != nil {
 		c.BAList = c.BWList
 	}
+
+	if _, err := filter.New(c.CaseSensitive, c.BAList); err != nil {
+		return terror.ErrConfigGenBAList.Delegate(err)
+	}
+	if _, err := router.NewTableRouter(c.CaseSensitive, c.RouteRules); err != nil {
+		return terror.ErrConfigGenTableRouter.Delegate(err)
+	}
+	// NewMapping will fill arguments with the default values.
+	if _, err := column.NewMapping(c.CaseSensitive, c.ColumnMappingRules); err != nil {
+		return terror.ErrConfigGenColumnMapping.Delegate(err)
+	}
+	if _, err := dumpling.ParseFileSize(c.MydumperConfig.ChunkFilesize, 0); err != nil {
+		return terror.ErrConfigInvalidChunkFileSize.Generate(c.MydumperConfig.ChunkFilesize)
+	}
+
+	// TODO: check every member
+	// TODO: since we checked here, we could remove other terror like ErrSyncerUnitGenBAList
+	// TODO: or we should check at task config and source config rather than this subtask config, to reduce duplication
 
 	return nil
 }

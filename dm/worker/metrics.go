@@ -31,7 +31,7 @@ import (
 	"github.com/pingcap/dm/pkg/metricsproxy"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay"
-	"github.com/pingcap/dm/syncer"
+	syncer "github.com/pingcap/dm/syncer/metrics"
 )
 
 const (

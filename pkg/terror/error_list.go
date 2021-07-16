@@ -230,6 +230,15 @@ const (
 	codeConfigMissingForBound
 	codeConfigBinlogEventFilter
 	codeConfigGlobalConfigsUnused
+	codeConfigExprFilterManyExpr
+	codeConfigExprFilterNotFound
+	codeConfigExprFilterWrongGrammar
+	codeConfigExprFilterEmptyName
+	codeConfigCheckerMaxTooSmall
+	codeConfigGenBAList
+	codeConfigGenTableRouter
+	codeConfigGenColumnMapping
+	codeConfigInvalidChunkFileSize
 )
 
 // Binlog operation error code list.
@@ -844,6 +853,15 @@ var (
 	ErrConfigMissingForBound        = New(codeConfigMissingForBound, ClassConfig, ScopeInternal, LevelHigh, "source bound %s doesn't have related source config in etcd", "")
 	ErrConfigBinlogEventFilter      = New(codeConfigBinlogEventFilter, ClassConfig, ScopeInternal, LevelHigh, "generate binlog event filter", "Please check the `filters` config in source and task configuration files.")
 	ErrConfigGlobalConfigsUnused    = New(codeConfigGlobalConfigsUnused, ClassConfig, ScopeInternal, LevelHigh, "The configurations as following %v are set in global configuration but instances don't use them", "Please check the configuration files.")
+	ErrConfigExprFilterManyExpr     = New(codeConfigExprFilterManyExpr, ClassConfig, ScopeInternal, LevelHigh, "expression filter can only specify one of (insert, update, delete) expressions, but %s has specified %v", "If you want to filter by A or B, please write two filters.")
+	ErrConfigExprFilterNotFound     = New(codeConfigExprFilterNotFound, ClassConfig, ScopeInternal, LevelHigh, "mysql-instance(%d)'s expression-filters %s not exist in expression-filter", "Please check the `expression-filters` config in task configuration file.")
+	ErrConfigExprFilterWrongGrammar = New(codeConfigExprFilterWrongGrammar, ClassConfig, ScopeInternal, LevelHigh, "expression-filter name(%s) SQL(%s) has wrong grammar: %v", "Please check the `expression-filters` config in task configuration file.")
+	ErrConfigExprFilterEmptyName    = New(codeConfigExprFilterEmptyName, ClassConfig, ScopeInternal, LevelHigh, "expression-filter %s has empty %s", "Please check the `expression-filters` config in task configuration file.")
+	ErrConfigCheckerMaxTooSmall     = New(codeConfigCheckerMaxTooSmall, ClassConfig, ScopeInternal, LevelHigh, "`backoff-max` value %v is less than `backoff-min` value %v", "Please increase `backoff-max` config in task configuration file.")
+	ErrConfigGenBAList              = New(codeConfigGenBAList, ClassConfig, ScopeInternal, LevelHigh, "generate block allow list error", "Please check the `block-allow-list` config in task configuration file.")
+	ErrConfigGenTableRouter         = New(codeConfigGenTableRouter, ClassConfig, ScopeInternal, LevelHigh, "generate table router error", "Please check the `routes` config in task configuration file.")
+	ErrConfigGenColumnMapping       = New(codeConfigGenColumnMapping, ClassConfig, ScopeInternal, LevelHigh, "generate column mapping error", "Please check the `column-mappings` config in task configuration file.")
+	ErrConfigInvalidChunkFileSize   = New(codeConfigInvalidChunkFileSize, ClassConfig, ScopeInternal, LevelHigh, "invalid `chunk-filesize` %v", "Please check the `chunk-filesize` config in task configuration file.")
 
 	// Binlog operation error.
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
@@ -1056,7 +1074,7 @@ var (
 	ErrMasterHostPortNotValid       = New(codeMasterHostPortNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "host:port '%s' not valid", "Please check the `master-addr` config in master configuration file.")
 	ErrMasterGetHostnameFail        = New(codeMasterGetHostnameFail, ClassDMMaster, ScopeInternal, LevelHigh, "get hostname fail", "")
 	ErrMasterGenEmbedEtcdConfigFail = New(codeMasterGenEmbedEtcdConfigFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to generate config item %s for embed etcd", "Please check configs in master configuration file.")
-	ErrMasterStartEmbedEtcdFail     = New(codeMasterStartEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to start embed etcd", "")
+	ErrMasterStartEmbedEtcdFail     = New(codeMasterStartEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to start embed etcd", "Please check all dm-master of `initial-cluster` in configuration file is up, and check the log for a detailed error.")
 	ErrMasterParseURLFail           = New(codeMasterParseURLFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to parse URL %s", "Please check configs in master configuration file.")
 	ErrMasterJoinEmbedEtcdFail      = New(codeMasterJoinEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to join embed etcd: %s", "Please check configs in master configuration file.")
 	ErrMasterInvalidOperateOp       = New(codeMasterInvalidOperateOp, ClassDMMaster, ScopeInternal, LevelMedium, "invalid op %s on %s", "")

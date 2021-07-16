@@ -7,4 +7,6 @@ gtid
 only_dml
 adjust_gtid
 load_task
-metrics
+downstream_more_column
+expression_filter
+fake_rotate_event

@@ -342,12 +342,11 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 			// do nothing
 		}
 		line, err := br.ReadString('\n')
-		cur += int64(len(line))
-
 		if err == io.EOF {
 			w.logger.Info("data are scanned finished.", zap.String("data file", file), zap.Int64("offset", offset))
 			break
 		}
+		cur += int64(len(line))
 
 		realLine := strings.TrimSpace(line[:len(line)-1])
 		if len(realLine) == 0 {

@@ -33,7 +33,7 @@ func (t *testTCPReaderSuite) TestGetGTIDsForPos(c *C) {
 			Port:           uint16(t.port),
 			User:           t.user,
 			Password:       t.password,
-			UseDecimal:     true,
+			UseDecimal:     false,
 			VerifyChecksum: true,
 		}
 		ctx, cancel = context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
@@ -73,7 +73,7 @@ func (t *testTCPReaderSuite) TestGetPreviousGTIDFromGTIDSet(c *C) {
 			Port:           uint16(t.port),
 			User:           t.user,
 			Password:       t.password,
-			UseDecimal:     true,
+			UseDecimal:     false,
 			VerifyChecksum: true,
 		}
 		ctx, cancel = context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
