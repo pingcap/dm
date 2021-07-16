@@ -357,6 +357,17 @@ func (c *SourceConfig) check(metaData *toml.MetaData, err error) error {
 // YamlForDowngrade returns YAML format represents of config for downgrade.
 func (c *SourceConfig) YamlForDowngrade() (string, error) {
 	s := NewSourceConfigForDowngrade(c)
+
+	// encrypt password
+	cipher, err := utils.Encrypt(utils.DecryptOrPlaintext(c.From.Password))
+	if err != nil {
+		return "", err
+	}
+	s.From.Password = cipher
+
+	// omit default values, so we can ignore them for later marshal
+	s.omitDefaultVals()
+
 	return s.Yaml()
 }
 
@@ -419,10 +430,8 @@ func (c *SourceConfigForDowngrade) omitDefaultVals() {
 	// }
 }
 
-// Yaml omitDefaultVals and returns YAML format representation of the config.
+// Yaml returns YAML format representation of the config.
 func (c *SourceConfigForDowngrade) Yaml() (string, error) {
-	// omit default values, so we can ignore them for later marshal
-	c.omitDefaultVals()
 	b, err := yaml.Marshal(c)
 	return string(b), err
 }

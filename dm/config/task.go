@@ -33,6 +33,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // Online DDL Scheme.
@@ -939,6 +940,17 @@ func checkValidExpr(expr string) error {
 // YamlForDowngrade returns YAML format represents of config for downgrade.
 func (c *TaskConfig) YamlForDowngrade() (string, error) {
 	t := NewTaskConfigForDowngrade(c)
+
+	// encrypt password
+	cipher, err := utils.Encrypt(utils.DecryptOrPlaintext(t.TargetDB.Password))
+	if err != nil {
+		return "", err
+	}
+	t.TargetDB.Password = cipher
+
+	// omit default values, so we can ignore them for later marshal
+	t.omitDefaultVals()
+
 	return t.Yaml()
 }
 
@@ -1067,10 +1079,8 @@ func (c *TaskConfigForDowngrade) omitDefaultVals() {
 	// }
 }
 
-// Yaml omitDefaultVals and returns YAML format representation of config.
+// Yaml returns YAML format representation of config.
 func (c *TaskConfigForDowngrade) Yaml() (string, error) {
-	// omit default values, so we can ignore them for later marshal
-	c.omitDefaultVals()
 	b, err := yaml.Marshal(c)
 	return string(b), err
 }
