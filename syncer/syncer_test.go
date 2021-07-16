@@ -296,7 +296,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		stmt, err := p.ParseOneStmt(query, "", "")
 		c.Assert(err, IsNil)
 
-		tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt)
+		tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
 
 		r, err := syncer.skipQuery(tableNames, stmt, query)
@@ -434,7 +434,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 		stmt, err := p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
 
-		tableNames, err := parserpkg.FetchDDLTableNames(sql, stmt)
+		tableNames, err := parserpkg.FetchDDLTableNames(sql, stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
 		r, err := syncer.skipQuery(tableNames, stmt, sql)
 		c.Assert(err, IsNil)
@@ -1595,7 +1595,7 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 				stmt, err := p.ParseOneStmt(sql, "", "")
 				c.Assert(err, IsNil)
 
-				tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt)
+				tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
 				c.Assert(err, IsNil)
 				r, err := syncer.skipQuery(tableNames, stmt, sql)
 				c.Assert(err, IsNil)

@@ -3,6 +3,7 @@ name: upgrade_via_tiup
 task-mode: all
 is-sharding: true
 enable-heartbeat: true
+case-sensitive: true
 
 target-database:
   host: tidb
@@ -21,18 +22,18 @@ mysql-instances:
 
 black-white-list:
   instance:
-    do-dbs: ["~^sharding[\\d]+"]
+    do-dbs: ["~^[sS]harding[\\d]+"]
     do-tables:
-    -  db-name: "~^sharding[\\d]+"
-       tbl-name: "~^t[\\d]+"
+    -  db-name: "~^[sS]harding[\\d]+"
+       tbl-name: "~^[tT][\\d]+"
 
 routes:
   sharding-route-rules-table:
-    schema-pattern: sharding*
-    table-pattern: t*
+    schema-pattern: "[sS]harding*"
+    table-pattern: "[tT]*"
     target-schema: db_target
     target-table: t_target
 
   sharding-route-rules-schema:
-    schema-pattern: sharding*
+    schema-pattern: "[sS]harding*"
     target-schema: db_target

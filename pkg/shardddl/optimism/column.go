@@ -109,3 +109,55 @@ func deleteDroppedColumnByColumnOp(lockID, column string) clientv3.Op {
 func deleteDroppedColumnsByLockOp(lockID string) clientv3.Op {
 	return clientv3.OpDelete(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(lockID), clientv3.WithPrefix())
 }
+
+// deleteSourceDroppedColumnsOp return a DELETE etcd operation for the specified lock relate to a upstream table.
+func deleteSourceDroppedColumnsOp(lockID, column, source, upSchema, upTable string) clientv3.Op {
+	return clientv3.OpDelete(common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(lockID, column, source, upSchema, upTable))
+}
+
+// CheckColumns try to check and fix all the schema and table names for delete columns infos.
+func CheckColumns(cli *clientv3.Client, source string, schemaMap map[string]string, tablesMap map[string]map[string]string) error {
+	allColInfos, _, err := GetAllDroppedColumns(cli)
+	if err != nil {
+		return err
+	}
+
+	for lockID, colDropInfo := range allColInfos {
+		for columnName, sourceDropInfo := range colDropInfo {
+			tableInfos, ok := sourceDropInfo[source]
+			if !ok {
+				continue
+			}
+			for schema, tableDropInfo := range tableInfos {
+				realSchema, hasChange := schemaMap[schema]
+				if !hasChange {
+					realSchema = schema
+				}
+				tableMap := tablesMap[schema]
+				for table, stage := range tableDropInfo {
+					realTable, tblChange := tableMap[table]
+					if !tblChange {
+						realTable = table
+						tblChange = hasChange
+					}
+					if tblChange {
+						key := common.ShardDDLOptimismDroppedColumnsKeyAdapter.Encode(lockID, columnName, source, realSchema, realTable)
+						val, err := json.Marshal(stage)
+						if err != nil {
+							return err
+						}
+						opPut := clientv3.OpPut(key, string(val))
+						opDel := deleteSourceDroppedColumnsOp(lockID, columnName, source, schema, table)
+
+						_, _, err = etcdutil.DoOpsInOneTxnWithRetry(cli, opPut, opDel)
+						if err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
