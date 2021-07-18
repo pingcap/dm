@@ -75,8 +75,8 @@ func NewRootCmd() *cobra.Command {
 		master.NewTransferSourceCmd(),
 		master.NewStartRelayCmd(),
 		master.NewStopRelayCmd(),
-		master.NewExportCfgCmd(),
-		master.NewImportCfgCmd(),
+		master.NewExportCfgsCmd(),
+		master.NewImportCfgsCmd(),
 		newDecryptCmd(),
 		newEncryptCmd(),
 	)
