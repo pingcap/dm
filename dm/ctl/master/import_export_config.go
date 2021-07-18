@@ -41,30 +41,30 @@ var (
 	yamlSuffix           = ".yaml"
 )
 
-// NewExportCfgCmd creates a exportCfg command.
-func NewExportCfgCmd() *cobra.Command {
+// NewExportCfgsCmd creates a exportCfg command.
+func NewExportCfgsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "export-config [--dir directory]",
+		Use:   "export-configs [--dir directory]",
 		Short: "Export the configurations of sources and tasks.",
-		RunE:  exportCfgFunc,
+		RunE:  exportCfgsFunc,
 	}
 	cmd.Flags().StringP("dir", "d", "configs", "specify the destinary directory, default is `./configs`")
 	return cmd
 }
 
-// NewImportCfgCmd creates a importCfg command.
-func NewImportCfgCmd() *cobra.Command {
+// NewImportCfgsCmd creates a importCfg command.
+func NewImportCfgsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "import-config [--dir directory]",
+		Use:   "import-configs [--dir directory]",
 		Short: "Import the configurations of sources and tasks.",
-		RunE:  importCfgFunc,
+		RunE:  importCfgsFunc,
 	}
 	cmd.Flags().StringP("dir", "d", "configs", "specify the configs directory, default is `./configs`")
 	return cmd
 }
 
-// exportCfgFunc exports configs.
-func exportCfgFunc(cmd *cobra.Command, args []string) error {
+// exportCfgsFunc exports configs.
+func exportCfgsFunc(cmd *cobra.Command, args []string) error {
 	dir, err := cmd.Flags().GetString("dir")
 	if err != nil {
 		common.PrintLinesf("can not get directory")
@@ -98,8 +98,8 @@ func exportCfgFunc(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// importCfgFunc imports configs.
-func importCfgFunc(cmd *cobra.Command, args []string) error {
+// importCfgsFunc imports configs.
+func importCfgsFunc(cmd *cobra.Command, args []string) error {
 	dir, err := cmd.Flags().GetString("dir")
 	if err != nil {
 		common.PrintLinesf("can not get directory")
@@ -328,7 +328,7 @@ func createSources(ctx context.Context, sourceCfgs []string) error {
 	common.PrintLinesf("start creating sources")
 
 	sourceResp := &pb.OperateSourceResponse{}
-	// Do not use batch for `operate-source start source1, source2` if we want to support idemponent import-config.
+	// Do not use batch for `operate-source start source1, source2` if we want to support idemponent import-configs.
 	// Because `operate-source start` will revert all batch sources if any source error.
 	// e.g. ErrSchedulerSourceCfgExist
 	for _, sourceCfg := range sourceCfgs {

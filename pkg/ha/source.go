@@ -38,7 +38,7 @@ func PutSourceCfg(cli *clientv3.Client, cfg *config.SourceConfig) (int64, error)
 }
 
 // GetAllSourceCfgBeforeV202 gets all upstream source configs before v2.0.2.
-// This func only use for export-config command.
+// This func only use for export-configs command.
 func GetAllSourceCfgBeforeV202(cli *clientv3.Client) (map[string]*config.SourceConfig, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()

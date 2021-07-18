@@ -1005,7 +1005,7 @@ func NewMySQLInstancesForDowngrade(mysqlInstances []*MySQLInstance) []*MySQLInst
 }
 
 // TaskConfigForDowngrade is the base configuration for task in v2.0.
-// This config is used for downgrade(export-config) from a higher dmctl version.
+// This config is used for downgrade(export-configs) from a higher dmctl version.
 // When we add any new config item into SourceConfig, we should update it also.
 type TaskConfigForDowngrade struct {
 	Name                    string                         `yaml:"name"`
