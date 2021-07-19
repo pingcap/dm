@@ -180,9 +180,7 @@ type Syncer struct {
 
 	heartbeat *Heartbeat
 
-	readerHub *streamer.ReaderHub
-	// when user starts a new task with GTID and no binlog file name, we can't know active relay log at init time
-	// at this case, we update active relay log when receive fake rotate event
+	readerHub              *streamer.ReaderHub
 	recordedActiveRelayLog bool
 
 	errOperatorHolder *operator.Holder
@@ -205,7 +203,7 @@ type Syncer struct {
 
 	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster atomic.Int64             // current task delay second behind upstream
-	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:queueBucketName val: lag
+	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:WorkerLagKey val: lag
 }
 
 // NewSyncer creates a new Syncer.
@@ -241,8 +239,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
 	syncer.recordedActiveRelayLog = false
-	syncer.workerLagMap = make(map[string]*atomic.Int64)
-
+	syncer.workerLagMap = make(map[string]*atomic.Int64, cfg.WorkerCount+2) // map size = WorkerCount + ddlkey + skipkey
 	return syncer
 }
 
@@ -765,11 +762,11 @@ func (s *Syncer) calcReplicationLag(headerTS int64) int64 {
 
 // updateReplicationLag calculates syncer's replication lag by job, it is called after every batch dml job / one skip job / one ddl
 // job is committed.
-func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
+func (s *Syncer) updateReplicationLag(job *job, lagKey string) {
 	var lag int64
 	// when job is nil mean no job in this bucket, need do reset this bucket lag to 0
 	if job == nil {
-		s.workerLagMap[queueBucketName].Store(0)
+		s.workerLagMap[lagKey].Store(0)
 	} else {
 		failpoint.Inject("BlockSyncerUpdateLag", func(v failpoint.Value) {
 			args := strings.Split(v.(string), ",")
@@ -787,7 +784,7 @@ func (s *Syncer) updateReplicationLag(job *job, queueBucketName string) {
 			lag = s.calcReplicationLag(int64(job.eventHeader.Timestamp))
 		default: // dml job
 			// NOTE workerlagmap already init all dml key(queueBucketName) before syncer running.
-			s.workerLagMap[queueBucketName].Store(s.calcReplicationLag(int64(job.eventHeader.Timestamp)))
+			s.workerLagMap[lagKey].Store(s.calcReplicationLag(int64(job.eventHeader.Timestamp)))
 		}
 	}
 	// find all job queue lag choose the max one
@@ -1144,7 +1141,8 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *dbconn.
 }
 
 // DML synced in batch by one worker.
-func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *dbconn.DBConn, jobChan chan *job) {
+func (s *Syncer) syncDML(
+	tctx *tcontext.Context, queueBucket string, db *dbconn.DBConn, jobChan chan *job, workerLagKey string) {
 	defer s.wg.Done()
 
 	idx := 0
@@ -1168,9 +1166,9 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *dbconn.
 			// every event before this job's event in this queue has already commit.
 			// and we can use this job to maintain the oldest binlog event ts among all workers.
 			j := jobs[0]
-			s.updateReplicationLag(j, queueBucket)
+			s.updateReplicationLag(j, workerLagKey)
 		} else {
-			s.updateReplicationLag(nil, queueBucket)
+			s.updateReplicationLag(nil, workerLagKey)
 		}
 		// calculate tps
 		for tpName, v := range tpCnt {
@@ -1226,9 +1224,19 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *dbconn.
 
 	var err error
 	var affect int
-	ticker := time.NewTicker(waitTime)
+	tickerInterval := waitTime
+	failpoint.Inject("changeTickerInterval", func(val failpoint.Value) {
+		t := val.(int)
+		tickerInterval = time.Duration(t) * time.Second
+		tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
+	})
+
+	ticker := time.NewTicker(tickerInterval)
 	defer ticker.Stop()
 	for {
+		// resets the time interval for each loop to prevent a certain amount of time being spent on the previous ticker
+		// execution to `executeSQLs` resulting in the next tikcer not waiting for the full waitTime.
+		ticker.Reset(tickerInterval)
 		select {
 		case sqlJob, ok := <-jobChan:
 			metrics.QueueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
@@ -1263,6 +1271,11 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *dbconn.
 				}
 				successF()
 				clearF()
+			} else {
+				// update lag metric even if there is no job in the queue
+				tctx.L().Debug("no job in queue, update lag to zero",
+					zap.String("workerLagKey", workerLagKey), zap.Int64("current ts", time.Now().Unix()))
+				s.updateReplicationLag(nil, workerLagKey)
 			}
 		}
 	}
@@ -1387,17 +1400,23 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 
 	s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)
+	// before starting syncDML, we should initialise the workerLagMap to prevent data races.
+	// for example, while thread 1 is setting the key of s.workerLagMap
+	// thread-2 might be calling s.updateReplicationLag( to get the key from s.workerLagMap)
+	for i := 0; i < s.cfg.WorkerCount; i++ {
+		s.workerLagMap[dmlWorkerLagKey(i)] = atomic.NewInt64(0)
+	}
 	for i := 0; i < s.cfg.WorkerCount; i++ {
 		s.wg.Add(1)
 		name := queueBucketName(i)
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
-		s.workerLagMap[name] = atomic.NewInt64(0)
-		go func(i int, name string) {
+		workerLagKey := dmlWorkerLagKey(i)
+		go func(i int, name, workerLagKey string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
-			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i])
+			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i], workerLagKey)
 			cancel()
-		}(i, name)
+		}(i, name, workerLagKey)
 	}
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
@@ -1757,10 +1776,23 @@ type eventContext struct {
 
 // TODO: Further split into smaller functions and group common arguments into a context struct.
 func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) error {
-	if ec.header.Timestamp == 0 || ec.header.LogPos == 0 { // fake rotate event
-		if string(ev.NextLogName) <= ec.lastLocation.Position.Name {
+	failpoint.Inject("MakeFakeRotateEvent", func(val failpoint.Value) {
+		ec.header.LogPos = 0
+		ev.NextLogName = []byte(val.(string))
+		ec.tctx.L().Info("MakeFakeRotateEvent", zap.String("fake file name", string(ev.NextLogName)))
+	})
+
+	if utils.IsFakeRotateEvent(ec.header) {
+		if fileName := string(ev.NextLogName); mysql.CompareBinlogFileName(fileName, ec.lastLocation.Position.Name) <= 0 {
+			// NOTE A fake rotate event is also generated when a master-slave switch occurs upstream, and the binlog filename may be rolled back in this case
+			// when the DM is updating based on the GTID, we also update the filename of the lastLocation
+			if s.cfg.EnableGTID {
+				ec.lastLocation.Position.Name = fileName
+			}
 			return nil // not rotate to the next binlog file, ignore it
 		}
+		// when user starts a new task with GTID and no binlog file name, we can't know active relay log at init time
+		// at this case, we update active relay log when receive fake rotate event
 		if !s.recordedActiveRelayLog {
 			if err := s.updateActiveRelayLog(mysql.Position{
 				Name: string(ev.NextLogName),
@@ -3194,7 +3226,7 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 			zap.String("adjusted_gtid", gs.String()), zap.Error(err))
 		return false, err
 	}
-	s.checkpoint.SaveGlobalPoint(location)
+	s.saveGlobalPoint(location)
 	// redirect streamer for new gtid set location
 	err = s.streamerController.RedirectStreamer(tctx, location)
 	if err != nil {
