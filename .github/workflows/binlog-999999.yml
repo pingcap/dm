@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-18.04
 
     steps:
-      - name: Set up Go 1.13
+      - name: Set up Go 1.16
         uses: actions/setup-go@v2
         with:
-          go-version: 1.13
+          go-version: 1.16
 
       - name: Check out code
         uses: actions/checkout@v2
@@ -114,10 +114,6 @@ jobs:
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
         if: ${{ failure() }}
-<<<<<<< HEAD
-        uses: mxschmitt/action-tmate@v2
-=======
         uses: mxschmitt/action-tmate@v3
         timeout-minutes: 30
 
->>>>>>> bb174ab72 (ci: bump action-tmate to v3 (#1881))
