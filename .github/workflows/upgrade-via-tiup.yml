@@ -38,6 +38,7 @@ jobs:
           cd ${{ env.working-directory }}/tests/tiup/docker
           GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
 
+<<<<<<< HEAD
     - name: Run test cases
       working-directory: ${{ env.working-directory }}
       run: |
@@ -58,6 +59,42 @@ jobs:
     - name: Set up tmate session
       if: ${{ failure() }}
       uses: mxschmitt/action-tmate@v2
+=======
+      - name: Run test cases
+        working-directory: ${{ env.working-directory }}
+        run: |
+          cd ${{ env.working-directory }}/tests/tiup/docker
+          docker-compose exec -T control bash -c "cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-from-v1.sh"
+
+      # send Slack notify if failed.
+      # NOTE: With the exception of `GITHUB_TOKEN`, secrets are not passed to the runner when a workflow is triggered from a forked repository.
+      - name: Slack notification
+        if: ${{ failure() }}
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_NOTIFY }}
+        uses: Ilshidur/action-slack@2.1.0
+        with:
+          args: "upgrade job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
+
+      - name: Feishu notification
+        if: ${{ failure() }}
+        uses: whatwewant/action-robot-feishu@v0.0.10
+        with:
+          url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+          title: FIX ME
+          text: |
+            repository: ${{ github.repository }}
+            committer: ${{ github.actor }}
+            compare: ${{ github.event.compare }}
+            job status: ${{ job.status }}
+            job url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
+
+      # Debug via SSH if previous steps failed
+      - name: Set up tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 30
+>>>>>>> bb174ab72 (ci: bump action-tmate to v3 (#1881))
 
   from_v2:
     name: From V2
@@ -127,6 +164,7 @@ jobs:
           docker cp dm-worker-nightly-linux-amd64.tar.gz control:/tmp
           docker cp dmctl-nightly-linux-amd64.tar.gz control:/tmp
 
+<<<<<<< HEAD
     # TODO: support more CUR_VER
     - name: Run test cases
       working-directory: ${{ env.working-directory }}
@@ -168,6 +206,63 @@ jobs:
     - name: Set up tmate session
       if: ${{ failure() }}
       uses: mxschmitt/action-tmate@v2
+=======
+      # TODO: support more CUR_VER
+      - name: Run test cases
+        working-directory: ${{ env.working-directory }}
+        run: |
+          cd ${{ env.working-directory }}/tests/tiup/docker
+          docker-compose exec -e ref=${{ github.ref }} -T control bash -c "cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-from-v2.sh ${{ matrix.previous_v2 }} nightly"
+
+      # if above step is passed, logs will be removed by tiup dm destroy
+      - name: Copy logs to hack permission
+        if: ${{ failure() }}
+        run: |
+          mkdir ./logs
+          docker cp -L master1:/home/tidb/dm/deploy/dm-master-8261/log ./logs/master
+          docker cp -L worker1:/home/tidb/dm/deploy/dm-worker-8262/log ./logs/worker1
+          docker cp -L worker2:/home/tidb/dm/deploy/dm-worker-8262/log ./logs/worker2
+          sudo chown -R runner ./logs
+
+      # Update logs as artifact seems not stable, so we set `continue-on-error: true` here.
+      - name: Upload logs
+        continue-on-error: true
+        uses: actions/upload-artifact@v2
+        if: ${{ failure() }}
+        with:
+          name: upgrade-via-tiup-${{ matrix.previous_v2 }}
+          path: |
+            ./logs
+
+      # send Slack notify if failed.
+      # NOTE: With the exception of `GITHUB_TOKEN`, secrets are not passed to the runner when a workflow is triggered from a forked repository.
+      - name: Slack notification
+        if: ${{ failure() }}
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_NOTIFY }}
+        uses: Ilshidur/action-slack@2.1.0
+        with:
+          args: "upgrade-via-tiup job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
+
+      - name: Feishu notification
+        if: ${{ failure() }}
+        uses: whatwewant/action-robot-feishu@v0.0.10
+        with:
+          url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+          title: FIX ME
+          text: |
+            repository: ${{ github.repository }}
+            committer: ${{ github.actor }}
+            compare: ${{ github.event.compare }}
+            job status: ${{ job.status }}
+            job url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
+
+      # Debug via SSH if previous steps failed
+      - name: Set up tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 30
+>>>>>>> bb174ab72 (ci: bump action-tmate to v3 (#1881))
 
   upgrade_tidb:
     name: Upgrade TiDB
@@ -207,6 +302,7 @@ jobs:
           sed -i "s/tidb:v3.0.19/tidb:v4.0.7/g" docker-compose.yml
           GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
 
+<<<<<<< HEAD
     - name: Run test cases after upgrade
       working-directory: ${{ env.working-directory }}
       run: |
@@ -228,4 +324,39 @@ jobs:
       if: ${{ failure() }}
       uses: mxschmitt/action-tmate@v2
       with:
+=======
+      - name: Run test cases after upgrade
+        working-directory: ${{ env.working-directory }}
+        run: |
+          cd ${{ env.working-directory }}/tests/tiup/docker
+          docker-compose exec -T control bash -c "source /root/.profile && cd /go/src/github.com/pingcap/dm && ./tests/tiup/upgrade-tidb.sh after_upgrade nightly"
+
+      # send Slack notify if failed.
+      # NOTE: With the exception of `GITHUB_TOKEN`, secrets are not passed to the runner when a workflow is triggered from a forked repository.
+      - name: Slack notification
+        if: ${{ failure() }}
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_NOTIFY }}
+        uses: Ilshidur/action-slack@2.1.0
+        with:
+          args: "upgrade job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
+
+      - name: Feishu notification
+        if: ${{ failure() }}
+        uses: whatwewant/action-robot-feishu@v0.0.10
+        with:
+          url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+          title: FIX ME
+          text: |
+            repository: ${{ github.repository }}
+            committer: ${{ github.actor }}
+            compare: ${{ github.event.compare }}
+            job status: ${{ job.status }}
+            job url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
+
+      # Debug via SSH if previous steps failed
+      - name: Set up tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+>>>>>>> bb174ab72 (ci: bump action-tmate to v3 (#1881))
         timeout-minutes: 60
