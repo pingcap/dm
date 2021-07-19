@@ -69,7 +69,8 @@ jobs:
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v2
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 30
 
   from_v2:
     name: From V2
@@ -190,7 +191,8 @@ jobs:
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v2
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 30
 
   upgrade_tidb:
     name: Upgrade TiDB
@@ -261,6 +263,5 @@ jobs:
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v2
-        with:
-          timeout-minutes: 60
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 60
