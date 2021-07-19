@@ -28,10 +28,6 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v2
 
-      - name: Set up tmate session
-        uses: mxschmitt/action-tmate@v3
-        timeout-minutes: 30
-
       - name: Cache go modules
         uses: actions/cache@v2
         with:
