@@ -14,20 +14,10 @@ jobs:
     runs-on: ubuntu-18.04
 
     steps:
-<<<<<<< HEAD
-    - name: Set up Go 1.13
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.13
-    
-    - name: Check out code
-      uses: actions/checkout@v2
-=======
       - name: Set up Go 1.16
         uses: actions/setup-go@v2
         with:
           go-version: 1.16
->>>>>>> 1678401b3 (syncer: update binlog filename when receive fake rotate event (#1848))
 
       - name: Check out code
         uses: actions/checkout@v2
