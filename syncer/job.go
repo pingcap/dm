@@ -173,3 +173,7 @@ func newFlushJob() *job {
 func queueBucketName(queueID int) string {
 	return fmt.Sprintf("q_%d", queueID%defaultBucketCount)
 }
+
+func dmlWorkerLagKey(queueID int) string {
+	return fmt.Sprintf("lag_%d", queueID)
+}

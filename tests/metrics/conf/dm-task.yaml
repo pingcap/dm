@@ -14,13 +14,13 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    black-white-list:  "instance" # compatible with deprecated config
+    black-white-list: "instance" # compatible with deprecated config
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
   - source-id: "mysql-replica-02"
-    block-allow-list:  "instance"
+    block-allow-list: "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -28,8 +28,6 @@ mysql-instances:
 black-white-list: # compatible with deprecated config
   instance:
     do-dbs: ["metrics"]
-    ignore-dbs: ["ignore_db"]
-
 
 mydumpers:
   global:
@@ -45,6 +43,5 @@ loaders:
 
 syncers:
   global:
-    worker-count: 16
-    batch: 100
-    enable-ansi-quotes: false  # compatible with deprecated config
+    worker-count: 1
+    batch: 1
