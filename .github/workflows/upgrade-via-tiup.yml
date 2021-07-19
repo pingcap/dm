@@ -10,11 +10,7 @@ on:
   workflow_dispatch:
     inputs: # TODO: use these inputs
       fromVer:
-<<<<<<< HEAD
-        dmVer: 'v1.0.6'
-=======
         dmVer: "v1.0.7"
->>>>>>> ebe018067 (chore: add feishu notification (#1873))
       toVer:
         dmVer: "nightly"
 
@@ -26,21 +22,6 @@ jobs:
       working-directory: ${{ github.workspace }}/go/src/github.com/pingcap/dm
 
     steps:
-<<<<<<< HEAD
-    - name: Set up Go 1.13
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.13
-
-    - name: Check out code
-      uses: actions/checkout@v2
-      with:
-        path: go/src/github.com/pingcap/dm
-
-    - name: Setup containers
-      working-directory: ${{ env.working-directory }}
-      run: |
-=======
       - name: Set up Go 1.16
         uses: actions/setup-go@v2
         with:
@@ -53,7 +34,6 @@ jobs:
       - name: Setup containers
         working-directory: ${{ env.working-directory }}
         run: |
->>>>>>> ebe018067 (chore: add feishu notification (#1873))
           cd ${{ env.working-directory }}/tests/tiup/docker
           GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d
 
@@ -116,30 +96,9 @@ jobs:
         working-directory: ${{ env.working-directory }}
         run: make build nolint=true
 
-<<<<<<< HEAD
-    - name: Set up Go 1.13
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.13
-
-    - name: Check out code
-      uses: actions/checkout@v2
-      with:
-        path: go/src/github.com/pingcap/dm
-
-    - name: Build
-      if: ${{ github.ref != 'refs/heads/master' }}
-      working-directory: ${{ env.working-directory }}
-      run: make build nolint=true
-
-    - name: Package files
-      if: ${{ github.ref != 'refs/heads/master' }}
-      run: |
-=======
       - name: Package files
         if: ${{ github.ref != 'refs/heads/master' }}
         run: |
->>>>>>> ebe018067 (chore: add feishu notification (#1873))
           mkdir ${{ github.workspace }}/package
           cd ${{ github.workspace }}/package
 
@@ -239,22 +198,6 @@ jobs:
     env:
       working-directory: ${{ github.workspace }}/go/src/github.com/pingcap/dm
     steps:
-<<<<<<< HEAD
-    - name: Set up Go 1.13
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.13
-    
-    - name: Check out code
-      uses: actions/checkout@v2
-      with:
-        path: go/src/github.com/pingcap/dm
-    
-    # TODO: support more versions
-    - name: Setup containers
-      working-directory: ${{ env.working-directory }}
-      run: |
-=======
       - name: Set up Go 1.16
         uses: actions/setup-go@v2
         with:
@@ -269,7 +212,6 @@ jobs:
       - name: Setup containers
         working-directory: ${{ env.working-directory }}
         run: |
->>>>>>> ebe018067 (chore: add feishu notification (#1873))
           cd ${{ env.working-directory }}/tests/tiup/docker
           sed -i "s/tidb:v4.0.7/tidb:v3.0.19/g" docker-compose.yml
           GOPATH=${GITHUB_WORKSPACE}/go docker-compose up -d

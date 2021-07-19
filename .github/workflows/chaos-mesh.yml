@@ -49,15 +49,6 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-<<<<<<< HEAD
-    # Set up Go for building DM, now it's v1.13
-    - name: Set up Go 1.13
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.13
-    - name: Print Go version
-      run: go version
-=======
       # Set up Go for building DM, now it's v1.16
       - name: Set up Go 1.16
         uses: actions/setup-go@v2
@@ -69,7 +60,6 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Check out code
         uses: actions/checkout@v2
->>>>>>> ebe018067 (chore: add feishu notification (#1873))
 
       - name: Cache go modules
         uses: actions/cache@v2
