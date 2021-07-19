@@ -169,11 +169,52 @@ function exec_incremental_stage2() {
 	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2, c3) VALUES (214, '214', 214);"
 }
 
+function exec_incremental_stage3() {
+	# prepare incremental data
+	exec_sql mysql1 3306 "INSERT INTO $DB1.$TBL1 (c1, c2) VALUES (301, '301');"
+	exec_sql mysql1 3306 "INSERT INTO $DB1.$TBL2 (c1, c2) VALUES (302, '302');"
+	exec_sql mariadb2 3306 "INSERT INTO $DB2.$TBL2 (c1, c2) VALUES (311, '311');"
+	exec_sql mariadb2 3306 "INSERT INTO $DB2.$TBL3 (c1, c2) VALUES (312, '312');"
+
+	# prepare optimistic incremental data
+	exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL1 (c1, c2, c3, c4) VALUES (301, '301', 301, 301);"
+	exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL2 (c1, c2, c3, c4) VALUES (302, '302', 302, 302);"
+	exec_sql mariadb2 3306 "INSERT INTO $DB4.$TBL2 (c1, c2, c3, c4) VALUES (311, '311', 311, 311);"
+	exec_sql mariadb2 3306 "INSERT INTO $DB4.$TBL3 (c1, c2, c3, c4) VALUES (312, '312', 312, 312);"
+
+	# prepare pessimistic incremental data
+	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL1 (c1, c2, c3) VALUES (303, '303', 303);"
+	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL2 (c1, c2, c3) VALUES (304, '304', 304);"
+	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL2 (c1, c2, c3) VALUES (313, '313', 313);"
+	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2, c3) VALUES (314, '314', 314);"
+}
+
+function exec_incremental_stage4() {
+	# prepare incremental data
+	exec_sql mysql1 3306 "INSERT INTO $DB1.$TBL1 (c1, c2) VALUES (401, '401');"
+	exec_sql mysql1 3306 "INSERT INTO $DB1.$TBL2 (c1, c2) VALUES (402, '402');"
+	exec_sql mariadb2 3306 "INSERT INTO $DB2.$TBL2 (c1, c2) VALUES (411, '411');"
+	exec_sql mariadb2 3306 "INSERT INTO $DB2.$TBL3 (c1, c2) VALUES (412, '412');"
+
+	# prepare optimistic incremental data
+	exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL1 (c1, c2, c3, c4) VALUES (401, '401', 401, 401);"
+	exec_sql mysql1 3306 "INSERT INTO $DB3.$TBL2 (c1, c2, c3, c4) VALUES (402, '402', 402, 402);"
+	exec_sql mariadb2 3306 "INSERT INTO $DB4.$TBL2 (c1, c2, c3, c4) VALUES (411, '411', 411, 411);"
+	exec_sql mariadb2 3306 "INSERT INTO $DB4.$TBL3 (c1, c2, c3, c4) VALUES (412, '412', 412, 412);"
+
+	# prepare pessimistic incremental data
+	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL1 (c1, c2, c3) VALUES (403, '403', 403);"
+	exec_sql mysql1 3306 "INSERT INTO $DB5.$TBL2 (c1, c2, c3) VALUES (404, '404', 404);"
+	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL2 (c1, c2, c3) VALUES (413, '413', 413);"
+	exec_sql mariadb2 3306 "INSERT INTO $DB6.$TBL3 (c1, c2, c3) VALUES (414, '414', 414);"
+}
+
 function patch_nightly_with_tiup_mirror() {
 	# clone packages for upgrade.
 	# FIXME: use nightly version of grafana and prometheus after https://github.com/pingcap/tiup/issues/1334 fixed.
 	tiup mirror clone tidb-dm-nightly-linux-amd64 --os=linux --arch=amd64 \
 		--alertmanager=v0.17.0 --grafana=v5.0.1 --prometheus=v5.0.1 \
+		--dm-master=v2.0.1 --dm-worker=v2.0.1 \
 		--tiup=v$(tiup --version | grep 'tiup' | awk -F ' ' '{print $1}') --dm=v$(tiup --version | grep 'tiup' | awk -F ' ' '{print $1}')
 
 	# change tiup mirror
@@ -183,8 +224,9 @@ function patch_nightly_with_tiup_mirror() {
 	# binary files have already been built and packaged.
 	tiup mirror genkey
 	tiup mirror grant gmhdbjd --name gmhdbjd
-	tiup mirror publish dm-master nightly /tmp/dm-master-nightly-linux-amd64.tar.gz dm-master/dm-master --arch amd64 --os linux --desc="dm-master component of Data Migration Platform"
-	tiup mirror publish dm-worker nightly /tmp/dm-worker-nightly-linux-amd64.tar.gz dm-worker/dm-worker --arch amd64 --os linux --desc="dm-worker component of Data Migration Platform"
+	mv tidb-dm-nightly-linux-amd64/keys/*-pingcap.json ./pingcap.json
+	tiup mirror publish dm-master nightly /tmp/dm-master-nightly-linux-amd64.tar.gz dm-master/dm-master --arch amd64 --os linux --desc="dm-master component of Data Migration Platform" -k pingcap.json
+	tiup mirror publish dm-worker nightly /tmp/dm-worker-nightly-linux-amd64.tar.gz dm-worker/dm-worker --arch amd64 --os linux --desc="dm-worker component of Data Migration Platform" -k pingcap.json
 	tiup mirror publish dmctl nightly /tmp/dmctl-nightly-linux-amd64.tar.gz dmctl/dmctl --arch amd64 --os linux --desc="dmctl component of Data Migration Platform"
 
 	tiup list
