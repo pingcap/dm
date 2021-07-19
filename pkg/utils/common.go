@@ -84,7 +84,7 @@ func FetchAllDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter) (map[s
 			Name:   "", // schema level
 		})
 	}
-	ftSchemas = bw.ApplyOn(ftSchemas)
+	ftSchemas = bw.Apply(ftSchemas)
 	if len(ftSchemas) == 0 {
 		log.L().Warn("no schema need to sync")
 		return nil, nil
@@ -105,7 +105,7 @@ func FetchAllDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter) (map[s
 				Name:   table,
 			})
 		}
-		ftTables = bw.ApplyOn(ftTables)
+		ftTables = bw.Apply(ftTables)
 		if len(ftTables) == 0 {
 			log.L().Info("no tables need to sync", zap.String("schema", schema))
 			continue // NOTE: should we still keep it as an empty elem?
@@ -151,6 +151,35 @@ func FetchTargetDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter, rou
 	}
 
 	return mapper, nil
+}
+
+// LowerCaseTableNamesFlavor represents the type of db `lower_case_table_names` settings.
+type LowerCaseTableNamesFlavor uint8
+
+const (
+	// LCTableNamesSensitive represent lower_case_table_names = 0, case sensitive.
+	LCTableNamesSensitive LowerCaseTableNamesFlavor = 0
+	// LCTableNamesInsensitive represent lower_case_table_names = 1, case insensitive.
+	LCTableNamesInsensitive = 1
+	// LCTableNamesMixed represent lower_case_table_names = 2, table names are case-sensitive, but case-insensitive in usage.
+	LCTableNamesMixed = 2
+)
+
+// FetchLowerCaseTableNamesSetting return the `lower_case_table_names` setting of target db.
+func FetchLowerCaseTableNamesSetting(ctx context.Context, conn *sql.Conn) (LowerCaseTableNamesFlavor, error) {
+	query := "SELECT @@lower_case_table_names;"
+	row := conn.QueryRowContext(ctx, query)
+	if row.Err() != nil {
+		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(row.Err(), query)
+	}
+	var res uint8
+	if err := row.Scan(&res); err != nil {
+		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(err, query)
+	}
+	if res > LCTableNamesMixed {
+		return LCTableNamesSensitive, terror.ErrDBUnExpect.Generate(fmt.Sprintf("invalid `lower_case_table_names` value '%d'", res))
+	}
+	return LowerCaseTableNamesFlavor(res), nil
 }
 
 // CompareShardingDDLs compares s and t ddls
@@ -216,6 +245,22 @@ func NonRepeatStringsEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// GenTableID generates table ID.
+func GenTableID(schema, table string) (id string, isSchemaOnly bool) {
+	if len(table) == 0 {
+		return "`" + schema + "`", true
+	}
+	return "`" + schema + "`.`" + table + "`", false
+}
+
+// UnpackTableID unpacks table ID to <schema, table> pair.
+func UnpackTableID(id string) (string, string) {
+	parts := strings.Split(id, "`.`")
+	schema := strings.TrimLeft(parts[0], "`")
+	table := strings.TrimRight(parts[1], "`")
+	return schema, table
 }
 
 type session struct {

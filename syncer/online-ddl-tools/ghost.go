@@ -177,3 +177,8 @@ func (g *Ghost) Close() {
 func (g *Ghost) ResetConn(tctx *tcontext.Context) error {
 	return g.storge.ResetConn(tctx)
 }
+
+// CheckAndUpdate try to check and fix the schema/table case-sensitive issue.
+func (g *Ghost) CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
+	return g.storge.CheckAndUpdate(tctx, schemas, tables, g.RealName)
+}
