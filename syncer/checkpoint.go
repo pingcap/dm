@@ -872,10 +872,7 @@ func (cp *RemoteCheckPoint) CheckAndUpdate(ctx context.Context, schemas map[stri
 	cp.Unlock()
 
 	if hasChange {
-		tctx := &tcontext.Context{
-			Logger: log.L(),
-			Ctx:    ctx,
-		}
+		tctx := tcontext.NewContext(ctx, log.L())
 		return cp.FlushPointsExcept(tctx, nil, nil, nil)
 	}
 	return nil

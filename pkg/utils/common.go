@@ -250,9 +250,9 @@ func NonRepeatStringsEqual(a, b []string) bool {
 // GenTableID generates table ID.
 func GenTableID(schema, table string) (id string, isSchemaOnly bool) {
 	if len(table) == 0 {
-		return fmt.Sprintf("`%s`", schema), true
+		return "`" + schema + "`", true
 	}
-	return fmt.Sprintf("`%s`.`%s`", schema, table), false
+	return "`" + schema + "`.`" + table + "`", false
 }
 
 // UnpackTableID unpacks table ID to <schema, table> pair.

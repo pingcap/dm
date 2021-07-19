@@ -32,14 +32,8 @@ function run() {
 	# operate mysql config to worker
 	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
 	cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
-	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
-	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
 	# make sure source1 is bound to worker1
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
-
-	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"start-relay -s $SOURCE_ID1 worker1" \
-		"\"result\": true" 1
 
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
@@ -75,17 +69,11 @@ function run() {
 
 	sleep 10
 	echo "after restart dm-worker, task should resume automatically"
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"start-task $WORK_DIR/dm-task.yaml" \
-		"\"result\": false" 1 \
-		"subtasks with name test for sources \[mysql-replica-01 mysql-replica-02\] already exist" 1
-	sleep 2
 
 	# wait for task running
 	check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
 	sleep 2 # still wait for subtask running on other dm-workers
 
-	# we used failpoint to imitate an upstream switching, which purged whole relay dir
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 

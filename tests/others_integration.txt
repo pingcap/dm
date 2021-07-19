@@ -11,4 +11,4 @@ downstream_more_column
 expression_filter
 fake_rotate_event
 metrics
-case-sensitive
+case_sensitive

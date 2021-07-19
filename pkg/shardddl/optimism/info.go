@@ -346,7 +346,7 @@ func (oldInfo *OldInfo) toInfo() Info {
 }
 
 // CheckDDLInfos try to check and fix all the schema and table names for DDL info.
-func CheckDDLInfos(cli *clientv3.Client, source string, schemaMap map[string]string, talesMap map[string]map[string]string) error {
+func CheckDDLInfos(cli *clientv3.Client, source string, schemaMap map[string]string, tablesMap map[string]map[string]string) error {
 	allInfos, _, err := GetAllInfo(cli)
 	if err != nil {
 		return err
@@ -363,7 +363,7 @@ func CheckDDLInfos(cli *clientv3.Client, source string, schemaMap map[string]str
 				realSchema = schema
 			}
 
-			tblMap := talesMap[schema]
+			tblMap := tablesMap[schema]
 			for tbl, info := range tblInfos {
 				realTable, tableChange := tblMap[tbl]
 				if !tableChange {
