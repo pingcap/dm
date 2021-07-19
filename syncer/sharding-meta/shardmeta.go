@@ -276,3 +276,74 @@ func (meta *ShardingMeta) FlushData(sourceID, tableID string) ([]string, [][]int
 	}
 	return sqls, args
 }
+
+func (meta *ShardingMeta) genRemoveSQL(sourceID, tableID string) (string, []interface{}) {
+	sql := fmt.Sprintf("DELETE FROM %s where source_id=? and target_table_id=?", meta.tableName)
+	return sql, []interface{}{sourceID, tableID}
+}
+
+// CheckAndUpdate check and fix schema and table names for all the sharding groups.
+func (meta *ShardingMeta) CheckAndUpdate(targetID string, schemaMap map[string]string, tablesMap map[string]map[string]string) ([]string, [][]interface{}, error) {
+	if len(schemaMap) == 0 && len(tablesMap) == 0 {
+		return nil, nil, nil
+	}
+
+	checkSourceID := func(source string) (string, bool) {
+		schemaName, tblName := utils.UnpackTableID(source)
+		realSchema, changed := schemaMap[schemaName]
+		if !changed {
+			realSchema = schemaName
+		}
+		tblMap := tablesMap[schemaName]
+		realTable, ok := tblMap[tblName]
+		if ok {
+			changed = true
+		} else {
+			realTable = tblName
+		}
+		newID, _ := utils.GenTableID(realSchema, realTable)
+		return newID, changed
+	}
+
+	for _, item := range meta.global.Items {
+		newID, changed := checkSourceID(item.Source)
+		if changed {
+			item.Source = newID
+		}
+	}
+
+	sourceIDsMap := make(map[string]string)
+	for sourceID, seqs := range meta.sources {
+		newSourceID, changed := checkSourceID(sourceID)
+		for _, item := range seqs.Items {
+			newID, hasChanged := checkSourceID(item.Source)
+			if hasChanged {
+				item.Source = newID
+				changed = true
+			}
+		}
+		if changed {
+			sourceIDsMap[sourceID] = newSourceID
+		}
+	}
+	var (
+		sqls []string
+		args [][]interface{}
+	)
+	for oldID, newID := range sourceIDsMap {
+		if oldID != newID {
+			seqs := meta.sources[oldID]
+			delete(meta.sources, oldID)
+			meta.sources[newID] = seqs
+			removeSQL, arg := meta.genRemoveSQL(oldID, targetID)
+			sqls = append(sqls, removeSQL)
+			args = append(args, arg)
+		}
+		log.L().Info("fix sharding meta", zap.String("old", oldID), zap.String("new", newID))
+		fixedSQLs, fixedArgs := meta.FlushData(newID, targetID)
+		sqls = append(sqls, fixedSQLs...)
+		args = append(args, fixedArgs...)
+	}
+
+	return sqls, args, nil
+}
