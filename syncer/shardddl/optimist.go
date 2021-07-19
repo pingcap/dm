@@ -204,6 +204,9 @@ func (o *Optimist) PendingOperation() *optimism.Operation {
 }
 
 // CheckPersistentData check and fix the persistent data.
+//
+// NOTE: currently this function is not used because user will meet error at early version
+// if set unsupported case-sensitive.
 func (o *Optimist) CheckPersistentData(source string, schemas map[string]string, tables map[string]map[string]string) error {
 	if o.cli == nil {
 		return nil
