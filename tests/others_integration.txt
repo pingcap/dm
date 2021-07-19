@@ -10,4 +10,5 @@ load_task
 downstream_more_column
 expression_filter
 fake_rotate_event
+metrics
 sql_mode
