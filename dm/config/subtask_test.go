@@ -20,11 +20,11 @@ import (
 
 func (t *testConfig) TestSubTask(c *C) {
 	cfg := &SubTaskConfig{
-		Name:            "test-task",
-		IsSharding:      true,
-		ShardMode:       "optimistic",
-		SourceID:        "mysql-instance-01",
-		OnlineDDLScheme: "pt",
+		Name:       "test-task",
+		IsSharding: true,
+		ShardMode:  "optimistic",
+		SourceID:   "mysql-instance-01",
+		OnlineDDL:  true,
 		From: DBConfig{
 			Host:     "127.0.0.1",
 			Port:     3306,
@@ -70,9 +70,9 @@ func (t *testConfig) TestSubTask(c *C) {
 func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 	newSubTaskConfig := func() *SubTaskConfig {
 		return &SubTaskConfig{
-			Name:            "test-task",
-			SourceID:        "mysql-instance-01",
-			OnlineDDLScheme: "pt",
+			Name:      "test-task",
+			SourceID:  "mysql-instance-01",
+			OnlineDDL: true,
 			From: DBConfig{
 				Host:     "127.0.0.1",
 				Port:     3306,
@@ -122,14 +122,6 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				return cfg
 			},
 			"\\[.*\\], Message: shard mode invalid-shard-mode not supported.*",
-		},
-		{
-			func() *SubTaskConfig {
-				cfg := newSubTaskConfig()
-				cfg.OnlineDDLScheme = "rtc"
-				return cfg
-			},
-			"\\[.*\\], Message: online scheme rtc not supported.*",
 		},
 	}
 

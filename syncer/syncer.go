@@ -325,12 +325,8 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		}
 	}
 
-	if s.cfg.OnlineDDLScheme != "" {
-		fn, ok := onlineddl.OnlineDDLSchemes[s.cfg.OnlineDDLScheme]
-		if !ok {
-			return terror.ErrSyncerUnitOnlineDDLSchemeNotSupport.Generate(s.cfg.OnlineDDLScheme)
-		}
-		s.onlineDDL, err = fn(tctx, s.cfg)
+	if s.cfg.OnlineDDL {
+		s.onlineDDL, err = onlineddl.NewRealOnlinePlugin(tctx, s.cfg)
 		if err != nil {
 			return err
 		}

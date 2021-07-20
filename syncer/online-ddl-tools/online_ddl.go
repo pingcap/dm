@@ -16,6 +16,7 @@ package onlineddl
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/pingcap/failpoint"
@@ -24,6 +25,7 @@ import (
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/syncer/dbconn"
 
@@ -32,12 +34,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 )
-
-// OnlineDDLSchemes is scheme name => online ddl handler.
-var OnlineDDLSchemes = map[string]func(*tcontext.Context, *config.SubTaskConfig) (OnlinePlugin, error){
-	config.PT:    NewPT,
-	config.GHOST: NewGhost,
-}
 
 // refactor to reduce duplicate later.
 var (
@@ -72,9 +68,11 @@ type TableType string
 
 // below variables will be explained later.
 const (
-	RealTable  TableType = "real table"
-	GhostTable TableType = "ghost table"
-	TrashTable TableType = "trash table" // means we should ignore these tables
+	RealTable       TableType = "real table"
+	GhostGhostTable TableType = "ghost ghost table"
+	GhostTrashTable TableType = "ghost trash table" // means we should ignore these tables
+	PTGhostTable    TableType = "pt ghost table"
+	PTTrashTable    TableType = "pt trash table" // means we should ignore these tables
 )
 
 // GhostDDLInfo stores ghost information and ddls.
@@ -314,4 +312,178 @@ func (s *Storage) createTable(tctx *tcontext.Context) error {
 		)`, s.tableName)
 	_, err := s.dbConn.ExecuteSQL(tctx, []string{sql})
 	return terror.WithScope(err, terror.ScopeDownstream)
+}
+
+// Ghost handles gh-ost online ddls (not complete, don't need to review it)
+// _*_gho ghost table
+// _*_ghc ghost changelog table
+// _*_del ghost transh table.
+type RealOnlinePlugin struct {
+	storge *Storage
+}
+
+// NewGhost returns gh-oat online plugin.
+func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
+	r := &RealOnlinePlugin{
+		storge: NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", "gh-ost"))), cfg), // create a context for logger
+	}
+
+	return r, r.storge.Init(tctx)
+}
+
+// Apply implements interface.
+// returns ddls, real schema, real table, error.
+// nolint:dupl
+func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
+	if len(tables) < 1 {
+		return nil, "", "", terror.ErrSyncerUnitGhostApplyEmptyTable.Generate()
+	}
+
+	schema, table := tables[0].Schema, tables[0].Name
+	targetTable := r.RealName(table)
+	tp := r.TableType(table)
+
+	switch tp {
+	case RealTable:
+		if _, ok := stmt.(*ast.RenameTableStmt); ok {
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+			}
+
+			tp1 := r.TableType(tables[1].Name)
+			if isTrashTable(tp1) {
+				return nil, "", "", nil
+			} else if isGhostTable(tp1) {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameToGhostTable.Generate(statement)
+			}
+		}
+		return []string{statement}, schema, table, nil
+	case GhostTrashTable, PTTrashTable:
+		// ignore TrashTable
+		if _, ok := stmt.(*ast.RenameTableStmt); ok {
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+			}
+
+			tp1 := r.TableType(tables[1].Name)
+			if isGhostTable(tp1) {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
+			}
+		}
+	case GhostGhostTable, PTGhostTable:
+		// record ghost table ddl changes
+		switch stmt.(type) {
+		case *ast.CreateTableStmt:
+			err := r.storge.Delete(tctx, schema, table)
+			if err != nil {
+				return nil, "", "", err
+			}
+		case *ast.DropTableStmt:
+			err := r.storge.Delete(tctx, schema, table)
+			if err != nil {
+				return nil, "", "", err
+			}
+		case *ast.RenameTableStmt:
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+			}
+
+			tp1 := r.TableType(tables[1].Name)
+			if tp1 == RealTable {
+				ghostInfo := r.storge.Get(schema, table)
+				if ghostInfo != nil {
+					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
+				}
+				return nil, "", "", terror.ErrSyncerUnitGhostOnlineDDLOnGhostTbl.Generate(schema, table)
+			} else if isGhostTable(tp1) {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
+			}
+
+			// rename ghost table to trash table
+			err := r.storge.Delete(tctx, schema, table)
+			if err != nil {
+				return nil, "", "", err
+			}
+
+		default:
+			err := r.storge.Save(tctx, schema, table, schema, targetTable, statement)
+			if err != nil {
+				return nil, "", "", err
+			}
+		}
+	}
+
+	return nil, schema, table, nil
+}
+
+// Finish implements interface.
+func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) error {
+	if r == nil {
+		return nil
+	}
+
+	return r.storge.Delete(tctx, schema, table)
+}
+
+// TableType implements interface.
+func (r *RealOnlinePlugin) TableType(table string) TableType {
+	// 5 is _ _gho/ghc/del
+	if len(table) > 5 && table[0] == '_' {
+		if strings.HasSuffix(table, "_gho") {
+			return GhostGhostTable
+		}
+
+		if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") {
+			return GhostTrashTable
+		}
+	}
+
+	// 5 is _ _old/new
+	if len(table) > 5 {
+		if strings.HasPrefix(table, "_") && strings.HasSuffix(table, "_new") {
+			return PTGhostTable
+		}
+
+		if strings.HasPrefix(table, "_") && strings.HasSuffix(table, "_old") {
+			return PTTrashTable
+		}
+	}
+	return RealTable
+}
+
+// RealName implements interface.
+func (r *RealOnlinePlugin) RealName(table string) string {
+	tp := r.TableType(table)
+	if tp == GhostGhostTable || tp == GhostTrashTable {
+		table = table[1 : len(table)-4]
+	}
+
+	if tp == PTGhostTable || tp == PTTrashTable {
+		table = strings.TrimLeft(table, "_")
+		table = table[:len(table)-4]
+	}
+	return table
+}
+
+// Clear clears online ddl information.
+func (r *RealOnlinePlugin) Clear(tctx *tcontext.Context) error {
+	return r.storge.Clear(tctx)
+}
+
+// Close implements interface.
+func (r *RealOnlinePlugin) Close() {
+	r.storge.Close()
+}
+
+// ResetConn implements interface.
+func (r *RealOnlinePlugin) ResetConn(tctx *tcontext.Context) error {
+	return r.storge.ResetConn(tctx)
+}
+
+func isGhostTable(tp TableType) bool {
+	return tp == GhostGhostTable || tp == PTGhostTable
+}
+
+func isTrashTable(tp TableType) bool {
+	return tp == GhostTrashTable || tp == PTTrashTable
 }

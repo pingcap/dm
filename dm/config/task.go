@@ -298,7 +298,7 @@ type TaskConfig struct {
 
 	MySQLInstances []*MySQLInstance `yaml:"mysql-instances" toml:"mysql-instances" json:"mysql-instances"`
 
-	OnlineDDLScheme string `yaml:"online-ddl-scheme" toml:"online-ddl-scheme" json:"online-ddl-scheme"`
+	OnlineDDL bool `yaml:"online-ddl" toml:"online-ddl" json:"online-ddl"`
 
 	Routes         map[string]*router.TableRule   `yaml:"routes" toml:"routes" json:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters" toml:"filters" json:"filters"`
@@ -422,10 +422,6 @@ func (c *TaskConfig) adjust() error {
 		if err := ValidateCheckingItem(item); err != nil {
 			return err
 		}
-	}
-
-	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
-		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)
 	}
 
 	if c.TargetDB == nil {
@@ -689,7 +685,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg := NewSubTaskConfig()
 		cfg.IsSharding = c.IsSharding
 		cfg.ShardMode = c.ShardMode
-		cfg.OnlineDDLScheme = c.OnlineDDLScheme
+		cfg.OnlineDDL = c.OnlineDDL
 		cfg.IgnoreCheckingItems = c.IgnoreCheckingItems
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
@@ -785,7 +781,7 @@ func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
 	c.HeartbeatReportInterval = stCfg0.HeartbeatReportInterval
 	c.CaseSensitive = stCfg0.CaseSensitive
 	c.TargetDB = &stCfg0.To // just ref
-	c.OnlineDDLScheme = stCfg0.OnlineDDLScheme
+	c.OnlineDDL = stCfg0.OnlineDDL
 	c.CleanDumpFile = stCfg0.CleanDumpFile
 	c.MySQLInstances = make([]*MySQLInstance, 0, len(stCfgs))
 	c.BAList = make(map[string]*filter.Rules)
