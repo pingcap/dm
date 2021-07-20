@@ -2754,10 +2754,13 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 	if !hasSQLMode {
 		sqlMode, err2 := utils.GetGlobalVariable(ctx, s.fromDB.BaseDB.DB, "sql_mode")
 		if err2 != nil {
-			s.tctx.L().Warn("cannot get sql_mode from upstream database", log.ShortError(err2))
-		} else {
-			s.cfg.To.Session["sql_mode"] = sqlMode
+			s.tctx.L().Warn("cannot get sql_mode from upstream database, the sql_mode will be assigned \"IGNORE_SPACE, NO_AUTO_VALUE_ON_ZERO, ALLOW_INVALID_DATES\"", log.ShortError(err2))
 		}
+		sqlModes, err3 := utils.AdjustSQLModeCompatible(sqlMode)
+		if err3 != nil {
+			s.tctx.L().Warn("cannot adjust sql_mode compatible, the sql_mode will be assigned  stay the same", log.ShortError(err3))
+		}
+		s.cfg.To.Session["sql_mode"] = sqlModes
 	}
 
 	dbCfg = s.cfg.To

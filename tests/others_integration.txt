@@ -10,3 +10,9 @@ load_task
 downstream_more_column
 expression_filter
 fake_rotate_event
+<<<<<<< HEAD
+=======
+metrics
+case_sensitive
+sql_mode
+>>>>>>> caad97b06 (loader, syncer: Update sql_mode to more compatible (#1869))
