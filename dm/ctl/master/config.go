@@ -132,7 +132,7 @@ func importCfgsFunc(cmd *cobra.Command, args []string) error {
 	}
 	if len(relayWorkers) > 0 {
 		common.PrintLinesf("The original relay workers have been exported to `%s`.", path.Join(dir, relayWorkersFilename))
-		common.PrintLinesf("Currently unsupport recover relay workers. You may need to execute `transfer-source` and `start-relay` command manually.")
+		common.PrintLinesf("Currently DM doesn't support recover relay workers. You may need to execute `transfer-source` and `start-relay` command manually.")
 	}
 
 	common.PrintLinesf("import configs from directory `%s` succeed", dir)

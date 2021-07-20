@@ -16,6 +16,7 @@ package config
 import (
 	"io/ioutil"
 	"path"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -1010,4 +1011,12 @@ func (t *testConfig) TestExclusiveAndWrongExprFilterFields(c *C) {
 	cfg.MySQLInstances[0].ExpressionFilters[length-1] = "wrong"
 	err = cfg.adjust()
 	c.Assert(terror.ErrConfigExprFilterWrongGrammar.Equal(err), IsTrue)
+}
+
+func (t *testConfig) TestTaskConfigForDowngrade(c *C) {
+	cfg := NewTaskConfig()
+	cfgForDowngrade := NewTaskConfigForDowngrade(cfg)
+	cfgReflect := reflect.Indirect(reflect.ValueOf(cfg))
+	cfgForDowngradeReflect := reflect.Indirect(reflect.ValueOf(cfgForDowngrade))
+	c.Assert(cfgReflect.NumField(), Equals, cfgForDowngradeReflect.NumField()+1) // without flag
 }
