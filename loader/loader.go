@@ -528,9 +528,16 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 			break
 		}
 	}
+
 	if !hasSQLMode {
-		lcfg.To.Session["sql_mode"] = l.cfg.LoaderConfig.SQLMode
+		sqlModes, err3 := utils.AdjustSQLModeCompatible(l.cfg.LoaderConfig.SQLMode)
+		if err3 != nil {
+			l.logger.Warn("cannot adjust sql_mode compatible, the sql_mode will stay the same", log.ShortError(err3))
+		}
+		lcfg.To.Session["sql_mode"] = sqlModes
 	}
+
+	l.logger.Info("loader's sql_mode is", zap.String("sqlmode", lcfg.To.Session["sql_mode"]))
 
 	l.toDB, l.toDBConns, err = createConns(tctx, lcfg, l.cfg.PoolSize)
 	if err != nil {

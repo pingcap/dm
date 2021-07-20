@@ -12,3 +12,4 @@ expression_filter
 fake_rotate_event
 metrics
 case_sensitive
+sql_mode
