@@ -14,20 +14,10 @@ jobs:
     runs-on: ubuntu-18.04
 
     steps:
-<<<<<<< HEAD
-    - name: Set up Go 1.13
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.13
-    
-    - name: Check out code
-      uses: actions/checkout@v2
-=======
       - name: Set up Go 1.16
         uses: actions/setup-go@v2
         with:
           go-version: 1.16
->>>>>>> 1678401b3 (syncer: update binlog filename when receive fake rotate event (#1848))
 
       - name: Check out code
         uses: actions/checkout@v2
@@ -84,6 +74,19 @@ jobs:
         uses: Ilshidur/action-slack@2.1.0
         with:
           args: "upstream-switch job failed, see https://github.com/pingcap/dm/actions/runs/{{ GITHUB_RUN_ID }}"
+
+      - name: Feishu notification
+        if: ${{ failure() }}
+        uses: whatwewant/action-robot-feishu@v0.0.10
+        with:
+          url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+          title: FIX ME
+          text: |
+            repository: ${{ github.repository }}
+            committer: ${{ github.actor }}
+            compare: ${{ github.event.compare }}
+            job status: ${{ job.status }}
+            job url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
 
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
