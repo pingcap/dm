@@ -91,18 +91,15 @@ function run() {
 	run_sql "show tables from UPPER_DB_ROUTE" $TIDB_PORT $TIDB_PASSWORD
 	check_contains "do_table_route"
 	check_not_contains "Do_table_ignore"
+	run_sql_tidb_with_retry "select count(*) from UPPER_DB_ROUTE.do_table_route" "count(*): 5"
 
-	run_sql "select count(*) from UPPER_DB_ROUTE.do_table_route" $TIDB_PORT $TIDB_PASSWORD
-	# ensure the truncate is ignored and the new row is inserted
-	check_contains "count(*): 5"
 	# test binlog event filter
 	run_sql "truncate table Upper_DB.Do_Table" $MYSQL_PORT1 $MYSQL_PASSWORD1
 	# insert another row
 	run_sql "INSERT INTO Upper_DB.Do_Table (id, name) values (103, 'new');" $MYSQL_PORT1 $MYSQL_PASSWORD1
 	sleep 2
-	run_sql "select count(*) from UPPER_DB_ROUTE.do_table_route" $TIDB_PORT $TIDB_PASSWORD
 	# ensure the truncate is ignored and the new row is inserted
-	check_contains "count(*): 6"
+	run_sql_tidb_with_retry "select count(*) from UPPER_DB_ROUTE.do_table_route" "count(*): 6"
 
 	export GO_FAILPOINTS=''
 }
