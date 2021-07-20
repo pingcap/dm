@@ -95,6 +95,8 @@ function migrate_in_v2() {
 }
 
 function diff_configs() {
+	echo "diff configs between different version"
+
 	sed '/password/d' old_configs/tasks/upgrade_via_tiup.yaml >/tmp/old_task.yaml
 	sed '/password/d' old_configs/tasks/upgrade_via_tiup_pessimistic.yaml >/tmp/old_task_pessimistic.yaml
 	sed '/password/d' old_configs/tasks/upgrade_via_tiup_optimistic.yaml >/tmp/old_task_optimistic.yaml
@@ -115,6 +117,8 @@ function diff_configs() {
 }
 
 function downgrade_to_previous_v2() {
+	echo "downgrade to previous version $PRE_VER"
+
 	# destory current cluster
 	tiup dm destroy --yes $CLUSTER_NAME
 
