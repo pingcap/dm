@@ -10,8 +10,4 @@ load_task
 downstream_more_column
 expression_filter
 fake_rotate_event
-<<<<<<< HEAD
-=======
-metrics
 case_sensitive
->>>>>>> a5a219cd9 (syncer: fix the case-sensitive issue (#1738))
