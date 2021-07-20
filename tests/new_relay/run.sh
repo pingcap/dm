@@ -149,7 +149,7 @@ function run() {
 		"creating sources" 1 \
 		"creating tasks" 1 \
 		"The original relay workers have been exported to" 1 \
-		"Currently unsupport recover relay workers.*transfer-source.*start-relay" 1
+		"Currently DM doesn't support recover relay workers.*transfer-source.*start-relay" 1
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"operate-source show" \

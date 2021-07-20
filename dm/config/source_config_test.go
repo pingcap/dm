@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"reflect"
 	"strings"
 	"time"
 
@@ -233,6 +234,14 @@ func (t *testConfig) TestConfigVerify(c *C) {
 			c.Assert(err, IsNil)
 		}
 	}
+}
+
+func (t *testConfig) TestSourceConfigForDowngrade(c *C) {
+	cfg := newSourceConfig()
+	cfgForDowngrade := NewSourceConfigForDowngrade(cfg)
+	cfgReflect := reflect.Indirect(reflect.ValueOf(cfg))
+	cfgForDowngradeReflect := reflect.Indirect(reflect.ValueOf(cfgForDowngrade))
+	c.Assert(cfgReflect.NumField(), Equals, cfgForDowngradeReflect.NumField())
 }
 
 func subtestFlavor(c *C, cfg *SourceConfig, sqlInfo, expectedFlavor, expectedError string) {
