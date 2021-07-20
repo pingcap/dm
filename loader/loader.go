@@ -656,7 +656,7 @@ func (l *Loader) skipSchemaAndTable(table *filter.Table) bool {
 	table.Name = unescapePercent(table.Name, l.logger)
 
 	tbs := []*filter.Table{table}
-	tbs = l.baList.ApplyOn(tbs)
+	tbs = l.baList.Apply(tbs)
 	return len(tbs) == 0
 }
 
