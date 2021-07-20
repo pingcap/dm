@@ -17,7 +17,7 @@ insert into t_2(name) values(concat ('ignore', 'space'));
 -- test sql_mode NO_AUTO_VALUE_ON_ZERO
 set @@session.sql_mode=concat(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO');
 insert into t_2(id, name) values (20, 'a');
-replace into t_2(id, name) values (0, 'b');
+replace into t_2(id, name) values (0, 'c');
 
 -- test sql_mode NO_BACKSLASH_ESCAPES
 set @@session.sql_mode=concat(@@session.sql_mode, ',NO_BACKSLASH_ESCAPES');
