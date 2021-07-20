@@ -62,8 +62,8 @@ function upgrade_to_current_v2() {
 	# FIXME: It may be a bug in tiup mirror.
 	tiup uninstall dmctl --all
 
-	# export-configs in PRE_VER
-	tiup dmctl:$CUR_VER --master-addr=master1:8261 export-configs -d old_configs
+	# config export in PRE_VER
+	tiup dmctl:$CUR_VER --master-addr=master1:8261 config export -d old_configs
 
 	tiup dm upgrade --yes $CLUSTER_NAME $CUR_VER
 }
@@ -90,8 +90,8 @@ function migrate_in_v2() {
 	echo "check locks"
 	run_dmctl_with_retry $CUR_VER "show-ddl-locks" "no DDL lock exists" 1
 
-	# export-configs in CUR_VER
-	tiup dmctl:$CUR_VER --master-addr=master1:8261 export-configs -d new_configs
+	# config export in CUR_VER
+	tiup dmctl:$CUR_VER --master-addr=master1:8261 config export -d new_configs
 }
 
 function diff_configs() {
@@ -124,8 +124,8 @@ function downgrade_to_previous_v2() {
 	tiup dm deploy --yes $CLUSTER_NAME $PRE_VER $CUR/conf/topo.yaml
 	tiup dm start --yes $CLUSTER_NAME
 
-	# import-configs
-	tiup dmctl:$CUR_VER --master-addr=master1:8261 import-configs -d new_configs
+	# config import
+	tiup dmctl:$CUR_VER --master-addr=master1:8261 config import -d new_configs
 
 	exec_incremental_stage4
 

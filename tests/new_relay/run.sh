@@ -117,15 +117,15 @@ function run() {
 	run_sql_file $cur/data/db1.increment4.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	# export-configs
+	# config export
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"export-configs -d /tmp/configs" \
+		"config export -d /tmp/configs" \
 		"export configs to directory .* succeed" 1
 
 	# check configs
 	sed '/password/d' /tmp/configs/tasks/test.yaml | diff $cur/configs/tasks/test.yaml - || exit 1
 	sed '/password/d' /tmp/configs/sources/mysql-replica-01.yaml | diff $cur/configs/sources/mysql-replica-01.yaml - || exit 1
-	diff /tmp/configs/relay_workers.json $cur/configs/relay_workers.json || exit 1
+	diff <(jq --sort-keys . /tmp/configs/relay_workers.json) <(jq --sort-keys . $cur/configs/relay_workers.json) || exit 1
 
 	# destroy cluster
 	cleanup_process $*
@@ -145,7 +145,7 @@ function run() {
 
 	# import configs
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"import-configs -d /tmp/configs" \
+		"config import -d /tmp/configs" \
 		"creating sources" 1 \
 		"creating tasks" 1 \
 		"The original relay workers have been exported to" 1 \

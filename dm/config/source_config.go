@@ -372,7 +372,7 @@ func (c *SourceConfig) YamlForDowngrade() (string, error) {
 }
 
 // SourceConfigForDowngrade is the base configuration for source in v2.0.
-// This config is used for downgrade(export-configs) from a higher dmctl version.
+// This config is used for downgrade(config export) from a higher dmctl version.
 // When we add any new config item into SourceConfig, we should update it also.
 type SourceConfigForDowngrade struct {
 	EnableGTID      bool                   `yaml:"enable-gtid"`

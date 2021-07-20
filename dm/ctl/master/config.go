@@ -41,10 +41,21 @@ var (
 	yamlSuffix           = ".yaml"
 )
 
-// NewExportCfgsCmd creates a exportCfg command.
-func NewExportCfgsCmd() *cobra.Command {
+// NewConfigCmd creates a exportCfg command.
+func NewConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "export-configs [--dir directory]",
+		Use:   "config",
+		Short: "Commands to import/export config",
+	}
+	cmd.AddCommand(newExportCfgsCmd())
+	cmd.AddCommand(newImportCfgsCmd())
+	return cmd
+}
+
+// newExportCfgsCmd creates a exportCfg command.
+func newExportCfgsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "export [--dir directory]",
 		Short: "Export the configurations of sources and tasks.",
 		RunE:  exportCfgsFunc,
 	}
@@ -52,10 +63,10 @@ func NewExportCfgsCmd() *cobra.Command {
 	return cmd
 }
 
-// NewImportCfgsCmd creates a importCfg command.
-func NewImportCfgsCmd() *cobra.Command {
+// newImportCfgsCmd creates a importCfg command.
+func newImportCfgsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "import-configs [--dir directory]",
+		Use:   "import [--dir directory]",
 		Short: "Import the configurations of sources and tasks.",
 		RunE:  importCfgsFunc,
 	}
@@ -265,6 +276,7 @@ func writeRelayWorkers(relayWorkersFile string, relayWorkersSet map[string]map[s
 		for worker := range workerSet {
 			workers = append(workers, worker)
 		}
+		sort.Strings(workers)
 		relayWorkers[source] = workers
 	}
 
@@ -328,7 +340,7 @@ func createSources(ctx context.Context, sourceCfgs []string) error {
 	common.PrintLinesf("start creating sources")
 
 	sourceResp := &pb.OperateSourceResponse{}
-	// Do not use batch for `operate-source start source1, source2` if we want to support idemponent import-configs.
+	// Do not use batch for `operate-source start source1, source2` if we want to support idemponent config import.
 	// Because `operate-source start` will revert all batch sources if any source error.
 	// e.g. ErrSchedulerSourceCfgExist
 	for _, sourceCfg := range sourceCfgs {
