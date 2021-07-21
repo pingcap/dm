@@ -60,7 +60,6 @@ func main() {
 	  }`
 	jsonStr := fmt.Sprintf(msgTMPL, repo, committer, jobURL)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(jsonStr)))
-	req.Header.Set("X-Custom-Header", "myvalue")
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
