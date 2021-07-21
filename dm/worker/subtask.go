@@ -435,12 +435,20 @@ func (st *SubTask) setResult(result *pb.ProcessResult) {
 	st.result = result
 }
 
-func (st *SubTask) markResultCanceled() {
+// markResultCanceled mark result as canceled if stage is Paused.
+// This func is used to pause a task which has been paused by error,
+// so the task will not auto resume by task checker.
+func (st *SubTask) markResultCanceled() bool {
 	st.Lock()
 	defer st.Unlock()
-	if st.result != nil {
-		st.result.IsCanceled = true
+	if st.stage == pb.Stage_Paused {
+		if st.result != nil && !st.result.IsCanceled {
+			st.l.Info("manually pause task which has been paused by errors")
+			st.result.IsCanceled = true
+			return true
+		}
 	}
+	return false
 }
 
 // Result returns the result of the sub task.
@@ -467,13 +475,8 @@ func (st *SubTask) Close() {
 
 // Pause pauses the running sub task.
 func (st *SubTask) Pause() error {
-	if st.Stage() == pb.Stage_Paused {
-		result := st.Result()
-		if result != nil && !result.IsCanceled {
-			st.l.Info("manually pause task which has been paused by errors")
-			st.markResultCanceled()
-			return nil
-		}
+	if st.markResultCanceled() {
+		return nil
 	}
 
 	if !st.stageCAS(pb.Stage_Running, pb.Stage_Pausing) {
