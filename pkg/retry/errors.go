@@ -17,6 +17,7 @@ import (
 	"database/sql/driver"
 
 	gmysql "github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 
@@ -82,7 +83,7 @@ var (
 func IsConnectionError(err error) bool {
 	err = errors.Cause(err)
 	switch err {
-	case driver.ErrBadConn, tmysql.ErrBadConn, gmysql.ErrBadConn:
+	case driver.ErrBadConn, tmysql.ErrBadConn, gmysql.ErrBadConn, mysql.ErrInvalidConn:
 		return true
 	}
 	return false
