@@ -473,7 +473,7 @@ func (st *SubTask) Close() {
 	updateTaskState(st.cfg.Name, st.cfg.SourceID, pb.Stage_Stopped)
 }
 
-// Pause pauses the running sub task.
+// Pause pauses a running sub task or a sub task paused by error.
 func (st *SubTask) Pause() error {
 	if st.markResultCanceled() {
 		return nil
