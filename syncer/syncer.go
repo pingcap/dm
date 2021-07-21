@@ -1261,6 +1261,16 @@ func (s *Syncer) syncDML(tctx *tcontext.Context, queueBucket string, db *dbconn.
 				}
 				successF()
 				clearF()
+<<<<<<< HEAD
+=======
+			} else {
+				failpoint.Inject("noJobInQueueLog", func() {
+					tctx.L().Debug("no job in queue, update lag to zero", zap.String(
+						"workerLagKey", workerLagKey), zap.Int64("current ts", time.Now().Unix()))
+				})
+				// update lag metric even if there is no job in the queue
+				s.updateReplicationLag(nil, workerLagKey)
+>>>>>>> fadd54342 (chore: remove no job in queue log (#1897))
 			}
 		}
 	}
