@@ -90,7 +90,7 @@ function run() {
 	echo "check zero job done!"
 
 	kill_dm_worker
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/changeTickerInterval=return(5)"
+	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/changeTickerInterval=return(5);github.com/pingcap/dm/syncer/noJobInQueueLog=return(true)"
 	# First set the ticker interval to 5s -> expect the execSQL interval to be greater than 5s
 	# At 5s, the first no job log will appear in the log
 	# At 6s, the ticker has already waited 1s and the ticker goes to 1/5th of the way
