@@ -11,7 +11,7 @@ import (
 func main() {
 	url := os.Getenv("FEISHU_BOT_WEBHOOK_URL")
 	repo := os.Getenv("GITHUB_REPOSITORY")
-	committer := os.Getenv("GITHUB_ACTOR")
+	committer := os.Getenv("GIT_COMMITTER_NAME")
 	jobID := os.Getenv("GITHUB_RUN_ID")
 	jobURL := fmt.Sprintf("https://github.com/%s/actions/runs/%s", repo, jobID)
 	msgTMPL := `
@@ -59,6 +59,7 @@ func main() {
 		}
 	  }`
 	jsonStr := fmt.Sprintf(msgTMPL, repo, committer, jobURL)
+	fmt.Println(jsonStr)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(jsonStr)))
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
