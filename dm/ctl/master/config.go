@@ -59,7 +59,7 @@ func newExportCfgsCmd() *cobra.Command {
 		Short: "Export the configurations of sources and tasks.",
 		RunE:  exportCfgsFunc,
 	}
-	cmd.Flags().StringP("dir", "d", "configs", "specify the destinary directory, default is `./configs`")
+	cmd.Flags().StringP("dir", "d", "configs", "specify the output directory, default is `./configs`")
 	return cmd
 }
 
@@ -195,10 +195,6 @@ func getAllCfgs(cli *clientv3.Client) (map[string]*config.SourceConfig, map[stri
 }
 
 func createDirectory(dir string) (string, string, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		common.PrintLinesf("can not create directory `%s`", dir)
-		return "", "", err
-	}
 	taskDir := path.Join(dir, taskDirname)
 	if err := os.MkdirAll(taskDir, 0o755); err != nil {
 		common.PrintLinesf("can not create directory of task configs `%s`", taskDir)
@@ -232,18 +228,14 @@ func writeSourceCfgs(sourceDir string, sourceCfgsMap map[string]*config.SourceCo
 
 func writeTaskCfgs(taskDir string, subTaskCfgsMap map[string]map[string]config.SubTaskConfig) error {
 	subTaskCfgsListMap := make(map[string][]*config.SubTaskConfig, len(subTaskCfgsMap))
-	// from source => task => subtask to task => source => subtask
+	// from source => task => subtask to task => subtask
 	for _, subTaskCfgs := range subTaskCfgsMap {
 		for task, subTaskCfg := range subTaskCfgs {
 			clone := subTaskCfg
-			if subTaskCfgList, ok := subTaskCfgsListMap[task]; ok {
-				subTaskCfgsListMap[task] = append(subTaskCfgList, &clone)
-			} else {
-				subTaskCfgsListMap[task] = []*config.SubTaskConfig{&clone}
-			}
+			subTaskCfgsListMap[task] = append(subTaskCfgsListMap[task], &clone)
 		}
 	}
-	// from task => source => subtask to task => taskCfg
+	// from task => subtask to task => taskCfg
 	for task, subTaskCfgs := range subTaskCfgsListMap {
 		sort.Slice(subTaskCfgs, func(i, j int) bool {
 			return subTaskCfgs[i].SourceID < subTaskCfgs[j].SourceID

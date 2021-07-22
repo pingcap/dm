@@ -1067,10 +1067,11 @@ func NewTaskConfigForDowngrade(taskConfig *TaskConfig) *TaskConfigForDowngrade {
 // If any default value for new config item is not empty(0 or false or nil),
 // we should change it to empty.
 func (c *TaskConfigForDowngrade) omitDefaultVals() {
-	// e.g.
-	// if c.newConfig == defaultVal {
-	//		c.newConfig == 0
-	// }
+	if len(c.TargetDB.Session) > 0 {
+		if timeZone, ok := c.TargetDB.Session["time_zone"]; ok && timeZone == defaultTimeZone {
+			delete(c.TargetDB.Session, "time_zone")
+		}
+	}
 }
 
 // Yaml returns YAML format representation of config.
