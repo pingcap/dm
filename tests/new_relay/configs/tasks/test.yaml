@@ -16,7 +16,6 @@ target-database:
   max-allowed-packet: null
   session:
     tidb_txn_mode: optimistic
-    time_zone: "+00:00"
   security: null
 online-ddl-scheme: ""
 routes: {}

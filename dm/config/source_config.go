@@ -424,10 +424,11 @@ func NewSourceConfigForDowngrade(sourceCfg *SourceConfig) *SourceConfigForDowngr
 // If any default value for new config item is not empty(0 or false or nil),
 // we should change it to empty.
 func (c *SourceConfigForDowngrade) omitDefaultVals() {
-	// e.g.
-	// if s.newConfig == defaultVal {
-	//		s.newConfig == 0
-	// }
+	if len(c.From.Session) > 0 {
+		if timeZone, ok := c.From.Session["time_zone"]; ok && timeZone == defaultTimeZone {
+			delete(c.From.Session, "time_zone")
+		}
+	}
 }
 
 // Yaml returns YAML format representation of the config.
