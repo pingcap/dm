@@ -83,7 +83,7 @@ column-mappings:
     expression: "partition id"
     source-column: "id"
     target-column: "id"
-    arguments: ["1", "", "t"]
+    arguments: ["1", "", "gho_t"]
 
   pt-instance-1:
     schema-pattern: "online_ddl"
@@ -91,7 +91,7 @@ column-mappings:
     expression: "partition id"
     source-column: "id"
     target-column: "id"
-    arguments: ["1", "", "t"]
+    arguments: ["1", "", "pt_t"]
   
   gho-instance-2:
     schema-pattern: "online_ddl"
@@ -99,7 +99,7 @@ column-mappings:
     expression: "partition id"
     source-column: "id"
     target-column: "id"
-    arguments: ["2", "", "t"]
+    arguments: ["2", "", "gho_t"]
 
   pt-instance-2:
     schema-pattern: "online_ddl"
@@ -107,7 +107,7 @@ column-mappings:
     expression: "partition id"
     source-column: "id"
     target-column: "id"
-    arguments: ["2", "", "t"]
+    arguments: ["2", "", "pt_t"]
   
 filters:
   filter-rule-index:

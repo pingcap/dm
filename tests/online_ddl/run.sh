@@ -56,25 +56,24 @@ function run() {
 	dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
 
 	echo "use sync_diff_inspector to check full dump data"
-	check_sync_diff $WORK_DIR $cur/conf/diff_config_gho.toml
-	check_sync_diff $WORK_DIR $cur/conf/diff_config_pt.toml
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	run_sql_online_ddl "alter table t1_gho add column c int comment '1  2
+	run_sql_online_ddl "alter table gho_t1 add column c int comment '1  2
 3😊4';" $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl gh-ost
-	run_sql_online_ddl "alter table t2_gho add column c int comment '1  2
+	run_sql_online_ddl "alter table gho_t2 add column c int comment '1  2
 3😊4';" $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl gh-ost
-	run_sql_online_ddl "alter table t2_gho add column c int comment '1  2
+	run_sql_online_ddl "alter table gho_t2 add column c int comment '1  2
 3😊4';" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl gh-ost
-	run_sql_online_ddl "alter table t3_gho add column c int comment '1  2
+	run_sql_online_ddl "alter table gho_t3 add column c int comment '1  2
 3😊4';" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl gh-ost
 
-	run_sql_online_ddl "alter table t1_pt add column c int comment '1  2
+	run_sql_online_ddl "alter table pt_t1 add column c int comment '1  2
 3😊4';" $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl pt
-	run_sql_online_ddl "alter table t2_pt add column c int comment '1  2
+	run_sql_online_ddl "alter table pt_t2 add column c int comment '1  2
 3😊4';" $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl pt
-	run_sql_online_ddl "alter table t2_pt add column c int comment '1  2
+	run_sql_online_ddl "alter table pt_t2 add column c int comment '1  2
 3😊4';" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl pt
-	run_sql_online_ddl "alter table t3_pt add column c int comment '1  2
+	run_sql_online_ddl "alter table pt_t3 add column c int comment '1  2
 3😊4';" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl pt
 
 	check_port_offline $WORKER2_PORT 10
@@ -107,8 +106,7 @@ function run() {
 	run_sql_tidb "alter table online_ddl.pt_t_target add key name (name)"
 
 	echo "use sync_diff_inspector to check increment data"
-	check_sync_diff $WORK_DIR $cur/conf/diff_config_gho.toml
-	check_sync_diff $WORK_DIR $cur/conf/diff_config_pt.toml
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	echo "start dm-worker3 and kill dm-worker2"
 	ps aux | grep dm-worker2 | awk '{print $2}' | xargs kill || true
@@ -137,8 +135,7 @@ function run() {
 	sleep 2
 
 	echo "use sync_diff_inspector to check increment2 data now!"
-	check_sync_diff $WORK_DIR $cur/conf/diff_config_gho.toml
-	check_sync_diff $WORK_DIR $cur/conf/diff_config_pt.tomls
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 cleanup_data online_ddl
