@@ -298,7 +298,8 @@ type TaskConfig struct {
 
 	MySQLInstances []*MySQLInstance `yaml:"mysql-instances" toml:"mysql-instances" json:"mysql-instances"`
 
-	OnlineDDL bool `yaml:"online-ddl" toml:"online-ddl" json:"online-ddl"`
+	OnlineDDLScheme string `yaml:"online-ddl-scheme" toml:"online-ddl-scheme" json:"online-ddl-scheme"`
+	OnlineDDL       bool   `yaml:"online-ddl" toml:"online-ddl" json:"online-ddl"`
 
 	Routes         map[string]*router.TableRule   `yaml:"routes" toml:"routes" json:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters" toml:"filters" json:"filters"`
@@ -422,6 +423,13 @@ func (c *TaskConfig) adjust() error {
 		if err := ValidateCheckingItem(item); err != nil {
 			return err
 		}
+	}
+
+	if !c.OnlineDDL && c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
+		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)
+	} else if c.OnlineDDLScheme == PT || c.OnlineDDLScheme == GHOST {
+		c.OnlineDDL = true
+		log.L().Warn("'online-ddl-scheme' will be deprecated soon. Recommend that use online-ddl instead of online-ddl-scheme.")
 	}
 
 	if c.TargetDB == nil {

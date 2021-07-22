@@ -371,7 +371,7 @@ func (s *Storage) CheckAndUpdate(
 	return nil
 }
 
-// RealOnlinePlugin suport ghost and pt
+// RealOnlinePlugin support ghost and pt
 // Ghost handles gh-ost online ddls (not complete, don't need to review it)
 // _*_gho ghost table
 // _*_ghc ghost changelog table
