@@ -1065,7 +1065,7 @@ func (s *Syncer) flushCheckPoints() error {
 	// optimistic shard info, DM-master may resolved the optimistic lock and let other worker execute DDL. So after this
 	// worker resume, it can not execute the DML/DDL in old binlog because of downstream table structure mismatching.
 	// We should find a way to (compensating) implement a transaction containing interaction with both etcd and SQL.
-	if err != nil {
+	if err != nil && !terror.ErrDBExecuteFailed.Equal(err) {
 		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint",
 			zap.Stringer("checkpoint", s.checkpoint),
 			zap.Error(err))
@@ -1160,7 +1160,9 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *dbconn.
 		// If downstream has error (which may cause by tracker is more compatible than downstream), we should stop handling
 		// this job, set `s.execError` to let caller of `addJob` discover error
 		if err != nil {
-			s.execError.Store(err)
+			if terror.ErrDBExecuteFailed.Equal(err) || s.execError.Load() == nil {
+				s.execError.Store(err)
+			}
 			if !utils.IsContextCanceledError(err) {
 				err = s.handleEventError(err, ddlJob.startLocation, ddlJob.currentLocation, true, ddlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
@@ -1198,7 +1200,9 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *dbconn.
 			}
 		}
 		if err != nil {
-			s.execError.Store(err)
+			if s.execError.Load() == nil {
+				s.execError.Store(err)
+			}
 			if !utils.IsContextCanceledError(err) {
 				err = s.handleEventError(err, ddlJob.startLocation, ddlJob.currentLocation, true, ddlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
@@ -1250,7 +1254,9 @@ func (s *Syncer) syncDML(
 	}
 
 	fatalF := func(affected int, err error) {
-		s.execError.Store(err)
+		if terror.ErrDBExecuteFailed.Equal(err) || s.execError.Load() == nil {
+			s.execError.Store(err)
+		}
 		if !utils.IsContextCanceledError(err) {
 			err = s.handleEventError(err, jobs[affected].startLocation, jobs[affected].currentLocation, false, "")
 			s.runFatalChan <- unit.NewProcessError(err)
@@ -1270,17 +1276,6 @@ func (s *Syncer) syncDML(
 			}
 		})
 
-		select {
-		case <-tctx.Ctx.Done():
-			// do not execute queries anymore, because they should be failed with a done context.
-			// and avoid some errors like:
-			//  - `driver: bad connection` for `BEGIN`
-			//  - `sql: connection is already closed` for `BEGIN`
-			tctx.L().Info("skip some remaining DML jobs in the job chan because the context is done", zap.Int("count", len(jobs)))
-			return 0, tctx.Ctx.Err() // return the error to trigger `fatalF`.
-		default:
-		}
-
 		queries := make([]string, 0, len(jobs))
 		args := make([][]interface{}, 0, len(jobs))
 		for _, j := range jobs {
@@ -1291,7 +1286,10 @@ func (s *Syncer) syncDML(
 			t := v.(int)
 			time.Sleep(time.Duration(t) * time.Second)
 		})
-		return db.ExecuteSQL(tctx, queries, args...)
+		// use background context to execute sqls as much as possible
+		ctctx, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
+		defer cancel()
+		return db.ExecuteSQL(ctctx, queries, args...)
 	}
 
 	var err error
@@ -1397,6 +1395,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	if flushCheckpoint {
 		if err = s.flushCheckPoints(); err != nil {
 			tctx.L().Warn("fail to flush checkpoints when starting task", zap.Error(err))
+			return err
 		}
 	}
 	if delLoadTask {
@@ -1505,6 +1504,23 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		cancel()
 	}()
 
+	// syncing progress with sharding DDL group
+	// 1. use the global streamer to sync regular binlog events
+	// 2. sharding DDL synced for some sharding groups
+	//    * record first pos, last pos, target schema, target table as re-sync info
+	// 3. use the re-sync info recorded in step.2 to create a new streamer
+	// 4. use the new streamer re-syncing for this sharding group
+	// 5. in sharding group's re-syncing
+	//    * ignore other tables' binlog events
+	//    * compare last pos with current binlog's pos to determine whether re-sync completed
+	// 6. use the global streamer to continue the syncing
+	var (
+		shardingReSyncCh        = make(chan *ShardingReSync, 10)
+		shardingReSync          *ShardingReSync
+		savedGlobalLastLocation binlog.Location
+		traceSource             = fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
+	)
+
 	defer func() {
 		if err1 := recover(); err1 != nil {
 			failpoint.Inject("ExitAfterSaveOnlineDDL", func() {
@@ -1516,9 +1532,22 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		s.jobWg.Wait()
-		if err2 := s.flushCheckPoints(); err2 != nil {
-			tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
+		var (
+			err2            error
+			exitSafeModeLoc binlog.Location
+		)
+		if binlog.CompareLocation(currentLocation, savedGlobalLastLocation, s.cfg.EnableGTID) > 0 {
+			exitSafeModeLoc = currentLocation.Clone()
+		} else {
+			exitSafeModeLoc = savedGlobalLastLocation.Clone()
 		}
+		s.checkpoint.SaveSafeModeExitPoint(&exitSafeModeLoc)
+		if err2 = s.execError.Load(); err2 != nil && !terror.ErrDBExecuteFailed.Equal(err2) {
+			err2 = s.checkpoint.FlushSafeModeExitPoint(s.tctx)
+		} else {
+			err2 = s.flushCheckPoints()
+		}
+		tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
 	}()
 
 	s.start = time.Now()
@@ -1537,23 +1566,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	// it's eventual consistency.
 	safeMode := sm.NewSafeMode()
 	s.enableSafeModeInitializationPhase(tctx, safeMode)
-
-	// syncing progress with sharding DDL group
-	// 1. use the global streamer to sync regular binlog events
-	// 2. sharding DDL synced for some sharding groups
-	//    * record first pos, last pos, target schema, target table as re-sync info
-	// 3. use the re-sync info recorded in step.2 to create a new streamer
-	// 4. use the new streamer re-syncing for this sharding group
-	// 5. in sharding group's re-syncing
-	//    * ignore other tables' binlog events
-	//    * compare last pos with current binlog's pos to determine whether re-sync completed
-	// 6. use the global streamer to continue the syncing
-	var (
-		shardingReSyncCh        = make(chan *ShardingReSync, 10)
-		shardingReSync          *ShardingReSync
-		savedGlobalLastLocation binlog.Location
-		traceSource             = fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
-	)
 
 	closeShardingResync := func() error {
 		if shardingReSync == nil {
@@ -1586,6 +1598,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 
 	for {
+		if s.execError.Load() != nil {
+			return nil
+		}
 		s.currentLocationMu.Lock()
 		s.currentLocationMu.currentLocation = currentLocation
 		s.currentLocationMu.Unlock()
@@ -1744,8 +1759,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if safeModeExitLoc != nil && !s.isReplacingErr && shardingReSync == nil {
 			if binlog.CompareLocation(currentLocation, *safeModeExitLoc, s.cfg.EnableGTID) >= 0 {
 				s.checkpoint.SaveSafeModeExitPoint(nil)
-				err = safeMode.Add(tctx, -1)
-				if err != nil {
+				// must flush here to avoid the following situation:
+				// 1. quit safe mode
+				// 2. push forward and replicate some sqls after safeModeExitPoint to downstream
+				// 3. quit because of network error, fail to flush global checkpoint and new safeModeExitPoint to downstream
+				// 4. restart again, quit safe mode at safeModeExitPoint, but some sqls after this location have already been replicated to the downstream
+				if err = s.checkpoint.FlushSafeModeExitPoint(s.tctx); err != nil {
+					return err
+				}
+				if err = safeMode.Add(tctx, -1); err != nil {
 					return err
 				}
 			}

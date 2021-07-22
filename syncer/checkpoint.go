@@ -216,6 +216,9 @@ type CheckPoint interface {
 	// FlushPointWithTableInfo flushed the table point with given table info
 	FlushPointWithTableInfo(tctx *tcontext.Context, sourceSchema, sourceTable string, ti *model.TableInfo) error
 
+	// FlushSafeModeExitPoint flushed the global checkpoint's with given table info
+	FlushSafeModeExitPoint(tctx *tcontext.Context) error
+
 	// GlobalPoint returns the global binlog stream's checkpoint
 	// corresponding to Meta.Pos and Meta.GTID
 	GlobalPoint() binlog.Location
@@ -285,7 +288,8 @@ type RemoteCheckPoint struct {
 	// this variable is mainly used to decide status of safe mode, so it is access when
 	//  - init safe mode
 	//  - checking in sync and if passed, unset it
-	safeModeExitPoint *binlog.Location
+	safeModeExitPoint          *binlog.Location
+	needFlushSafeModeExitPoint bool
 
 	logCtx *tcontext.Context
 }
@@ -385,7 +389,11 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, loc
 // SaveSafeModeExitPoint implements CheckPoint.SaveSafeModeExitPoint
 // shouldn't call concurrently (only called before loop in Syncer.Run and in loop to reset).
 func (cp *RemoteCheckPoint) SaveSafeModeExitPoint(point *binlog.Location) {
-	cp.safeModeExitPoint = point
+	if cp.safeModeExitPoint == nil || point == nil ||
+		binlog.CompareLocation(*point, *cp.safeModeExitPoint, cp.cfg.EnableGTID) > 0 {
+		cp.safeModeExitPoint = point
+		cp.needFlushSafeModeExitPoint = true
+	}
 }
 
 // SafeModeExitPoint implements CheckPoint.SafeModeExitPoint.
@@ -506,7 +514,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	sqls := make([]string, 0, 100)
 	args := make([][]interface{}, 0, 100)
 
-	if cp.globalPoint.outOfDate() || cp.globalPointSaveTime.IsZero() {
+	if cp.globalPoint.outOfDate() || cp.globalPointSaveTime.IsZero() || cp.needFlushSafeModeExitPoint {
 		locationG := cp.GlobalPoint()
 		sqlG, argG := cp.genUpdateSQL(globalCpSchema, globalCpTable, locationG, cp.safeModeExitPoint, nil, true)
 		sqls = append(sqls, sqlG)
@@ -556,6 +564,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	}
 
 	cp.globalPointSaveTime = time.Now()
+	cp.needFlushSafeModeExitPoint = false
 	return nil
 }
 
@@ -598,6 +607,30 @@ func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, sour
 	}
 	point.flush()
 
+	return nil
+}
+
+// FlushSafeModeExitPoint implements CheckPoint.FlushSafeModeExitPoint.
+func (cp *RemoteCheckPoint) FlushSafeModeExitPoint(tctx *tcontext.Context) error {
+	cp.RLock()
+	defer cp.RUnlock()
+
+	sqls := make([]string, 1)
+	args := make([][]interface{}, 1)
+
+	// use FlushedGlobalPoint here to avoid update global checkpoint
+	locationG := cp.FlushedGlobalPoint()
+	sqls[0], args[0] = cp.genUpdateSQL(globalCpSchema, globalCpTable, locationG, cp.safeModeExitPoint, nil, true)
+
+	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
+	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
+	defer cancel()
+	_, err := cp.dbConn.ExecuteSQL(tctx2, sqls, args...)
+	if err != nil {
+		return err
+	}
+
+	cp.needFlushSafeModeExitPoint = false
 	return nil
 }
 

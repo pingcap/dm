@@ -35,31 +35,31 @@ func (s *Syncer) enableSafeModeInitializationPhase(tctx *tcontext.Context, safeM
 	if s.checkpoint.SafeModeExitPoint() != nil {
 		//nolint:errcheck
 		safeMode.Add(tctx, 1) // enable and will revert after pass SafeModeExitLoc
-		s.tctx.L().Info("enable safe-mode because of inconsistent dump, will exit at", zap.Stringer("location", *s.checkpoint.SafeModeExitPoint()))
-	}
+		s.tctx.L().Info("enable safe-mode for safe mode exit point, will exit at", zap.Stringer("location", *s.checkpoint.SafeModeExitPoint()))
+	} else {
+		//nolint:errcheck
+		safeMode.Add(tctx, 1) // enable and will revert after 2 * CheckpointFlushInterval
+		go func() {
+			defer func() {
+				err := safeMode.Add(tctx, -1)
+				if err != nil {
+					// send error to the fatal chan to interrupt the process
+					s.runFatalChan <- unit.NewProcessError(err)
+				}
+			}()
 
-	//nolint:errcheck
-	safeMode.Add(tctx, 1) // enable and will revert after 2 * CheckpointFlushInterval
-	go func() {
-		defer func() {
-			err := safeMode.Add(tctx, -1)
-			if err != nil {
-				// send error to the fatal chan to interrupt the process
-				s.runFatalChan <- unit.NewProcessError(err)
+			initPhaseSeconds := s.cfg.CheckpointFlushInterval * 2
+
+			failpoint.Inject("SafeModeInitPhaseSeconds", func(val failpoint.Value) {
+				seconds, _ := val.(int)
+				initPhaseSeconds = seconds
+				s.tctx.L().Info("set initPhaseSeconds", zap.String("failpoint", "SafeModeInitPhaseSeconds"), zap.Int("value", seconds))
+			})
+			s.tctx.L().Info("enable safe-mode because of task initialization", zap.Int("duration in seconds", initPhaseSeconds))
+			select {
+			case <-tctx.Context().Done():
+			case <-time.After(time.Duration(initPhaseSeconds) * time.Second):
 			}
 		}()
-
-		initPhaseSeconds := s.cfg.CheckpointFlushInterval * 2
-
-		failpoint.Inject("SafeModeInitPhaseSeconds", func(val failpoint.Value) {
-			seconds, _ := val.(int)
-			initPhaseSeconds = seconds
-			s.tctx.L().Info("set initPhaseSeconds", zap.String("failpoint", "SafeModeInitPhaseSeconds"), zap.Int("value", seconds))
-		})
-		s.tctx.L().Info("enable safe-mode because of task initialization", zap.Int("duration in seconds", initPhaseSeconds))
-		select {
-		case <-tctx.Context().Done():
-		case <-time.After(time.Duration(initPhaseSeconds) * time.Second):
-		}
-	}()
+	}
 }
