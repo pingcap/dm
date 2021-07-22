@@ -131,7 +131,7 @@ function run() {
 	run_sql_file $cur/data/gho.db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_file $cur/data/gho.db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 	run_sql_file $cur/data/pt.db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-	run_sql_file $cur/data/pt.db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2	sleep 2
+	run_sql_file $cur/data/pt.db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 	sleep 2
 
 	echo "use sync_diff_inspector to check increment2 data now!"
