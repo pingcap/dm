@@ -1069,7 +1069,7 @@ func (s *Syncer) flushCheckPoints() error {
 	// optimistic shard info, DM-master may resolved the optimistic lock and let other worker execute DDL. So after this
 	// worker resume, it can not execute the DML/DDL in old binlog because of downstream table structure mismatching.
 	// We should find a way to (compensating) implement a transaction containing interaction with both etcd and SQL.
-	if err != nil && !terror.ErrDBExecuteFailed.Equal(err) {
+	if err != nil && (terror.ErrDBExecuteFailed.Equal(err) || terror.ErrDBUnExpect.Equal(err)) {
 		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint",
 			zap.Stringer("checkpoint", s.checkpoint),
 			zap.Error(err))
@@ -1164,9 +1164,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *dbconn.
 		// If downstream has error (which may cause by tracker is more compatible than downstream), we should stop handling
 		// this job, set `s.execError` to let caller of `addJob` discover error
 		if err != nil {
-			if terror.ErrDBExecuteFailed.Equal(err) || s.execError.Load() == nil {
-				s.execError.Store(err)
-			}
+			s.execError.Store(err)
 			if !utils.IsContextCanceledError(err) {
 				err = s.handleEventError(err, ddlJob.startLocation, ddlJob.currentLocation, true, ddlJob.originSQL)
 				s.runFatalChan <- unit.NewProcessError(err)
@@ -1258,9 +1256,7 @@ func (s *Syncer) syncDML(
 	}
 
 	fatalF := func(affected int, err error) {
-		if terror.ErrDBExecuteFailed.Equal(err) || s.execError.Load() == nil {
-			s.execError.Store(err)
-		}
+		s.execError.Store(err)
 		if !utils.IsContextCanceledError(err) {
 			err = s.handleEventError(err, jobs[affected].startLocation, jobs[affected].currentLocation, false, "")
 			s.runFatalChan <- unit.NewProcessError(err)
@@ -1548,7 +1544,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			exitSafeModeLoc = savedGlobalLastLocation.Clone()
 		}
 		s.checkpoint.SaveSafeModeExitPoint(&exitSafeModeLoc)
-		if err2 = s.execError.Load(); err2 != nil && !terror.ErrDBExecuteFailed.Equal(err2) {
+		if err2 = s.execError.Load(); err2 != nil && (terror.ErrDBExecuteFailed.Equal(err2) || terror.ErrDBUnExpect.Equal(err2)) {
 			err2 = s.checkpoint.FlushSafeModeExitPoint(s.tctx)
 		} else {
 			err2 = s.flushCheckPoints()
