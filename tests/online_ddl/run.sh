@@ -48,6 +48,8 @@ function run() {
 	# imitate a DM task is started during the running of online DDL tool
 	run_sql_source1 "create table online_ddl.gho_ignore (c int); create table online_ddl._gho_ignore_gho (c int);"
 	run_sql_source1 "create table online_ddl.pt_ignore (c int); create table online_ddl._pt_ignore_new (c int);"
+	# run_sql_source1 "create table online_ddl.gho_ignore (c int, unique key (`c`)); create table online_ddl._gho_ignore_gho (c int, unique key (`c`));"
+	# run_sql_source1 "create table online_ddl.pt_ignore (c int, unique key (`c`)); create table online_ddl._pt_ignore_new (c int, unique key (`c`));"
 
 	# start DM task only
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
@@ -89,20 +91,20 @@ function run() {
 	run_sql_file_online_ddl $cur/data/pt.db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl pt
 
 	for ((k = 0; k < 10; k++)); do
-		run_sql_tidb "show create table online_ddl.t_gho_target"
-		run_sql_tidb "show create table online_ddl.t_pt_target"
+		run_sql_tidb "show create table online_ddl.gho_t_target"
+		run_sql_tidb "show create table online_ddl.pt_t_target"
 		check_contains "info_json" && break || true
 		sleep 1
 	done
 	check_contains "info_json"
 
-	run_sql_tidb "show create table online_ddl.t_gho_target"
-	run_sql_tidb "show create table online_ddl.t_pt_target"
+	run_sql_tidb "show create table online_ddl.gho_t_target"
+	run_sql_tidb "show create table online_ddl.pt_t_target"
 	check_not_contains "KEY \`name\`"
 
 	# manually create index to pass check_sync_diff
-	run_sql_tidb "alter table online_ddl.t_gho_target add key name (name)"
-	run_sql_tidb "alter table online_ddl.t_pt_target add key name (name)"
+	run_sql_tidb "alter table online_ddl.gho_t_target add key name (name)"
+	run_sql_tidb "alter table online_ddl.pt_t_target add key name (name)"
 
 	echo "use sync_diff_inspector to check increment data"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config_gho.toml

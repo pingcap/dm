@@ -371,15 +371,20 @@ func (s *Storage) CheckAndUpdate(
 	return nil
 }
 
+// RealOnlinePlugin suport ghost and pt
 // Ghost handles gh-ost online ddls (not complete, don't need to review it)
 // _*_gho ghost table
 // _*_ghc ghost changelog table
 // _*_del ghost transh table.
+// PT handles pt online schema changes
+// (_*).*_new ghost table
+// (_*).*_old ghost trash table
+// we don't support `--new-table-name` flag.
 type RealOnlinePlugin struct {
 	storge *Storage
 }
 
-// NewGhost returns gh-oat online plugin.
+// NewRealOnlinePlugin returns real online plugin.
 func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
 	r := &RealOnlinePlugin{
 		storge: NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", "gh-ost"))), cfg), // create a context for logger
