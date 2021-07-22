@@ -1272,9 +1272,11 @@ func (s *Syncer) syncDML(
 				successF()
 				clearF()
 			} else {
+				failpoint.Inject("noJobInQueueLog", func() {
+					tctx.L().Debug("no job in queue, update lag to zero", zap.String(
+						"workerLagKey", workerLagKey), zap.Int64("current ts", time.Now().Unix()))
+				})
 				// update lag metric even if there is no job in the queue
-				tctx.L().Debug("no job in queue, update lag to zero",
-					zap.String("workerLagKey", workerLagKey), zap.Int64("current ts", time.Now().Unix()))
 				s.updateReplicationLag(nil, workerLagKey)
 			}
 		}
