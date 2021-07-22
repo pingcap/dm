@@ -55,16 +55,9 @@ jobs:
 
       - name: Feishu notification
         if: ${{ failure() }}
-        uses: whatwewant/action-robot-feishu@v0.0.10
-        with:
-          url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
-          title: FIX ME
-          text: |
-            repository: ${{ github.repository }}
-            committer: ${{ github.actor }}
-            compare: ${{ github.event.compare }}
-            job status: ${{ job.status }}
-            job url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
+        env:
+          FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+        run: go run tests/_utils/send_lark_notify.go
 
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
@@ -177,16 +170,9 @@ jobs:
 
       - name: Feishu notification
         if: ${{ failure() }}
-        uses: whatwewant/action-robot-feishu@v0.0.10
-        with:
-          url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
-          title: FIX ME
-          text: |
-            repository: ${{ github.repository }}
-            committer: ${{ github.actor }}
-            compare: ${{ github.event.compare }}
-            job status: ${{ job.status }}
-            job url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
+        env:
+          FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+        run: go run tests/_utils/send_lark_notify.go
 
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
@@ -249,17 +235,9 @@ jobs:
 
       - name: Feishu notification
         if: ${{ failure() }}
-        uses: whatwewant/action-robot-feishu@v0.0.10
-        with:
-          url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
-          title: FIX ME
-          text: |
-            repository: ${{ github.repository }}
-            committer: ${{ github.actor }}
-            compare: ${{ github.event.compare }}
-            job status: ${{ job.status }}
-            job url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
-
+        env:
+          FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+        run: go run tests/_utils/send_lark_notify.go
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
         if: ${{ failure() }}
