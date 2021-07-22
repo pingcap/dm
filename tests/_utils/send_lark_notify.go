@@ -59,7 +59,6 @@ func main() {
 		}
 	  }`
 	jsonStr := fmt.Sprintf(msgTMPL, repo, committer, jobURL)
-	fmt.Println(jsonStr)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(jsonStr)))
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
