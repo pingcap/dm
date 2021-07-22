@@ -526,7 +526,7 @@ func AddGSetWithPurged(ctx context.Context, gset gtid.Set, conn *sql.Conn) (gtid
 }
 
 // AdjustSQLModeCompatible adjust downstream sql mode to compatible.
-// When upstream's datatime is 2020-00-00, 2020-00-01, 2020-06-00
+// TODO: When upstream's datatime is 2020-00-00, 2020-00-01, 2020-06-00
 // and so on, downstream will be 2019-11-30, 2019-12-01, 2020-05-31,
 // as if set the 'NO_ZERO_IN_DATE', 'NO_ZERO_DATE'.
 // This is because the implementation of go-mysql, that you can see
@@ -550,15 +550,15 @@ func AdjustSQLModeCompatible(sqlModes string) (string, error) {
 
 	mode, err := tmysql.GetSQLMode(sqlModes)
 	if err != nil {
-		return "", err
+		return sqlModes, err
 	}
 	disableMode, err2 := tmysql.GetSQLMode(disable)
 	if err2 != nil {
-		return "", err2
+		return sqlModes, err2
 	}
 	enableMode, err3 := tmysql.GetSQLMode(enable)
 	if err3 != nil {
-		return "", err3
+		return sqlModes, err3
 	}
 	// About this bit manipulation, details can be seen
 	// https://github.com/pingcap/dm/pull/1869#discussion_r669771966
