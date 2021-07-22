@@ -17,7 +17,6 @@ mysql-instances:
     block-allow-list:  "instance"
     route-rules: ["gho-sharding-route-rules-table", "pt-sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["gho-instance-1", "pt-instance-1"]
-    # column-mapping-rules: ["instance-1"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -30,7 +29,6 @@ mysql-instances:
     block-allow-list:  "instance"
     route-rules: ["gho-sharding-route-rules-table", "pt-sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["gho-instance-2", "pt-instance-2"]
-    # column-mapping-rules: ["instance-2"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -60,22 +58,6 @@ routes:
     schema-pattern: online_ddl
     target-schema: online_ddl
 
-# column-mappings:
-#   instance-1:
-#     schema-pattern: "online_ddl"
-#     table-pattern: "t*"
-#     expression: "partition id"
-#     source-column: "id"
-#     target-column: "id"
-#     arguments: ["1", "", "t"]
-
-#   instance-2:
-#     schema-pattern: "online_ddl"
-#     table-pattern: "t*"
-#     expression: "partition id"
-#     source-column: "id"
-#     target-column: "id"
-#     arguments: ["2", "", "t"]
 column-mappings:
   gho-instance-1:
     schema-pattern: "online_ddl"

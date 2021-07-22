@@ -48,8 +48,6 @@ function run() {
 	# imitate a DM task is started during the running of online DDL tool
 	run_sql_source1 "create table online_ddl.gho_ignore (c int); create table online_ddl._gho_ignore_gho (c int);"
 	run_sql_source1 "create table online_ddl.pt_ignore (c int); create table online_ddl._pt_ignore_new (c int);"
-	# run_sql_source1 "create table online_ddl.gho_ignore (c int, unique key (`c`)); create table online_ddl._gho_ignore_gho (c int, unique key (`c`));"
-	# run_sql_source1 "create table online_ddl.pt_ignore (c int, unique key (`c`)); create table online_ddl._pt_ignore_new (c int, unique key (`c`));"
 
 	# start DM task only
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
