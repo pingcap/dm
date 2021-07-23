@@ -1272,7 +1272,7 @@ func (s *Syncer) syncDML(
 		failpoint.Inject("failSecondJobOfEvent", func() {
 			if failExecuteSQL && failOnce.CAS(false, true) {
 				s.tctx.L().Info("trigger failSecondJobOfEvent")
-				failpoint.Return(0, errors.New("failSecondJobOfEvent"))
+				failpoint.Return(0, terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJobOfEvent"), "mock"))
 			}
 		})
 
