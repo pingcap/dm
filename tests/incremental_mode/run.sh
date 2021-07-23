@@ -174,6 +174,7 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
+  sleep 3
 	# check not specify binlog name could also update active relay log
 	if [ $worker1_run_source_1 -gt 0 ]; then
 		grep -E ".*current earliest active relay log.*$name1" $WORK_DIR/worker1/log/dm-worker.log
