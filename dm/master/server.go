@@ -129,7 +129,6 @@ func NewServer(cfg *Config) *Server {
 	server.pessimist = shardddl.NewPessimist(&logger, server.getTaskResources)
 	server.optimist = shardddl.NewOptimist(&logger)
 	server.closed.Store(true)
-
 	setUseTLS(&cfg.Security)
 
 	return &server
@@ -223,6 +222,12 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	go func() {
 		defer s.bgFunWg.Done()
 		s.electionNotify(ctx)
+	}()
+
+	s.bgFunWg.Add(1)
+	go func() {
+		defer s.bgFunWg.Done()
+		s.StartOpenAPIServer(ctx)
 	}()
 
 	runBackgroundOnce.Do(func() {
@@ -1094,30 +1099,30 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 		if err != nil {
 			return cfgs, err
 		}
-
-		dbConfig := cfg.GenerateDBConfig()
-
-		fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
-		if err != nil {
+		if err := checkAndAdjustSourceConfig(ctx, cfg); err != nil {
 			return cfgs, err
 		}
-		if err = cfg.Adjust(ctx, fromDB.DB); err != nil {
-			fromDB.Close()
-			return cfgs, err
-		}
-		if _, err = cfg.Yaml(); err != nil {
-			fromDB.Close()
-			return cfgs, err
-		}
-
-		if err = cfg.Verify(); err != nil {
-			return cfgs, err
-		}
-
-		fromDB.Close()
 		cfgs[i] = cfg
 	}
 	return cfgs, nil
+}
+
+func checkAndAdjustSourceConfig(ctx context.Context, cfg *config.SourceConfig) error {
+	dbConfig := cfg.GenerateDBConfig()
+	fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
+	if err != nil {
+		return err
+	}
+	defer fromDB.Close()
+	if err = cfg.Adjust(ctx, fromDB.DB); err != nil {
+		fromDB.Close()
+		return err
+	}
+	if _, err = cfg.Yaml(); err != nil {
+		fromDB.Close()
+		return err
+	}
+	return cfg.Verify()
 }
 
 func parseSourceConfig(contents []string) ([]*config.SourceConfig, error) {

@@ -18,3 +18,5 @@ tidb-slow.log
 /monitoring/rules/dm_worker.rules.yml
 mysql.*.log
 .python-version
+openapi/cli/
+default.master-1/*

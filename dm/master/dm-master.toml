@@ -10,6 +10,9 @@ master-addr = ":8261"
 # addr(i.e. 'host:port') to advertise to the public
 advertise-addr = "127.0.0.1:8261"
 
+# openapi-addr(i.e. 'host:port') is dm open api server listen address
+openapi-addr = "127.0.0.1:1323"
+
 # human-readable name for this DM-master member
 name = "dm-master"
 

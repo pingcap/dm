@@ -1,0 +1,856 @@
+openapi: "3.0.0"
+info:
+  title: DM OpenAPI 文档
+  version: "2.0.6"
+externalDocs:
+  description: "DM 相关文档"
+  url: "https://docs.pingcap.com/zh/tidb-data-migration/stable"
+servers:
+  - url: "https://you.domain.com/"
+tags:
+  - name: source
+    description: 数据源相关
+    externalDocs:
+      description: doc
+      url: "https://docs.pingcap.com/zh/tidb-data-migration/stable/quick-start-create-source"
+  - name: task
+    description: 迁移任务相关
+    externalDocs:
+      description: doc
+      url: "https://docs.pingcap.com/zh/tidb-data-migration/stable/quick-create-migration-task"
+
+paths:
+  /api/v1/sources:
+    post:
+      tags:
+        - source
+      summary: "创建新的数据源"
+      operationId: "DMAPICreateSource"
+      requestBody:
+        description: "请求体"
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/Source"
+      responses:
+        "201":
+          description: "创建成功"
+        "400":
+          description: "创建失败"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/ErrorWithMessage"
+    get:
+      tags:
+        - source
+      summary: "获取所有数据源列表"
+      operationId: "DMAPIGetSourceList"
+      responses:
+        "200":
+          description: "数据源列表"
+          content:
+            "application/json":
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Source"
+  /api/v1/sources/{source-name}:
+    delete:
+      tags:
+        - source
+      summary: "删除数据源"
+      operationId: "DMAPIDeleteSource"
+      parameters:
+        - name: "source-name"
+          in: path
+          description: "全局唯一的数据源名字"
+          required: true
+          schema:
+            type: string
+            example: "mysql-01"
+      responses:
+        "204":
+          description: "删除成功"
+        "400":
+          description: "删除失败"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/ErrorWithMessage"
+  /api/v1/sources/{source-name}/status:
+    get:
+      tags:
+        - source
+      summary: "查询数据源的当前状态"
+      operationId: "DMAPIGetSourceStatus"
+      parameters:
+        - name: source-name
+          in: path
+          description: "全局唯一的数据源名"
+          required: true
+          schema:
+            type: string
+            example: "mysql-replica-01"
+      responses:
+        "200":
+          description: "获取成功"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/SourceStatus"
+        "400":
+          description: "获取失败"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/ErrorWithMessage"
+  /api/v1/sources/{source-name}/start-relay:
+    patch:
+      tags:
+        - source
+      summary: "为数据源开启 relay log 功能"
+      operationId: "DMAPIStartRelay"
+      parameters:
+        - name: "source-name"
+          in: path
+          description: "全局唯一的数据源名字"
+          required: true
+          schema:
+            type: string
+            example: "mysql-01"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/StartRelayRequest"
+      responses:
+        "200":
+          description: "开启成功"
+        "400":
+          description: "开启失败"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/ErrorWithMessage"
+  /api/v1/sources/{source-name}/stop-relay:
+    patch:
+      tags:
+        - source
+      summary: "为数据源关闭 relay log 功能"
+      operationId: "DMAPIStopRelay"
+      parameters:
+        - name: "source-name"
+          in: path
+          description: "全局唯一的数据源名字"
+          required: true
+          schema:
+            type: string
+            example: "mysql-01"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/WorkerNameRequest"
+      responses:
+        "200":
+          description: "开启成功"
+        "400":
+          description: "开启失败"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/ErrorWithMessage"
+
+  /api/v1/tasks:
+    post:
+      tags:
+        - task
+      summary: "提交并开始任务"
+      operationId: "DMAPIStartTask"
+      requestBody:
+        description: "请求体"
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/Task"
+      responses:
+        "201":
+          description: "创建任务成功成功"
+        "400":
+          description: "创建失败"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/ErrorWithMessage"
+    get:
+      tags:
+        - task
+      summary: "获取当前所有任务的信息"
+      operationId: "DMAPIGetTaskList"
+      responses:
+        "200":
+          description: "当前 task 的列表"
+          content:
+            "application/json":
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+        "400":
+          description: "创建失败"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/ErrorWithMessage"
+  /api/v1/tasks/{task-name}:
+    delete:
+      tags:
+        - task
+      summary: "删除任务"
+      operationId: "DMAPIDeleteTask"
+      parameters:
+        - name: task-name
+          in: path
+          description: "全局唯一的任务名"
+          required: true
+          schema:
+            type: string
+            example: "task-1"
+      responses:
+        "204":
+          description: "删除成功"
+        "400":
+          description: "删除失败"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/ErrorWithMessage"
+  /api/v1/tasks/{task-name}/status:
+    get:
+      tags:
+        - task
+      summary: "查询任务当前状态"
+      operationId: "DMAPIGetTaskStatus"
+      parameters:
+        - name: task-name
+          in: path
+          description: "全局唯一的任务名"
+          required: true
+          schema:
+            type: string
+            example: "task-1"
+      responses:
+        "200":
+          description: "获取成功"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/SubTaskStatus"
+        "400":
+          description: "获取失败"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/ErrorWithMessage"
+
+components:
+  schemas:
+    Security:
+      type: object
+      description: "数据源 ssl 配置,从接口获取数据源配置时，该字段会被隐藏"
+      nullable: true
+      properties:
+        ssl_ca_content:
+          type: string
+          example: ""
+          description: "根证书文件内容"
+          nullable: true
+        ssl_cert_content:
+          type: string
+          example: ""
+          description: "PEM格式/X509格式证书的文件内容"
+          nullable: true
+        ssl_key_content:
+          type: string
+          example: ""
+          description: "X509格式的私钥文件内容"
+          nullable: true
+    Purge:
+      description: "relay log 清理策略配置"
+      type: object
+      properties:
+        interval:
+          type: integer
+          default: 3600
+          description: "定期检查 relay log 是否过期的间隔时间，默认值：3600，单位：秒"
+          nullable: true
+        expires:
+          type: integer
+          default: 0
+          description: "relay log 的过期时间，默认值为 0，单位：小时。未由 relay 处理单元进行写入、或已有数据迁移任务当前或未来不需要读取的 relay log 在超过过期时间后会被 DM 删除。如果不设置则 DM 不会自动清理过期的 relay log。"
+          nullable: true
+        remain_space:
+          type: integer
+          default: 15
+          description: "设置最小的可用磁盘空间。当磁盘可用空间小于这个值时，DM-worker 会尝试删除 relay log，默认值：15，单位：GB"
+          nullable: true
+    RelayStatus:
+      description: "relay log 的状态"
+      type: object
+      properties:
+        master_binlog:
+          type: string
+          example: "(mysql-bin.000001, 1979)"
+          description: "上游 binlog file的信息"
+        master_binlog_gtid:
+          type: string
+          example: "e9a1fc22-ec08-11e9-b2ac-0242ac110003:1-7849"
+          description: "上游 binlog 的 GTID"
+        relay_sub_dir:
+          type: string
+          description: "存储 relay log 的目录"
+          example: "b8ba86a4-a3d5-11eb-95ce-1add06868d30.000001"
+        relay_binlog_gtid:
+          type: string
+          example: "e9a1fc22-ec08-11e9-b2ac-0242ac110003:1-7849"
+          description: "relay 当前的 GTID"
+        relay_catch_up_master:
+          type: boolean
+          description: "relay log 是否追上上游的进度"
+        stage:
+          type: string
+          description: "当前状态"
+          example: "Running"
+    StartRelayRequest:
+      description: 操作是否开启 relay 的请求
+      type: object
+      properties:
+        worker_name:
+          type: string
+          example: "worker-1"
+          description: "woker 的名字，需要全局唯一"
+        relay_binlog_name:
+          type: string
+          example: "mysql-bin.000002"
+          description: "拉取上游 binlog 的起始文件名"
+          nullable: true
+        relay_binlog_gtid:
+          type: string
+          example: "e9a1fc22-ec08-11e9-b2ac-0242ac110003:1-7849"
+          description: "拉取上游 binlog 的起始 GTID"
+          nullable: true
+        relay_dir:
+          type: string
+          default: "./relay_log"
+          description: "存储 relay log 的目录"
+          nullable: true
+        pruge:
+          $ref: "#/components/schemas/Purge"
+    WorkerNameRequest:
+      description: 和 worker 相关的请求
+      type: object
+      properties:
+        worker_name:
+          type: string
+          example: "worker-1"
+          description: "woker 的名字，需要全局唯一"
+    BinlogEventFilterRule:
+      description: "binlog 级别的过规则"
+      type: object
+      properties:
+        rule_name:
+          type: string
+          example: "rule-1"
+          description: "过滤规则名"
+        schema_pattern:
+          type: string
+          example: "test_*"
+          description: "数据库名规则"
+        table_pattern:
+          type: string
+          example: "t_*"
+          description: "数据表名规则"
+        events:
+          description: "匹配哪些 event 类型"
+          type: array
+          items:
+            type: string
+            description: "事件类型"
+        action:
+          type: string
+          example: "Ignore"
+          description: "Do 白名单 Ignore 黑名单"
+          enum:
+            - "Do"
+            - "Ignore"
+    SourceStatus:
+      description: "数据源的状态"
+      type: object
+      properties:
+        source_name:
+          type: string
+          example: "mysql-replica-01"
+          description: "数据源 ID"
+        worker_name:
+          type: string
+          example: "worker-1"
+          description: "当前 source 绑定的 worker"
+        enable_relay:
+          type: boolean
+          example: false
+          default: false
+          description: "是否开启 relay log，默认值为 false"
+        relay_status:
+          $ref: "#/components/schemas/RelayStatus"
+    Source:
+      type: object
+      description: "数据源"
+      properties:
+        source_name:
+          type: string
+          example: "mysql-01"
+          description: "数据源名字，需要全局唯一"
+        host:
+          type: string
+          example: "127.0.0.1"
+          description: "数据源地址"
+        port:
+          type: integer
+          example: 3306
+          description: "数据源端口"
+        user:
+          type: string
+          example: "root"
+          description: "数据库用户名"
+        password:
+          type: string
+          example: "123456"
+          description: "数据库密码"
+        enable_gtid:
+          type: boolean
+          example: false
+          default: false
+          description: "是否使用 GTID 方式从上游拉取 binlog"
+        security:
+          $ref: "#/components/schemas/Security"
+        case_sensitive:
+          type: boolean
+          example: false
+          default: false
+          description: "Binlog event filter 标识符是否大小写敏感。"
+    TaskTargetDataBase:
+      type: object
+      description: "下游数据库配置"
+      properties:
+        host:
+          type: string
+          example: "127.0.0.1"
+          description: "数据源地址"
+        port:
+          type: integer
+          example: 3306
+          description: "数据源端口"
+        user:
+          type: string
+          example: "root"
+          description: "数据库用户名"
+        password:
+          type: string
+          example: "123456"
+          description: "数据库密码"
+        security:
+          $ref: "#/components/schemas/Security"
+        session:
+          type: array
+          description: "设置 TiDB 的 session 变量，在 v1.0.6 版本引入。更多变量及解释参见 https://docs.pingcap.com/zh/tidb/stable/system-variables"
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+                example: "sql_mode"
+              value:
+                type: string
+                example: "ANSI_QUOTES"
+    TaskRouteRule:
+      type: object
+      description: "上游和下游表之间的路由 table routing 规则"
+      properties:
+        rule_name:
+          type: string
+          example: "rule-1"
+          description: "规则名"
+        schema_pattern:
+          type: string
+          example: "test_*"
+          description: 库名匹配规则，支持通配符 "*" 和 "?"
+        table_pattern:
+          type: string
+          example: "t_*"
+          description: 表名匹配规则，支持通配符 "*" 和 "?"
+        target_schema:
+          type: string
+          example: "test"
+          description: "目标库名称"
+        target_table:
+          type: string
+          example: "t"
+          description: "目标表名称"
+    TaskBlockAllowRule:
+      type: object
+      description: "黑白名单规则"
+      properties:
+        do_dbs:
+          description: "迁移哪些库"
+          type: array
+          items:
+            type: string
+        ignore_dbs:
+          description: "忽略哪些库"
+          type: array
+          items:
+            type: string
+        do_tables:
+          description: "迁移哪些表"
+          type: array
+          items:
+            type: object
+            properties:
+              db_name:
+                type: string
+                description: "数据库名"
+              tbl_name:
+                type: string
+                description: "表名"
+        ignore_tables:
+          description: "迁移哪些表"
+          type: array
+          items:
+            type: object
+            properties:
+              db_name:
+                type: string
+                description: "数据库名"
+              tbl_name:
+                type: string
+                description: "表名"
+    TaskMydumperConfig:
+      type: object
+      description: "dump 处理单元的运行配置参数"
+      properties:
+        config_name:
+          type: string
+          example: "rule-1"
+          description: "规则名"
+        threads:
+          type: integer
+          default: 4
+          example: 32
+          description: dump 处理单元从上游数据库实例导出数据的线程数量
+        chunk_filesize:
+          type: integer
+          default: 64
+          example: 64
+          description: dump 处理单元生成的数据文件大小，默认值为 64，单位为 MB
+        extra_args:
+          type: string
+          example: "--consistency none"
+          description: dump 处理单元的其他参数，不需要在 extra-args 中配置 table-list，DM 会自动生成
+    TaskLoaderConfig:
+      type: object
+      description: "load 处理单元的运行配置参数"
+      properties:
+        config_name:
+          type: string
+          example: "rule-1"
+          description: "规则名"
+        pool_size:
+          type: integer
+          default: 14
+          description: load 处理单元并发执行 dump 处理单元的 SQL 文件的线程数量，默认值为 16，当有多个实例同时向 TiDB 迁移数据时可根据负载情况适当调小该值
+        dir:
+          type: string
+          example: "./dumped_data"
+          default: "./dumped_data"
+          description: dump 处理单元输出 SQL 文件的目录，同时也是 load 处理单元读取文件的目录。该配置项的默认值为 "./dumped_data"。同实例对应的不同任务必须配置不同的目录
+    TaskSyncerConfig:
+      type: object
+      description: "sync 处理单元的运行配置参数"
+      properties:
+        config_name:
+          type: string
+          example: "rule-1"
+          description: "规则名"
+        worker_count:
+          type: integer
+          default: 16
+          description: sync 并发迁移 binlog event 的线程数量，默认值为 16，当有多个实例同时向 TiDB 迁移数据时可根据负载情况适当调小该值
+        batch:
+          type: integer
+          default: 100
+          description: sync 迁移到下游数据库的一个事务批次 SQL 语句数，默认值为 100
+        enable_ansi_quotes:
+          type: boolean
+          description: '若 session 中设置 sql-mode: "ANSI_QUOTES"，则需开启此项'
+        safe_mode:
+          type: boolean
+          description: "dm safe mode 相关操作"
+    TaskSourceConfig:
+      type: object
+      description: "任务针对数据源的配置"
+      properties:
+        source_name:
+          type: string
+          example: "mysql-replica-01"
+          description: "数据源名"
+        meta:
+          type: object
+          description: "task-mode 为 incremental 且下游数据库的 checkpoint 不存在时 binlog 迁移开始的位置; 如果 checkpoint 存在，则以 checkpoint 为准"
+          properties:
+            binlog_name:
+              type: string
+              example: "binlog.000001"
+            binlog_pos:
+              type: integer
+              example: 4
+            binlog_gtid:
+              type: string
+              description: "对于 source 中指定了 enable-gtid: true 的增量任务，需要指定该值"
+              example: "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170"
+        route_rules:
+          type: array
+          description: "该上游数据库实例匹配的表到下游数据库的 table routing 规则名称列表"
+          items:
+            type: string
+        filter_rules:
+          type: array
+          description: "该上游数据库实例匹配的表的 binlog event filter 规则名称列表"
+          items:
+            type: string
+        block_allow_list:
+          type: array
+          description: "该上游数据库实例匹配的表的 block-allow-list 过滤规则名称列表"
+          items:
+            type: string
+        mydumper_config_name:
+          type: string
+          description: "mydumpers 配置的名称"
+        loader_config_name:
+          type: string
+          description: "mydumpers 配置的名称"
+        syncer_config_name:
+          type: string
+          description: "mydumpers 配置的名称"
+    ShardingGroup:
+      type: object
+      properties:
+        target:
+          type: string
+        ddl_list:
+          type: array
+          items:
+            type: string
+          description: ""
+        first_location:
+          type: string
+        synced:
+          type: array
+          items:
+            type: string
+          description: ""
+        unsynced:
+          type: array
+          items:
+            type: string
+          description: ""
+    LoadStatus:
+      type: object
+      description: "load 单元子任务的状态"
+      properties:
+        finished_bytes:
+          type: integer
+          format: int64
+        total_bytes:
+          type: integer
+          format: int64
+        progress:
+          type: string
+        meta_binlog:
+          type: string
+        meta_binlog_gtid:
+          type: string
+    SyncStatus:
+      type: object
+      description: "load 单元子任务的状态"
+      properties:
+        total_events:
+          type: integer
+          format: int64
+        total_tps:
+          type: integer
+          format: int64
+        recent_tps:
+          type: integer
+          format: int64
+        master_binlog:
+          type: string
+        master_binlog_gtid:
+          type: string
+        syncer_binlog:
+          type: string
+        syncer_binlog_gtid:
+          type: string
+        blocking_ddls:
+          type: array
+          items:
+            type: string
+          description: sharding DDL which current is blocking
+        unresolved_groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShardingGroup"
+          description: sharding groups which current are un-resolved
+        synced:
+          type: boolean
+        binlog_type:
+          type: string
+        seconds_behind_master:
+          type: integer
+    SubTaskStatus:
+      type: object
+      properties:
+        name:
+          type: string
+          description: "任务名字"
+        stage:
+          type: string
+          example: "runing"
+          description: "任务当前阶段"
+        unit:
+          type: string
+          example: "sync"
+          description: "任务单元类型"
+        unresolved_ddl_lock_id:
+          type: string
+        load_status:
+          nullable: true
+          $ref: "#/components/schemas/LoadStatus"
+        sync_status:
+          nullable: true
+          $ref: "#/components/schemas/SyncStatus"
+    Task:
+      description: "迁移任务"
+      type: object
+      properties:
+        name:
+          type: string
+          example: "task-1"
+          description: "迁移任务名，需要全局唯一"
+        task_mode:
+          type: string
+          example: "all"
+          description: "迁移模式"
+          enum:
+            - "full"
+            - "incremental"
+            - "all"
+        shard_mode:
+          type: string
+          example: "all"
+          description: 如果为分库分表合并任务则需要配置该项。默认使用悲观协调模式 "pessimistic"，在深入了解乐观协调模式的原理和使用限制后，也可以设置为乐观协调模式 "optimistic"
+          nullable: true
+          enum:
+            - "pessimistic"
+            - "optimistic"
+        meta_schema:
+          type: string
+          example: "dm-meta"
+          description: "下游储存 meta 信息的数据库"
+        timezone:
+          type: string
+          example: "Asia/Shanghai"
+          description: "时区"
+        case_sensitive:
+          type: boolean
+          description: "schema/table 是否大小写敏感"
+          default: false
+        online_ddl_scheme:
+          type: string
+          example: "all"
+          description: "online ddl 的插件"
+          nullable: true
+          enum:
+            - "gh-ost"
+            - "pt"
+        clean_dump_file:
+          type: boolean
+          description: "是否清理 dump 阶段产生的文件，包括 metadata 文件、建库建表 SQL 文件以及数据导入 SQL 文件"
+          default: true
+        ignore_checking_items:
+          type: array
+          description: "想要关闭的检查项 默认不关闭任何检查项"
+          items:
+            type: string
+            description: "需要忽略的检查项"
+            enum:
+              - "all"
+              - "dump_privilege"
+              - "replication_privilege"
+              - "version"
+              - "binlog_enable"
+              - "binlog_format"
+              - "binlog_row_image"
+              - "table_schema"
+              - "schema_of_shard_tables"
+              - "auto_increment_ID"
+        target_database:
+          $ref: "#/components/schemas/TaskTargetDataBase"
+        routes:
+          type: array
+          description: "上游和下游表之间的路由 table routing 规则集"
+          items:
+            $ref: "#/components/schemas/TaskRouteRule"
+        filters:
+          type: array
+          description: "游数据库实例匹配的表的 binlog event filter 规则集"
+          items:
+            $ref: "#/components/schemas/BinlogEventFilterRule"
+        block_allow_list:
+          type: array
+          description: "定义数据源迁移表的过滤规则，可以定义多个规则。如果 DM 版本早于 v2.0.0-beta.2 则使用 black-white-list"
+          items:
+            $ref: "#/components/schemas/TaskBlockAllowRule"
+        mydumper_configs:
+          type: array
+          description: "dump 处理单元的运行配置参数"
+          items:
+            $ref: "#/components/schemas/TaskMydumperConfig"
+        loader_configs:
+          type: array
+          description: "load 处理单元的运行配置参数"
+          items:
+            $ref: "#/components/schemas/TaskLoaderConfig"
+        syncer_configs:
+          type: array
+          description: "sync 处理单元的运行配置参数"
+          items:
+            $ref: "#/components/schemas/TaskSyncerConfig"
+        source_configs:
+          type: array
+          description: "task 上游数据源的配置列表"
+          items:
+            $ref: "#/components/schemas/TaskSourceConfig"
+
+    ErrorWithMessage:
+      description: "操作错误"
+      type: object
+      properties:
+        error_msg:
+          type: string
+          description: "失败原因"
+        error_code:
+          type: integer
+          description: "错误码"

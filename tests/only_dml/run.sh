@@ -90,6 +90,7 @@ function run() {
 
 	# check diff
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	exit 1
 
 	insert_data &
 	pid=$!

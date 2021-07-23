@@ -111,6 +111,7 @@ type Config struct {
 
 	MasterAddr    string `toml:"master-addr" json:"master-addr"`
 	AdvertiseAddr string `toml:"advertise-addr" json:"advertise-addr"`
+	OpenAPIAddr   string `toml:"openapi-addr" json:"openapi-addr"`
 
 	ConfigFile string `toml:"config-file" json:"config-file"`
 
