@@ -30,8 +30,7 @@ import (
 	"github.com/coreos/go-semver/semver"
 )
 
-func (t *testConfig) TestUnusedTaskConfig(c *C) {
-	correctTaskConfig := `---
+var correctTaskConfig = `---
 name: test
 task-mode: all
 shard-mode: "pessimistic"       
@@ -136,6 +135,8 @@ mysql-instances:
     loader-config-name: "global2"
     syncer-config-name: "global2"
 `
+
+func (t *testConfig) TestUnusedTaskConfig(c *C) {
 	taskConfig := NewTaskConfig()
 	err := taskConfig.Decode(correctTaskConfig)
 	c.Assert(err, IsNil)
@@ -1015,8 +1016,75 @@ func (t *testConfig) TestExclusiveAndWrongExprFilterFields(c *C) {
 
 func (t *testConfig) TestTaskConfigForDowngrade(c *C) {
 	cfg := NewTaskConfig()
+	err := cfg.Decode(correctTaskConfig)
+	c.Assert(err, IsNil)
+
 	cfgForDowngrade := NewTaskConfigForDowngrade(cfg)
+
+	// make sure all new field were added
 	cfgReflect := reflect.Indirect(reflect.ValueOf(cfg))
 	cfgForDowngradeReflect := reflect.Indirect(reflect.ValueOf(cfgForDowngrade))
 	c.Assert(cfgReflect.NumField(), Equals, cfgForDowngradeReflect.NumField()+1) // without flag
+
+	// make sure all field were copied
+	cfgForClone := &TaskConfigForDowngrade{}
+	Clone(cfgForClone, cfg)
+	c.Assert(cfgForDowngrade, DeepEquals, cfgForClone)
+}
+
+// Clone clones src to dest.
+func Clone(dest, src interface{}) {
+	cloneValues(reflect.ValueOf(dest), reflect.ValueOf(src))
+}
+
+// cloneValues clone src to dest recursively.
+// Note: pointer still use shadow copy.
+func cloneValues(dest, src reflect.Value) {
+	destType := dest.Type()
+	srcType := src.Type()
+	if destType.Kind() == reflect.Ptr {
+		destType = destType.Elem()
+	}
+	if srcType.Kind() == reflect.Ptr {
+		srcType = srcType.Elem()
+	}
+
+	if destType.Kind() == reflect.Slice {
+		slice := reflect.MakeSlice(destType, src.Len(), src.Cap())
+		for i := 0; i < src.Len(); i++ {
+			if slice.Index(i).Type().Kind() == reflect.Ptr {
+				newVal := reflect.New(slice.Index(i).Type().Elem())
+				cloneValues(newVal, src.Index(i))
+				slice.Index(i).Set(newVal)
+			} else {
+				cloneValues(slice.Index(i).Addr(), src.Index(i).Addr())
+			}
+		}
+		dest.Set(slice)
+		return
+	}
+
+	destFieldsMap := map[string]int{}
+	for i := 0; i < destType.NumField(); i++ {
+		destFieldsMap[destType.Field(i).Name] = i
+	}
+	for i := 0; i < srcType.NumField(); i++ {
+		if j, ok := destFieldsMap[srcType.Field(i).Name]; ok {
+			destField := dest.Elem().Field(j)
+			srcField := src.Elem().Field(i)
+			destFieldType := destField.Type()
+			srcFieldType := srcField.Type()
+			if destFieldType.Kind() == reflect.Ptr {
+				destFieldType = destFieldType.Elem()
+			}
+			if srcFieldType.Kind() == reflect.Ptr {
+				srcFieldType = srcFieldType.Elem()
+			}
+			if destFieldType != srcFieldType {
+				cloneValues(destField, srcField)
+			} else {
+				destField.Set(srcField)
+			}
+		}
+	}
 }
