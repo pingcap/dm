@@ -237,11 +237,19 @@ func (t *testConfig) TestConfigVerify(c *C) {
 }
 
 func (t *testConfig) TestSourceConfigForDowngrade(c *C) {
-	cfg := newSourceConfig()
+	cfg, err := LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
+
+	// make sure all new field were added
 	cfgForDowngrade := NewSourceConfigForDowngrade(cfg)
 	cfgReflect := reflect.Indirect(reflect.ValueOf(cfg))
 	cfgForDowngradeReflect := reflect.Indirect(reflect.ValueOf(cfgForDowngrade))
 	c.Assert(cfgReflect.NumField(), Equals, cfgForDowngradeReflect.NumField())
+
+	// make sure all field were copied
+	cfgForClone := &SourceConfigForDowngrade{}
+	Clone(cfgForClone, cfg)
+	c.Assert(cfgForDowngrade, DeepEquals, cfgForClone)
 }
 
 func subtestFlavor(c *C, cfg *SourceConfig, sqlInfo, expectedFlavor, expectedError string) {
