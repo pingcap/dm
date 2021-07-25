@@ -39,7 +39,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -3200,7 +3199,8 @@ func (s *Syncer) setSyncCfg() error {
 	var tlsConfig *tls.Config
 	var err error
 	if s.cfg.From.Security != nil {
-		tlsConfig, err = toolutils.ToTLSConfig(s.cfg.From.Security.SSLCA, s.cfg.From.Security.SSLCert, s.cfg.From.Security.SSLKey)
+		tlsConfig, err = utils.ToTLSConfigWithVerifyByRawbytes(s.cfg.From.Security.SSLCABytes,
+			s.cfg.From.Security.SSLCertBytes, s.cfg.From.Security.SSLKEYBytes, []string{})
 		if err != nil {
 			return terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}

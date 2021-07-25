@@ -23,7 +23,7 @@ func (t *testConfig) TestLoadContent(c *C) {
 		SSLCert: "testdata/cert.pem",
 		SSLKey:  "testdata/key.pem",
 	}
-	err := s.LoadContent()
+	err := s.LoadTLSContent()
 	c.Assert(err, IsNil)
 	c.Assert(len(s.SSLCABytes) > 0, Equals, true)
 	c.Assert(len(s.SSLCertBytes) > 0, Equals, true)

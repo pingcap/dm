@@ -15,6 +15,7 @@ package ha
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -26,7 +27,7 @@ import (
 
 const (
 	// do not forget to update this path if the file removed/renamed.
-	sourceSampleFile = "../../dm/worker/source.yaml"
+	sourceSampleFile = "./testdata/source.yaml"
 )
 
 var etcdTestCli *clientv3.Client
@@ -78,6 +79,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(rev3, Equals, rev2)
 	cfg2 := scm2[source]
 	c.Assert(cfg2, DeepEquals, cfg)
+	c.Assert(strings.Contains(string(cfg2.From.Security.SSLCertBytes), "test no content"), Equals, true)
 
 	// put another source config.
 	rev2, err = PutSourceCfg(etcdTestCli, &cfgExtra)

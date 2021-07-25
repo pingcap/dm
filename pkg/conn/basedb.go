@@ -32,7 +32,6 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/go-sql-driver/mysql"
-	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 var customID int64
@@ -64,7 +63,11 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 
 	doFuncInClose := func() {}
 	if config.Security != nil && len(config.Security.SSLCA) != 0 {
-		tlsConfig, err := toolutils.ToTLSConfig(config.Security.SSLCA, config.Security.SSLCert, config.Security.SSLKey)
+		if err := config.Security.LoadTLSContent(); err != nil {
+			return nil, terror.ErrConnInvalidTLSConfig.Delegate(err)
+		}
+		tlsConfig, err := utils.ToTLSConfigWithVerifyByRawbytes(config.Security.SSLCABytes,
+			config.Security.SSLCertBytes, config.Security.SSLKEYBytes, []string{})
 		if err != nil {
 			return nil, terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}

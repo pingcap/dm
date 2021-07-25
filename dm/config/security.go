@@ -42,10 +42,10 @@ func (i *strArray) Set(value string) error {
 	return nil
 }
 
-// LoadContent load all tls config from file.
-func (s *Security) LoadContent() error {
+// LoadTLSContent load all tls config from file.
+func (s *Security) LoadTLSContent() error {
 	if len(s.SSLCABytes) > 0 {
-		// already reload
+		// already loaded
 		return nil
 	}
 

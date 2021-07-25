@@ -28,7 +28,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
-	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
@@ -960,7 +959,8 @@ func (r *Relay) setSyncConfig() error {
 	var tlsConfig *tls.Config
 	var err error
 	if r.cfg.From.Security != nil {
-		tlsConfig, err = toolutils.ToTLSConfig(r.cfg.From.Security.SSLCA, r.cfg.From.Security.SSLCert, r.cfg.From.Security.SSLKey)
+		tlsConfig, err = utils.ToTLSConfigWithVerifyByRawbytes(r.cfg.From.Security.SSLCABytes,
+			r.cfg.From.Security.SSLCertBytes, r.cfg.From.Security.SSLKEYBytes, []string{})
 		if err != nil {
 			return terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}
