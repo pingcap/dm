@@ -86,6 +86,7 @@ var (
 	maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
 
 	maxDMLConnectionDuration, _ = time.ParseDuration(maxDMLConnectionTimeout)
+	maxDMLExecutionDuration     = 30 * time.Second
 
 	adminQueueName     = "admin queue"
 	defaultBucketCount = 8
@@ -1144,7 +1145,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *dbconn.
 
 		failpoint.Inject("ExecDDLError", func() {
 			s.tctx.L().Warn("execute ddl error", zap.Strings("DDL", ddlJob.ddls), zap.String("failpoint", "ExecDDLError"))
-			err = errors.Errorf("execute ddl %v error", ddlJob.ddls)
+			err = terror.ErrDBUnExpect.Delegate(errors.Errorf("execute ddl %v error", ddlJob.ddls))
 			failpoint.Goto("bypass")
 		})
 
@@ -1157,6 +1158,16 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *dbconn.
 			}
 		}
 		failpoint.Label("bypass")
+		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
+			if intVal, ok := val.(int); ok && (intVal == 2 || intVal == 3) {
+				s.tctx.L().Warn("mock safe mode error", zap.Strings("DDL", ddlJob.ddls), zap.String("failpoint", "SafeModeExit"))
+				if intVal == 2 {
+					err = terror.ErrWorkerDDLLockInfoNotFound.Generatef("DDL info not found")
+				} else {
+					err = terror.ErrDBExecuteFailed.Delegate(errors.Errorf("execute ddl %v error", ddlJob.ddls))
+				}
+			}
+		})
 		// If downstream has error (which may cause by tracker is more compatible than downstream), we should stop handling
 		// this job, set `s.execError` to let caller of `addJob` discover error
 		if err != nil {
@@ -1283,7 +1294,7 @@ func (s *Syncer) syncDML(
 			time.Sleep(time.Duration(t) * time.Second)
 		})
 		// use background context to execute sqls as much as possible
-		ctctx, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
+		ctctx, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLExecutionDuration)
 		defer cancel()
 		return db.ExecuteSQL(ctctx, queries, args...)
 	}
@@ -1318,6 +1329,13 @@ func (s *Syncer) syncDML(
 
 			if idx >= count || sqlJob.tp == flush {
 				affect, err = executeSQLs()
+
+				failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
+					if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
+						s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
+						affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
+					}
+				})
 				if err != nil {
 					fatalF(affect, err)
 					continue
@@ -1628,6 +1646,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		startTime := time.Now()
 		e, err = s.getEvent(tctx, currentLocation)
 
+		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
+			if intVal, ok := val.(int); ok && intVal == 1 {
+				s.tctx.L().Warn("fail to get event", zap.String("failpoint", "SafeModeExit"))
+				err = errors.New("connect: connection refused")
+			}
+		})
 		switch {
 		case err == context.Canceled:
 			tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last location", lastLocation))
