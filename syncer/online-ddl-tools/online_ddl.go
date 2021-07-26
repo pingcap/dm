@@ -70,11 +70,9 @@ type TableType string
 
 // below variables will be explained later.
 const (
-	RealTable       TableType = "real table"
-	GhostGhostTable TableType = "ghost ghost table"
-	GhostTrashTable TableType = "ghost trash table" // means we should ignore these tables
-	PTGhostTable    TableType = "pt ghost table"
-	PTTrashTable    TableType = "pt trash table" // means we should ignore these tables
+	RealTable  TableType = "real table"
+	GhostTable TableType = "ghost table"
+	TrashTable TableType = "trash table" // means we should ignore these tables
 )
 
 // GhostDDLInfo stores ghost information and ddls.
@@ -413,14 +411,14 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 			}
 
 			tp1 := r.TableType(tables[1].Name)
-			if isTrashTable(tp1) {
+			if tp1 == TrashTable {
 				return nil, "", "", nil
-			} else if isGhostTable(tp1) {
+			} else if tp1 == GhostTable {
 				return nil, "", "", terror.ErrSyncerUnitGhostRenameToGhostTable.Generate(statement)
 			}
 		}
 		return []string{statement}, schema, table, nil
-	case GhostTrashTable, PTTrashTable:
+	case TrashTable:
 		// ignore TrashTable
 		if _, ok := stmt.(*ast.RenameTableStmt); ok {
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
@@ -428,11 +426,11 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 			}
 
 			tp1 := r.TableType(tables[1].Name)
-			if isGhostTable(tp1) {
+			if tp1 == GhostTable {
 				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
 			}
 		}
-	case GhostGhostTable, PTGhostTable:
+	case GhostTable:
 		// record ghost table ddl changes
 		switch stmt.(type) {
 		case *ast.CreateTableStmt:
@@ -457,7 +455,7 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
 				}
 				return nil, "", "", terror.ErrSyncerUnitGhostOnlineDDLOnGhostTbl.Generate(schema, table)
-			} else if isGhostTable(tp1) {
+			} else if tp1 == GhostTable {
 				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
 			}
 
@@ -489,25 +487,14 @@ func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) 
 
 // TableType implements interface.
 func (r *RealOnlinePlugin) TableType(table string) TableType {
-	// 5 is _ _gho/ghc/del
-	if len(table) > 5 && table[0] == '_' {
-		if strings.HasSuffix(table, "_gho") {
-			return GhostGhostTable
+	// 5 is _ _gho/ghc/del or _ _old/new
+	if len(table) > 5 && strings.HasPrefix(table, "_") {
+		if strings.HasSuffix(table, "_gho") || strings.HasSuffix(table, "_new") {
+			return GhostTable
 		}
 
-		if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") {
-			return GhostTrashTable
-		}
-	}
-
-	// 5 is _ _old/new
-	if len(table) > 5 {
-		if strings.HasPrefix(table, "_") && strings.HasSuffix(table, "_new") {
-			return PTGhostTable
-		}
-
-		if strings.HasPrefix(table, "_") && strings.HasSuffix(table, "_old") {
-			return PTTrashTable
+		if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") || strings.HasSuffix(table, "_old") {
+			return TrashTable
 		}
 	}
 	return RealTable
@@ -516,13 +503,8 @@ func (r *RealOnlinePlugin) TableType(table string) TableType {
 // RealName implements interface.
 func (r *RealOnlinePlugin) RealName(table string) string {
 	tp := r.TableType(table)
-	if tp == GhostGhostTable || tp == GhostTrashTable {
+	if tp == GhostTable || tp == TrashTable {
 		table = table[1 : len(table)-4]
-	}
-
-	if tp == PTGhostTable || tp == PTTrashTable {
-		table = strings.TrimLeft(table, "_")
-		table = table[:len(table)-4]
 	}
 	return table
 }
@@ -545,12 +527,4 @@ func (r *RealOnlinePlugin) ResetConn(tctx *tcontext.Context) error {
 // CheckAndUpdate try to check and fix the schema/table case-sensitive issue.
 func (r *RealOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
 	return r.storge.CheckAndUpdate(tctx, schemas, tables, r.RealName)
-}
-
-func isGhostTable(tp TableType) bool {
-	return tp == GhostGhostTable || tp == PTGhostTable
-}
-
-func isTrashTable(tp TableType) bool {
-	return tp == GhostTrashTable || tp == PTTrashTable
 }
