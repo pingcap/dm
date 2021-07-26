@@ -131,8 +131,10 @@ type SubTaskConfig struct {
 	flagSet *flag.FlagSet
 
 	// when in sharding, multi dm-workers do one task
-	IsSharding      bool   `toml:"is-sharding" json:"is-sharding"`
-	ShardMode       string `toml:"shard-mode" json:"shard-mode"`
+	IsSharding bool   `toml:"is-sharding" json:"is-sharding"`
+	ShardMode  string `toml:"shard-mode" json:"shard-mode"`
+	OnlineDDL  bool   `toml:"online-ddl" json:"online-ddl"`
+	// deprecated
 	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
 	// handle schema/table name mode, and only for schema/table name/pattern

@@ -36,7 +36,7 @@ task-mode: all
 shard-mode: "pessimistic"       
 meta-schema: "dm_meta"         
 case-sensitive: false        
-online-ddl-scheme: "gh-ost" 
+online-ddl: true
 clean-dump-file: true     
 
 target-database:
@@ -144,7 +144,7 @@ task-mode: all
 shard-mode: "pessimistic"       
 meta-schema: "dm_meta"         
 case-sensitive: false        
-online-ddl-scheme: "gh-ost" 
+online-ddl: true
 clean-dump-file: true     
 
 target-database:
@@ -540,7 +540,7 @@ func WordCount(s string) map[string]int {
 func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	var (
 		shardMode           = ShardOptimistic
-		onlineDDLScheme     = "pt"
+		onlineDDL           = true
 		name                = "from-sub-tasks"
 		taskMode            = "incremental"
 		ignoreCheckingItems = []string{VersionChecking, BinlogRowImageChecking}
@@ -645,7 +645,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		stCfg1 = &SubTaskConfig{
 			IsSharding:              true,
 			ShardMode:               shardMode,
-			OnlineDDLScheme:         onlineDDLScheme,
+			OnlineDDL:               onlineDDL,
 			CaseSensitive:           true,
 			Name:                    name,
 			Mode:                    taskMode,
@@ -770,7 +770,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				ExpressionFilters:  []string{"expr-filter-01"},
 			},
 		},
-		OnlineDDLScheme: onlineDDLScheme,
+		OnlineDDL: onlineDDL,
 		Routes: map[string]*router.TableRule{
 			"route-01": &routeRule1,
 			"route-02": &routeRule2,
