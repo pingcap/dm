@@ -59,9 +59,9 @@ function consistency_none() {
 }
 
 function check_exit_safe_binlog() {
-  source_id=$1
-  compare_gtid=$2
-  compare=$3
+	source_id=$1
+	compare_gtid=$2
+	compare=$3
 
 	bash -c "$cur/../bin/check_exit_safe_binlog $TIDB_PASSWORD $source_id $compare_gtid \"$compare\""
 }
@@ -70,126 +70,125 @@ function safe_mode_recover() {
 	i=1
 	while [ $i -lt 5 ]; do
 		echo "start to run safe mode case $i"
-	  export GO_FAILPOINTS=""
-  	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    check_contains 'Query OK, 2 rows affected'
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
-    check_contains 'Query OK, 3 rows affected'
+		export GO_FAILPOINTS=""
+		run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+		check_contains 'Query OK, 2 rows affected'
+		run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+		check_contains 'Query OK, 3 rows affected'
 
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    # operate mysql config to worker
-    cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
-    cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
-    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
-    sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
-    dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
-    dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
+		run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+		check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+		run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+		check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+		run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+		check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+		# operate mysql config to worker
+		cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+		cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+		sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+		sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
+		dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+		dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
-    dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+		dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
+		check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	  pkill -hup dm-worker.test 2>/dev/null || true
-    check_port_offline $WORKER1_PORT 20
-    check_port_offline $WORKER2_PORT 20
+		pkill -hup dm-worker.test 2>/dev/null || true
+		check_port_offline $WORKER1_PORT 20
+		check_port_offline $WORKER2_PORT 20
 
-	  export GO_FAILPOINTS="github.com/pingcap/dm/syncer/SafeModeExit=return($i)"
-    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+		export GO_FAILPOINTS="github.com/pingcap/dm/syncer/SafeModeExit=return($i)"
+		run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+		check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+		run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+		check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-    # DM-worker returns error due to the mocked error
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
-    expected_paused=2
-    if [ $i -ge 2 ] && [ $i -le 3 ]; then
-      expected_paused=1
-    fi
-	  run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		  "query-status test" \
-		  "Paused" $expected_paused
+		# DM-worker returns error due to the mocked error
+		run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+		run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+		expected_paused=2
+		if [ $i -ge 2 ] && [ $i -le 3 ]; then
+			expected_paused=1
+		fi
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"query-status test" \
+			"Paused" $expected_paused
 		if [ $expected_paused -eq 1 ]; then
-      run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "pause-task test" \
-        "\"result\": true" 2
-      echo 'create table t1 (id bigint auto_increment, uid int, name varchar(80), primary key (`id`), unique key(`uid`)) DEFAULT CHARSET=utf8mb4;' >${WORK_DIR}/schema.sql
-      run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-schema set -s mysql-replica-01 test -d safe_mode_test -t t1 ${WORK_DIR}/schema.sql" \
-        "\"result\": true" 2
-      echo 'create table t2 (id bigint auto_increment, uid int, name varchar(80), primary key (`id`), unique key(`uid`)) DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT = 100;' >${WORK_DIR}/schema.sql
-      run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-schema set -s mysql-replica-01 test -d safe_mode_test -t t2 ${WORK_DIR}/schema.sql" \
-        "\"result\": true" 2
-      echo 'create table t2 (id bigint auto_increment, uid int, name varchar(80), primary key (`id`), unique key(`uid`)) DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT = 200;' >${WORK_DIR}/schema.sql
-      run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-schema set -s mysql-replica-02 test -d safe_mode_test -t t2 ${WORK_DIR}/schema.sql" \
-        "\"result\": true" 2
-      echo 'create table t3 (id bigint auto_increment, uid int, name varchar(80), primary key (`id`), unique key(`uid`)) DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT = 300;' >${WORK_DIR}/schema.sql
-      run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-schema set -s mysql-replica-02 test -d safe_mode_test -t t3 ${WORK_DIR}/schema.sql" \
-        "\"result\": true" 2
-    fi
+			run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+				"pause-task test" \
+				"\"result\": true" 2
+			echo 'create table t1 (id bigint auto_increment, uid int, name varchar(80), primary key (`id`), unique key(`uid`)) DEFAULT CHARSET=utf8mb4;' >${WORK_DIR}/schema.sql
+			run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+				"operate-schema set -s mysql-replica-01 test -d safe_mode_test -t t1 ${WORK_DIR}/schema.sql" \
+				"\"result\": true" 2
+			echo 'create table t2 (id bigint auto_increment, uid int, name varchar(80), primary key (`id`), unique key(`uid`)) DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT = 100;' >${WORK_DIR}/schema.sql
+			run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+				"operate-schema set -s mysql-replica-01 test -d safe_mode_test -t t2 ${WORK_DIR}/schema.sql" \
+				"\"result\": true" 2
+			echo 'create table t2 (id bigint auto_increment, uid int, name varchar(80), primary key (`id`), unique key(`uid`)) DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT = 200;' >${WORK_DIR}/schema.sql
+			run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+				"operate-schema set -s mysql-replica-02 test -d safe_mode_test -t t2 ${WORK_DIR}/schema.sql" \
+				"\"result\": true" 2
+			echo 'create table t3 (id bigint auto_increment, uid int, name varchar(80), primary key (`id`), unique key(`uid`)) DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT = 300;' >${WORK_DIR}/schema.sql
+			run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+				"operate-schema set -s mysql-replica-02 test -d safe_mode_test -t t3 ${WORK_DIR}/schema.sql" \
+				"\"result\": true" 2
+		fi
 
+		pkill -hup dm-worker.test 2>/dev/null || true
+		check_port_offline $WORKER1_PORT 20
+		check_port_offline $WORKER2_PORT 20
 
-	  pkill -hup dm-worker.test 2>/dev/null || true
-    check_port_offline $WORKER1_PORT 20
-    check_port_offline $WORKER2_PORT 20
+		compare="<"
+		if [ $i -lt 2 ]; then
+			compare="="
+		fi
+		check_exit_safe_binlog "mysql-replica-01" "true" $compare
+		check_exit_safe_binlog "mysql-replica-02" "false" $compare
 
-    compare="<"
-    if [ $i -lt 2 ]; then
-      compare="="
-    fi
-    check_exit_safe_binlog "mysql-replica-01" "true" $compare
-    check_exit_safe_binlog "mysql-replica-02" "false" $compare
+		export GO_FAILPOINTS=""
+		# clean failpoint, should sync successfully
+		run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+		run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+		check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+		check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-	  export GO_FAILPOINTS=""
-    # clean failpoint, should sync successfully
-    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
-    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"resume-task test" \
+			"\"result\": true" 3
+		sleep 3
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"query-status test" \
+			"Running" 2
+		echo "check sync diff after clean SafeModeExit failpoint"
+		check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	  run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		  "resume-task test" \
-      "\"result\": true" 3
-    sleep 3
-	  run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		  "query-status test" \
-		  "Running" 2
-    echo "check sync diff after clean SafeModeExit failpoint"
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+		# DM-worker exit when waiting for sharding group synced
+		run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+		run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+		echo "check sync diff after restart DDL owner"
+		sleep 3
+		check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"pause-task test" \
+			"\"result\": true" 3
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"query-status test" \
+			"Paused" 2
 
-    # DM-worker exit when waiting for sharding group synced
-    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
-    echo "check sync diff after restart DDL owner"
-    sleep 3
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-      "pause-task test" \
-      "\"result\": true" 3
-	  run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		  "query-status test" \
-		  "Paused" 2
-
-    check_exit_safe_binlog "mysql-replica-01" "true" "="
-    check_exit_safe_binlog "mysql-replica-02" "false" "="
+		check_exit_safe_binlog "mysql-replica-01" "true" "="
+		check_exit_safe_binlog "mysql-replica-02" "false" "="
 
 		echo "finish running run safe mode recover case $i"
 		((i += 1))
 		cleanup_data safe_mode_target
-	  cleanup_process $*
+		cleanup_process $*
 	done
 }
 
 function run() {
 	consistency_none
-  safe_mode_recover
+	safe_mode_recover
 
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 2 rows affected'
