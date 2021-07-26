@@ -417,8 +417,7 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 	}
 
 	for _, ca := range cases {
-		fn := onlineddl.OnlineDDLSchemes[ca.onlineType]
-		plugin, err := fn(tctx, s.cfg)
+		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, s.cfg)
 		c.Assert(err, IsNil)
 		syncer := NewSyncer(s.cfg, nil)
 		syncer.onlineDDL = plugin
