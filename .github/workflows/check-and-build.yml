@@ -84,6 +84,7 @@ jobs:
         if: ${{ failure() }}
         env:
           FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+          GIT_COMMITTER_NAME: ${{ github.event.pusher.name }}
         run: go run tests/_utils/send_lark_notify.go
 
   lint:
