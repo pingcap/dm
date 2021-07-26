@@ -298,8 +298,9 @@ type TaskConfig struct {
 
 	MySQLInstances []*MySQLInstance `yaml:"mysql-instances" toml:"mysql-instances" json:"mysql-instances"`
 
+	OnlineDDL bool `yaml:"online-ddl" toml:"online-ddl" json:"online-ddl"`
+	// deprecated
 	OnlineDDLScheme string `yaml:"online-ddl-scheme" toml:"online-ddl-scheme" json:"online-ddl-scheme"`
-	OnlineDDL       bool   `yaml:"online-ddl" toml:"online-ddl" json:"online-ddl"`
 
 	Routes         map[string]*router.TableRule   `yaml:"routes" toml:"routes" json:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters" toml:"filters" json:"filters"`
@@ -790,6 +791,7 @@ func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
 	c.CaseSensitive = stCfg0.CaseSensitive
 	c.TargetDB = &stCfg0.To // just ref
 	c.OnlineDDL = stCfg0.OnlineDDL
+	c.OnlineDDLScheme = stCfg0.OnlineDDLScheme
 	c.CleanDumpFile = stCfg0.CleanDumpFile
 	c.MySQLInstances = make([]*MySQLInstance, 0, len(stCfgs))
 	c.BAList = make(map[string]*filter.Rules)

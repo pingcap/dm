@@ -370,30 +370,29 @@ func (s *Storage) CheckAndUpdate(
 }
 
 // RealOnlinePlugin support ghost and pt
-// Ghost handles gh-ost online ddls (not complete, don't need to review it)
+// Ghost's table format:
 // _*_gho ghost table
 // _*_ghc ghost changelog table
 // _*_del ghost transh table.
-// PT handles pt online schema changes
+// PT's table format:
 // (_*).*_new ghost table
 // (_*).*_old ghost trash table
 // we don't support `--new-table-name` flag.
 type RealOnlinePlugin struct {
-	storge *Storage
+	storage *Storage
 }
 
 // NewRealOnlinePlugin returns real online plugin.
 func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
 	r := &RealOnlinePlugin{
-		storge: NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
+		storage: NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
 	}
 
-	return r, r.storge.Init(tctx)
+	return r, r.storage.Init(tctx)
 }
 
 // Apply implements interface.
 // returns ddls, real schema, real table, error.
-// nolint:dupl
 func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
 	if len(tables) < 1 {
 		return nil, "", "", terror.ErrSyncerUnitGhostApplyEmptyTable.Generate()
@@ -434,12 +433,12 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 		// record ghost table ddl changes
 		switch stmt.(type) {
 		case *ast.CreateTableStmt:
-			err := r.storge.Delete(tctx, schema, table)
+			err := r.storage.Delete(tctx, schema, table)
 			if err != nil {
 				return nil, "", "", err
 			}
 		case *ast.DropTableStmt:
-			err := r.storge.Delete(tctx, schema, table)
+			err := r.storage.Delete(tctx, schema, table)
 			if err != nil {
 				return nil, "", "", err
 			}
@@ -450,7 +449,7 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 
 			tp1 := r.TableType(tables[1].Name)
 			if tp1 == RealTable {
-				ghostInfo := r.storge.Get(schema, table)
+				ghostInfo := r.storage.Get(schema, table)
 				if ghostInfo != nil {
 					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
 				}
@@ -460,13 +459,13 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 			}
 
 			// rename ghost table to trash table
-			err := r.storge.Delete(tctx, schema, table)
+			err := r.storage.Delete(tctx, schema, table)
 			if err != nil {
 				return nil, "", "", err
 			}
 
 		default:
-			err := r.storge.Save(tctx, schema, table, schema, targetTable, statement)
+			err := r.storage.Save(tctx, schema, table, schema, targetTable, statement)
 			if err != nil {
 				return nil, "", "", err
 			}
@@ -482,7 +481,7 @@ func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) 
 		return nil
 	}
 
-	return r.storge.Delete(tctx, schema, table)
+	return r.storage.Delete(tctx, schema, table)
 }
 
 // TableType implements interface.
@@ -511,20 +510,20 @@ func (r *RealOnlinePlugin) RealName(table string) string {
 
 // Clear clears online ddl information.
 func (r *RealOnlinePlugin) Clear(tctx *tcontext.Context) error {
-	return r.storge.Clear(tctx)
+	return r.storage.Clear(tctx)
 }
 
 // Close implements interface.
 func (r *RealOnlinePlugin) Close() {
-	r.storge.Close()
+	r.storage.Close()
 }
 
 // ResetConn implements interface.
 func (r *RealOnlinePlugin) ResetConn(tctx *tcontext.Context) error {
-	return r.storge.ResetConn(tctx)
+	return r.storage.ResetConn(tctx)
 }
 
 // CheckAndUpdate try to check and fix the schema/table case-sensitive issue.
 func (r *RealOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
-	return r.storge.CheckAndUpdate(tctx, schemas, tables, r.RealName)
+	return r.storage.CheckAndUpdate(tctx, schemas, tables, r.RealName)
 }

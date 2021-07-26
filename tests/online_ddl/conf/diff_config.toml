@@ -42,12 +42,12 @@ is-sharding = true
     [[table-config.source-tables]]
     instance-id = "source-1"
     schema = "online_ddl"
-    table  = "~gho_t.*"
+    table  = "~pt_t.*"
 
     [[table-config.source-tables]]
     instance-id = "source-2"
     schema = "online_ddl"
-    table  = "~gho_t.*"
+    table  = "~pt_t.*"
 
 [[source-db]]
 host = "127.0.0.1"
