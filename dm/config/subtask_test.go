@@ -126,7 +126,6 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 		{
 			func() *SubTaskConfig {
 				cfg := newSubTaskConfig()
-				cfg.OnlineDDL = false
 				cfg.OnlineDDLScheme = "rtc"
 				return cfg
 			},
