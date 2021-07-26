@@ -363,11 +363,12 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
 
 	// pause
-	c.Assert(st.Pause(), NotNil)
+	c.Assert(st.Pause(), IsNil)
 	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
 	c.Assert(st.Result(), NotNil)
 	c.Assert(st.Result().Errors, HasLen, 1)
+	c.Assert(st.Result().IsCanceled, IsTrue)
 	c.Assert(strings.Contains(st.Result().Errors[0].Message, "dumper process error"), IsTrue)
 
 	// resume twice
