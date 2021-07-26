@@ -387,7 +387,7 @@ type RealOnlinePlugin struct {
 // NewRealOnlinePlugin returns real online plugin.
 func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
 	r := &RealOnlinePlugin{
-		storge: NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", "gh-ost"))), cfg), // create a context for logger
+		storge: NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
 	}
 
 	return r, r.storge.Init(tctx)

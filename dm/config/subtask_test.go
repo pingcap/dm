@@ -123,6 +123,15 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 			},
 			"\\[.*\\], Message: shard mode invalid-shard-mode not supported.*",
 		},
+		{
+			func() *SubTaskConfig {
+				cfg := newSubTaskConfig()
+				cfg.OnlineDDL = false
+				cfg.OnlineDDLScheme = "rtc"
+				return cfg
+			},
+			"\\[.*\\], Message: online scheme rtc not supported.*",
+		},
 	}
 
 	for _, tc := range testCases {
