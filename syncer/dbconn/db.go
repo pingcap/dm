@@ -160,6 +160,8 @@ func (conn *DBConn) ExecuteSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 						log.ShortError(err))
 					return false
 				}
+				tctx.L().Warn("execute sql failed by connection error", zap.Int("retry", retryTime),
+					zap.Error(err))
 				metrics.SQLRetriesTotal.WithLabelValues("stmt_exec", conn.Cfg.Name).Add(1)
 				return true
 			}
@@ -168,6 +170,8 @@ func (conn *DBConn) ExecuteSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 					zap.String("queries", utils.TruncateInterface(queries, -1)),
 					zap.String("arguments", utils.TruncateInterface(args, -1)),
 					log.ShortError(err))
+				tctx.L().Warn("execute sql failed by retryable error", zap.Int("retry", retryTime),
+					zap.Error(err))
 				metrics.SQLRetriesTotal.WithLabelValues("stmt_exec", conn.Cfg.Name).Add(1)
 				return true
 			}
