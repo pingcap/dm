@@ -10,7 +10,7 @@ function run() {
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	inject_points=(
 		"github.com/pingcap/dm/syncer/SyncerGetEventError=return"
-		"github.com/pingcap/dm/syncer/GetEventErrorOnce=return"
+		"github.com/pingcap/dm/syncer/GetEventError=1*return"
 	)
 	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 
@@ -40,16 +40,16 @@ function run() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"get event returned an error" 1 \
+		"go-mysql returned an error" 1 \
 		"\"stage\": \"Paused\"" 1 \
 		"\"isCanceled\": false" 1
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"pause-task test" \
 		"\"result\": true" 1 \
-		"get event returned an error" 1
+		"go-mysql returned an error" 1
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"get event returned an error" 1 \
+		"go-mysql returned an error" 1 \
 		"\"stage\": \"Paused\"" 1 \
 		"\"isCanceled\": true" 1
 
