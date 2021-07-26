@@ -62,8 +62,8 @@ mysql-instances:
   syncer-config-name: sync-01
   syncer: null
   syncer-thread: 0
-online-ddl-scheme: ""
 online-ddl: false
+online-ddl-scheme: ""
 routes:
   route-01:
     schema-pattern: dmctl

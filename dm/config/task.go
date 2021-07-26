@@ -426,7 +426,7 @@ func (c *TaskConfig) adjust() error {
 		}
 	}
 
-	if !c.OnlineDDL && c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
+	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
 		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)
 	} else if c.OnlineDDLScheme == PT || c.OnlineDDLScheme == GHOST {
 		c.OnlineDDL = true

@@ -270,7 +270,7 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		c.ShardMode = ShardPessimistic // use the pessimistic mode as default for back compatible.
 	}
 
-	if !c.OnlineDDL && c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
+	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
 		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)
 	}
 
