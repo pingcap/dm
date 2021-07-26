@@ -1038,7 +1038,7 @@ func Clone(dest, src interface{}) {
 }
 
 // cloneValues clone src to dest recursively.
-// Note: pointer still use shadow copy.
+// Note: pointer still use shallow copy.
 func cloneValues(dest, src reflect.Value) {
 	destType := dest.Type()
 	srcType := src.Type()
