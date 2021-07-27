@@ -1886,10 +1886,10 @@ type eventContext struct {
 	traceSource         string
 	// safeMode is the value of syncer.safeMode when process this event
 	// syncer.safeMode's value may change on the fly, e.g. after event by pass the safeModeExitPoint
-	safeMode            bool
-	tryReSync           bool
-	startTime           time.Time
-	shardingReSyncCh    *chan *ShardingReSync
+	safeMode         bool
+	tryReSync        bool
+	startTime        time.Time
+	shardingReSyncCh *chan *ShardingReSync
 }
 
 // TODO: Further split into smaller functions and group common arguments into a context struct.
