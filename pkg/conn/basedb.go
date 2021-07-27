@@ -71,6 +71,11 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 		if err != nil {
 			return nil, terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}
+		// NOTE for local test(use a self-signed or invalid certificate), we don't need to check CA file.
+		// see more here https://github.com/go-sql-driver/mysql#tls
+		if config.Host == "127.0.0.1" {
+			tlsConfig.InsecureSkipVerify = true
+		}
 
 		name := "dm" + strconv.FormatInt(atomic.AddInt64(&customID, 1), 10)
 		err = mysql.RegisterTLSConfig(name, tlsConfig)

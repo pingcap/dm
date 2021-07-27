@@ -30,11 +30,12 @@ EOF
 		--path $WORK_DIR/tidb \
 		--store mocktikv \
 		--config $WORK_DIR/tidb-tls-config.toml \
+		-status=10081 \
 		--log-file "$WORK_DIR/tidb.log" &
 
 	sleep 3
 	# if execute failed, print tidb's log for debug
-	mysql -uroot -h127.0.0.1 -P4400 --default-character-set utf8 --ssl-ca $cur/conf/ca.pem --ssl-cert $cur/conf/dm.pem --ssl-key $cur/conf/dm.key -E -e "drop database if exists tls" || (cat $WORK_DIR/tidb.log && exit 1)
+	mysql -uroot -h127.0.0.1 -P4400 --default-character-set utf8 --ssl-ca $cur/conf/ca.pem --ssl-cert $cur/conf/dm.pem --ssl-key $cur/conf/dm.key -E -e "drop database if exists tls"
 	mysql -uroot -h127.0.0.1 -P4400 --default-character-set utf8 --ssl-ca $cur/conf/ca.pem --ssl-cert $cur/conf/dm.pem --ssl-key $cur/conf/dm.key -E -e "drop database if exists dm_meta"
 }
 
@@ -47,9 +48,22 @@ function prepare_data() {
 	done
 }
 
+function setup_source_tls() {
+	run_sql 'SHOW VARIABLES WHERE Variable_Name = "datadir"' $MYSQL_PORT1 $MYSQL_PASSWORD1
+	mysql_data_path=$(cat "$TEST_DIR/sql_res.$TEST_NAME.txt" | grep Value | cut -d ':' -f 2 | xargs)
+	echo "mysql1 datadir path=$mysql_data_path"
+
+	run_sql "grant all on *.* to 'dm_tls_test'@'%' identified by '123456' require ssl;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql 'flush privileges;' $MYSQL_PORT1 $MYSQL_PASSWORD1
+
+	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+	sed -i "s%dir-placeholer%$mysql_data_path%g" $WORK_DIR/source1.yaml
+	echo "add dm_tls_test user done $mysql_data_path"
+}
+
 function run() {
 	run_tidb_with_tls
-
+	setup_source_tls
 	prepare_data
 
 	cp $cur/conf/dm-master1.toml $WORK_DIR/
@@ -73,9 +87,8 @@ function run() {
 
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $WORK_DIR/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
+
 	# operate mysql config to worker
-	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
-	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
 	run_dm_ctl_with_tls_and_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" $cur/conf/ca.pem $cur/conf/dm.pem $cur/conf/dm.key \
 		"operate-source create $WORK_DIR/source1.yaml" \
 		"\"result\": true" 2 \
