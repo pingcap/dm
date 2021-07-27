@@ -381,6 +381,18 @@ func (s *Scheduler) RemoveSourceCfg(source string) error {
 	return nil
 }
 
+// GetSourceCfgs gets all source cfgs, return nil when error happens.
+func (s *Scheduler) GetSourceCfgs() map[string]*config.SourceConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	clone := make(map[string]*config.SourceConfig, len(s.sourceCfgs))
+	for sourceID, sourceCfg := range s.sourceCfgs {
+		cloneCfg := sourceCfg.Clone()
+		clone[sourceID] = cloneCfg
+	}
+	return clone
+}
+
 // GetSourceCfgIDs gets all added source ID.
 func (s *Scheduler) GetSourceCfgIDs() []string {
 	s.mu.RLock()

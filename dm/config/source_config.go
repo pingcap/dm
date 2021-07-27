@@ -45,7 +45,7 @@ type PurgeConfig struct {
 	RemainSpace int64 `yaml:"remain-space" toml:"remain-space" json:"remain-space"` // if remain space in @RelayBaseDir less than @RemainSpace (GB), then it can be purged
 }
 
-// SourceConfig is the configuration for Worker.
+// SourceConfig is the configuration for source.
 type SourceConfig struct {
 	EnableGTID  bool   `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
 	AutoFixGTID bool   `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
@@ -352,4 +352,87 @@ func (c *SourceConfig) check(metaData *toml.MetaData, err error) error {
 	}
 	c.adjust()
 	return nil
+}
+
+// YamlForDowngrade returns YAML format represents of config for downgrade.
+func (c *SourceConfig) YamlForDowngrade() (string, error) {
+	s := NewSourceConfigForDowngrade(c)
+
+	// encrypt password
+	cipher, err := utils.Encrypt(utils.DecryptOrPlaintext(c.From.Password))
+	if err != nil {
+		return "", err
+	}
+	s.From.Password = cipher
+
+	// omit default values, so we can ignore them for later marshal
+	s.omitDefaultVals()
+
+	return s.Yaml()
+}
+
+// SourceConfigForDowngrade is the base configuration for source in v2.0.
+// This config is used for downgrade(config export) from a higher dmctl version.
+// When we add any new config item into SourceConfig, we should update it also.
+type SourceConfigForDowngrade struct {
+	EnableGTID      bool                   `yaml:"enable-gtid"`
+	AutoFixGTID     bool                   `yaml:"auto-fix-gtid"`
+	RelayDir        string                 `yaml:"relay-dir"`
+	MetaDir         string                 `yaml:"meta-dir"`
+	Flavor          string                 `yaml:"flavor"`
+	Charset         string                 `yaml:"charset"`
+	EnableRelay     bool                   `yaml:"enable-relay"`
+	RelayBinLogName string                 `yaml:"relay-binlog-name"`
+	RelayBinlogGTID string                 `yaml:"relay-binlog-gtid"`
+	UUIDSuffix      int                    `yaml:"-"`
+	SourceID        string                 `yaml:"source-id"`
+	From            DBConfig               `yaml:"from"`
+	Purge           PurgeConfig            `yaml:"purge"`
+	Checker         CheckerConfig          `yaml:"checker"`
+	ServerID        uint32                 `yaml:"server-id"`
+	Tracer          map[string]interface{} `yaml:"tracer"`
+	// any new config item, we mark it omitempty
+	CaseSensitive bool                  `yaml:"case-sensitive,omitempty"`
+	Filters       []*bf.BinlogEventRule `yaml:"filters,omitempty"`
+}
+
+// NewSourceConfigForDowngrade creates a new base config for downgrade.
+func NewSourceConfigForDowngrade(sourceCfg *SourceConfig) *SourceConfigForDowngrade {
+	return &SourceConfigForDowngrade{
+		EnableGTID:      sourceCfg.EnableGTID,
+		AutoFixGTID:     sourceCfg.AutoFixGTID,
+		RelayDir:        sourceCfg.RelayDir,
+		MetaDir:         sourceCfg.MetaDir,
+		Flavor:          sourceCfg.Flavor,
+		Charset:         sourceCfg.Charset,
+		EnableRelay:     sourceCfg.EnableRelay,
+		RelayBinLogName: sourceCfg.RelayBinLogName,
+		RelayBinlogGTID: sourceCfg.RelayBinlogGTID,
+		UUIDSuffix:      sourceCfg.UUIDSuffix,
+		SourceID:        sourceCfg.SourceID,
+		From:            sourceCfg.From,
+		Purge:           sourceCfg.Purge,
+		Checker:         sourceCfg.Checker,
+		ServerID:        sourceCfg.ServerID,
+		Tracer:          sourceCfg.Tracer,
+		CaseSensitive:   sourceCfg.CaseSensitive,
+		Filters:         sourceCfg.Filters,
+	}
+}
+
+// omitDefaultVals change default value to empty value for new config item.
+// If any default value for new config item is not empty(0 or false or nil),
+// we should change it to empty.
+func (c *SourceConfigForDowngrade) omitDefaultVals() {
+	if len(c.From.Session) > 0 {
+		if timeZone, ok := c.From.Session["time_zone"]; ok && timeZone == defaultTimeZone {
+			delete(c.From.Session, "time_zone")
+		}
+	}
+}
+
+// Yaml returns YAML format representation of the config.
+func (c *SourceConfigForDowngrade) Yaml() (string, error) {
+	b, err := yaml.Marshal(c)
+	return string(b), err
 }

@@ -58,9 +58,9 @@ var (
 type CtlClient struct {
 	mu           sync.RWMutex
 	tls          *toolutils.TLS
-	etcdClient   *clientv3.Client
 	conn         *grpc.ClientConn
-	MasterClient pb.MasterClient // exposed to be used in test
+	MasterClient pb.MasterClient  // exposed to be used in test
+	EtcdClient   *clientv3.Client // exposed to be used in export config
 }
 
 func (c *CtlClient) updateMasterClient() error {
@@ -76,7 +76,7 @@ func (c *CtlClient) updateMasterClient() error {
 		c.conn.Close()
 	}
 
-	endpoints := c.etcdClient.Endpoints()
+	endpoints := c.EtcdClient.Endpoints()
 	for _, endpoint := range endpoints {
 		//nolint:staticcheck
 		conn, err = grpc.Dial(utils.UnwrapScheme(endpoint), c.tls.ToGRPCDialOption(), grpc.WithBackoffMaxDelay(3*time.Second), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
@@ -176,7 +176,7 @@ func InitClient(addr string, securityCfg config.Security) error {
 
 	GlobalCtlClient = &CtlClient{
 		tls:        tls,
-		etcdClient: etcdClient,
+		EtcdClient: etcdClient,
 	}
 
 	return GlobalCtlClient.updateMasterClient()
@@ -355,7 +355,7 @@ func SyncMasterEndpoints(ctx context.Context) {
 	clientURLs := []string{}
 	updateF := func() {
 		clientURLs = clientURLs[:0]
-		resp, err := GlobalCtlClient.etcdClient.MemberList(ctx)
+		resp, err := GlobalCtlClient.EtcdClient.MemberList(ctx)
 		if err != nil {
 			return
 		}
@@ -366,7 +366,7 @@ func SyncMasterEndpoints(ctx context.Context) {
 		if utils.NonRepeatStringsEqual(clientURLs, lastClientUrls) {
 			return
 		}
-		GlobalCtlClient.etcdClient.SetEndpoints(clientURLs...)
+		GlobalCtlClient.EtcdClient.SetEndpoints(clientURLs...)
 		lastClientUrls = make([]string, len(clientURLs))
 		copy(lastClientUrls, clientURLs)
 	}
