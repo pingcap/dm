@@ -154,6 +154,9 @@ type Syncer struct {
 		sync.RWMutex
 		t time.Time
 	}
+	// safeMode is used to track if we need to generate dml with safe-mode
+	// For each binlog event, we will set the current value into eventContext because
+	// the status of this track may change over time.
 	safeMode *sm.SafeMode
 
 	timezone *time.Location
@@ -1881,6 +1884,8 @@ type eventContext struct {
 	shardingReSync      *ShardingReSync
 	closeShardingResync func() error
 	traceSource         string
+	// safeMode is the value of syncer.safeMode when process this event
+	// syncer.safeMode's value may change on the fly, e.g. after event by pass the safeModeExitPoint
 	safeMode            bool
 	tryReSync           bool
 	startTime           time.Time
