@@ -506,7 +506,7 @@ components:
               type: integer
               description: 全量导入并发配置。默认 4
               default: 16
-            data——dir:
+            data_dir:
               type: string
               example: "./exported_data"
               description: "存储目录，保留可以承载全量数据的足够空间"
@@ -675,12 +675,12 @@ components:
           type: string
           example: "dm-meta"
           description: "下游储存 meta 信息的数据库"
-        enhance-online-schema-change:
+        enhance_online_schema_change:
           type: boolean
           example: true
           description: 增强的osc,自适应上游 "gh-ost pt
           nullable: true
-        on-duplication:
+        on_duplication:
           type: string
           description: "如何处理有冲突的数据"
           enum:
