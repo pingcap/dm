@@ -1035,6 +1035,7 @@ type TaskConfigForDowngrade struct {
 	// new config item
 	MySQLInstances []*MySQLInstanceForDowngrade `yaml:"mysql-instances"`
 	ExprFilter     map[string]*ExpressionFilter `yaml:"expression-filter,omitempty"`
+	OnlineDDL      bool                         `yaml:"online-ddl,omitempty"`
 }
 
 // NewTaskConfigForDowngrade create new TaskConfigForDowngrade.
@@ -1066,6 +1067,7 @@ func NewTaskConfigForDowngrade(taskConfig *TaskConfig) *TaskConfigForDowngrade {
 		RemoveMeta:              taskConfig.RemoveMeta,
 		MySQLInstances:          NewMySQLInstancesForDowngrade(taskConfig.MySQLInstances),
 		ExprFilter:              taskConfig.ExprFilter,
+		OnlineDDL:               taskConfig.OnlineDDL,
 	}
 }
 
