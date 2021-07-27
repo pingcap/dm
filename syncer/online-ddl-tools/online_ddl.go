@@ -16,6 +16,7 @@ package onlineddl
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/pingcap/failpoint"
@@ -24,6 +25,7 @@ import (
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/syncer/dbconn"
 
@@ -32,12 +34,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 )
-
-// OnlineDDLSchemes is scheme name => online ddl handler.
-var OnlineDDLSchemes = map[string]func(*tcontext.Context, *config.SubTaskConfig) (OnlinePlugin, error){
-	config.PT:    NewPT,
-	config.GHOST: NewGhost,
-}
 
 // refactor to reduce duplicate later.
 var (
@@ -371,4 +367,163 @@ func (s *Storage) CheckAndUpdate(
 		delete(s.ddls, schema)
 	}
 	return nil
+}
+
+// RealOnlinePlugin support ghost and pt
+// Ghost's table format:
+// _*_gho ghost table
+// _*_ghc ghost changelog table
+// _*_del ghost transh table.
+// PT's table format:
+// (_*).*_new ghost table
+// (_*).*_old ghost trash table
+// we don't support `--new-table-name` flag.
+type RealOnlinePlugin struct {
+	storage *Storage
+}
+
+// NewRealOnlinePlugin returns real online plugin.
+func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
+	r := &RealOnlinePlugin{
+		storage: NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
+	}
+
+	return r, r.storage.Init(tctx)
+}
+
+// Apply implements interface.
+// returns ddls, real schema, real table, error.
+func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
+	if len(tables) < 1 {
+		return nil, "", "", terror.ErrSyncerUnitGhostApplyEmptyTable.Generate()
+	}
+
+	schema, table := tables[0].Schema, tables[0].Name
+	targetTable := r.RealName(table)
+	tp := r.TableType(table)
+
+	switch tp {
+	case RealTable:
+		if _, ok := stmt.(*ast.RenameTableStmt); ok {
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+			}
+
+			tp1 := r.TableType(tables[1].Name)
+			if tp1 == TrashTable {
+				return nil, "", "", nil
+			} else if tp1 == GhostTable {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameToGhostTable.Generate(statement)
+			}
+		}
+		return []string{statement}, schema, table, nil
+	case TrashTable:
+		// ignore TrashTable
+		if _, ok := stmt.(*ast.RenameTableStmt); ok {
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+			}
+
+			tp1 := r.TableType(tables[1].Name)
+			if tp1 == GhostTable {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
+			}
+		}
+	case GhostTable:
+		// record ghost table ddl changes
+		switch stmt.(type) {
+		case *ast.CreateTableStmt:
+			err := r.storage.Delete(tctx, schema, table)
+			if err != nil {
+				return nil, "", "", err
+			}
+		case *ast.DropTableStmt:
+			err := r.storage.Delete(tctx, schema, table)
+			if err != nil {
+				return nil, "", "", err
+			}
+		case *ast.RenameTableStmt:
+			if len(tables) != parserpkg.SingleRenameTableNameNum {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+			}
+
+			tp1 := r.TableType(tables[1].Name)
+			if tp1 == RealTable {
+				ghostInfo := r.storage.Get(schema, table)
+				if ghostInfo != nil {
+					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
+				}
+				return nil, "", "", terror.ErrSyncerUnitGhostOnlineDDLOnGhostTbl.Generate(schema, table)
+			} else if tp1 == GhostTable {
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
+			}
+
+			// rename ghost table to trash table
+			err := r.storage.Delete(tctx, schema, table)
+			if err != nil {
+				return nil, "", "", err
+			}
+
+		default:
+			err := r.storage.Save(tctx, schema, table, schema, targetTable, statement)
+			if err != nil {
+				return nil, "", "", err
+			}
+		}
+	}
+
+	return nil, schema, table, nil
+}
+
+// Finish implements interface.
+func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) error {
+	if r == nil {
+		return nil
+	}
+
+	return r.storage.Delete(tctx, schema, table)
+}
+
+// TableType implements interface.
+func (r *RealOnlinePlugin) TableType(table string) TableType {
+	// 5 is _ _gho/ghc/del or _ _old/new
+	if len(table) > 5 && strings.HasPrefix(table, "_") {
+		if strings.HasSuffix(table, "_gho") || strings.HasSuffix(table, "_new") {
+			return GhostTable
+		}
+
+		if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") || strings.HasSuffix(table, "_old") {
+			return TrashTable
+		}
+	}
+	return RealTable
+}
+
+// RealName implements interface.
+func (r *RealOnlinePlugin) RealName(table string) string {
+	tp := r.TableType(table)
+	if tp == GhostTable || tp == TrashTable {
+		table = table[1 : len(table)-4]
+	}
+	return table
+}
+
+// Clear clears online ddl information.
+func (r *RealOnlinePlugin) Clear(tctx *tcontext.Context) error {
+	return r.storage.Clear(tctx)
+}
+
+// Close implements interface.
+func (r *RealOnlinePlugin) Close() {
+	r.storage.Close()
+}
+
+// ResetConn implements interface.
+func (r *RealOnlinePlugin) ResetConn(tctx *tcontext.Context) error {
+	return r.storage.ResetConn(tctx)
+}
+
+// CheckAndUpdate try to check and fix the schema/table case-sensitive issue.
+func (r *RealOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
+	return r.storage.CheckAndUpdate(tctx, schemas, tables, r.RealName)
 }
