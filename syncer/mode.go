@@ -21,27 +21,26 @@ import (
 
 	"github.com/pingcap/dm/dm/unit"
 	tcontext "github.com/pingcap/dm/pkg/context"
-	sm "github.com/pingcap/dm/syncer/safe-mode"
 )
 
-func (s *Syncer) enableSafeModeInitializationPhase(tctx *tcontext.Context, safeMode *sm.SafeMode) {
-	safeMode.Reset(tctx) // in initialization phase, reset first
+func (s *Syncer) enableSafeModeInitializationPhase(tctx *tcontext.Context) {
+	s.safeMode.Reset(tctx) // in initialization phase, reset first
 
 	if s.cfg.SafeMode {
 		//nolint:errcheck
-		safeMode.Add(tctx, 1) // add 1 but has no corresponding -1, so keeps enabled
+		s.safeMode.Add(tctx, 1) // add 1 but has no corresponding -1, so keeps enabled
 		s.tctx.L().Info("enable safe-mode by config")
 	}
 	if s.checkpoint.SafeModeExitPoint() != nil {
 		//nolint:errcheck
-		safeMode.Add(tctx, 1) // enable and will revert after pass SafeModeExitLoc
+		s.safeMode.Add(tctx, 1) // enable and will revert after pass SafeModeExitLoc
 		s.tctx.L().Info("enable safe-mode for safe mode exit point, will exit at", zap.Stringer("location", *s.checkpoint.SafeModeExitPoint()))
 	} else {
 		//nolint:errcheck
-		safeMode.Add(tctx, 1) // enable and will revert after 2 * CheckpointFlushInterval
+		s.safeMode.Add(tctx, 1) // enable and will revert after 2 * CheckpointFlushInterval
 		go func() {
 			defer func() {
-				err := safeMode.Add(tctx, -1)
+				err := s.safeMode.Add(tctx, -1)
 				if err != nil {
 					// send error to the fatal chan to interrupt the process
 					s.runFatalChan <- unit.NewProcessError(err)
