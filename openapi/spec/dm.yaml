@@ -481,7 +481,7 @@ components:
               type: string
               description: table name, does not support wildcards
               example: "tb1"
-        event_filter:
+        event_filter_name:
           type: array
           description: "filter rule name"
           items:
@@ -526,7 +526,7 @@ components:
               type: integer
               description: incremental synchronization of batch execution sql quantities
               default: 200
-        source:
+        source_conf:
           type: array
           description: "source configuration"
           items:
@@ -661,7 +661,6 @@ components:
             - "all"
         shard_mode:
           type: string
-          example: "all"
           description: the way to coordinate DDL
           nullable: true
           enum:
@@ -684,7 +683,7 @@ components:
             - "error"
         target_config:
           $ref: "#/components/schemas/TaskTargetDataBase"
-        event_filter:
+        event_filter_rule:
           type: array
           description: "binlog event filter rule set"
           items:
