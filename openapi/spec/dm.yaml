@@ -357,35 +357,6 @@ components:
           type: string
           example: "worker-1"
           description: "woker 的名字，需要全局唯一"
-    BinlogEventFilterRule:
-      description: "binlog 级别的过规则"
-      type: object
-      properties:
-        rule_name:
-          type: string
-          example: "rule-1"
-          description: "过滤规则名"
-        schema_pattern:
-          type: string
-          example: "test_*"
-          description: "数据库名规则"
-        table_pattern:
-          type: string
-          example: "t_*"
-          description: "数据表名规则"
-        events:
-          description: "匹配哪些 event 类型"
-          type: array
-          items:
-            type: string
-            description: "事件类型"
-        action:
-          type: string
-          example: "Ignore"
-          description: "Do 白名单 Ignore 黑名单"
-          enum:
-            - "Do"
-            - "Ignore"
     SourceStatus:
       description: "数据源的状态"
       type: object
@@ -436,11 +407,6 @@ components:
           description: "是否使用 GTID 方式从上游拉取 binlog"
         security:
           $ref: "#/components/schemas/Security"
-        case_sensitive:
-          type: boolean
-          example: false
-          default: false
-          description: "Binlog event filter 标识符是否大小写敏感。"
     TaskTargetDataBase:
       type: object
       description: "下游数据库配置"
@@ -463,187 +429,127 @@ components:
           description: "数据库密码"
         security:
           $ref: "#/components/schemas/Security"
-        session:
-          type: array
-          description: "设置 TiDB 的 session 变量，在 v1.0.6 版本引入。更多变量及解释参见 https://docs.pingcap.com/zh/tidb/stable/system-variables"
-          items:
-            type: object
-            properties:
-              key:
-                type: string
-                example: "sql_mode"
-              value:
-                type: string
-                example: "ANSI_QUOTES"
-    TaskRouteRule:
+
+    TaskEventFilterRule:
+      description: "binlog 级别的过滤规则"
       type: object
-      description: "上游和下游表之间的路由 table routing 规则"
       properties:
         rule_name:
           type: string
           example: "rule-1"
-          description: "规则名"
-        schema_pattern:
-          type: string
-          example: "test_*"
-          description: 库名匹配规则，支持通配符 "*" 和 "?"
-        table_pattern:
-          type: string
-          example: "t_*"
-          description: 表名匹配规则，支持通配符 "*" 和 "?"
-        target_schema:
-          type: string
-          example: "test"
-          description: "目标库名称"
-        target_table:
-          type: string
-          example: "t"
-          description: "目标表名称"
-    TaskBlockAllowRule:
-      type: object
-      description: "黑白名单规则"
-      properties:
-        do_dbs:
-          description: "迁移哪些库"
+          description: "过滤规则名"
+        ignore_event:
+          description: "过滤哪些 event 类型"
           type: array
           items:
             type: string
-        ignore_dbs:
-          description: "忽略哪些库"
+            description: "事件类型"
+            example: "all dml"
+        ignore_sql:
+          description: "过滤哪些sql类型"
           type: array
           items:
             type: string
-        do_tables:
-          description: "迁移哪些表"
+            description: "事件类型"
+            example: "^Drop"
+    TaskTableMigrateRule:
+      type: object
+      description: "上游表到下游的同步规则"
+      properties:
+        source:
+          type: object
+          description: 数据源相关配置
+          properties:
+            source_name:
+              type: string
+              description: 数据源名字,支持通配符
+              example: "source-*"
+            schema:
+              type: string
+              description: 数据库名字,支持通配符
+              example: "db-*"
+            table:
+              type: string
+              description: 表名字,支持通配符
+              example: "tb-*"
+        target:
+          type: object
+          description: 下游相关配置
+          properties:
+            schema:
+              type: string
+              description: 数据库名字,不支持通配符
+              example: "db1"
+            table:
+              type: string
+              description: 表名字,不支持通配符
+              example: "tb1"
+        event_filter:
           type: array
+          description: "过滤规则名字"
           items:
-            type: object
-            properties:
-              db_name:
-                type: string
-                description: "数据库名"
-              tbl_name:
-                type: string
-                description: "表名"
-        ignore_tables:
-          description: "迁移哪些表"
-          type: array
-          items:
-            type: object
-            properties:
-              db_name:
-                type: string
-                description: "数据库名"
-              tbl_name:
-                type: string
-                description: "表名"
-    TaskMydumperConfig:
-      type: object
-      description: "dump 处理单元的运行配置参数"
-      properties:
-        config_name:
-          type: string
-          example: "rule-1"
-          description: "规则名"
-        threads:
-          type: integer
-          default: 4
-          example: 32
-          description: dump 处理单元从上游数据库实例导出数据的线程数量
-        chunk_filesize:
-          type: integer
-          default: 64
-          example: 64
-          description: dump 处理单元生成的数据文件大小，默认值为 64，单位为 MB
-        extra_args:
-          type: string
-          example: "--consistency none"
-          description: dump 处理单元的其他参数，不需要在 extra-args 中配置 table-list，DM 会自动生成
-    TaskLoaderConfig:
-      type: object
-      description: "load 处理单元的运行配置参数"
-      properties:
-        config_name:
-          type: string
-          example: "rule-1"
-          description: "规则名"
-        pool_size:
-          type: integer
-          default: 14
-          description: load 处理单元并发执行 dump 处理单元的 SQL 文件的线程数量，默认值为 16，当有多个实例同时向 TiDB 迁移数据时可根据负载情况适当调小该值
-        dir:
-          type: string
-          example: "./dumped_data"
-          default: "./dumped_data"
-          description: dump 处理单元输出 SQL 文件的目录，同时也是 load 处理单元读取文件的目录。该配置项的默认值为 "./dumped_data"。同实例对应的不同任务必须配置不同的目录
-    TaskSyncerConfig:
-      type: object
-      description: "sync 处理单元的运行配置参数"
-      properties:
-        config_name:
-          type: string
-          example: "rule-1"
-          description: "规则名"
-        worker_count:
-          type: integer
-          default: 16
-          description: sync 并发迁移 binlog event 的线程数量，默认值为 16，当有多个实例同时向 TiDB 迁移数据时可根据负载情况适当调小该值
-        batch:
-          type: integer
-          default: 100
-          description: sync 迁移到下游数据库的一个事务批次 SQL 语句数，默认值为 100
-        enable_ansi_quotes:
-          type: boolean
-          description: '若 session 中设置 sql-mode: "ANSI_QUOTES"，则需开启此项'
-        safe_mode:
-          type: boolean
-          description: "dm safe mode 相关操作"
+            type: string
+            example: rule-1
     TaskSourceConfig:
       type: object
       description: "任务针对数据源的配置"
       properties:
-        source_name:
-          type: string
-          example: "mysql-replica-01"
-          description: "数据源名"
-        meta:
+        full_migrate_conf:
+          description: 全量任务的配置
           type: object
-          description: "task-mode 为 incremental 且下游数据库的 checkpoint 不存在时 binlog 迁移开始的位置; 如果 checkpoint 存在，则以 checkpoint 为准"
           properties:
-            binlog_name:
-              type: string
-              example: "binlog.000001"
-            binlog_pos:
+            export_threads:
               type: integer
-              example: 4
-            binlog_gtid:
+              description: 全量导出并发配置。默认 4
+              default: 4
+            import_threads:
+              type: integer
+              description: 全量导入并发配置。默认 4
+              default: 16
+            data——dir:
               type: string
-              description: "对于 source 中指定了 enable-gtid: true 的增量任务，需要指定该值"
-              example: "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170"
-        route_rules:
+              example: "./exported_data"
+              description: "存储目录，保留可以承载全量数据的足够空间"
+            consistency:
+              type: string
+              example: ""
+              description: "一致性保证"
+              enum:
+                - "snapshot"
+                - "none"
+        incr_migrate_conf:
+          description: 全量任务的配置
+          type: object
+          properties:
+            repl_threads:
+              type: integer
+              description: 增量同步的并发配置
+              default: 32
+            batch:
+              type: integer
+              description: 增量同步的攒批配置
+              default: 200
+        source:
           type: array
-          description: "该上游数据库实例匹配的表到下游数据库的 table routing 规则名称列表"
+          description: 每个数据源的配置
           items:
-            type: string
-        filter_rules:
-          type: array
-          description: "该上游数据库实例匹配的表的 binlog event filter 规则名称列表"
-          items:
-            type: string
-        block_allow_list:
-          type: array
-          description: "该上游数据库实例匹配的表的 block-allow-list 过滤规则名称列表"
-          items:
-            type: string
-        mydumper_config_name:
-          type: string
-          description: "mydumpers 配置的名称"
-        loader_config_name:
-          type: string
-          description: "mydumpers 配置的名称"
-        syncer_config_name:
-          type: string
-          description: "mydumpers 配置的名称"
+            type: object
+            properties:
+              source_name:
+                type: string
+                example: "mysql-replica-01"
+                description: "数据源名"
+              binlog_name:
+                type: string
+                example: "binlog.000001"
+              binlog_pos:
+                type: integer
+                example: 4
+              binlog_gtid:
+                type: string
+                description: "对于 source 中指定了 enable-gtid: true 的增量任务，需要指定该值"
+                example: "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170"
+
     ShardingGroup:
       type: object
       properties:
@@ -769,76 +675,30 @@ components:
           type: string
           example: "dm-meta"
           description: "下游储存 meta 信息的数据库"
-        timezone:
-          type: string
-          example: "Asia/Shanghai"
-          description: "时区"
-        case_sensitive:
+        enhance-online-schema-change:
           type: boolean
-          description: "schema/table 是否大小写敏感"
-          default: false
-        online_ddl_scheme:
-          type: string
-          example: "all"
-          description: "online ddl 的插件"
+          example: true
+          description: 增强的osc,自适应上游 "gh-ost pt
           nullable: true
+        on-duplication:
+          type: string
+          description: "如何处理有冲突的数据"
           enum:
-            - "gh-ost"
-            - "pt"
-        clean_dump_file:
-          type: boolean
-          description: "是否清理 dump 阶段产生的文件，包括 metadata 文件、建库建表 SQL 文件以及数据导入 SQL 文件"
-          default: true
-        ignore_checking_items:
-          type: array
-          description: "想要关闭的检查项 默认不关闭任何检查项"
-          items:
-            type: string
-            description: "需要忽略的检查项"
-            enum:
-              - "all"
-              - "dump_privilege"
-              - "replication_privilege"
-              - "version"
-              - "binlog_enable"
-              - "binlog_format"
-              - "binlog_row_image"
-              - "table_schema"
-              - "schema_of_shard_tables"
-              - "auto_increment_ID"
-        target_database:
+            - "overwrite"
+            - "error"
+        target_config:
           $ref: "#/components/schemas/TaskTargetDataBase"
-        routes:
-          type: array
-          description: "上游和下游表之间的路由 table routing 规则集"
-          items:
-            $ref: "#/components/schemas/TaskRouteRule"
-        filters:
+        event_filter:
           type: array
           description: "游数据库实例匹配的表的 binlog event filter 规则集"
           items:
-            $ref: "#/components/schemas/BinlogEventFilterRule"
-        block_allow_list:
+            $ref: "#/components/schemas/TaskEventFilterRule"
+        table_migrate_rule:
           type: array
           description: "定义数据源迁移表的过滤规则，可以定义多个规则。如果 DM 版本早于 v2.0.0-beta.2 则使用 black-white-list"
           items:
-            $ref: "#/components/schemas/TaskBlockAllowRule"
-        mydumper_configs:
-          type: array
-          description: "dump 处理单元的运行配置参数"
-          items:
-            $ref: "#/components/schemas/TaskMydumperConfig"
-        loader_configs:
-          type: array
-          description: "load 处理单元的运行配置参数"
-          items:
-            $ref: "#/components/schemas/TaskLoaderConfig"
-        syncer_configs:
-          type: array
-          description: "sync 处理单元的运行配置参数"
-          items:
-            $ref: "#/components/schemas/TaskSyncerConfig"
-        source_configs:
+            $ref: "#/components/schemas/TaskTableMigrateRule"
+        source_config:
           type: array
           description: "task 上游数据源的配置列表"
           items:
