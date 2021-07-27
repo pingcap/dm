@@ -3,18 +3,18 @@ info:
   title: DM OpenAPI 文档
   version: "2.0.6"
 externalDocs:
-  description: "DM 相关文档"
+  description: "DM OpenAPI DOC"
   url: "https://docs.pingcap.com/zh/tidb-data-migration/stable"
 servers:
   - url: "https://you.domain.com/"
 tags:
   - name: source
-    description: 数据源相关
+    description: source
     externalDocs:
       description: doc
       url: "https://docs.pingcap.com/zh/tidb-data-migration/stable/quick-start-create-source"
   - name: task
-    description: 迁移任务相关
+    description: task
     externalDocs:
       description: doc
       url: "https://docs.pingcap.com/zh/tidb-data-migration/stable/quick-create-migration-task"
@@ -24,19 +24,19 @@ paths:
     post:
       tags:
         - source
-      summary: "创建新的数据源"
+      summary: "create new data source"
       operationId: "DMAPICreateSource"
       requestBody:
-        description: "请求体"
+        description: "request body"
         content:
           "application/json":
             schema:
               $ref: "#/components/schemas/Source"
       responses:
         "201":
-          description: "创建成功"
+          description: "success"
         "400":
-          description: "创建失败"
+          description: "failed"
           content:
             "application/json":
               schema:
@@ -44,11 +44,11 @@ paths:
     get:
       tags:
         - source
-      summary: "获取所有数据源列表"
+      summary: "get data source list"
       operationId: "DMAPIGetSourceList"
       responses:
         "200":
-          description: "数据源列表"
+          description: "data source list"
           content:
             "application/json":
               schema:
@@ -59,21 +59,21 @@ paths:
     delete:
       tags:
         - source
-      summary: "删除数据源"
+      summary: "delete a data source"
       operationId: "DMAPIDeleteSource"
       parameters:
         - name: "source-name"
           in: path
-          description: "全局唯一的数据源名字"
+          description: "globally unique data source name"
           required: true
           schema:
             type: string
             example: "mysql-01"
       responses:
         "204":
-          description: "删除成功"
+          description: "success"
         "400":
-          description: "删除失败"
+          description: "failed"
           content:
             "application/json":
               schema:
@@ -82,25 +82,25 @@ paths:
     get:
       tags:
         - source
-      summary: "查询数据源的当前状态"
+      summary: "get the current status of the data source"
       operationId: "DMAPIGetSourceStatus"
       parameters:
         - name: source-name
           in: path
-          description: "全局唯一的数据源名"
+          description: "globally unique data source name"
           required: true
           schema:
             type: string
             example: "mysql-replica-01"
       responses:
         "200":
-          description: "获取成功"
+          description: "success"
           content:
             "application/json":
               schema:
                 $ref: "#/components/schemas/SourceStatus"
         "400":
-          description: "获取失败"
+          description: "failed"
           content:
             "application/json":
               schema:
@@ -109,12 +109,12 @@ paths:
     patch:
       tags:
         - source
-      summary: "为数据源开启 relay log 功能"
+      summary: "enable relay log function for the data source"
       operationId: "DMAPIStartRelay"
       parameters:
         - name: "source-name"
           in: path
-          description: "全局唯一的数据源名字"
+          description: "globally unique data source name"
           required: true
           schema:
             type: string
@@ -127,9 +127,9 @@ paths:
               $ref: "#/components/schemas/StartRelayRequest"
       responses:
         "200":
-          description: "开启成功"
+          description: "success"
         "400":
-          description: "开启失败"
+          description: "failed"
           content:
             "application/json":
               schema:
@@ -138,12 +138,12 @@ paths:
     patch:
       tags:
         - source
-      summary: "为数据源关闭 relay log 功能"
+      summary: "disable relay log function for the data source"
       operationId: "DMAPIStopRelay"
       parameters:
         - name: "source-name"
           in: path
-          description: "全局唯一的数据源名字"
+          description: "globally unique data source name"
           required: true
           schema:
             type: string
@@ -156,9 +156,9 @@ paths:
               $ref: "#/components/schemas/WorkerNameRequest"
       responses:
         "200":
-          description: "开启成功"
+          description: "success"
         "400":
-          description: "开启失败"
+          description: "failed"
           content:
             "application/json":
               schema:
@@ -168,19 +168,19 @@ paths:
     post:
       tags:
         - task
-      summary: "提交并开始任务"
+      summary: "create and start task"
       operationId: "DMAPIStartTask"
       requestBody:
-        description: "请求体"
+        description: "request body"
         content:
           "application/json":
             schema:
               $ref: "#/components/schemas/Task"
       responses:
         "201":
-          description: "创建任务成功成功"
+          description: "success"
         "400":
-          description: "创建失败"
+          description: "failed"
           content:
             "application/json":
               schema:
@@ -188,11 +188,11 @@ paths:
     get:
       tags:
         - task
-      summary: "获取当前所有任务的信息"
+      summary: "get task list"
       operationId: "DMAPIGetTaskList"
       responses:
         "200":
-          description: "当前 task 的列表"
+          description: "task list"
           content:
             "application/json":
               schema:
@@ -200,7 +200,7 @@ paths:
                 items:
                   $ref: "#/components/schemas/Task"
         "400":
-          description: "创建失败"
+          description: "failed"
           content:
             "application/json":
               schema:
@@ -209,21 +209,21 @@ paths:
     delete:
       tags:
         - task
-      summary: "删除任务"
+      summary: "delete and stop task"
       operationId: "DMAPIDeleteTask"
       parameters:
         - name: task-name
           in: path
-          description: "全局唯一的任务名"
+          description: "globally unique task name"
           required: true
           schema:
             type: string
             example: "task-1"
       responses:
         "204":
-          description: "删除成功"
+          description: "success"
         "400":
-          description: "删除失败"
+          description: "failed"
           content:
             "application/json":
               schema:
@@ -232,25 +232,25 @@ paths:
     get:
       tags:
         - task
-      summary: "查询任务当前状态"
+      summary: "get current task status"
       operationId: "DMAPIGetTaskStatus"
       parameters:
         - name: task-name
           in: path
-          description: "全局唯一的任务名"
+          description: "globally unique task name"
           required: true
           schema:
             type: string
             example: "task-1"
       responses:
         "200":
-          description: "获取成功"
+          description: "success"
           content:
             "application/json":
               schema:
                 $ref: "#/components/schemas/SubTaskStatus"
         "400":
-          description: "获取失败"
+          description: "failed"
           content:
             "application/json":
               schema:
@@ -260,285 +260,282 @@ components:
   schemas:
     Security:
       type: object
-      description: "数据源 ssl 配置,从接口获取数据源配置时，该字段会被隐藏"
+      description: "data source ssl configuration, the field will be hidden when getting the data source configuration from the interface"
       nullable: true
       properties:
         ssl_ca_content:
           type: string
           example: ""
-          description: "根证书文件内容"
-          nullable: true
+          description: "certificate file content"
         ssl_cert_content:
           type: string
           example: ""
-          description: "PEM格式/X509格式证书的文件内容"
-          nullable: true
+          description: "File content of PEM format/X509 format certificates"
         ssl_key_content:
           type: string
           example: ""
-          description: "X509格式的私钥文件内容"
-          nullable: true
+          description: "Content of the private key file in X509 format"
     Purge:
-      description: "relay log 清理策略配置"
+      description: "relay log cleanup policy configuration"
       type: object
       properties:
         interval:
           type: integer
           default: 3600
-          description: "定期检查 relay log 是否过期的间隔时间，默认值：3600，单位：秒"
+          description: "The interval to periodically check if the relay log is expired, default value: 3600, in seconds"
           nullable: true
         expires:
           type: integer
           default: 0
-          description: "relay log 的过期时间，默认值为 0，单位：小时。未由 relay 处理单元进行写入、或已有数据迁移任务当前或未来不需要读取的 relay log 在超过过期时间后会被 DM 删除。如果不设置则 DM 不会自动清理过期的 relay log。"
+          description: "expiration time of relay log"
           nullable: true
         remain_space:
           type: integer
           default: 15
-          description: "设置最小的可用磁盘空间。当磁盘可用空间小于这个值时，DM-worker 会尝试删除 relay log，默认值：15，单位：GB"
+          description: "Minimum free disk space, in GB"
           nullable: true
     RelayStatus:
-      description: "relay log 的状态"
+      description: "status of relay log"
       type: object
       properties:
         master_binlog:
           type: string
           example: "(mysql-bin.000001, 1979)"
-          description: "上游 binlog file的信息"
+          description: "upstream binlog file information"
         master_binlog_gtid:
           type: string
           example: "e9a1fc22-ec08-11e9-b2ac-0242ac110003:1-7849"
-          description: "上游 binlog 的 GTID"
-        relay_sub_dir:
+          description: "GTID of the upstream"
+        relay_dir:
           type: string
-          description: "存储 relay log 的目录"
-          example: "b8ba86a4-a3d5-11eb-95ce-1add06868d30.000001"
+          description: "the directory where the relay log is stored"
+          example: "./sub_dir"
         relay_binlog_gtid:
           type: string
           example: "e9a1fc22-ec08-11e9-b2ac-0242ac110003:1-7849"
-          description: "relay 当前的 GTID"
+          description: "relay current GTID"
         relay_catch_up_master:
           type: boolean
-          description: "relay log 是否追上上游的进度"
+          description: "whether to catch up with upstream progress"
         stage:
           type: string
-          description: "当前状态"
+          description: "current status"
           example: "Running"
     StartRelayRequest:
-      description: 操作是否开启 relay 的请求
+      description: action to open a relay request
       type: object
       properties:
         worker_name:
           type: string
           example: "worker-1"
-          description: "woker 的名字，需要全局唯一"
+          description: "woker name"
         relay_binlog_name:
           type: string
           example: "mysql-bin.000002"
-          description: "拉取上游 binlog 的起始文件名"
+          description: "starting filename of the upstream binlog"
           nullable: true
         relay_binlog_gtid:
           type: string
           example: "e9a1fc22-ec08-11e9-b2ac-0242ac110003:1-7849"
-          description: "拉取上游 binlog 的起始 GTID"
+          description: "starting GTID of the upstream binlog"
           nullable: true
         relay_dir:
           type: string
           default: "./relay_log"
-          description: "存储 relay log 的目录"
+          description: "the directory where the relay log is stored"
           nullable: true
         pruge:
           $ref: "#/components/schemas/Purge"
     WorkerNameRequest:
-      description: 和 worker 相关的请求
+      description: requests related to workers
       type: object
       properties:
         worker_name:
           type: string
           example: "worker-1"
-          description: "woker 的名字，需要全局唯一"
+          description: "worker name"
     SourceStatus:
-      description: "数据源的状态"
+      description: "source status"
       type: object
       properties:
         source_name:
           type: string
           example: "mysql-replica-01"
-          description: "数据源 ID"
+          description: "source name"
         worker_name:
           type: string
           example: "worker-1"
-          description: "当前 source 绑定的 worker"
+          description: "The worker currently bound to the source"
         enable_relay:
           type: boolean
           example: false
           default: false
-          description: "是否开启 relay log，默认值为 false"
+          description: "whether to enable relay log function"
         relay_status:
           $ref: "#/components/schemas/RelayStatus"
     Source:
       type: object
-      description: "数据源"
+      description: "source"
       properties:
         source_name:
           type: string
           example: "mysql-01"
-          description: "数据源名字，需要全局唯一"
+          description: "scource name"
         host:
           type: string
           example: "127.0.0.1"
-          description: "数据源地址"
+          description: "source address"
         port:
           type: integer
           example: 3306
-          description: "数据源端口"
+          description: "source port"
         user:
           type: string
           example: "root"
-          description: "数据库用户名"
+          description: "source username"
         password:
           type: string
           example: "123456"
-          description: "数据库密码"
+          description: "source password"
         enable_gtid:
           type: boolean
           example: false
           default: false
-          description: "是否使用 GTID 方式从上游拉取 binlog"
+          description: "whether to use GTID to pull binlogs from upstream"
         security:
           $ref: "#/components/schemas/Security"
     TaskTargetDataBase:
       type: object
-      description: "下游数据库配置"
+      description: "downstream database configuration"
       properties:
         host:
           type: string
           example: "127.0.0.1"
-          description: "数据源地址"
+          description: "source address"
         port:
           type: integer
           example: 3306
-          description: "数据源端口"
+          description: "ource port"
         user:
           type: string
           example: "root"
-          description: "数据库用户名"
+          description: "source username"
         password:
           type: string
           example: "123456"
-          description: "数据库密码"
+          description: "source password"
         security:
           $ref: "#/components/schemas/Security"
 
     TaskEventFilterRule:
-      description: "binlog 级别的过滤规则"
+      description: "Filtering rules at binlog level"
       type: object
       properties:
         rule_name:
           type: string
           example: "rule-1"
-          description: "过滤规则名"
+          description: "rule name"
         ignore_event:
-          description: "过滤哪些 event 类型"
+          description: "event type"
           type: array
           items:
             type: string
-            description: "事件类型"
+            description: "event type"
             example: "all dml"
         ignore_sql:
-          description: "过滤哪些sql类型"
+          description: "sql patterm to filter"
           type: array
           items:
             type: string
-            description: "事件类型"
+            description: "sql patterm to filter"
             example: "^Drop"
     TaskTableMigrateRule:
       type: object
-      description: "上游表到下游的同步规则"
+      description: "upstream table to downstream migrate rules"
       properties:
         source:
           type: object
-          description: 数据源相关配置
+          description: source-related configuration
           properties:
             source_name:
               type: string
-              description: 数据源名字,支持通配符
+              description: source name, wildcard support
               example: "source-*"
             schema:
               type: string
-              description: 数据库名字,支持通配符
+              description: schema name, wildcard suppor
               example: "db-*"
             table:
               type: string
-              description: 表名字,支持通配符
+              description: table name, wildcard suppor
               example: "tb-*"
         target:
           type: object
-          description: 下游相关配置
+          description: downstream-related configuration
           properties:
             schema:
               type: string
-              description: 数据库名字,不支持通配符
+              description: schema name, does not support wildcards
               example: "db1"
             table:
               type: string
-              description: 表名字,不支持通配符
+              description: table name, does not support wildcards
               example: "tb1"
         event_filter:
           type: array
-          description: "过滤规则名字"
+          description: "filter rule name"
           items:
             type: string
             example: rule-1
     TaskSourceConfig:
       type: object
-      description: "任务针对数据源的配置"
+      description: "source-related configuration"
       properties:
         full_migrate_conf:
-          description: 全量任务的配置
+          description: configuration of full migrate tasks
           type: object
           properties:
             export_threads:
               type: integer
-              description: 全量导出并发配置。默认 4
+              description: full export of concurrent
               default: 4
             import_threads:
               type: integer
-              description: 全量导入并发配置。默认 4
+              description: full import of concurrent
               default: 16
             data_dir:
               type: string
               example: "./exported_data"
-              description: "存储目录，保留可以承载全量数据的足够空间"
+              description: "storage dir name"
             consistency:
               type: string
               example: ""
-              description: "一致性保证"
+              description: "consistency level at full export"
               enum:
                 - "snapshot"
                 - "none"
         incr_migrate_conf:
-          description: 全量任务的配置
+          description: configuration of incremental tasks
           type: object
           properties:
             repl_threads:
               type: integer
-              description: 增量同步的并发配置
+              description: incremental task of concurrent
               default: 32
             batch:
               type: integer
-              description: 增量同步的攒批配置
+              description: incremental synchronization of batch execution sql quantities
               default: 200
         source:
           type: array
-          description: 每个数据源的配置
+          description: "source configuration"
           items:
             type: object
             properties:
               source_name:
                 type: string
                 example: "mysql-replica-01"
-                description: "数据源名"
+                description: "source name"
               binlog_name:
                 type: string
                 example: "binlog.000001"
@@ -547,7 +544,6 @@ components:
                 example: 4
               binlog_gtid:
                 type: string
-                description: "对于 source 中指定了 enable-gtid: true 的增量任务，需要指定该值"
                 example: "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170"
 
     ShardingGroup:
@@ -574,7 +570,7 @@ components:
           description: ""
     LoadStatus:
       type: object
-      description: "load 单元子任务的状态"
+      description: "status of load unit"
       properties:
         finished_bytes:
           type: integer
@@ -590,7 +586,7 @@ components:
           type: string
     SyncStatus:
       type: object
-      description: "load 单元子任务的状态"
+      description: "status of sync uuit"
       properties:
         total_events:
           type: integer
@@ -630,15 +626,15 @@ components:
       properties:
         name:
           type: string
-          description: "任务名字"
+          description: task name
         stage:
           type: string
           example: "runing"
-          description: "任务当前阶段"
+          description: "current stage of the task"
         unit:
           type: string
           example: "sync"
-          description: "任务单元类型"
+          description: "task unit type"
         unresolved_ddl_lock_id:
           type: string
         load_status:
@@ -648,17 +644,17 @@ components:
           nullable: true
           $ref: "#/components/schemas/SyncStatus"
     Task:
-      description: "迁移任务"
+      description: "task"
       type: object
       properties:
         name:
           type: string
           example: "task-1"
-          description: "迁移任务名，需要全局唯一"
+          description: "task name"
         task_mode:
           type: string
           example: "all"
-          description: "迁移模式"
+          description: "migrate mode"
           enum:
             - "full"
             - "incremental"
@@ -666,7 +662,7 @@ components:
         shard_mode:
           type: string
           example: "all"
-          description: 如果为分库分表合并任务则需要配置该项。默认使用悲观协调模式 "pessimistic"，在深入了解乐观协调模式的原理和使用限制后，也可以设置为乐观协调模式 "optimistic"
+          description: the way to coordinate DDL
           nullable: true
           enum:
             - "pessimistic"
@@ -674,15 +670,15 @@ components:
         meta_schema:
           type: string
           example: "dm-meta"
-          description: "下游储存 meta 信息的数据库"
+          description: "downstream database for storing meta information"
         enhance_online_schema_change:
           type: boolean
           example: true
-          description: 增强的osc,自适应上游 "gh-ost pt
+          description: whether to enable support for the onlineddl plugin
           nullable: true
         on_duplication:
           type: string
-          description: "如何处理有冲突的数据"
+          description: "how to handle conflicted data"
           enum:
             - "overwrite"
             - "error"
@@ -690,27 +686,27 @@ components:
           $ref: "#/components/schemas/TaskTargetDataBase"
         event_filter:
           type: array
-          description: "游数据库实例匹配的表的 binlog event filter 规则集"
+          description: "binlog event filter rule set"
           items:
             $ref: "#/components/schemas/TaskEventFilterRule"
         table_migrate_rule:
           type: array
-          description: "定义数据源迁移表的过滤规则，可以定义多个规则。如果 DM 版本早于 v2.0.0-beta.2 则使用 black-white-list"
+          description: "table migrate rule"
           items:
             $ref: "#/components/schemas/TaskTableMigrateRule"
         source_config:
           type: array
-          description: "task 上游数据源的配置列表"
+          description: "task configuration list of upstream data sources"
           items:
             $ref: "#/components/schemas/TaskSourceConfig"
 
     ErrorWithMessage:
-      description: "操作错误"
+      description: "operation error"
       type: object
       properties:
         error_msg:
           type: string
-          description: "失败原因"
+          description: "error message"
         error_code:
           type: integer
-          description: "错误码"
+          description: "error code"
