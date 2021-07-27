@@ -232,7 +232,7 @@ paths:
     get:
       tags:
         - task
-      summary: "get current task status"
+      summary: "get task status"
       operationId: "DMAPIGetTaskStatus"
       parameters:
         - name: task-name
@@ -426,7 +426,6 @@ components:
           description: "source password"
         security:
           $ref: "#/components/schemas/Security"
-
     TaskEventFilterRule:
       description: "Filtering rules at binlog level"
       type: object
@@ -545,6 +544,23 @@ components:
               binlog_gtid:
                 type: string
                 example: "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170"
+    TaskCheckerConfig:
+      type: object
+      description: "task status checker configuration"
+      properties:
+        enable:
+          type: boolean
+          example: false
+          default: true
+          description: "determines whether to enable task status checker"
+        backoff_max:
+          type: string
+          example: "5m0s"
+          description: "sets the longest time interval for the automatic recovery after errors are detected."
+        backoff_rollback:
+          type: string
+          example: "5m0s"
+          description: "sets the time interval for adjusting the waiting time of the automatic recovery."
 
     ShardingGroup:
       type: object
@@ -683,6 +699,8 @@ components:
             - "error"
         target_config:
           $ref: "#/components/schemas/TaskTargetDataBase"
+        checker_config:
+          $ref: "#/components/schemas/TaskCheckerConfig"
         event_filter_rule:
           type: array
           description: "binlog event filter rule set"
