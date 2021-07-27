@@ -33,6 +33,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // Online DDL Scheme.
@@ -934,4 +935,155 @@ func checkValidExpr(expr string) error {
 	expr = "select " + expr
 	_, _, err := defaultParser.Parse(expr, "", "")
 	return err
+}
+
+// YamlForDowngrade returns YAML format represents of config for downgrade.
+func (c *TaskConfig) YamlForDowngrade() (string, error) {
+	t := NewTaskConfigForDowngrade(c)
+
+	// encrypt password
+	cipher, err := utils.Encrypt(utils.DecryptOrPlaintext(t.TargetDB.Password))
+	if err != nil {
+		return "", err
+	}
+	t.TargetDB.Password = cipher
+
+	// omit default values, so we can ignore them for later marshal
+	t.omitDefaultVals()
+
+	return t.Yaml()
+}
+
+// MySQLInstanceForDowngrade represents a sync config of a MySQL instance for downgrade.
+type MySQLInstanceForDowngrade struct {
+	SourceID           string          `yaml:"source-id"`
+	Meta               *Meta           `yaml:"meta"`
+	FilterRules        []string        `yaml:"filter-rules"`
+	ColumnMappingRules []string        `yaml:"column-mapping-rules"`
+	RouteRules         []string        `yaml:"route-rules"`
+	BWListName         string          `yaml:"black-white-list"`
+	BAListName         string          `yaml:"block-allow-list"`
+	MydumperConfigName string          `yaml:"mydumper-config-name"`
+	Mydumper           *MydumperConfig `yaml:"mydumper"`
+	MydumperThread     int             `yaml:"mydumper-thread"`
+	LoaderConfigName   string          `yaml:"loader-config-name"`
+	Loader             *LoaderConfig   `yaml:"loader"`
+	LoaderThread       int             `yaml:"loader-thread"`
+	SyncerConfigName   string          `yaml:"syncer-config-name"`
+	Syncer             *SyncerConfig   `yaml:"syncer"`
+	SyncerThread       int             `yaml:"syncer-thread"`
+	// new config item
+	ExpressionFilters []string `yaml:"expression-filters,omitempty"`
+}
+
+// NewMySQLInstancesForDowngrade creates []* MySQLInstanceForDowngrade.
+func NewMySQLInstancesForDowngrade(mysqlInstances []*MySQLInstance) []*MySQLInstanceForDowngrade {
+	mysqlInstancesForDowngrade := make([]*MySQLInstanceForDowngrade, 0, len(mysqlInstances))
+	for _, m := range mysqlInstances {
+		newMySQLInstance := &MySQLInstanceForDowngrade{
+			SourceID:           m.SourceID,
+			Meta:               m.Meta,
+			FilterRules:        m.FilterRules,
+			ColumnMappingRules: m.ColumnMappingRules,
+			RouteRules:         m.RouteRules,
+			BWListName:         m.BWListName,
+			BAListName:         m.BAListName,
+			MydumperConfigName: m.MydumperConfigName,
+			Mydumper:           m.Mydumper,
+			MydumperThread:     m.MydumperThread,
+			LoaderConfigName:   m.LoaderConfigName,
+			Loader:             m.Loader,
+			LoaderThread:       m.LoaderThread,
+			SyncerConfigName:   m.SyncerConfigName,
+			Syncer:             m.Syncer,
+			SyncerThread:       m.SyncerThread,
+			ExpressionFilters:  m.ExpressionFilters,
+		}
+		mysqlInstancesForDowngrade = append(mysqlInstancesForDowngrade, newMySQLInstance)
+	}
+	return mysqlInstancesForDowngrade
+}
+
+// TaskConfigForDowngrade is the base configuration for task in v2.0.
+// This config is used for downgrade(config export) from a higher dmctl version.
+// When we add any new config item into SourceConfig, we should update it also.
+type TaskConfigForDowngrade struct {
+	Name                    string                         `yaml:"name"`
+	TaskMode                string                         `yaml:"task-mode"`
+	IsSharding              bool                           `yaml:"is-sharding"`
+	ShardMode               string                         `yaml:"shard-mode"`
+	IgnoreCheckingItems     []string                       `yaml:"ignore-checking-items"`
+	MetaSchema              string                         `yaml:"meta-schema"`
+	EnableHeartbeat         bool                           `yaml:"enable-heartbeat"`
+	HeartbeatUpdateInterval int                            `yaml:"heartbeat-update-interval"`
+	HeartbeatReportInterval int                            `yaml:"heartbeat-report-interval"`
+	Timezone                string                         `yaml:"timezone"`
+	CaseSensitive           bool                           `yaml:"case-sensitive"`
+	TargetDB                *DBConfig                      `yaml:"target-database"`
+	OnlineDDLScheme         string                         `yaml:"online-ddl-scheme"`
+	Routes                  map[string]*router.TableRule   `yaml:"routes"`
+	Filters                 map[string]*bf.BinlogEventRule `yaml:"filters"`
+	ColumnMappings          map[string]*column.Rule        `yaml:"column-mappings"`
+	BWList                  map[string]*filter.Rules       `yaml:"black-white-list"`
+	BAList                  map[string]*filter.Rules       `yaml:"block-allow-list"`
+	Mydumpers               map[string]*MydumperConfig     `yaml:"mydumpers"`
+	Loaders                 map[string]*LoaderConfig       `yaml:"loaders"`
+	Syncers                 map[string]*SyncerConfig       `yaml:"syncers"`
+	CleanDumpFile           bool                           `yaml:"clean-dump-file"`
+	EnableANSIQuotes        bool                           `yaml:"ansi-quotes"`
+	RemoveMeta              bool                           `yaml:"remove-meta"`
+	// new config item
+	MySQLInstances []*MySQLInstanceForDowngrade `yaml:"mysql-instances"`
+	ExprFilter     map[string]*ExpressionFilter `yaml:"expression-filter,omitempty"`
+	OnlineDDL      bool                         `yaml:"online-ddl,omitempty"`
+}
+
+// NewTaskConfigForDowngrade create new TaskConfigForDowngrade.
+func NewTaskConfigForDowngrade(taskConfig *TaskConfig) *TaskConfigForDowngrade {
+	return &TaskConfigForDowngrade{
+		Name:                    taskConfig.Name,
+		TaskMode:                taskConfig.TaskMode,
+		IsSharding:              taskConfig.IsSharding,
+		ShardMode:               taskConfig.ShardMode,
+		IgnoreCheckingItems:     taskConfig.IgnoreCheckingItems,
+		MetaSchema:              taskConfig.MetaSchema,
+		EnableHeartbeat:         taskConfig.EnableHeartbeat,
+		HeartbeatUpdateInterval: taskConfig.HeartbeatUpdateInterval,
+		HeartbeatReportInterval: taskConfig.HeartbeatReportInterval,
+		Timezone:                taskConfig.Timezone,
+		CaseSensitive:           taskConfig.CaseSensitive,
+		TargetDB:                taskConfig.TargetDB,
+		OnlineDDLScheme:         taskConfig.OnlineDDLScheme,
+		Routes:                  taskConfig.Routes,
+		Filters:                 taskConfig.Filters,
+		ColumnMappings:          taskConfig.ColumnMappings,
+		BWList:                  taskConfig.BWList,
+		BAList:                  taskConfig.BAList,
+		Mydumpers:               taskConfig.Mydumpers,
+		Loaders:                 taskConfig.Loaders,
+		Syncers:                 taskConfig.Syncers,
+		CleanDumpFile:           taskConfig.CleanDumpFile,
+		EnableANSIQuotes:        taskConfig.EnableANSIQuotes,
+		RemoveMeta:              taskConfig.RemoveMeta,
+		MySQLInstances:          NewMySQLInstancesForDowngrade(taskConfig.MySQLInstances),
+		ExprFilter:              taskConfig.ExprFilter,
+		OnlineDDL:               taskConfig.OnlineDDL,
+	}
+}
+
+// omitDefaultVals change default value to empty value for new config item.
+// If any default value for new config item is not empty(0 or false or nil),
+// we should change it to empty.
+func (c *TaskConfigForDowngrade) omitDefaultVals() {
+	if len(c.TargetDB.Session) > 0 {
+		if timeZone, ok := c.TargetDB.Session["time_zone"]; ok && timeZone == defaultTimeZone {
+			delete(c.TargetDB.Session, "time_zone")
+		}
+	}
+}
+
+// Yaml returns YAML format representation of config.
+func (c *TaskConfigForDowngrade) Yaml() (string, error) {
+	b, err := yaml.Marshal(c)
+	return string(b), err
 }
