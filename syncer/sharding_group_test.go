@@ -31,6 +31,8 @@ import (
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 var _ = Suite(&testShardingGroupSuite{})
@@ -222,8 +224,8 @@ func (t *testShardingGroupSuite) TestTableID(c *C) {
 	}
 	for _, ca := range cases {
 		// ignore isSchemaOnly
-		id, _ := GenTableID(ca[0], ca[1])
-		schema, table := UnpackTableID(id)
+		id, _ := utils.GenTableID(ca[0], ca[1])
+		schema, table := utils.UnpackTableID(id)
 		c.Assert(schema, Equals, ca[0])
 		c.Assert(table, Equals, ca[1])
 	}
@@ -237,7 +239,7 @@ func (t *testShardingGroupSuite) TestKeeper(c *C) {
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 	k.db = conn.NewBaseDB(db, func() {})
-	k.dbConn = &DBConn{cfg: t.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	k.dbConn = &dbconn.DBConn{Cfg: t.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 
 	mock.ExpectBegin()
 	mock.ExpectExec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", t.cfg.MetaSchema)).WillReturnResult(sqlmock.NewResult(1, 1))

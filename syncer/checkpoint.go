@@ -35,6 +35,7 @@ import (
 	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/failpoint"
@@ -215,6 +216,9 @@ type CheckPoint interface {
 	// FlushPointWithTableInfo flushed the table point with given table info
 	FlushPointWithTableInfo(tctx *tcontext.Context, sourceSchema, sourceTable string, ti *model.TableInfo) error
 
+	// FlushSafeModeExitPoint flushed the global checkpoint's with given table info
+	FlushSafeModeExitPoint(tctx *tcontext.Context) error
+
 	// GlobalPoint returns the global binlog stream's checkpoint
 	// corresponding to Meta.Pos and Meta.GTID
 	GlobalPoint() binlog.Location
@@ -246,6 +250,9 @@ type CheckPoint interface {
 
 	// String return text of global position
 	String() string
+
+	// CheckAndUpdate check the checkpoint data consistency and try to fix them if possible
+	CheckAndUpdate(ctx context.Context, schemas map[string]string, tables map[string]map[string]string) error
 }
 
 // RemoteCheckPoint implements CheckPoint
@@ -258,7 +265,7 @@ type RemoteCheckPoint struct {
 	cfg *config.SubTaskConfig
 
 	db        *conn.BaseDB
-	dbConn    *DBConn
+	dbConn    *dbconn.DBConn
 	tableName string // qualified table name: schema is set through task config, table is task name
 	id        string // checkpoint ID, now it is `source-id`
 
@@ -281,7 +288,8 @@ type RemoteCheckPoint struct {
 	// this variable is mainly used to decide status of safe mode, so it is access when
 	//  - init safe mode
 	//  - checking in sync and if passed, unset it
-	safeModeExitPoint *binlog.Location
+	safeModeExitPoint          *binlog.Location
+	needFlushSafeModeExitPoint bool
 
 	logCtx *tcontext.Context
 }
@@ -304,7 +312,7 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context) error {
 	checkPointDB := cp.cfg.To
 	checkPointDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
-	db, dbConns, err := createConns(tctx, cp.cfg, checkPointDB, 1)
+	db, dbConns, err := dbconn.CreateConns(tctx, cp.cfg, checkPointDB, 1)
 	if err != nil {
 		return err
 	}
@@ -316,12 +324,12 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context) error {
 
 // Close implements CheckPoint.Close.
 func (cp *RemoteCheckPoint) Close() {
-	closeBaseDB(cp.logCtx, cp.db)
+	dbconn.CloseBaseDB(cp.logCtx, cp.db)
 }
 
 // ResetConn implements CheckPoint.ResetConn.
 func (cp *RemoteCheckPoint) ResetConn(tctx *tcontext.Context) error {
-	return cp.dbConn.resetConn(tctx)
+	return cp.dbConn.ResetConn(tctx)
 }
 
 // Clear implements CheckPoint.Clear.
@@ -333,7 +341,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
 	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
 	defer cancel()
-	_, err := cp.dbConn.executeSQL(
+	_, err := cp.dbConn.ExecuteSQL(
 		tctx2,
 		[]string{`DELETE FROM ` + cp.tableName + ` WHERE id = ?`},
 		[]interface{}{cp.id},
@@ -381,7 +389,11 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, loc
 // SaveSafeModeExitPoint implements CheckPoint.SaveSafeModeExitPoint
 // shouldn't call concurrently (only called before loop in Syncer.Run and in loop to reset).
 func (cp *RemoteCheckPoint) SaveSafeModeExitPoint(point *binlog.Location) {
-	cp.safeModeExitPoint = point
+	if cp.safeModeExitPoint == nil || point == nil ||
+		binlog.CompareLocation(*point, *cp.safeModeExitPoint, cp.cfg.EnableGTID) > 0 {
+		cp.safeModeExitPoint = point
+		cp.needFlushSafeModeExitPoint = true
+	}
 }
 
 // SafeModeExitPoint implements CheckPoint.SafeModeExitPoint.
@@ -406,7 +418,7 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(tctx *tcontext.Context, sourceSchem
 	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
 	defer cancel()
 	cp.logCtx.L().Info("delete table checkpoint", zap.String("schema", sourceSchema), zap.String("table", sourceTable))
-	_, err := cp.dbConn.executeSQL(
+	_, err := cp.dbConn.ExecuteSQL(
 		tctx2,
 		[]string{`DELETE FROM ` + cp.tableName + ` WHERE id = ? AND cp_schema = ? AND cp_table = ?`},
 		[]interface{}{cp.id, sourceSchema, sourceTable},
@@ -431,7 +443,7 @@ func (cp *RemoteCheckPoint) DeleteSchemaPoint(tctx *tcontext.Context, sourceSche
 	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
 	defer cancel()
 	cp.logCtx.L().Info("delete schema checkpoint", zap.String("schema", sourceSchema))
-	_, err := cp.dbConn.executeSQL(
+	_, err := cp.dbConn.ExecuteSQL(
 		tctx2,
 		[]string{`DELETE FROM ` + cp.tableName + ` WHERE id = ? AND cp_schema = ?`},
 		[]interface{}{cp.id, sourceSchema},
@@ -502,7 +514,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	sqls := make([]string, 0, 100)
 	args := make([][]interface{}, 0, 100)
 
-	if cp.globalPoint.outOfDate() || cp.globalPointSaveTime.IsZero() {
+	if cp.globalPoint.outOfDate() || cp.globalPointSaveTime.IsZero() || cp.needFlushSafeModeExitPoint {
 		locationG := cp.GlobalPoint()
 		sqlG, argG := cp.genUpdateSQL(globalCpSchema, globalCpTable, locationG, cp.safeModeExitPoint, nil, true)
 		sqls = append(sqls, sqlG)
@@ -541,7 +553,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
 	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
 	defer cancel()
-	_, err := cp.dbConn.executeSQL(tctx2, sqls, args...)
+	_, err := cp.dbConn.ExecuteSQL(tctx2, sqls, args...)
 	if err != nil {
 		return err
 	}
@@ -552,6 +564,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 	}
 
 	cp.globalPointSaveTime = time.Now()
+	cp.needFlushSafeModeExitPoint = false
 	return nil
 }
 
@@ -583,7 +596,7 @@ func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, sour
 	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
 	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(utils.DefaultDBTimeout)
 	defer cancel()
-	_, err = cp.dbConn.executeSQL(tctx2, sqls, args...)
+	_, err = cp.dbConn.ExecuteSQL(tctx2, sqls, args...)
 	if err != nil {
 		return err
 	}
@@ -594,6 +607,30 @@ func (cp *RemoteCheckPoint) FlushPointWithTableInfo(tctx *tcontext.Context, sour
 	}
 	point.flush()
 
+	return nil
+}
+
+// FlushSafeModeExitPoint implements CheckPoint.FlushSafeModeExitPoint.
+func (cp *RemoteCheckPoint) FlushSafeModeExitPoint(tctx *tcontext.Context) error {
+	cp.RLock()
+	defer cp.RUnlock()
+
+	sqls := make([]string, 1)
+	args := make([][]interface{}, 1)
+
+	// use FlushedGlobalPoint here to avoid update global checkpoint
+	locationG := cp.FlushedGlobalPoint()
+	sqls[0], args[0] = cp.genUpdateSQL(globalCpSchema, globalCpTable, locationG, cp.safeModeExitPoint, nil, true)
+
+	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
+	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
+	defer cancel()
+	_, err := cp.dbConn.ExecuteSQL(tctx2, sqls, args...)
+	if err != nil {
+		return err
+	}
+
+	cp.needFlushSafeModeExitPoint = false
 	return nil
 }
 
@@ -700,7 +737,7 @@ func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
 	// TODO(lance6716): change ColumnName to IdentName or something
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", dbutil.ColumnName(cp.cfg.MetaSchema))
 	args := make([]interface{}, 0)
-	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
+	_, err := cp.dbConn.ExecuteSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	cp.logCtx.L().Info("create checkpoint schema", zap.String("statement", sql2))
 	return err
 }
@@ -724,7 +761,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 			UNIQUE KEY uk_id_schema_table (id, cp_schema, cp_table)
 		)`,
 	}
-	_, err := cp.dbConn.executeSQL(tctx, sqls)
+	_, err := cp.dbConn.ExecuteSQL(tctx, sqls)
 	cp.logCtx.L().Info("create checkpoint table", zap.Strings("statements", sqls))
 	return err
 }
@@ -735,7 +772,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	defer cp.Unlock()
 
 	query := `SELECT cp_schema, cp_table, binlog_name, binlog_pos, binlog_gtid, exit_safe_binlog_name, exit_safe_binlog_pos, exit_safe_binlog_gtid, table_info, is_global FROM ` + cp.tableName + ` WHERE id = ?`
-	rows, err := cp.dbConn.querySQL(tctx, query, cp.id)
+	rows, err := cp.dbConn.QuerySQL(tctx, query, cp.id)
 	defer func() {
 		if rows != nil {
 			rows.Close()
@@ -837,6 +874,41 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	}
 
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
+}
+
+// CheckAndUpdate check the checkpoint data consistency and try to fix them if possible.
+func (cp *RemoteCheckPoint) CheckAndUpdate(ctx context.Context, schemas map[string]string, tables map[string]map[string]string) error {
+	cp.Lock()
+	hasChange := false
+	for lcSchema, tableMap := range tables {
+		tableCps, ok := cp.points[lcSchema]
+		if !ok {
+			continue
+		}
+		for lcTable, table := range tableMap {
+			tableCp, ok := tableCps[lcTable]
+			if !ok {
+				continue
+			}
+			tableCps[table] = tableCp
+			delete(tableCps, lcTable)
+			hasChange = true
+		}
+	}
+	for lcSchema, schema := range schemas {
+		if tableCps, ok := cp.points[lcSchema]; ok {
+			cp.points[schema] = tableCps
+			delete(cp.points, lcSchema)
+			hasChange = true
+		}
+	}
+	cp.Unlock()
+
+	if hasChange {
+		tctx := tcontext.NewContext(ctx, log.L())
+		return cp.FlushPointsExcept(tctx, nil, nil, nil)
+	}
+	return nil
 }
 
 // LoadMeta implements CheckPoint.LoadMeta.

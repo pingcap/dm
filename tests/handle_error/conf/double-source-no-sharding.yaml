@@ -10,6 +10,9 @@ target-database:
   user: "test"
   password: "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs="
 
+  session:
+    sql_mode: "STRICT_TRANS_TABLES"
+
 mysql-instances:
   - source-id: "mysql-replica-01"
     block-allow-list:  "instance"

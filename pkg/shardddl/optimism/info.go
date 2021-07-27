@@ -222,8 +222,10 @@ func GetAllInfo(cli *clientv3.Client) (map[string]map[string]map[string]map[stri
 // This function should often be called by DM-master.
 func WatchInfo(ctx context.Context, cli *clientv3.Client, revision int64,
 	outCh chan<- Info, errCh chan<- error) {
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	// NOTE: WithPrevKV used to get a valid `ev.PrevKv` for deletion.
-	ch := cli.Watch(ctx, common.ShardDDLOptimismInfoKeyAdapter.Path(),
+	ch := cli.Watch(wCtx, common.ShardDDLOptimismInfoKeyAdapter.Path(),
 		clientv3.WithPrefix(), clientv3.WithRev(revision), clientv3.WithPrevKV())
 
 	for {
@@ -341,4 +343,48 @@ func (oldInfo *OldInfo) toInfo() Info {
 		TableInfoBefore: oldInfo.TableInfoBefore,
 		TableInfosAfter: []*model.TableInfo{oldInfo.TableInfoAfter},
 	}
+}
+
+// CheckDDLInfos try to check and fix all the schema and table names for DDL info.
+func CheckDDLInfos(cli *clientv3.Client, source string, schemaMap map[string]string, tablesMap map[string]map[string]string) error {
+	allInfos, _, err := GetAllInfo(cli)
+	if err != nil {
+		return err
+	}
+
+	for _, taskTableInfos := range allInfos {
+		sourceInfos, ok := taskTableInfos[source]
+		if !ok {
+			continue
+		}
+		for schema, tblInfos := range sourceInfos {
+			realSchema, hasChange := schemaMap[schema]
+			if !hasChange {
+				realSchema = schema
+			}
+
+			tblMap := tablesMap[schema]
+			for tbl, info := range tblInfos {
+				realTable, tableChange := tblMap[tbl]
+				if !tableChange {
+					realTable = tbl
+					tableChange = hasChange
+				}
+				if tableChange {
+					delOp := deleteInfoOp(info)
+					info.UpSchema = realSchema
+					info.UpTable = realTable
+					putOp, err := putInfoOp(info)
+					if err != nil {
+						return err
+					}
+					_, _, err = etcdutil.DoOpsInOneTxnWithRetry(cli, delOp, putOp)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
