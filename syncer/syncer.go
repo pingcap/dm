@@ -936,12 +936,12 @@ func (s *Syncer) addJob(job *job) error {
 		// trigger a flush after see one job
 		if lastLocationNum == 1 {
 			waitJobsDone = true
-			s.tctx.L().Info("meet the first job of an event", zap.Any("binlog position", lastLocation))
+			s.tctx.L().Info("meet the first job of a GTID", zap.Any("binlog position", lastLocation))
 		}
 		// mock a execution error after see two jobs.
 		if lastLocationNum == 2 {
 			failExecuteSQL = true
-			s.tctx.L().Info("meet the second job of an event", zap.Any("binlog position", lastLocation))
+			s.tctx.L().Info("meet the second job of a GTID", zap.Any("binlog position", lastLocation))
 		}
 	})
 	var queueBucket int
@@ -1305,6 +1305,13 @@ func (s *Syncer) syncDML(
 			}
 		})
 
+		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
+			if intVal, ok := val.(int); ok && intVal == 4 {
+				s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
+				failpoint.Return(0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock"))
+			}
+		})
+
 		queries := make([]string, 0, len(jobs))
 		args := make([][]interface{}, 0, len(jobs))
 		for _, j := range jobs {
@@ -1351,13 +1358,6 @@ func (s *Syncer) syncDML(
 
 			if idx >= count || sqlJob.tp == flush {
 				affect, err = executeSQLs()
-
-				failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
-					if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
-						s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
-						affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
-					}
-				})
 				if err != nil {
 					fatalF(affect, err)
 					continue
