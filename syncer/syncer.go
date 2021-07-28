@@ -1353,7 +1353,7 @@ func (s *Syncer) syncDML(
 				affect, err = executeSQLs()
 
 				failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
-					if intVal, ok := val.(int); ok && intVal == 4 {
+					if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
 						s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
 						affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
 					}
@@ -1373,7 +1373,7 @@ func (s *Syncer) syncDML(
 				affect, err = executeSQLs()
 
 				failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
-					if intVal, ok := val.(int); ok && intVal == 4 {
+					if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
 						s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
 						affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
 					}
