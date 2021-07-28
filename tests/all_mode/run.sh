@@ -192,7 +192,7 @@ function test_fail_job_between_event() {
 	sed -i "s/enable-gtid: true/enable-gtid: false/g" $WORK_DIR/source1.yaml
 	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
 
-  # worker1 will be bound to source1 and fail when see the second row change in an event
+	# worker1 will be bound to source1 and fail when see the second row change in an event
 	inject_points=(
 		"github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
 		"github.com/pingcap/dm/syncer/countJobFromOneEvent=return()"
@@ -204,8 +204,8 @@ function test_fail_job_between_event() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
-  # worker2 will be bound to source2 and fail when see the second event in a GTID
-  inject_points=(
+	# worker2 will be bound to source2 and fail when see the second event in a GTID
+	inject_points=(
 		"github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
 		"github.com/pingcap/dm/syncer/countJobFromOneGTID=return()"
 		"github.com/pingcap/dm/syncer/flushFirstJob=return()"
