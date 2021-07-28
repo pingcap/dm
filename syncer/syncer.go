@@ -1305,13 +1305,6 @@ func (s *Syncer) syncDML(
 			}
 		})
 
-		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
-			if intVal, ok := val.(int); ok && intVal == 4 {
-				s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
-				failpoint.Return(0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock"))
-			}
-		})
-
 		queries := make([]string, 0, len(jobs))
 		args := make([][]interface{}, 0, len(jobs))
 		for _, j := range jobs {
@@ -1358,6 +1351,13 @@ func (s *Syncer) syncDML(
 
 			if idx >= count || sqlJob.tp == flush {
 				affect, err = executeSQLs()
+
+				failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
+					if intVal, ok := val.(int); ok && intVal == 4 {
+						s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
+						affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
+					}
+				})
 				if err != nil {
 					fatalF(affect, err)
 					continue
@@ -1371,6 +1371,13 @@ func (s *Syncer) syncDML(
 					tctx.L().Info("job queue not full, executeSQLs by ticker")
 				})
 				affect, err = executeSQLs()
+
+				failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
+					if intVal, ok := val.(int); ok && intVal == 4 {
+						s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
+						affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
+					}
+				})
 				if err != nil {
 					fatalF(affect, err)
 					continue
