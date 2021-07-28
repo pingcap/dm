@@ -155,6 +155,10 @@ type Syncer struct {
 		sync.RWMutex
 		t time.Time
 	}
+	// safeMode is used to track if we need to generate dml with safe-mode
+	// For each binlog event, we will set the current value into eventContext because
+	// the status of this track may change over time.
+	safeMode *sm.SafeMode
 
 	timezone *time.Location
 
@@ -1594,8 +1598,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	// but there are no ways to make `update` idempotent,
 	// if we start syncer at an early position, database must bear a period of inconsistent state,
 	// it's eventual consistency.
-	safeMode := sm.NewSafeMode()
-	s.enableSafeModeInitializationPhase(tctx, safeMode)
+	s.safeMode = sm.NewSafeMode()
+	s.enableSafeModeInitializationPhase(tctx)
 
 	closeShardingResync := func() error {
 		if shardingReSync == nil {
@@ -1803,7 +1807,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if err = s.checkpoint.FlushSafeModeExitPoint(s.tctx); err != nil {
 					return err
 				}
-				if err = safeMode.Add(tctx, -1); err != nil {
+				if err = s.safeMode.Add(tctx, -1); err != nil {
 					return err
 				}
 			}
@@ -1818,7 +1822,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			shardingReSync:      shardingReSync,
 			closeShardingResync: closeShardingResync,
 			traceSource:         traceSource,
-			safeMode:            safeMode,
+			safeMode:            s.safeMode.Enable(),
 			tryReSync:           tryReSync,
 			startTime:           startTime,
 			shardingReSyncCh:    &shardingReSyncCh,
@@ -1896,10 +1900,12 @@ type eventContext struct {
 	shardingReSync      *ShardingReSync
 	closeShardingResync func() error
 	traceSource         string
-	safeMode            *sm.SafeMode
-	tryReSync           bool
-	startTime           time.Time
-	shardingReSyncCh    *chan *ShardingReSync
+	// safeMode is the value of syncer.safeMode when process this event
+	// syncer.safeMode's value may change on the fly, e.g. after event by pass the safeModeExitPoint
+	safeMode         bool
+	tryReSync        bool
+	startTime        time.Time
+	shardingReSyncCh *chan *ShardingReSync
 }
 
 // TODO: Further split into smaller functions and group common arguments into a context struct.
@@ -2065,7 +2071,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err2
 		}
 
-		param.safeMode = ec.safeMode.Enable()
+		param.safeMode = ec.safeMode
 		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
@@ -2079,7 +2085,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err2
 		}
 
-		param.safeMode = ec.safeMode.Enable()
+		param.safeMode = ec.safeMode
 		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
@@ -2441,7 +2447,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	if needShardingHandle {
 		target, _ := utils.GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 		metrics.UnsyncedTableGauge.WithLabelValues(s.cfg.Name, target, s.cfg.SourceID).Set(float64(remain))
-		err = ec.safeMode.IncrForTable(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
+		err = s.safeMode.IncrForTable(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
 		if err != nil {
 			return err
 		}
@@ -2457,7 +2463,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 
 		ec.tctx.L().Info("source shard group is synced", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-		err = ec.safeMode.DescForTable(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try disable safe-mode after sharding group synced
+		err = s.safeMode.DescForTable(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try disable safe-mode after sharding group synced
 		if err != nil {
 			return err
 		}
