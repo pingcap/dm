@@ -252,6 +252,11 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 		dumpConfig.Security.CAPath = db.Security.SSLCA
 		dumpConfig.Security.CertPath = db.Security.SSLCert
 		dumpConfig.Security.KeyPath = db.Security.SSLKey
+
+		dumpConfig.Security.SSLCABytes = db.Security.SSLCABytes
+		dumpConfig.Security.SSLCertBytes = db.Security.SSLCertBytes
+		dumpConfig.Security.SSLKEYBytes = db.Security.SSLKEYBytes
+		println("--------dumpConfig.Security.SSLKEYBytes", string(db.Security.SSLKEYBytes))
 	}
 
 	// `true` means dumpling will release lock after working connection established

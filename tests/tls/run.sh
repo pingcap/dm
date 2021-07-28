@@ -51,7 +51,11 @@ function prepare_data() {
 function setup_source_tls() {
 	run_sql 'SHOW VARIABLES WHERE Variable_Name = "datadir"' $MYSQL_PORT1 $MYSQL_PASSWORD1
 	mysql_data_path=$(cat "$TEST_DIR/sql_res.$TEST_NAME.txt" | grep Value | cut -d ':' -f 2 | xargs)
-	echo "mysql1 datadir path=$mysql_data_path"
+	echo "mysql_ssl_setup at=$mysql_data_path"
+	mysql_ssl_rsa_setup --datadir "$mysql_data_path"
+	# NOTE the mysql_ssl_rsa_setup will create a new cert if there is no cert in datadir
+	# only mysql 8.0 support use `ALTER INSTANCE RELOAD TLS` to reload cert
+	# when use mysql 5.7 we need to restart mysql-server manually if your local server do not enable ssl
 
 	run_sql "grant all on *.* to 'dm_tls_test'@'%' identified by '123456' require ssl;" $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql 'flush privileges;' $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -62,8 +66,8 @@ function setup_source_tls() {
 }
 
 function run() {
-	run_tidb_with_tls
 	setup_source_tls
+	run_tidb_with_tls
 	prepare_data
 
 	cp $cur/conf/dm-master1.toml $WORK_DIR/
