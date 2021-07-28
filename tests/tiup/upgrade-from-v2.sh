@@ -33,6 +33,10 @@ function migrate_in_previous_v2() {
 		sed -i "s/enable-gtid: true/enable-gtid: false/g" $CUR/conf/source2.yaml
 	fi
 
+	sed -i "s/enable-heartbeat: true/enable-heartbeat: false/g" $CUR/conf/task.yaml
+	sed -i "s/enable-heartbeat: true/enable-heartbeat: false/g" $CUR/conf/task_pessimistic.yaml
+	sed -i "s/enable-heartbeat: true/enable-heartbeat: false/g" $CUR/conf/task_optimistic.yaml
+
 	tiup dmctl:$PRE_VER --master-addr=master1:8261 operate-source create $CUR/conf/source1.yaml
 	tiup dmctl:$PRE_VER --master-addr=master1:8261 operate-source create $CUR/conf/source2.yaml
 
@@ -51,12 +55,17 @@ function migrate_in_previous_v2() {
 
 function upgrade_to_current_v2() {
 	if [[ "$CUR_VER" == "nightly" && "$ref" == "refs/pull"* ]]; then
-		patch_nightly_with_tiup_mirror
+		patch_nightly_with_tiup_mirror $PRE_VER
 	fi
-	tiup dm upgrade --yes $CLUSTER_NAME $CUR_VER
+
 	# uninstall previous dmctl, otherwise dmctl:nightly still use PRE_VER.
 	# FIXME: It may be a bug in tiup mirror.
 	tiup uninstall dmctl --all
+
+	# config export in PRE_VER
+	tiup dmctl:$CUR_VER --master-addr=master1:8261 config export -d old_configs
+
+	tiup dm upgrade --yes $CLUSTER_NAME $CUR_VER
 }
 
 function migrate_in_v2() {
@@ -81,11 +90,60 @@ function migrate_in_v2() {
 	echo "check locks"
 	run_dmctl_with_retry $CUR_VER "show-ddl-locks" "no DDL lock exists" 1
 
-	export DM_MASTER_ADDR="master1:8261"
-	tiup dmctl:$CUR_VER stop-task $TASK_NAME
+	# config export in CUR_VER
+	tiup dmctl:$CUR_VER --master-addr=master1:8261 config export -d new_configs
+}
+
+function diff_configs() {
+	echo "diff configs between different version"
+
+	sed '/password/d' old_configs/tasks/upgrade_via_tiup.yaml >/tmp/old_task.yaml
+	sed '/password/d' old_configs/tasks/upgrade_via_tiup_pessimistic.yaml >/tmp/old_task_pessimistic.yaml
+	sed '/password/d' old_configs/tasks/upgrade_via_tiup_optimistic.yaml >/tmp/old_task_optimistic.yaml
+	sed '/password/d' new_configs/tasks/upgrade_via_tiup.yaml >/tmp/new_task.yaml
+	sed '/password/d' new_configs/tasks/upgrade_via_tiup_pessimistic.yaml >/tmp/new_task_pessimistic.yaml
+	sed '/password/d' new_configs/tasks/upgrade_via_tiup_optimistic.yaml >/tmp/new_task_optimistic.yaml
+
+	sed '/password/d' old_configs/sources/mysql-replica-01.yaml >/tmp/old_source1.yaml
+	sed '/password/d' old_configs/sources/mariadb-replica-02.yaml >/tmp/old_source2.yaml
+	sed '/password/d' new_configs/sources/mysql-replica-01.yaml >/tmp/new_source1.yaml
+	sed '/password/d' new_configs/sources/mariadb-replica-02.yaml >/tmp/new_source2.yaml
+
+	diff /tmp/old_task.yaml /tmp/new_task.yaml || exit 1
+	diff /tmp/old_task_pessimistic.yaml /tmp/new_task_pessimistic.yaml || exit 1
+	diff /tmp/old_task_optimistic.yaml /tmp/new_task_optimistic.yaml || exit 1
+	diff /tmp/old_source1.yaml /tmp/new_source1.yaml || exit 1
+	diff /tmp/old_source2.yaml /tmp/new_source2.yaml || exit 1
+}
+
+function downgrade_to_previous_v2() {
+	echo "downgrade to previous version $PRE_VER"
+
+	# destory current cluster
+	tiup dm destroy --yes $CLUSTER_NAME
+
+	exec_incremental_stage3
+
+	# deploy previous cluster
+	tiup dm deploy --yes $CLUSTER_NAME $PRE_VER $CUR/conf/topo.yaml
+	tiup dm start --yes $CLUSTER_NAME
+
+	# config import
+	tiup dmctl:$CUR_VER --master-addr=master1:8261 config import -d new_configs
+
+	exec_incremental_stage4
+
+	run_dmctl_with_retry $CUR_VER "operate-source show" "mysql-replica-01" 1 "mariadb-replica-02" 1
+	run_dmctl_with_retry $CUR_VER "list-member --worker" "\"stage\": \"bound\"" 2
+
+	check_sync_diff $WORK_DIR $CUR/conf/diff_config.toml
+	check_sync_diff $WORK_DIR $CUR/conf/diff_config_optimistic.toml
+	check_sync_diff $WORK_DIR $CUR/conf/diff_config_pessimistic.toml
 }
 
 function destroy_v2_by_tiup() {
+	export DM_MASTER_ADDR="master1:8261"
+	tiup dmctl:$CUR_VER stop-task $TASK_NAME
 	tiup dm destroy --yes $CLUSTER_NAME
 }
 
@@ -99,6 +157,10 @@ function test() {
 	upgrade_to_current_v2
 
 	migrate_in_v2
+
+	diff_configs
+
+	downgrade_to_previous_v2
 
 	destroy_v2_by_tiup
 }

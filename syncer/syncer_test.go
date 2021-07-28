@@ -1232,12 +1232,17 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		streamer:         mockStreamer,
 	}
 
+	// When crossing safeModeExitPoint, will generate a flush sql
+	checkPointMock.ExpectBegin()
+	checkPointMock.ExpectExec(".*INSERT INTO .* VALUES.* ON DUPLICATE KEY UPDATE.*").WillReturnResult(sqlmock.NewResult(0, 1))
+	checkPointMock.ExpectCommit()
+	// Simulate resume from syncer, last time we exit successfully, so we shouldn't open safe mode here
 	go syncer.Process(ctx, resultCh)
 
 	expectJobs2 := []*expectJob{
 		{
 			insert,
-			"REPLACE INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?)",
+			"INSERT INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int32(3), "c"},
 		}, {
 			del,
@@ -1346,6 +1351,10 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan pb.ProcessResult)
 
+	// When crossing safeModeExitPoint, will generate a flush sql
+	checkPointMock.ExpectBegin()
+	checkPointMock.ExpectExec(".*INSERT INTO .* VALUES.* ON DUPLICATE KEY UPDATE.*").WillReturnResult(sqlmock.NewResult(0, 1))
+	checkPointMock.ExpectCommit()
 	// disable 1-minute safe mode
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds", "return(0)"), IsNil)
 	go syncer.Process(ctx, resultCh)
