@@ -181,7 +181,8 @@ function run() {
 	sleep 2
 
 	# leader needs some time to rebuild info
-	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
+	# start-task is not retryable
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT5" \
 		"start-task $cur/conf/dm-task.yaml" \
 		"\"result\": true" 3 \
 		"\"source\": \"$SOURCE_ID1\"" 1 \
