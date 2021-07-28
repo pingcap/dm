@@ -138,6 +138,7 @@ type Syncer struct {
 	jobsClosed         atomic.Bool
 	jobsChanLock       sync.Mutex
 	queueBucketMapping []string
+	waitXIDJob         waitXIDType
 
 	c *causality
 
@@ -922,9 +923,17 @@ func (s *Syncer) addJob(job *job) error {
 			s.tctx.L().Info("meet the second job of an event", zap.Any("binlog position", lastPos))
 		}
 	})
+	if s.waitXIDJob == waitComplete {
+		s.tctx.L().Info("All job is completed before syncer close, the coming job will be abandon", zap.Any("job", job))
+		return nil
+	}
+
 	var queueBucket int
 	switch job.tp {
 	case xid:
+		if s.waitXIDJob == waiting {
+			s.waitXIDJob = waitComplete
+		}
 		s.saveGlobalPoint(job.location)
 		return nil
 	case skip:
@@ -1318,6 +1327,13 @@ func (s *Syncer) syncDML(
 		case sqlJob, ok := <-jobChan:
 			metrics.QueueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
 			if !ok {
+				affect, err = executeSQLs()
+				if err != nil {
+					fatalF(affect, err)
+					continue
+				}
+				successF()
+				clearF()
 				return
 			}
 			idx++
@@ -3031,6 +3047,8 @@ func (s *Syncer) stopSync() {
 	if s.done != nil {
 		<-s.done // wait Run to return
 	}
+
+	s.waitTransaction()
 	s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 
@@ -3376,5 +3394,21 @@ func (s *Syncer) delLoadTask() error {
 		return err
 	}
 	s.tctx.Logger.Info("delete load worker in etcd for all mode", zap.String("task", s.cfg.Name), zap.String("source", s.cfg.SourceID))
+	return nil
+}
+
+type waitXIDType int
+
+const (
+	noWait waitXIDType = iota
+	waiting
+	waitComplete
+)
+
+func (s *Syncer) waitTransaction() error {
+	defer s.jobWg.Wait()
+
+	s.waitXIDJob = waiting
+
 	return nil
 }
