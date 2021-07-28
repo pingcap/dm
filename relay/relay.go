@@ -48,6 +48,8 @@ import (
 	"github.com/pingcap/dm/relay/retry"
 	"github.com/pingcap/dm/relay/transformer"
 	"github.com/pingcap/dm/relay/writer"
+
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 // used to fill RelayLogInfo.
@@ -959,7 +961,7 @@ func (r *Relay) setSyncConfig() error {
 	var tlsConfig *tls.Config
 	var err error
 	if r.cfg.From.Security != nil {
-		tlsConfig, err = utils.ToTLSConfigWithVerifyByRawbytes(r.cfg.From.Security.SSLCABytes,
+		tlsConfig, err = toolutils.ToTLSConfigWithVerifyByRawbytes(r.cfg.From.Security.SSLCABytes,
 			r.cfg.From.Security.SSLCertBytes, r.cfg.From.Security.SSLKEYBytes, []string{})
 		if err != nil {
 			return terror.ErrConnInvalidTLSConfig.Delegate(err)

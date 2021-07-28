@@ -26,6 +26,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/failpoint"
 
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
@@ -66,7 +68,7 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 		if err := config.Security.LoadTLSContent(); err != nil {
 			return nil, terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}
-		tlsConfig, err := utils.ToTLSConfigWithVerifyByRawbytes(config.Security.SSLCABytes,
+		tlsConfig, err := toolutils.ToTLSConfigWithVerifyByRawbytes(config.Security.SSLCABytes,
 			config.Security.SSLCertBytes, config.Security.SSLKEYBytes, []string{})
 		if err != nil {
 			return nil, terror.ErrConnInvalidTLSConfig.Delegate(err)

@@ -43,6 +43,8 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
+
 	"github.com/pingcap/dm/dm/config"
 	common2 "github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
@@ -3247,7 +3249,7 @@ func (s *Syncer) setSyncCfg() error {
 	var tlsConfig *tls.Config
 	var err error
 	if s.cfg.From.Security != nil {
-		tlsConfig, err = utils.ToTLSConfigWithVerifyByRawbytes(s.cfg.From.Security.SSLCABytes,
+		tlsConfig, err = toolutils.ToTLSConfigWithVerifyByRawbytes(s.cfg.From.Security.SSLCABytes,
 			s.cfg.From.Security.SSLCertBytes, s.cfg.From.Security.SSLKEYBytes, []string{})
 		if err != nil {
 			return terror.ErrConnInvalidTLSConfig.Delegate(err)
