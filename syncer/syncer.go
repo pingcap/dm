@@ -900,30 +900,48 @@ func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 
 // only used in tests.
 var (
-	lastPos        mysql.Position
-	lastPosNum     int
-	waitJobsDone   bool
-	failExecuteSQL bool
-	failOnce       atomic.Bool
+	lastLocation    binlog.Location
+	lastLocationNum int
+	waitJobsDone    bool
+	failExecuteSQL  bool
+	failOnce        atomic.Bool
 )
 
 func (s *Syncer) addJob(job *job) error {
 	failpoint.Inject("countJobFromOneEvent", func() {
-		if job.currentLocation.Position.Compare(lastPos) == 0 {
-			lastPosNum++
+		if job.currentLocation.Position.Compare(lastLocation.Position) == 0 {
+			lastLocationNum++
 		} else {
-			lastPos = job.currentLocation.Position
-			lastPosNum = 1
+			lastLocation = job.currentLocation
+			lastLocationNum = 1
 		}
 		// trigger a flush after see one job
-		if lastPosNum == 1 {
+		if lastLocationNum == 1 {
 			waitJobsDone = true
-			s.tctx.L().Info("meet the first job of an event", zap.Any("binlog position", lastPos))
+			s.tctx.L().Info("meet the first job of an event", zap.Any("binlog position", lastLocation))
 		}
 		// mock a execution error after see two jobs.
-		if lastPosNum == 2 {
+		if lastLocationNum == 2 {
 			failExecuteSQL = true
-			s.tctx.L().Info("meet the second job of an event", zap.Any("binlog position", lastPos))
+			s.tctx.L().Info("meet the second job of an event", zap.Any("binlog position", lastLocation))
+		}
+	})
+	failpoint.Inject("countJobFromOneGTID", func() {
+		if binlog.CompareLocation(job.currentLocation, lastLocation, true) == 0 {
+			lastLocationNum++
+		} else {
+			lastLocation = job.currentLocation
+			lastLocationNum = 1
+		}
+		// trigger a flush after see one job
+		if lastLocationNum == 1 {
+			waitJobsDone = true
+			s.tctx.L().Info("meet the first job of an event", zap.Any("binlog position", lastLocation))
+		}
+		// mock a execution error after see two jobs.
+		if lastLocationNum == 2 {
+			failExecuteSQL = true
+			s.tctx.L().Info("meet the second job of an event", zap.Any("binlog position", lastLocation))
 		}
 	})
 	var queueBucket int
@@ -966,9 +984,9 @@ func (s *Syncer) addJob(job *job) error {
 
 	// nolint:ifshort
 	wait := s.checkWait(job)
-	failpoint.Inject("flushFirstJobOfEvent", func() {
+	failpoint.Inject("flushFirstJob", func() {
 		if waitJobsDone {
-			s.tctx.L().Info("trigger flushFirstJobOfEvent")
+			s.tctx.L().Info("trigger flushFirstJob")
 			waitJobsDone = false
 			wait = true
 		}
@@ -1280,10 +1298,10 @@ func (s *Syncer) syncDML(
 			return 0, nil
 		}
 
-		failpoint.Inject("failSecondJobOfEvent", func() {
+		failpoint.Inject("failSecondJob", func() {
 			if failExecuteSQL && failOnce.CAS(false, true) {
-				s.tctx.L().Info("trigger failSecondJobOfEvent")
-				failpoint.Return(0, terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJobOfEvent"), "mock"))
+				s.tctx.L().Info("trigger failSecondJob")
+				failpoint.Return(0, terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJob"), "mock"))
 			}
 		})
 
@@ -1781,7 +1799,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		// check pass SafeModeExitLoc and try disable safe mode, but not in sharding or replacing error
 		safeModeExitLoc := s.checkpoint.SafeModeExitPoint()
 		if safeModeExitLoc != nil && !s.isReplacingErr && shardingReSync == nil {
-			if binlog.CompareLocation(currentLocation, *safeModeExitLoc, s.cfg.EnableGTID) >= 0 {
+			// TODO: for RowsEvent (in fact other than QueryEvent), `currentLocation` is updated in `handleRowsEvent`
+			// so here the meaning of `currentLocation` is the location of last event
+			if binlog.CompareLocation(currentLocation, *safeModeExitLoc, s.cfg.EnableGTID) > 0 {
 				s.checkpoint.SaveSafeModeExitPoint(nil)
 				// must flush here to avoid the following situation:
 				// 1. quit safe mode
