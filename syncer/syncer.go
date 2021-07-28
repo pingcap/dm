@@ -1572,7 +1572,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			err2            error
 			exitSafeModeLoc binlog.Location
 		)
-		// TODO: why use a sharding-resync variable savedGlobalLastLocation?
 		if binlog.CompareLocation(currentLocation, savedGlobalLastLocation, s.cfg.EnableGTID) > 0 {
 			exitSafeModeLoc = currentLocation.Clone()
 		} else {
@@ -1584,7 +1583,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		} else {
 			err2 = s.flushCheckPoints()
 		}
-		if err != nil {
+		if err2 != nil {
 			tctx.L().Warn("failed to flush checkpoints when exit task", zap.Error(err2))
 		} else {
 			tctx.L().Info("flush checkpoints when exit task")
