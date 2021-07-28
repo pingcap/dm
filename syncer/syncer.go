@@ -1318,7 +1318,14 @@ func (s *Syncer) syncDML(
 		// use background context to execute sqls as much as possible
 		ctctx, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLExecutionDuration)
 		defer cancel()
-		return db.ExecuteSQL(ctctx, queries, args...)
+		affect, err := db.ExecuteSQL(ctctx, queries, args...)
+		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
+			if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
+				s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
+				affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
+			}
+		})
+		return affect, err
 	}
 
 	var err error
@@ -1351,13 +1358,6 @@ func (s *Syncer) syncDML(
 
 			if idx >= count || sqlJob.tp == flush {
 				affect, err = executeSQLs()
-
-				failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
-					if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
-						s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
-						affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
-					}
-				})
 				if err != nil {
 					fatalF(affect, err)
 					continue
@@ -1371,13 +1371,6 @@ func (s *Syncer) syncDML(
 					tctx.L().Info("job queue not full, executeSQLs by ticker")
 				})
 				affect, err = executeSQLs()
-
-				failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
-					if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
-						s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
-						affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
-					}
-				})
 				if err != nil {
 					fatalF(affect, err)
 					continue
@@ -1579,6 +1572,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			err2            error
 			exitSafeModeLoc binlog.Location
 		)
+		// TODO: why use a sharding-resync variable savedGlobalLastLocation?
 		if binlog.CompareLocation(currentLocation, savedGlobalLastLocation, s.cfg.EnableGTID) > 0 {
 			exitSafeModeLoc = currentLocation.Clone()
 		} else {
@@ -1590,7 +1584,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		} else {
 			err2 = s.flushCheckPoints()
 		}
-		tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
+		if err != nil {
+			tctx.L().Warn("failed to flush checkpoints when exit task", zap.Error(err2))
+		} else {
+			tctx.L().Info("flush checkpoints when exit task")
+		}
 	}()
 
 	s.start = time.Now()
@@ -2011,13 +2009,21 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 	}
 
-	// DML position before table checkpoint, ignore it
+	// For DML position before table checkpoint, ignore it. When the position equals to table checkpoint, this event may
+	// be partially replicated to downstream, we rely on safe-mode to handle it.
 	if s.checkpoint.IsOlderThanTablePoint(originSchema, originTable, *ec.currentLocation, false) {
 		ec.tctx.L().Debug("ignore obsolete event that is old than table checkpoint", zap.String("event", "row"), log.WrapStringerField("location", ec.currentLocation), zap.String("origin schema", originSchema), zap.String("origin table", originTable))
 		return nil
 	}
 
-	ec.tctx.L().Debug("", zap.String("event", "row"), zap.String("origin schema", originSchema), zap.String("origin table", originTable), zap.String("target schema", schemaName), zap.String("target table", tableName), log.WrapStringerField("location", ec.currentLocation), zap.Reflect("raw event data", ev.Rows))
+	ec.tctx.L().Debug("",
+		zap.String("event", "row"),
+		zap.String("origin schema", originSchema),
+		zap.String("origin table", originTable),
+		zap.String("target schema", schemaName),
+		zap.String("target table", tableName),
+		log.WrapStringerField("location", ec.currentLocation),
+		zap.Reflect("raw event data", ev.Rows))
 
 	// TODO(ehco) remove heartbeat
 	if s.cfg.EnableHeartbeat {
@@ -2143,6 +2149,12 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, originSQL string) error {
 	if originSQL == "BEGIN" {
+		// GTID event: GTID_NEXT = xxx:11
+		// Query event: BEGIN (GTID set = xxx:1-11)
+		// Rows event: ... (GTID set = xxx:1-11)  if we update lastLocation below,
+		//                                        otherwise that is xxx:1-10 when dealing with table checkpoints
+		// Xid event: GTID set = xxx:1-11  this event is related to global checkpoint
+		*ec.lastLocation = *ec.currentLocation
 		return nil
 	}
 
