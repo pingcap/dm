@@ -229,12 +229,12 @@ func (t *testFileSuite) TestGetFirstBinlogName(c *C) {
 	c.Assert(err, ErrorMatches, ".*not found.*")
 	c.Assert(name, Equals, "")
 
-	// has file, but not a valid binlog file
+	// has file, but not a valid binlog file. Now the error message is binlog files not found
 	filename := "invalid.bin"
 	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0o600)
 	c.Assert(err, IsNil)
 	_, err = getFirstBinlogName(baseDir, uuid)
-	c.Assert(err, ErrorMatches, ".*not valid.*")
+	c.Assert(err, ErrorMatches, ".*not found.*")
 	err = os.Remove(filepath.Join(subDir, filename))
 	c.Assert(err, IsNil)
 
