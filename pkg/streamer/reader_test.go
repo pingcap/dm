@@ -256,7 +256,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	t.verifyNoEventsInStreamer(c, s)
 }
 
-func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
+func (t *testReaderSuite) TestParseFilerelayLogUpdatedOrNewCreated(c *C) {
 	var (
 		filename                      = "test-mysql-bin.000001"
 		nextFilename                  = "test-mysql-bin.000002"
