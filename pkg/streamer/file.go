@@ -233,7 +233,7 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 				// if we return a different filename with latestFile the outer logic (parseDirAsPossible) will find the right one
 				metaFile, err := os.Open(filepath.Join(dir, utils.MetaFilename))
 				if err != nil {
-					errCh <- terror.Annotatef(err, "open metaFile from %s in dir %s", dir, utils.MetaFilename)
+					errCh <- terror.Annotatef(err, "open metaFile from %s in dir %s", utils.MetaFilename, dir)
 					return
 				}
 				defer metaFile.Close()
