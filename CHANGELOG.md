@@ -6,7 +6,6 @@ All notable changes to this project will be documented in this file.
 ### Improvements
 
 - Support for filtering certain DML using SQL expressions [#1832](https://github.com/pingcap/dm/pull/1832)
-- Automatically recognize and support for upstream `lower_case_table_names` settings [#1886](https://github.com/pingcap/dm/pull/1886)
 - Add `config import/export` command to import and export cluster sources and tasks configuration files for downgrade [#1921](https://github.com/pingcap/dm/pull/1921)
 - Optimize safe-mode to improve replication efficiency [#1920](https://github.com/pingcap/dm/pull/1920)
 - Maximize compatibility with upstream SQL_MODE [#1894](https://github.com/pingcap/dm/pull/1894)
@@ -18,6 +17,7 @@ All notable changes to this project will be documented in this file.
 
 - Fix the issue that the inconsistency of upstream and downstream primary keys might lead to data loss [#1919](https://github.com/pingcap/dm/pull/1919)
 - Fix the issue that too many upstream sources cause cluster upgrade failure and DM-master OOM [#1868](https://github.com/pingcap/dm/pull/1868)
+- Fix the issue of the configuration item `case-sensitive` [#1886](https://github.com/pingcap/dm/pull/1886)
 - Fix the issue that the default value of `tidb_enable_change_column_type` inside DM is wrong [#1843](https://github.com/pingcap/dm/pull/1843)
 - Fix the issue that the `auto_random` column in downstream may causes task interruption [#1847](https://github.com/pingcap/dm/pull/1847)
 - Fix the issue that `operate-schema set -flush` command causes DM-worker panic [#1829](https://github.com/pingcap/dm/pull/1829)
