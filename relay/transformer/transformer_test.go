@@ -64,6 +64,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 		result: Result{
 			LogPos:      uint32(position),
 			NextLogName: nextLogName,
+			CanSaveGTID: true,
 		},
 	})
 
