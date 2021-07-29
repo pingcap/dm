@@ -443,7 +443,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	c.Assert(pos, DeepEquals, binlogPos)
 	c.Assert(gs.String(), Equals, "") // no GTID sets in event yet
 
-	// after handle rotate envent, we flush the meta immediately
+	// after handle rotate envent, we save and flush the meta immediately
 	newctx, newcancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer newcancel()
 	newErr := r.handleEvents(newctx, reader2, transformer2, writer2)
