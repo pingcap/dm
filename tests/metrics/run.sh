@@ -45,6 +45,9 @@ function run() {
 	# start DM task
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 	dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"result\": true" 3
 
 	# check ddl job lag
 	run_sql_source1 "alter table metrics.t1 add column new_col1 int;"
@@ -112,8 +115,6 @@ function run() {
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"stop-task test" \
 		"\"result\": true" 3
-	cleanup_data metrics
-	cleanup_process $*
 	export GO_FAILPOINTS=''
 }
 
