@@ -23,6 +23,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/BurntSushi/toml"
+
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -198,9 +200,10 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 	}
 }
 
-// relaySubDirUpdated checks whether the relay sub directory updated
-// including file changed, created.
-func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir string,
+// relayLogUpdatedOrNewCreated checks whether current relay log file is updated or new relay log is created.
+// we check the size of the file first, if the size is the same as the latest file, we assume there is no new wirte
+// so we need to chenk relay meta file to see if the new relay log is created.
+func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Duration, dir string,
 	latestFilePath, latestFile string, latestFileSize int64, updatePathCh chan string, errCh chan error) {
 	// watch current relay log file size and newer relay log  create event to check whether need to reparse or parse next file
 	ticker := time.NewTicker(watcherInterval)
@@ -213,7 +216,6 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 			}
 			return
 		case <-ticker.C:
-
 			// check the latest relay log file whether updated when adding watching and collecting newer
 			cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
 			switch {
@@ -227,14 +229,23 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 				updatePathCh <- latestFilePath
 				return
 			default: // no new write
-				newerFiles, err := CollectBinlogFilesCmp(dir, latestFile, FileCmpBigger)
+				// our relay meat file will be updated immediately after new relay log file created
+				// although we can't ensure the binlog file name is the next one we expected
+				// if we return a different filename with latestFile the outer logic (parseDirAsPossible) will find the right one
+				metaFile, err := os.Open(filepath.Join(dir, utils.MetaFilename))
 				if err != nil {
-					errCh <- terror.Annotatef(err, "collect newer files from %s in dir %s", latestFile, dir)
+					errCh <- terror.Annotatef(err, "open metaFile from %s in dir %s", dir, utils.MetaFilename)
 					return
 				}
-				if len(newerFiles) > 0 {
-					// check whether newer relay log file exists
-					nextFilePath := filepath.Join(dir, newerFiles[0])
+				defer metaFile.Close()
+				meta := &Meta{}
+				_, err = toml.DecodeReader(metaFile, meta)
+				if err != nil {
+					errCh <- terror.Annotate(err, "decode meta toml faild")
+					return
+				}
+				if meta.BinLogName != latestFile {
+					nextFilePath := filepath.Join(dir, meta.BinLogName)
 					log.L().Info("newer relay log file is already generated, start parse from it", zap.String("new file", nextFilePath))
 					updatePathCh <- nextFilePath
 					return
