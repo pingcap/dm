@@ -14,6 +14,11 @@ on:
       toVer:
         dmVer: "nightly"
 
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 jobs:
   from_v1:
     name: From V1
