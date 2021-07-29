@@ -136,6 +136,9 @@ func readSortedBinlogFromDir(dirpath string) ([]string, error) {
 	if err != nil {
 		return nil, terror.ErrReadDir.Delegate(err, dirpath)
 	}
+	if len(names) == 0 {
+		return nil, nil
+	}
 
 	// sorting bin.100000, ..., bin.1000000, ..., bin.999999
 	type tuple struct {
