@@ -120,7 +120,6 @@ func getFirstBinlogName(baseDir, uuid string) (string, error) {
 
 	if len(files) == 0 {
 		return "", terror.ErrBinlogFilesNotFound.Generate(subDir)
-
 	}
 	return files[0], nil
 }
@@ -141,9 +140,9 @@ func readSortedBinlogFromDir(dirpath string) ([]string, error) {
 	// sorting bin.100000, ..., bin.1000000, ..., bin.999999
 	type tuple struct {
 		filename string
-		parsed binlog.Filename
+		parsed   binlog.Filename
 	}
-	tmp := make([]tuple, 0, len(names) - 1)
+	tmp := make([]tuple, 0, len(names)-1)
 
 	for _, f := range names {
 		p, err2 := binlog.ParseFilename(f)
@@ -154,7 +153,7 @@ func readSortedBinlogFromDir(dirpath string) ([]string, error) {
 		}
 		tmp = append(tmp, tuple{
 			filename: f,
-			parsed: p,
+			parsed:   p,
 		})
 	}
 
