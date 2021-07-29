@@ -205,7 +205,6 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 // so we need to chenk relay meta file to see if the new relay log is created.
 func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Duration, dir string,
 	latestFilePath, latestFile string, latestFileSize int64, updatePathCh chan string, errCh chan error) {
-	// watch current relay log file size and newer relay log  create event to check whether need to reparse or parse next file
 	ticker := time.NewTicker(watcherInterval)
 	defer ticker.Stop()
 	for {
@@ -246,7 +245,9 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 				}
 				if meta.BinLogName != latestFile {
 					nextFilePath := filepath.Join(dir, meta.BinLogName)
-					log.L().Info("newer relay log file is already generated, start parse from it", zap.String("new file", nextFilePath))
+					log.L().Info("newer relay log file is already generated, start parse from it",
+						zap.String("now file", latestFilePath),
+						zap.String("new file", nextFilePath))
 					updatePathCh <- nextFilePath
 					return
 				}
