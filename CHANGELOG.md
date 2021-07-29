@@ -1,6 +1,39 @@
 # DM Changelog
 
 All notable changes to this project will be documented in this file.
+## [2.0.5] 2021-07-30
+
+### Improvements
+
+- Support for filtering certain DML using SQL expressions [#1832](https://github.com/pingcap/dm/pull/1832)
+- Automatically recognize and support for upstream `lower_case_table_names` settings [#1886](https://github.com/pingcap/dm/pull/1886)
+- Add `config import/export` command to import and export cluster sources and tasks configuration files for downgrade [#1921](https://github.com/pingcap/dm/pull/1921)
+- Optimize safe-mode to improve replication efficiency [#1920](https://github.com/pingcap/dm/pull/1920)
+- Maximize compatibility with upstream SQL_MODE [#1894](https://github.com/pingcap/dm/pull/1894)
+- Support upstream using both pt and gh-ost online DDL modes in one task [#1918](https://github.com/pingcap/dm/pull/1918)
+- Improve the efficiency of replication of DECIMAL types [#1841](https://github.com/pingcap/dm/pull/1841)
+- Support for automatic retry of transaction-related retryable errors [#1916](https://github.com/pingcap/dm/pull/1916)
+
+### Bug fixes
+
+- Fix the issue that the inconsistency of upstream and downstream primary keys might lead to data loss [#1919](https://github.com/pingcap/dm/pull/1919)
+- Fix the issue that too many upstream sources cause cluster upgrade failure and DM-master OOM [#1868](https://github.com/pingcap/dm/pull/1868)
+- Fix the issue that the default value of `tidb_enable_change_column_type` inside DM is wrong [#1843](https://github.com/pingcap/dm/pull/1843)
+- Fix the issue that the `auto_random` column in downstream may causes task interruption [#1847](https://github.com/pingcap/dm/pull/1847)
+- Fix the issue that `operate-schema set -flush` command causes DM-worker panic [#1829](https://github.com/pingcap/dm/pull/1829)
+- Fix the issue that DDL fails to coordinate within DM-worker due to repeated execution of the same DDL in pessimistic mode [#1816](https://github.com/pingcap/dm/pull/1816)
+- Fix the issue that wrong configuration causes DM-worker panic [#1842](https://github.com/pingcap/dm/pull/1842)
+- Fix the issue that redoing tasks causes loader panic [#1822](https://github.com/pingcap/dm/pull/1822)
+- Fix the issue that DM binlog file name is not timely updatedafter upstream master-slave switch [#1874](https://github.com/pingcap/dm/pull/1874)
+- Fix the issue of incorrect value of replication delay monitoring [#1880](https://github.com/pingcap/dm/pull/1880)
+- Fix the issue that block-allow-list fails to filter online DDL in some cases [#1867](https://github.com/pingcap/dm/pull/1867)
+- Fix the issue that the task cannot be stopped manually due to the error after automatic resuming [#1917](https://github.com/pingcap/dm/pull/1917)
+
+
+### Known issues
+
+[GitHub issues](https://github.com/pingcap/dm/issues?q=is%3Aissue+label%3Aaffected-v2.0.5)
+
 ## [1.0.7] 2021-06-21
 
 ### Bug fixes
