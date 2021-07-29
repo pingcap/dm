@@ -24,7 +24,7 @@ All notable changes to this project will be documented in this file.
 - Fix the issue that DDL fails to coordinate within DM-worker due to repeated execution of the same DDL in pessimistic mode [#1816](https://github.com/pingcap/dm/pull/1816)
 - Fix the issue that wrong configuration causes DM-worker panic [#1842](https://github.com/pingcap/dm/pull/1842)
 - Fix the issue that redoing tasks causes loader panic [#1822](https://github.com/pingcap/dm/pull/1822)
-- Fix the issue that DM binlog file name is not timely updatedafter upstream master-slave switch [#1874](https://github.com/pingcap/dm/pull/1874)
+- Fix the issue that DM binlog file name is not timely updated after upstream master-slave switch [#1874](https://github.com/pingcap/dm/pull/1874)
 - Fix the issue of incorrect value of replication delay monitoring [#1880](https://github.com/pingcap/dm/pull/1880)
 - Fix the issue that block-allow-list fails to filter online DDL in some cases [#1867](https://github.com/pingcap/dm/pull/1867)
 - Fix the issue that the task cannot be stopped manually due to the error after automatic resuming [#1917](https://github.com/pingcap/dm/pull/1917)
