@@ -74,6 +74,7 @@ func (t *transformer) Transform(e *replication.BinlogEvent) Result {
 	case *replication.RotateEvent:
 		result.LogPos = uint32(ev.Position)         // next event's position
 		result.NextLogName = string(ev.NextLogName) // for RotateEvent, update binlog name
+		result.CanSaveGTID = true
 		// NOTE: we need to get the first binlog filename from fake RotateEvent when using auto position
 	case *replication.QueryEvent:
 		// when RawModeEnabled not true, QueryEvent will be parsed.

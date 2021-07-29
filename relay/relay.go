@@ -522,12 +522,6 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		}
 		relayLogWriteDurationHistogram.Observe(time.Since(writeTimer).Seconds())
 		r.tryUpdateActiveRelayLog(e, lastPos.Name) // wrote a event, try update the current active relay log.
-		if _, ok := e.Event.(*replication.RotateEvent); ok {
-			err2 := r.FlushMeta()
-			if err2 != nil {
-				return err2
-			}
-		}
 
 		// 4. update meta and metrics
 		needSavePos := tResult.CanSaveGTID
@@ -560,6 +554,11 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			err = r.SaveMeta(lastPos, lastGTID.Clone())
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
+			}
+			if _, ok := e.Event.(*replication.RotateEvent); ok {
+				if err2 := r.FlushMeta(); err2 != nil {
+					return err2
+				}
 			}
 		}
 	}
