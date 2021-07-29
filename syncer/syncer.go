@@ -225,6 +225,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.cfg = cfg
 	syncer.tctx = tcontext.Background().WithLogger(logger)
 	syncer.jobsClosed.Store(true) // not open yet
+	syncer.waitXIDJob = noWait
 	syncer.closed.Store(false)
 	syncer.lastBinlogSizeCount.Store(0)
 	syncer.binlogSizeCount.Store(0)
@@ -545,6 +546,7 @@ func (s *Syncer) reset() {
 	s.execError.Store(nil)
 	s.setErrLocation(nil, nil, false)
 	s.isReplacingErr = false
+	s.waitXIDJob = noWait
 
 	switch s.cfg.ShardMode {
 	case config.ShardPessimistic:
@@ -1331,6 +1333,7 @@ func (s *Syncer) syncDML(
 		case sqlJob, ok := <-jobChan:
 			metrics.QueueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
 			if !ok {
+				tctx.L().Info("close job chan", zap.Any("rest job", jobs))
 				affect, err = executeSQLs()
 				if err != nil {
 					fatalF(affect, err)
@@ -3054,7 +3057,7 @@ func (s *Syncer) stopSync() {
 		<-s.done // wait Run to return
 	}
 
-	s.waitTransaction()
+	s.waitTransactionAndDDL()
 	s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 
@@ -3411,10 +3414,9 @@ const (
 	waitComplete
 )
 
-func (s *Syncer) waitTransaction() error {
-	defer s.jobWg.Wait()
+func (s *Syncer) waitTransactionAndDDL() {
 
 	s.waitXIDJob = waiting
-
-	return nil
+	s.jobWg.Wait()
+	s.waitXIDJob = waitComplete
 }
