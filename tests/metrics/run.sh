@@ -45,6 +45,9 @@ function run() {
 	# start DM task
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 	dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"result\": true" 3
 
 	# check ddl job lag
 	run_sql_source1 "alter table metrics.t1 add column new_col1 int;"
@@ -90,7 +93,7 @@ function run() {
 	echo "check zero job done!"
 
 	kill_dm_worker
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/changeTickerInterval=return(5);github.com/pingcap/dm/syncer/noJobInQueueLog=return(true)"
+	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/changeTickerInterval=return(5);github.com/pingcap/dm/syncer/noJobInQueueLog=return(true);github.com/pingcap/dm/syncer/WaitUserCancel=return(1)"
 	# First set the ticker interval to 5s -> expect the execSQL interval to be greater than 5s
 	# At 5s, the first no job log will appear in the log
 	# At 6s, the ticker has already waited 1s and the ticker goes to 1/5th of the way
@@ -105,14 +108,13 @@ function run() {
 	sleep 6
 	echo "make a dml job"
 	run_sql_source1 "use metrics;insert into t1 (id, name, ts) values (1004, 'zmj4', '2022-05-11 12:01:05')"
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	echo "sleep 6s"
 	sleep 6
 	$cur/../_utils/check_ticker_interval.py $WORK_DIR/worker1/log/dm-worker.log 5
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"stop-task test" \
 		"\"result\": true" 3
-	cleanup_data metrics
-	cleanup_process $*
 	export GO_FAILPOINTS=''
 }
 
