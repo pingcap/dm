@@ -7,8 +7,10 @@ CUR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $CUR/_utils/env_variables
 
 stop_services() {
-	# killall -9 tidb-server || true
 	echo "..."
+	# clean sql mode
+	mysql -u root -h $MYSQL_HOST1 -P $MYSQL_PORT1 -p$MYSQL_PASSWORD1 -e "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
+	mysql -u root -h $MYSQL_HOST2 -P $MYSQL_PORT2 -p$MYSQL_PASSWORD2 -e "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
 }
 
 check_mysql() {
@@ -25,6 +27,13 @@ check_mysql() {
 	done
 }
 
+set_default_variables() {
+	host=$1
+	port=$2
+	password=$3
+	mysql -u root -h ${host} -P ${port} -p${password} -e "set global character_set_server='utf8mb4';set global collation_server='utf8mb4_bin';"
+}
+
 start_services() {
 	stop_services
 
@@ -37,6 +46,8 @@ start_services() {
 
 	check_mysql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_mysql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+	set_default_variables $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	set_default_variables $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 }
 
 if [ "$#" -ge 1 ]; then

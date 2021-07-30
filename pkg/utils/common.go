@@ -19,12 +19,20 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser/model"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/sessionctx/variable"
+	"github.com/pingcap/tidb/table"
+	"github.com/pingcap/tidb/types"
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -76,7 +84,7 @@ func FetchAllDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter) (map[s
 			Name:   "", // schema level
 		})
 	}
-	ftSchemas = bw.ApplyOn(ftSchemas)
+	ftSchemas = bw.Apply(ftSchemas)
 	if len(ftSchemas) == 0 {
 		log.L().Warn("no schema need to sync")
 		return nil, nil
@@ -97,7 +105,7 @@ func FetchAllDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter) (map[s
 				Name:   table,
 			})
 		}
-		ftTables = bw.ApplyOn(ftTables)
+		ftTables = bw.Apply(ftTables)
 		if len(ftTables) == 0 {
 			log.L().Info("no tables need to sync", zap.String("schema", schema))
 			continue // NOTE: should we still keep it as an empty elem?
@@ -143,6 +151,35 @@ func FetchTargetDoTables(ctx context.Context, db *sql.DB, bw *filter.Filter, rou
 	}
 
 	return mapper, nil
+}
+
+// LowerCaseTableNamesFlavor represents the type of db `lower_case_table_names` settings.
+type LowerCaseTableNamesFlavor uint8
+
+const (
+	// LCTableNamesSensitive represent lower_case_table_names = 0, case sensitive.
+	LCTableNamesSensitive LowerCaseTableNamesFlavor = 0
+	// LCTableNamesInsensitive represent lower_case_table_names = 1, case insensitive.
+	LCTableNamesInsensitive = 1
+	// LCTableNamesMixed represent lower_case_table_names = 2, table names are case-sensitive, but case-insensitive in usage.
+	LCTableNamesMixed = 2
+)
+
+// FetchLowerCaseTableNamesSetting return the `lower_case_table_names` setting of target db.
+func FetchLowerCaseTableNamesSetting(ctx context.Context, conn *sql.Conn) (LowerCaseTableNamesFlavor, error) {
+	query := "SELECT @@lower_case_table_names;"
+	row := conn.QueryRowContext(ctx, query)
+	if row.Err() != nil {
+		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(row.Err(), query)
+	}
+	var res uint8
+	if err := row.Scan(&res); err != nil {
+		return LCTableNamesSensitive, terror.ErrDBExecuteFailed.Delegate(err, query)
+	}
+	if res > LCTableNamesMixed {
+		return LCTableNamesSensitive, terror.ErrDBUnExpect.Generate(fmt.Sprintf("invalid `lower_case_table_names` value '%d'", res))
+	}
+	return LowerCaseTableNamesFlavor(res), nil
 }
 
 // CompareShardingDDLs compares s and t ddls
@@ -208,4 +245,96 @@ func NonRepeatStringsEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// GenTableID generates table ID.
+func GenTableID(schema, table string) (id string, isSchemaOnly bool) {
+	if len(table) == 0 {
+		return "`" + schema + "`", true
+	}
+	return "`" + schema + "`.`" + table + "`", false
+}
+
+// UnpackTableID unpacks table ID to <schema, table> pair.
+func UnpackTableID(id string) (string, string) {
+	parts := strings.Split(id, "`.`")
+	schema := strings.TrimLeft(parts[0], "`")
+	table := strings.TrimRight(parts[1], "`")
+	return schema, table
+}
+
+type session struct {
+	sessionctx.Context
+	vars   *variable.SessionVars
+	values map[fmt.Stringer]interface{}
+
+	mu sync.RWMutex
+}
+
+// GetSessionVars implements the sessionctx.Context interface.
+func (se *session) GetSessionVars() *variable.SessionVars {
+	return se.vars
+}
+
+// SetValue implements the sessionctx.Context interface.
+func (se *session) SetValue(key fmt.Stringer, value interface{}) {
+	se.mu.Lock()
+	se.values[key] = value
+	se.mu.Unlock()
+}
+
+// Value implements the sessionctx.Context interface.
+func (se *session) Value(key fmt.Stringer) interface{} {
+	se.mu.RLock()
+	value := se.values[key]
+	se.mu.RUnlock()
+	return value
+}
+
+// UTCSession can be used as a sessionctx.Context, with UTC timezone.
+var UTCSession *session
+
+func init() {
+	UTCSession = &session{}
+	vars := variable.NewSessionVars()
+	vars.StmtCtx.TimeZone = time.UTC
+	UTCSession.vars = vars
+	UTCSession.values = make(map[fmt.Stringer]interface{}, 1)
+}
+
+// AdjustBinaryProtocolForDatum converts the data in binlog to TiDB datum.
+func AdjustBinaryProtocolForDatum(data []interface{}, cols []*model.ColumnInfo) ([]types.Datum, error) {
+	log.L().Debug("AdjustBinaryProtocolForChunk",
+		zap.Any("data", data),
+		zap.Any("columns", cols))
+	ret := make([]types.Datum, 0, len(data))
+	for i, d := range data {
+		switch v := d.(type) {
+		case int8:
+			d = int64(v)
+		case int16:
+			d = int64(v)
+		case int32:
+			d = int64(v)
+		case uint8:
+			d = uint64(v)
+		case uint16:
+			d = uint64(v)
+		case uint32:
+			d = uint64(v)
+		case uint:
+			d = uint64(v)
+		case decimal.Decimal:
+			d = v.String()
+		}
+		datum := types.NewDatum(d)
+
+		// TODO: should we use timezone of upstream?
+		castDatum, err := table.CastValue(UTCSession, datum, cols[i], false, false)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, castDatum)
+	}
+	return ret, nil
 }

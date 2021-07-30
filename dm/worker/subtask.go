@@ -49,7 +49,7 @@ const (
 var createUnits = createRealUnits
 
 // createRealUnits creates process units base on task mode.
-func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, workerName string) []unit.Unit {
 	failpoint.Inject("mockCreateUnitsDumpOnly", func(_ failpoint.Value) {
 		log.L().Info("create mock worker units with dump unit only", zap.String("failpoint", "mockCreateUnitsDumpOnly"))
 		failpoint.Return([]unit.Unit{dumpling.NewDumpling(cfg)})
@@ -59,12 +59,12 @@ func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []u
 	switch cfg.Mode {
 	case config.ModeAll:
 		us = append(us, dumpling.NewDumpling(cfg))
-		us = append(us, loader.NewLoader(cfg))
+		us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
 		us = append(us, syncer.NewSyncer(cfg, etcdClient))
 	case config.ModeFull:
 		// NOTE: maybe need another checker in the future?
 		us = append(us, dumpling.NewDumpling(cfg))
-		us = append(us, loader.NewLoader(cfg))
+		us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
 	case config.ModeIncrement:
 		us = append(us, syncer.NewSyncer(cfg, etcdClient))
 	default:
@@ -98,6 +98,8 @@ type SubTask struct {
 	result *pb.ProcessResult // the process result, nil when is processing
 
 	etcdClient *clientv3.Client
+
+	workerName string
 }
 
 // NewSubTask is subtask initializer
@@ -105,12 +107,12 @@ type SubTask struct {
 var NewSubTask = NewRealSubTask
 
 // NewRealSubTask creates a new SubTask.
-func NewRealSubTask(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
-	return NewSubTaskWithStage(cfg, pb.Stage_New, etcdClient)
+func NewRealSubTask(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, workerName string) *SubTask {
+	return NewSubTaskWithStage(cfg, pb.Stage_New, etcdClient, workerName)
 }
 
 // NewSubTaskWithStage creates a new SubTask with stage.
-func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *clientv3.Client) *SubTask {
+func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *clientv3.Client, workerName string) *SubTask {
 	ctx, cancel := context.WithCancel(context.Background())
 	st := SubTask{
 		cfg:        cfg,
@@ -119,6 +121,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 		ctx:        ctx,
 		cancel:     cancel,
 		etcdClient: etcdClient,
+		workerName: workerName,
 	}
 	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
 	return &st
@@ -126,7 +129,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 
 // Init initializes the sub task processing units.
 func (st *SubTask) Init() error {
-	st.units = createUnits(st.cfg, st.etcdClient)
+	st.units = createUnits(st.cfg, st.etcdClient, st.workerName)
 	if len(st.units) < 1 {
 		return terror.ErrWorkerNoAvailUnits.Generate(st.cfg.Name, st.cfg.Mode)
 	}
@@ -432,6 +435,22 @@ func (st *SubTask) setResult(result *pb.ProcessResult) {
 	st.result = result
 }
 
+// markResultCanceled mark result as canceled if stage is Paused.
+// This func is used to pause a task which has been paused by error,
+// so the task will not auto resume by task checker.
+func (st *SubTask) markResultCanceled() bool {
+	st.Lock()
+	defer st.Unlock()
+	if st.stage == pb.Stage_Paused {
+		if st.result != nil && !st.result.IsCanceled {
+			st.l.Info("manually pause task which has been paused by errors")
+			st.result.IsCanceled = true
+			return true
+		}
+	}
+	return false
+}
+
 // Result returns the result of the sub task.
 func (st *SubTask) Result() *pb.ProcessResult {
 	st.RLock()
@@ -454,8 +473,12 @@ func (st *SubTask) Close() {
 	updateTaskState(st.cfg.Name, st.cfg.SourceID, pb.Stage_Stopped)
 }
 
-// Pause pauses the running sub task.
+// Pause pauses a running sub task or a sub task paused by error.
 func (st *SubTask) Pause() error {
+	if st.markResultCanceled() {
+		return nil
+	}
+
 	if !st.stageCAS(pb.Stage_Running, pb.Stage_Pausing) {
 		return terror.ErrWorkerNotRunningStage.Generate(st.Stage().String())
 	}

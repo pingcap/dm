@@ -119,7 +119,7 @@ func (t *testMaster) TestWaitWorkersReadyV1Import(c *C) {
 	s := testDefaultMasterServer(c)
 	defer s.Close()
 	s.cfg.V1SourcesPath = c.MkDir()
-	c.Assert(s.scheduler.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(s.scheduler.Start(ctx, t.etcdTestCli), IsNil)
 
 	cfg1, err := config.LoadFromFile("./source.yaml")
 	c.Assert(err, IsNil)
@@ -216,7 +216,7 @@ func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
 	s := testDefaultMasterServer(c)
 	defer s.Close()
 	s.cfg.V1SourcesPath = c.MkDir()
-	c.Assert(s.scheduler.Start(ctx, etcdTestCli), IsNil)
+	c.Assert(s.scheduler.Start(ctx, t.etcdTestCli), IsNil)
 
 	// no workers exist, no config and status need to get.
 	cfgs, stages, err := s.getSubtaskCfgsStagesV1Import(tctx)

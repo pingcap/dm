@@ -174,6 +174,7 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
+	sleep 3
 	# check not specify binlog name could also update active relay log
 	if [ $worker1_run_source_1 -gt 0 ]; then
 		grep -E ".*current earliest active relay log.*$name1" $WORK_DIR/worker1/log/dm-worker.log
@@ -184,7 +185,7 @@ function run() {
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
 		"Running" 4
 	# we use failpoint to let worker sleep 8 second when executeSQLs, to increase possibility of

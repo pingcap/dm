@@ -97,12 +97,13 @@ function test_list_member() {
 	echo "[$(date)] <<<<<< start test_list_member_command >>>>>>"
 
 	master_ports=(0 $MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3 $MASTER_PORT4 $MASTER_PORT5)
+	master_peer_ports=(0 8291 8292 8293 8294 8295)
 
 	alive=(1 2 3 4 5)
 	leaders=()
 	leader_idx=0
 
-	# TODO: when removing 3 masters (use `sql 0 2`), this test sometimes will fail
+	# TODO: when removing 3 masters (use `seq 0 2`), this test sometimes will fail
 	# In these cases, DM-master will campaign successfully, but fails to `get` from etcd while starting scheduler. But finally it will recover.
 	for i in $(seq 0 1); do
 		alive=("${alive[@]/$leader_idx/}")
@@ -133,7 +134,7 @@ function test_list_member() {
 		echo "kill leader" $leader
 		ps aux | grep $leader | awk '{print $2}' | xargs kill || true
 		check_port_offline ${master_ports[$leader_idx]} 20
-		sleep 5
+		check_port_offline ${master_peer_ports[$leader_idx]} 20
 	done
 
 	# join master which has been killed
@@ -144,7 +145,6 @@ function test_list_member() {
 			check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:${master_ports[$idx]}
 		fi
 	done
-
 	# check leader is same for every master
 	alive=(1 2 3 4 5)
 	leaders=()

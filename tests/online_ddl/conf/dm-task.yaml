@@ -4,7 +4,7 @@ task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
 enable-heartbeat: false
-online-ddl-scheme: online-ddl-scheme-placeholder
+online-ddl: true
 
 target-database:
   host: "127.0.0.1"
@@ -15,8 +15,8 @@ target-database:
 mysql-instances:
   - source-id: "mysql-replica-01"
     block-allow-list:  "instance"
-    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
-    column-mapping-rules: ["instance-1"]
+    route-rules: ["gho-sharding-route-rules-table", "pt-sharding-route-rules-table", "sharding-route-rules-schema"]
+    column-mapping-rules: ["gho-instance-1", "pt-instance-1"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -27,8 +27,8 @@ mysql-instances:
       binlog-name: binlog.000001
       binlog-pos: 4
     block-allow-list:  "instance"
-    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
-    column-mapping-rules: ["instance-2"]
+    route-rules: ["gho-sharding-route-rules-table", "pt-sharding-route-rules-table", "sharding-route-rules-schema"]
+    column-mapping-rules: ["gho-instance-2", "pt-instance-2"]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -39,36 +39,58 @@ block-allow-list:
     do-dbs: ["online_ddl"]
     do-tables:
     -  db-name: "online_ddl"
-       tbl-name: "~^t[\\d]+"
+       tbl-name: "~^((pt)|(gho))_t[1-3]$"
 
 routes:
-  sharding-route-rules-table:
+  gho-sharding-route-rules-table:
     schema-pattern: online_ddl
-    table-pattern: t*
+    table-pattern: gho_t*
     target-schema: online_ddl
-    target-table: t_target
+    target-table: gho_t_target
+
+  pt-sharding-route-rules-table:
+    schema-pattern: online_ddl
+    table-pattern: pt_t*
+    target-schema: online_ddl
+    target-table: pt_t_target
 
   sharding-route-rules-schema:
     schema-pattern: online_ddl
     target-schema: online_ddl
 
 column-mappings:
-  instance-1:
+  gho-instance-1:
     schema-pattern: "online_ddl"
-    table-pattern: "t*"
+    table-pattern: "gho_t*"
     expression: "partition id"
     source-column: "id"
     target-column: "id"
-    arguments: ["1", "", "t"]
+    arguments: ["1", "", "gho_t"]
 
-  instance-2:
+  pt-instance-1:
     schema-pattern: "online_ddl"
-    table-pattern: "t*"
+    table-pattern: "pt_t*"
     expression: "partition id"
     source-column: "id"
     target-column: "id"
-    arguments: ["2", "", "t"]
+    arguments: ["1", "", "pt_t"]
+  
+  gho-instance-2:
+    schema-pattern: "online_ddl"
+    table-pattern: "gho_t*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["2", "", "gho_t"]
 
+  pt-instance-2:
+    schema-pattern: "online_ddl"
+    table-pattern: "pt_t*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["2", "", "pt_t"]
+  
 filters:
   filter-rule-index:
     schema-pattern: "*"

@@ -34,6 +34,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 var _ = Suite(&testDBSuite{})
@@ -79,7 +80,7 @@ func (s *testDBSuite) resetBinlogSyncer(c *C) {
 		Port:           uint16(s.cfg.From.Port),
 		User:           s.cfg.From.User,
 		Password:       s.cfg.From.Password,
-		UseDecimal:     true,
+		UseDecimal:     false,
 		VerifyChecksum: true,
 	}
 	cfg.TimestampStringLocation = time.UTC
@@ -107,6 +108,12 @@ func (s *testDBSuite) TestGetServerID(c *C) {
 	id, err := utils.GetServerID(context.Background(), s.db)
 	c.Assert(err, IsNil)
 	c.Assert(id, Greater, uint32(0))
+}
+
+func (s *testDBSuite) TestGetServerUnixTS(c *C) {
+	id, err := utils.GetServerUnixTS(context.Background(), s.db)
+	c.Assert(err, IsNil)
+	c.Assert(id, Greater, int64(0))
 }
 
 func (s *testDBSuite) TestBinaryLogs(c *C) {
@@ -145,12 +152,12 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 	c.Assert(err, IsNil)
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
-	conn := &DBConn{
-		baseConn: &conn.BaseConn{
+	conn := &dbconn.DBConn{
+		BaseConn: &conn.BaseConn{
 			DBConn:        dbConn,
 			RetryStrategy: &retry.FiniteRetryStrategy{},
 		},
-		cfg: &config.SubTaskConfig{
+		Cfg: &config.SubTaskConfig{
 			Name: "test",
 		},
 	}
@@ -164,7 +171,7 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 	mock.ExpectCommit()
 
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestExecuteSQLSWithIgnore")))
-	n, err := conn.executeSQLWithIgnore(tctx, ignoreDDLError, sqls)
+	n, err := conn.ExecuteSQLWithIgnore(tctx, ignoreDDLError, sqls)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, 2)
 
@@ -173,7 +180,7 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 	mock.ExpectExec("alter table t1 add column a int").WillReturnError(newMysqlErr(uint16(infoschema.ErrColumnExists.Code()), "column a already exists"))
 	mock.ExpectRollback()
 
-	n, err = conn.executeSQL(tctx, sqls)
+	n, err = conn.ExecuteSQL(tctx, sqls)
 	c.Assert(err, ErrorMatches, ".*column a already exists.*")
 	c.Assert(n, Equals, 0)
 

@@ -4,8 +4,8 @@ set -eux
 
 cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
+source $cur/../_utils/handle_error_lib.sh
 WORK_DIR=$TEST_DIR/$TEST_NAME
-source $cur/lib.sh
 
 # skip modify column, two sources, no sharding
 function DM_SKIP_ERROR_CASE() {
@@ -537,7 +537,7 @@ function DM_4206_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column.*varchar(10)" 2
+		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
 
 	first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
 	first_pos2=$(get_start_pos 127.0.0.1:$MASTER_PORT $source2)
@@ -553,7 +553,7 @@ function DM_4206_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column.*varchar(10)" 2
+		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"binlog skip test -b $first_name1:$first_pos1 -s $source1" \
@@ -563,7 +563,7 @@ function DM_4206_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column.*varchar(10)" 1
+		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"binlog skip test -b $first_name2:$first_pos2 -s $source2" \
@@ -571,7 +571,7 @@ function DM_4206_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column.*varchar(20)" 1
+		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"binlog skip test -b $first_name2:$second_pos2 -s $source2" \

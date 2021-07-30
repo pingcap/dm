@@ -16,6 +16,7 @@ package config
 import (
 	"io/ioutil"
 	"path"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -29,14 +30,13 @@ import (
 	"github.com/coreos/go-semver/semver"
 )
 
-func (t *testConfig) TestUnusedTaskConfig(c *C) {
-	correctTaskConfig := `---
+var correctTaskConfig = `---
 name: test
 task-mode: all
 shard-mode: "pessimistic"       
 meta-schema: "dm_meta"         
 case-sensitive: false        
-online-ddl-scheme: "gh-ost" 
+online-ddl: true
 clean-dump-file: true     
 
 target-database:
@@ -110,6 +110,12 @@ syncers:
     batch: 100 
     enable-ansi-quotes: true
     safe-mode: false  
+
+expression-filter:
+  expr-1:
+    schema: "db"
+    table: "tbl"
+    insert-value-expr: "a > 1"
 
 mysql-instances:
   - source-id: "mysql-replica-01"
@@ -119,6 +125,7 @@ mysql-instances:
     mydumper-config-name: "global1"
     loader-config-name: "global1"
     syncer-config-name: "global1"
+    expression-filters: ["expr-1"]
 
   - source-id: "mysql-replica-02"
     route-rules: ["route-rule-1"]
@@ -128,6 +135,8 @@ mysql-instances:
     loader-config-name: "global2"
     syncer-config-name: "global2"
 `
+
+func (t *testConfig) TestUnusedTaskConfig(c *C) {
 	taskConfig := NewTaskConfig()
 	err := taskConfig.Decode(correctTaskConfig)
 	c.Assert(err, IsNil)
@@ -137,7 +146,7 @@ task-mode: all
 shard-mode: "pessimistic"       
 meta-schema: "dm_meta"         
 case-sensitive: false        
-online-ddl-scheme: "gh-ost" 
+online-ddl: true
 clean-dump-file: true     
 
 target-database:
@@ -212,6 +221,12 @@ syncers:
     batch: 100 
     enable-ansi-quotes: true
     safe-mode: false  
+
+expression-filter:
+  expr-1:
+    schema: "db"
+    table: "tbl"
+    insert-value-expr: "a > 1"
 
 mysql-instances:
   - source-id: "mysql-replica-01"
@@ -233,7 +248,7 @@ mysql-instances:
 	taskConfig = NewTaskConfig()
 	err = taskConfig.Decode(errorTaskConfig)
 	c.Check(err, NotNil)
-	c.Assert(err, ErrorMatches, `[\s\S]*The configurations as following \[column-mapping-rule-2 filter-rule-2 route-rule-2\] are set in global configuration[\s\S]*`)
+	c.Assert(err, ErrorMatches, `[\s\S]*The configurations as following \[column-mapping-rule-2 expr-1 filter-rule-2 route-rule-2\] are set in global configuration[\s\S]*`)
 }
 
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
@@ -527,7 +542,7 @@ func WordCount(s string) map[string]int {
 func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	var (
 		shardMode           = ShardOptimistic
-		onlineDDLScheme     = "pt"
+		onlineDDL           = true
 		name                = "from-sub-tasks"
 		taskMode            = "incremental"
 		ignoreCheckingItems = []string{VersionChecking, BinlogRowImageChecking}
@@ -558,7 +573,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		}
 		routeRule1 = router.TableRule{
 			SchemaPattern: "db*",
-			TablePattern:  "tbl*",
+			TargetSchema:  "db",
 		}
 		routeRule2 = router.TableRule{
 			SchemaPattern: "db*",
@@ -567,8 +582,8 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			TargetTable:   "tbl",
 		}
 		routeRule3 = router.TableRule{
-			SchemaPattern: "database*",
-			TablePattern:  "table*",
+			SchemaPattern: "schema*",
+			TargetSchema:  "schema",
 		}
 		routeRule4 = router.TableRule{
 			SchemaPattern: "schema*",
@@ -603,6 +618,11 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				{Schema: "bd2", Name: "lbt2"},
 			},
 		}
+		exprFilter1 = ExpressionFilter{
+			Schema:          "db",
+			Table:           "tbl",
+			DeleteValueExpr: "state = 1",
+		}
 		source1DBCfg = DBConfig{
 			Host:             "127.0.0.1",
 			Port:             3306,
@@ -627,7 +647,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		stCfg1 = &SubTaskConfig{
 			IsSharding:              true,
 			ShardMode:               shardMode,
-			OnlineDDLScheme:         onlineDDLScheme,
+			OnlineDDL:               onlineDDL,
 			CaseSensitive:           true,
 			Name:                    name,
 			Mode:                    taskMode,
@@ -697,6 +717,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	stCfg2.From = source2DBCfg
 	stCfg2.BAList = &baList2
 	stCfg2.RouteRules = []*router.TableRule{&routeRule4, &routeRule1, &routeRule2}
+	stCfg2.ExprFilter = []*ExpressionFilter{&exprFilter1}
 
 	cfg := FromSubTaskConfigs(stCfg1, stCfg2)
 
@@ -748,9 +769,10 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				SyncerConfigName:   "sync-01",
 				Syncer:             nil,
 				SyncerThread:       0,
+				ExpressionFilters:  []string{"expr-filter-01"},
 			},
 		},
-		OnlineDDLScheme: onlineDDLScheme,
+		OnlineDDL: onlineDDL,
 		Routes: map[string]*router.TableRule{
 			"route-01": &routeRule1,
 			"route-02": &routeRule2,
@@ -776,6 +798,9 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 		Syncers: map[string]*SyncerConfig{
 			"sync-01": &stCfg1.SyncerConfig,
 		},
+		ExprFilter: map[string]*ExpressionFilter{
+			"expr-filter-01": &exprFilter1,
+		},
 		CleanDumpFile: stCfg1.CleanDumpFile,
 	}
 
@@ -792,8 +817,11 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	c.Assert(stCfg1.ColumnMappingRules, HasLen, 0)
 	c.Assert(stCfgs[1].ColumnMappingRules, HasLen, 0)
 	c.Assert(stCfg2.ColumnMappingRules, HasLen, 0)
+	c.Assert(stCfgs[0].ExprFilter, HasLen, 0)
+	c.Assert(stCfg1.ExprFilter, HasLen, 0)
 	stCfgs[0].ColumnMappingRules = stCfg1.ColumnMappingRules
 	stCfgs[1].ColumnMappingRules = stCfg2.ColumnMappingRules
+	stCfgs[0].ExprFilter = stCfg1.ExprFilter
 	// deprecated config will not recover
 	stCfgs[0].EnableANSIQuotes = stCfg1.EnableANSIQuotes
 	stCfgs[1].EnableANSIQuotes = stCfg2.EnableANSIQuotes
@@ -919,4 +947,144 @@ func (t *testConfig) TestDefaultConfig(c *C) {
 	cfg.MySQLInstances[0].Mydumper = &MydumperConfig{MydumperPath: "test"}
 	c.Assert(cfg.adjust(), IsNil)
 	c.Assert(cfg.MySQLInstances[0].Mydumper.ChunkFilesize, Equals, defaultChunkFilesize)
+}
+
+func (t *testConfig) TestExclusiveAndWrongExprFilterFields(c *C) {
+	cfg := NewTaskConfig()
+	cfg.Name = "test"
+	cfg.TaskMode = "all"
+	cfg.TargetDB = &DBConfig{}
+	cfg.MySQLInstances = append(cfg.MySQLInstances, &MySQLInstance{SourceID: "source1"})
+	c.Assert(cfg.adjust(), IsNil)
+
+	cfg.ExprFilter["test-insert"] = &ExpressionFilter{
+		Schema:          "db",
+		Table:           "tbl",
+		InsertValueExpr: "a > 1",
+	}
+	cfg.ExprFilter["test-update-only-old"] = &ExpressionFilter{
+		Schema:             "db",
+		Table:              "tbl",
+		UpdateOldValueExpr: "a > 1",
+	}
+	cfg.ExprFilter["test-update-only-new"] = &ExpressionFilter{
+		Schema:             "db",
+		Table:              "tbl",
+		UpdateNewValueExpr: "a > 1",
+	}
+	cfg.ExprFilter["test-update"] = &ExpressionFilter{
+		Schema:             "db",
+		Table:              "tbl",
+		UpdateOldValueExpr: "a > 1",
+		UpdateNewValueExpr: "a > 1",
+	}
+	cfg.ExprFilter["test-delete"] = &ExpressionFilter{
+		Schema:          "db",
+		Table:           "tbl",
+		DeleteValueExpr: "a > 1",
+	}
+	cfg.MySQLInstances[0].ExpressionFilters = []string{
+		"test-insert",
+		"test-update-only-old",
+		"test-update-only-new",
+		"test-update",
+		"test-delete",
+	}
+	c.Assert(cfg.adjust(), IsNil)
+
+	cfg.ExprFilter["both-field"] = &ExpressionFilter{
+		Schema:          "db",
+		Table:           "tbl",
+		InsertValueExpr: "a > 1",
+		DeleteValueExpr: "a > 1",
+	}
+	cfg.MySQLInstances[0].ExpressionFilters = append(cfg.MySQLInstances[0].ExpressionFilters, "both-field")
+	err := cfg.adjust()
+	c.Assert(terror.ErrConfigExprFilterManyExpr.Equal(err), IsTrue)
+
+	delete(cfg.ExprFilter, "both-field")
+	cfg.ExprFilter["wrong"] = &ExpressionFilter{
+		Schema:          "db",
+		Table:           "tbl",
+		DeleteValueExpr: "a >",
+	}
+	length := len(cfg.MySQLInstances[0].ExpressionFilters)
+	cfg.MySQLInstances[0].ExpressionFilters[length-1] = "wrong"
+	err = cfg.adjust()
+	c.Assert(terror.ErrConfigExprFilterWrongGrammar.Equal(err), IsTrue)
+}
+
+func (t *testConfig) TestTaskConfigForDowngrade(c *C) {
+	cfg := NewTaskConfig()
+	err := cfg.Decode(correctTaskConfig)
+	c.Assert(err, IsNil)
+
+	cfgForDowngrade := NewTaskConfigForDowngrade(cfg)
+
+	// make sure all new field were added
+	cfgReflect := reflect.Indirect(reflect.ValueOf(cfg))
+	cfgForDowngradeReflect := reflect.Indirect(reflect.ValueOf(cfgForDowngrade))
+	c.Assert(cfgReflect.NumField(), Equals, cfgForDowngradeReflect.NumField()+1) // without flag
+
+	// make sure all field were copied
+	cfgForClone := &TaskConfigForDowngrade{}
+	Clone(cfgForClone, cfg)
+	c.Assert(cfgForDowngrade, DeepEquals, cfgForClone)
+}
+
+// Clone clones src to dest.
+func Clone(dest, src interface{}) {
+	cloneValues(reflect.ValueOf(dest), reflect.ValueOf(src))
+}
+
+// cloneValues clone src to dest recursively.
+// Note: pointer still use shallow copy.
+func cloneValues(dest, src reflect.Value) {
+	destType := dest.Type()
+	srcType := src.Type()
+	if destType.Kind() == reflect.Ptr {
+		destType = destType.Elem()
+	}
+	if srcType.Kind() == reflect.Ptr {
+		srcType = srcType.Elem()
+	}
+
+	if destType.Kind() == reflect.Slice {
+		slice := reflect.MakeSlice(destType, src.Len(), src.Cap())
+		for i := 0; i < src.Len(); i++ {
+			if slice.Index(i).Type().Kind() == reflect.Ptr {
+				newVal := reflect.New(slice.Index(i).Type().Elem())
+				cloneValues(newVal, src.Index(i))
+				slice.Index(i).Set(newVal)
+			} else {
+				cloneValues(slice.Index(i).Addr(), src.Index(i).Addr())
+			}
+		}
+		dest.Set(slice)
+		return
+	}
+
+	destFieldsMap := map[string]int{}
+	for i := 0; i < destType.NumField(); i++ {
+		destFieldsMap[destType.Field(i).Name] = i
+	}
+	for i := 0; i < srcType.NumField(); i++ {
+		if j, ok := destFieldsMap[srcType.Field(i).Name]; ok {
+			destField := dest.Elem().Field(j)
+			srcField := src.Elem().Field(i)
+			destFieldType := destField.Type()
+			srcFieldType := srcField.Type()
+			if destFieldType.Kind() == reflect.Ptr {
+				destFieldType = destFieldType.Elem()
+			}
+			if srcFieldType.Kind() == reflect.Ptr {
+				srcFieldType = srcFieldType.Elem()
+			}
+			if destFieldType != srcFieldType {
+				cloneValues(destField, srcField)
+			} else {
+				destField.Set(srcField)
+			}
+		}
+	}
 }

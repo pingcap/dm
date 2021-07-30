@@ -169,6 +169,7 @@ func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, err
 }
 
 // GetMasterStatus gets status from master.
+// When the returned error is nil, the gtid.Set must be not nil.
 func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
 	var (
 		binlogPos gmysql.Position
@@ -195,31 +196,54 @@ func GetMasterStatus(ctx context.Context, db *sql.DB, flavor string) (gmysql.Pos
 		| ON.000001 |     4822 |              |                  | 85ab69d1-b21f-11e6-9c5e-64006a8978d2:1-46
 		+-----------+----------+--------------+------------------+--------------------------------------------+
 	*/
+	/*
+		For MariaDB,SHOW MASTER STATUS:
+		+--------------------+----------+--------------+------------------+
+		| File               | Position | Binlog_Do_DB | Binlog_Ignore_DB |
+		+--------------------+----------+--------------+------------------+
+		| mariadb-bin.000016 |      475 |              |                  |
+		+--------------------+----------+--------------+------------------+
+		SELECT @@global.gtid_binlog_pos;
+		+--------------------------+
+		| @@global.gtid_binlog_pos |
+		+--------------------------+
+		| 0-1-2                    |
+		+--------------------------+
+	*/
 	var (
 		gtidStr    string
 		binlogName string
 		pos        uint32
 		nullPtr    interface{}
 	)
-	for rows.Next() {
-		if len(rowColumns) == 5 {
-			err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr, &gtidStr)
-		} else {
-			err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr)
-		}
-		if err != nil {
-			return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
+	if !rows.Next() {
+		return binlogPos, gs, terror.ErrNoMasterStatus.Generate()
+	}
 
-		binlogPos = gmysql.Position{
-			Name: binlogName,
-			Pos:  pos,
-		}
+	if len(rowColumns) == 5 {
+		err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr, &gtidStr)
+	} else {
+		err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr)
+	}
+	if err != nil {
+		return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
 
-		gs, err = gtid.ParserGTID(flavor, gtidStr)
-		if err != nil {
-			return binlogPos, gs, err
-		}
+	binlogPos = gmysql.Position{
+		Name: binlogName,
+		Pos:  pos,
+	}
+
+	gs, err = gtid.ParserGTID(flavor, gtidStr)
+	if err != nil {
+		return binlogPos, gs, err
+	}
+	if rows.Next() {
+		log.L().Warn("SHOW MASTER STATUS returns more than one row, will only use first row")
+	}
+
+	if rows.Close() != nil {
+		return binlogPos, gs, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 	}
 	if rows.Err() != nil {
 		return binlogPos, gs, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
@@ -355,6 +379,18 @@ func GetServerUUID(ctx context.Context, db *sql.DB, flavor string) (string, erro
 	return serverUUID, err
 }
 
+// GetServerUnixTS gets server's `UNIX_TIMESTAMP()`.
+func GetServerUnixTS(ctx context.Context, db *sql.DB) (int64, error) {
+	var ts int64
+	row := db.QueryRowContext(ctx, "SELECT UNIX_TIMESTAMP()")
+	err := row.Scan(&ts)
+	if err != nil {
+		log.L().Error("can't SELECT UNIX_TIMESTAMP()", zap.Error(err))
+		return ts, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	return ts, err
+}
+
 // GetMariaDBUUID gets equivalent `server_uuid` for MariaDB
 // `gtid_domain_id` joined `server_id` with domainServerIDSeparator.
 func GetMariaDBUUID(ctx context.Context, db *sql.DB) (string, error) {
@@ -487,4 +523,57 @@ func AddGSetWithPurged(ctx context.Context, gset gtid.Set, conn *sql.Conn) (gtid
 	ret := &gtid.MySQLGTIDSet{}
 	_ = ret.Set(newGset)
 	return ret, nil
+}
+
+// AdjustSQLModeCompatible adjust downstream sql mode to compatible.
+// TODO: When upstream's datatime is 2020-00-00, 2020-00-01, 2020-06-00
+// and so on, downstream will be 2019-11-30, 2019-12-01, 2020-05-31,
+// as if set the 'NO_ZERO_IN_DATE', 'NO_ZERO_DATE'.
+// This is because the implementation of go-mysql, that you can see
+// https://github.com/go-mysql-org/go-mysql/blob/master/replication/row_event.go#L1063-L1087
+func AdjustSQLModeCompatible(sqlModes string) (string, error) {
+	needDisable := []string{
+		"NO_ZERO_IN_DATE",
+		"NO_ZERO_DATE",
+		"ERROR_FOR_DIVISION_BY_ZERO",
+		"NO_AUTO_CREATE_USER",
+		"STRICT_TRANS_TABLES",
+		"STRICT_ALL_TABLES",
+	}
+	needEnable := []string{
+		"IGNORE_SPACE",
+		"NO_AUTO_VALUE_ON_ZERO",
+		"ALLOW_INVALID_DATES",
+	}
+	disable := strings.Join(needDisable, ",")
+	enable := strings.Join(needEnable, ",")
+
+	mode, err := tmysql.GetSQLMode(sqlModes)
+	if err != nil {
+		return sqlModes, err
+	}
+	disableMode, err2 := tmysql.GetSQLMode(disable)
+	if err2 != nil {
+		return sqlModes, err2
+	}
+	enableMode, err3 := tmysql.GetSQLMode(enable)
+	if err3 != nil {
+		return sqlModes, err3
+	}
+	// About this bit manipulation, details can be seen
+	// https://github.com/pingcap/dm/pull/1869#discussion_r669771966
+	mode = (mode &^ disableMode) | enableMode
+
+	return GetSQLModeStrBySQLMode(mode), nil
+}
+
+// GetSQLModeStrBySQLMode get string represent of sql_mode by sql_mode.
+func GetSQLModeStrBySQLMode(sqlMode tmysql.SQLMode) string {
+	var sqlModeStr []string
+	for str, SQLMode := range tmysql.Str2SQLMode {
+		if sqlMode&SQLMode != 0 {
+			sqlModeStr = append(sqlModeStr, str)
+		}
+	}
+	return strings.Join(sqlModeStr, ",")
 }

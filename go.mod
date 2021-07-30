@@ -8,7 +8,7 @@ require (
 	github.com/coreos/go-semver v0.3.0
 	github.com/docker/go-units v0.4.0
 	github.com/dustin/go-humanize v1.0.0
-	github.com/go-mysql-org/go-mysql v1.1.3-0.20210519094347-5ec8d511f5be
+	github.com/go-mysql-org/go-mysql v1.1.3-0.20210705101833-83965e516929
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gogo/gateway v1.1.0
 	github.com/gogo/protobuf v1.3.2
@@ -24,9 +24,10 @@ require (
 	github.com/pingcap/log v0.0.0-20210317133921-96f4fcab92a4
 	github.com/pingcap/parser v0.0.0-20210415081931-48e7f467fd74
 	github.com/pingcap/tidb v1.1.0-beta.0.20210330094614-60111e1c4b6f
-	github.com/pingcap/tidb-tools v5.0.1-0.20210420102153-beed8ddc59e9+incompatible
+	github.com/pingcap/tidb-tools v5.2.0-alpha.0.20210721090336-4921149b5e5c+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
+	github.com/shopspring/decimal v0.0.0-20200105231215-408a2507e114
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5

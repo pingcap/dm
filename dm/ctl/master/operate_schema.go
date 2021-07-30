@@ -33,7 +33,7 @@ func NewOperateSchemaCmd() *cobra.Command {
 	}
 	cmd.Flags().StringP("database", "d", "", "database name of the table")
 	cmd.Flags().StringP("table", "t", "", "table name")
-	cmd.Flags().Bool("flush", false, "flush the table info and checkpoint immediately")
+	cmd.Flags().Bool("flush", true, "flush the table info and checkpoint immediately")
 	cmd.Flags().Bool("sync", false, "sync the table info to master to resolve shard ddl lock, only for optimistic mode now")
 	return cmd
 }
@@ -109,9 +109,6 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) error {
 	flush, err := cmd.Flags().GetBool("flush")
 	if err != nil {
 		return err
-	}
-	if flush && op != pb.SchemaOp_SetSchema {
-		return errors.New("--flush flag is only used to set schema")
 	}
 	sync, err := cmd.Flags().GetBool("sync")
 	if err != nil {

@@ -26,12 +26,15 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
+const cmdGetTaskConfig = "get-task-config"
+
 // NewGetCfgCmd creates a getCfg command.
 func NewGetCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get-config <task | master | worker | source> <name> [--file filename]",
-		Short: "Gets the configuration.",
-		RunE:  getCfgFunc,
+		Use:     "get-config <task | master | worker | source> <name> [--file filename]",
+		Short:   "Gets the configuration.",
+		RunE:    getCfgFunc,
+		Aliases: []string{cmdGetTaskConfig},
 	}
 	cmd.Flags().StringP("file", "f", "", "write config to file")
 	return cmd
@@ -53,21 +56,24 @@ func convertCfgType(t string) pb.CfgType {
 }
 
 // getCfgFunc gets config.
-func getCfgFunc(cmd *cobra.Command, _ []string) error {
-	if len(cmd.Flags().Args()) != 2 {
+func getCfgFunc(cmd *cobra.Command, args []string) error {
+	if cmd.CalledAs() == cmdGetTaskConfig {
+		args = append([]string{"task"}, args...)
+	}
+	if len(args) != 2 {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
 		return errors.New("please check output to see error")
 	}
 
-	cfgType := cmd.Flags().Arg(0)
+	cfgType := args[0]
 	tp := convertCfgType(cfgType)
 	if tp == pb.CfgType_InvalidType {
 		common.PrintLinesf("invalid config type '%s'", cfgType)
 		return errors.New("please check output to see error")
 	}
 
-	cfgName := cmd.Flags().Arg(1)
+	cfgName := args[1]
 	filename, err := cmd.Flags().GetString("file")
 	if err != nil {
 		common.PrintLinesf("can not get filename")

@@ -37,6 +37,31 @@ func PutSourceCfg(cli *clientv3.Client, cfg *config.SourceConfig) (int64, error)
 	return rev, err
 }
 
+// GetAllSourceCfgBeforeV202 gets all upstream source configs before v2.0.2.
+// This func only use for config export command.
+func GetAllSourceCfgBeforeV202(cli *clientv3.Client) (map[string]*config.SourceConfig, int64, error) {
+	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
+	defer cancel()
+
+	var (
+		scm  = make(map[string]*config.SourceConfig)
+		resp *clientv3.GetResponse
+		err  error
+	)
+	resp, err = cli.Get(ctx, common.UpstreamConfigKeyAdapterV1.Path(), clientv3.WithPrefix())
+
+	if err != nil {
+		return scm, 0, err
+	}
+
+	scm, err = sourceCfgFromResp("", resp)
+	if err != nil {
+		return scm, 0, err
+	}
+
+	return scm, resp.Header.Revision, nil
+}
+
 // GetSourceCfg gets upstream source configs.
 // k/v: source ID -> source config.
 // if the source config for the sourceID not exist, return with `err == nil`.
@@ -110,7 +135,8 @@ func ClearTestInfoOperation(cli *clientv3.Client) error {
 	clearRelayStage := clientv3.OpDelete(common.StageRelayKeyAdapter.Path(), clientv3.WithPrefix())
 	clearRelayConfig := clientv3.OpDelete(common.UpstreamRelayWorkerKeyAdapter.Path(), clientv3.WithPrefix())
 	clearSubTaskStage := clientv3.OpDelete(common.StageSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
+	clearLoadTasks := clientv3.OpDelete(common.LoadTaskKeyAdapter.Path(), clientv3.WithPrefix())
 	_, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clearSource, clearTask, clearSubTask, clearWorkerInfo, clearBound,
-		clearLastBound, clearWorkerKeepAlive, clearRelayStage, clearRelayConfig, clearSubTaskStage)
+		clearLastBound, clearWorkerKeepAlive, clearRelayStage, clearRelayConfig, clearSubTaskStage, clearLoadTasks)
 	return err
 }

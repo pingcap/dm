@@ -21,8 +21,14 @@ import (
 
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
 
+// skipQuery will return true when
+// - given `sql` matches builtin pattern.
+// - any schema of table names is system schema.
+// - any table name doesn't pass block-allow list.
+// - type of SQL doesn't pass binlog filter.
 func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string) (bool, error) {
 	if utils.IsBuildInSkipDDL(sql) {
 		return true, nil
@@ -35,7 +41,7 @@ func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string
 	}
 
 	if len(tables) > 0 {
-		tbs := s.baList.ApplyOn(tables)
+		tbs := s.baList.Apply(tables)
 		if len(tbs) != len(tables) {
 			return true, nil
 		}
@@ -80,14 +86,14 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 	}
 
 	tbs := []*filter.Table{{Schema: schema, Name: table}}
-	tbs = s.baList.ApplyOn(tbs)
+	tbs = s.baList.Apply(tbs)
 	if len(tbs) == 0 {
 		return true, nil
 	}
 	// filter ghost table
 	if s.onlineDDL != nil {
 		tp := s.onlineDDL.TableType(table)
-		if tp != realTable {
+		if tp != onlineddl.RealTable {
 			return true, nil
 		}
 	}

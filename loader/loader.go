@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"go.etcd.io/etcd/clientv3"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/pingcap/dm/dm/config"
@@ -35,6 +36,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/dumpling"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -181,6 +183,17 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 
 			failpoint.Inject("LoadDataSlowDown", nil)
 
+			failpoint.Inject("LoadDataSlowDownByTask", func(val failpoint.Value) {
+				tasks := val.(string)
+				taskNames := strings.Split(tasks, ",")
+				for _, taskName := range taskNames {
+					if w.cfg.Name == taskName {
+						w.logger.Info("inject failpoint LoadDataSlowDownByTask", zap.String("task", taskName))
+						<-newCtx.Done()
+					}
+				}
+			})
+
 			err := w.conn.executeSQL(ctctx, sqls)
 			failpoint.Inject("executeSQLError", func(_ failpoint.Value) {
 				w.logger.Info("", zap.String("failpoint", "executeSQLError"))
@@ -199,7 +212,15 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				})
 				continue
 			}
-			w.loader.checkPoint.UpdateOffset(job.file, job.offset)
+
+			failpoint.Inject("loaderCPUpdateOffsetError", func(_ failpoint.Value) {
+				job.file = "notafile" + job.file
+			})
+			if err := w.loader.checkPoint.UpdateOffset(job.file, job.offset); err != nil {
+				runFatalChan <- unit.NewProcessError(err)
+				hasError = true
+				continue
+			}
 			w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
 		}
 	}
@@ -316,12 +337,11 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 			// do nothing
 		}
 		line, err := br.ReadString('\n')
-		cur += int64(len(line))
-
 		if err == io.EOF {
 			w.logger.Info("data are scanned finished.", zap.String("data file", file), zap.Int64("offset", offset))
 			break
 		}
+		cur += int64(len(line))
 
 		realLine := strings.TrimSpace(line[:len(line)-1])
 		if len(realLine) == 0 {
@@ -386,6 +406,8 @@ type Loader struct {
 	sync.RWMutex
 
 	cfg        *config.SubTaskConfig
+	cli        *clientv3.Client
+	workerName string
 	checkPoint CheckPoint
 
 	logger log.Logger
@@ -424,13 +446,15 @@ type Loader struct {
 }
 
 // NewLoader creates a new Loader.
-func NewLoader(cfg *config.SubTaskConfig) *Loader {
+func NewLoader(cfg *config.SubTaskConfig, cli *clientv3.Client, workerName string) *Loader {
 	loader := &Loader{
 		cfg:        cfg,
+		cli:        cli,
 		db2Tables:  make(map[string]Tables2DataFiles),
 		tableInfos: make(map[string]*tableInfo),
 		workerWg:   new(sync.WaitGroup),
 		logger:     log.With(zap.String("task", cfg.Name), zap.String("unit", "load")),
+		workerName: workerName,
 	}
 	loader.fileJobQueueClosed.Store(true) // not open yet
 	return loader
@@ -504,9 +528,16 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 			break
 		}
 	}
+
 	if !hasSQLMode {
-		lcfg.To.Session["sql_mode"] = l.cfg.LoaderConfig.SQLMode
+		sqlModes, err3 := utils.AdjustSQLModeCompatible(l.cfg.LoaderConfig.SQLMode)
+		if err3 != nil {
+			l.logger.Warn("cannot adjust sql_mode compatible, the sql_mode will stay the same", log.ShortError(err3))
+		}
+		lcfg.To.Session["sql_mode"] = sqlModes
 	}
+
+	l.logger.Info("loader's sql_mode is", zap.String("sqlmode", lcfg.To.Session["sql_mode"]))
 
 	l.toDB, l.toDBConns, err = createConns(tctx, lcfg, l.cfg.PoolSize)
 	if err != nil {
@@ -632,7 +663,7 @@ func (l *Loader) skipSchemaAndTable(table *filter.Table) bool {
 	table.Name = unescapePercent(table.Name, l.logger)
 
 	tbs := []*filter.Table{table}
-	tbs = l.baList.ApplyOn(tbs)
+	tbs = l.baList.Apply(tbs)
 	return len(tbs) == 0
 }
 
@@ -648,6 +679,9 @@ func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
 
 // Restore begins the restore process.
 func (l *Loader) Restore(ctx context.Context) error {
+	if err := l.putLoadTask(); err != nil {
+		return err
+	}
 	// reset some counter used to calculate progress
 	l.totalDataSize.Store(0)
 	l.finishedDataSize.Store(0) // reset before load from checkpoint
@@ -703,8 +737,15 @@ func (l *Loader) Restore(ctx context.Context) error {
 	if err == nil {
 		l.finish.Store(true)
 		l.logger.Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
-		if l.cfg.CleanDumpFile && l.checkPoint.AllFinished() {
-			l.cleanDumpFiles()
+		if l.checkPoint.AllFinished() {
+			if l.cfg.Mode == config.ModeFull {
+				if err = l.delLoadTask(); err != nil {
+					return err
+				}
+			}
+			if l.cfg.CleanDumpFile {
+				l.cleanDumpFiles()
+			}
 		}
 	} else if errors.Cause(err) != context.Canceled {
 		return err
@@ -889,22 +930,18 @@ func (l *Loader) prepareDBFiles(files map[string]struct{}) error {
 	l.totalFileCount.Store(0) // reset
 	schemaFileCount := 0
 	for file := range files {
-		if !strings.HasSuffix(file, "-schema-create.sql") {
+		db, ok := utils.GetDBFromDumpFilename(file)
+		if !ok {
+			continue
+		}
+		schemaFileCount++
+		if l.skipSchemaAndTable(&filter.Table{Schema: db}) {
+			l.logger.Warn("ignore schema file", zap.String("schema file", file))
 			continue
 		}
 
-		idx := strings.LastIndex(file, "-schema-create.sql")
-		if idx > 0 {
-			schemaFileCount++
-			db := file[:idx]
-			if l.skipSchemaAndTable(&filter.Table{Schema: db}) {
-				l.logger.Warn("ignore schema file", zap.String("schema file", file))
-				continue
-			}
-
-			l.db2Tables[db] = make(Tables2DataFiles)
-			l.totalFileCount.Add(1) // for schema
-		}
+		l.db2Tables[db] = make(Tables2DataFiles)
+		l.totalFileCount.Add(1) // for schema
 	}
 
 	if schemaFileCount == 0 {
@@ -919,21 +956,11 @@ func (l *Loader) prepareDBFiles(files map[string]struct{}) error {
 
 func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 	var tablesNumber float64
-
 	for file := range files {
-		if !strings.HasSuffix(file, "-schema.sql") {
+		db, table, ok := utils.GetTableFromDumpFilename(file)
+		if !ok {
 			continue
 		}
-
-		idx := strings.LastIndex(file, "-schema.sql")
-		name := file[:idx]
-		fields := strings.Split(name, ".")
-		if len(fields) != 2 {
-			l.logger.Warn("invalid table schema file", zap.String("file", file))
-			continue
-		}
-
-		db, table := fields[0], fields[1]
 		if l.skipSchemaAndTable(&filter.Table{Schema: db, Name: table}) {
 			l.logger.Warn("ignore table file", zap.String("table file", file))
 			continue
@@ -1038,7 +1065,7 @@ func (l *Loader) prepare() error {
 	}
 
 	// collect dir files.
-	files, err := CollectDirFiles(l.cfg.Dir)
+	files, err := utils.CollectDirFiles(l.cfg.Dir)
 	if err != nil {
 		return err
 	}
@@ -1458,6 +1485,15 @@ func (l *Loader) getMydumpMetadata() error {
 	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
 	loc, _, err := dumpling.ParseMetaData(metafile, l.cfg.Flavor)
 	if err != nil {
+		if os.IsNotExist(err) {
+			worker, _, err2 := ha.GetLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID)
+			if err2 != nil {
+				l.logger.Warn("get load task", log.ShortError(err2))
+			}
+			if worker != "" && worker != l.workerName {
+				return terror.ErrLoadTaskWorkerNotMatch.Generate(worker, l.workerName)
+			}
+		}
 		if terror.ErrMetadataNoBinlogLoc.Equal(err) {
 			l.logger.Warn("dumped metadata doesn't have binlog location, it's OK if DM doesn't enter incremental mode")
 			return nil
@@ -1485,14 +1521,18 @@ func (l *Loader) cleanDumpFiles() {
 			l.logger.Warn("error when remove loaded dump folder", zap.String("data folder", l.cfg.Dir), zap.Error(err))
 		}
 	} else {
-		// leave metadata file, only delete sql files
-		files, err := CollectDirFiles(l.cfg.Dir)
+		// leave metadata file and table structure files, only delete data files
+		files, err := utils.CollectDirFiles(l.cfg.Dir)
 		if err != nil {
 			l.logger.Warn("fail to collect files", zap.String("data folder", l.cfg.Dir), zap.Error(err))
 		}
 		var lastErr error
 		for f := range files {
 			if strings.HasSuffix(f, ".sql") {
+				// TODO: table structure files are not used now, but we plan to used them in future so not delete them
+				if strings.HasSuffix(f, "-schema-create.sql") || strings.HasSuffix(f, "-schema.sql") {
+					continue
+				}
 				lastErr = os.Remove(filepath.Join(l.cfg.Dir, f))
 			}
 		}
@@ -1500,4 +1540,24 @@ func (l *Loader) cleanDumpFiles() {
 			l.logger.Warn("show last error when remove loaded dump sql files", zap.String("data folder", l.cfg.Dir), zap.Error(lastErr))
 		}
 	}
+}
+
+// putLoadTask is called when start restoring data, to put load worker in etcd.
+func (l *Loader) putLoadTask() error {
+	_, err := ha.PutLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID, l.workerName)
+	if err != nil {
+		return err
+	}
+	l.logger.Info("put load worker in etcd", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
+	return nil
+}
+
+// delLoadTask is called when finish restoring data, to delete load worker in etcd.
+func (l *Loader) delLoadTask() error {
+	_, _, err := ha.DelLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID)
+	if err != nil {
+		return err
+	}
+	l.logger.Info("delete load worker in etcd for full mode", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
+	return nil
 }

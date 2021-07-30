@@ -27,6 +27,7 @@ mysql-instances:
   filter-rules: []
   column-mapping-rules: []
   route-rules: []
+  expression-filters: []
   black-white-list: ""
   block-allow-list: balist-01
   mydumper-config-name: dump-01
@@ -43,6 +44,7 @@ mysql-instances:
   filter-rules: []
   column-mapping-rules: []
   route-rules: []
+  expression-filters: []
   black-white-list: ""
   block-allow-list: balist-01
   mydumper-config-name: dump-01
@@ -54,10 +56,12 @@ mysql-instances:
   syncer-config-name: sync-02
   syncer: null
   syncer-thread: 0
+online-ddl: false
 online-ddl-scheme: ""
 routes: {}
 filters: {}
 column-mappings: {}
+expression-filter: {}
 black-white-list: {}
 block-allow-list:
   balist-01:

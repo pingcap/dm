@@ -867,8 +867,8 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 			wg.Add(1)
 			go func(worker *scheduler.Worker, source string) {
 				defer wg.Done()
-				resp, err3 := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
 				var workerResp *pb.CommonWorkerResponse
+				resp, err3 := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
 				if err3 != nil {
 					workerResp = errorCommonWorkerResponse(err3.Error(), source, worker.BaseInfo().Name)
 				} else {
@@ -1019,8 +1019,8 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 				sourceID := args[0].(string)
 				w, _ := args[1].(*scheduler.Worker)
 
-				resp, err := w.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
 				var workerStatus *pb.QueryStatusResponse
+				resp, err := w.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
 				if err != nil {
 					workerStatus = &pb.QueryStatusResponse{
 						Result:       false,
@@ -1174,6 +1174,9 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 	var (
 		cfgs []*config.SourceConfig
 		err  error
+		resp = &pb.OperateSourceResponse{
+			Result: false,
+		}
 	)
 	switch req.Op {
 	case pb.SourceOp_StartSource, pb.SourceOp_UpdateSource:
@@ -1181,9 +1184,6 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 	default:
 		// don't check the upstream connections, because upstream may be inaccessible
 		cfgs, err = parseSourceConfig(req.Config)
-	}
-	resp := &pb.OperateSourceResponse{
-		Result: false,
 	}
 	if err != nil {
 		resp.Msg = err.Error()
@@ -1412,6 +1412,10 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 	if err != nil {
 		return err
 	}
+	err = s.scheduler.RemoveLoadTask(cfg.Name)
+	if err != nil {
+		return err
+	}
 
 	// set up db and clear meta data in downstream db
 	baseDB, err := conn.DefaultDBProvider.Apply(toDB)
@@ -1532,8 +1536,8 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 				}
 			}
 		}
-		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
 		var queryResp *pb.QueryStatusResponse
+		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
 		if err != nil {
 			log.L().Error("fail to query operation", zap.Int("retryNum", num), zap.String("task", taskName),
 				zap.String("source", sourceID), zap.Stringer("expect", expect), log.ShortError(err))
@@ -1892,8 +1896,8 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateSchemaRequest
 				},
 			}
 
-			resp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
 			var workerResp *pb.CommonWorkerResponse
+			resp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
 			} else {
@@ -2111,8 +2115,8 @@ func (s *Server) HandleError(ctx context.Context, req *pb.HandleErrorRequest) (*
 				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("source %s relevant worker-client not found", source), source, "")
 				return
 			}
-			resp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
 			var workerResp *pb.CommonWorkerResponse
+			resp, err := worker.SendRequest(ctx, &workerReq, s.cfg.RPCTimeout)
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(err.Error(), source, worker.BaseInfo().Name)
 			} else {

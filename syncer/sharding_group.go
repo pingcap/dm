@@ -72,7 +72,6 @@ package syncer
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/pingcap/dm/dm/config"
@@ -82,6 +81,8 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/dbconn"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
 
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -280,7 +281,7 @@ func (sg *ShardingGroup) Tables() [][]string {
 	sources := sg.Sources()
 	tables := make([][]string, 0, len(sources))
 	for id := range sources {
-		schema, table := UnpackTableID(id)
+		schema, table := utils.UnpackTableID(id)
 		tables = append(tables, []string{schema, table})
 	}
 	return tables
@@ -299,7 +300,7 @@ func (sg *ShardingGroup) UnresolvedTables() [][]string {
 
 	tables := make([][]string, 0, len(sg.sources))
 	for id := range sg.sources {
-		schema, table := UnpackTableID(id)
+		schema, table := utils.UnpackTableID(id)
 		tables = append(tables, []string{schema, table})
 	}
 	return tables
@@ -364,22 +365,6 @@ func (sg *ShardingGroup) FlushData(targetTableID string) ([]string, [][]interfac
 	return sg.meta.FlushData(sg.sourceID, targetTableID)
 }
 
-// GenTableID generates table ID.
-func GenTableID(schema, table string) (id string, isSchemaOnly bool) {
-	if len(table) == 0 {
-		return fmt.Sprintf("`%s`", schema), true
-	}
-	return fmt.Sprintf("`%s`.`%s`", schema, table), false
-}
-
-// UnpackTableID unpacks table ID to <schema, table> pair.
-func UnpackTableID(id string) (string, string) {
-	parts := strings.Split(id, "`.`")
-	schema := strings.TrimLeft(parts[0], "`")
-	table := strings.TrimRight(parts[1], "`")
-	return schema, table
-}
-
 // ShardingGroupKeeper used to keep ShardingGroup.
 type ShardingGroupKeeper struct {
 	sync.RWMutex
@@ -391,7 +376,7 @@ type ShardingGroupKeeper struct {
 	shardMetaTableName string
 
 	db     *conn.BaseDB
-	dbConn *DBConn
+	dbConn *dbconn.DBConn
 
 	tctx *tcontext.Context
 }
@@ -413,8 +398,8 @@ func NewShardingGroupKeeper(tctx *tcontext.Context, cfg *config.SubTaskConfig) *
 func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceIDs []string, meta *shardmeta.ShardingMeta, merge bool) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int, err error) {
 	// if need to support target table-level sharding DDL
 	// we also need to support target schema-level sharding DDL
-	schemaID, _ := GenTableID(targetSchema, "")
-	targetTableID, _ := GenTableID(targetSchema, targetTable)
+	schemaID, _ := utils.GenTableID(targetSchema, "")
+	targetTableID, _ := utils.GenTableID(targetSchema, targetTable)
 
 	k.Lock()
 	defer k.Unlock()
@@ -447,7 +432,7 @@ func (k *ShardingGroupKeeper) Init() error {
 	k.clear()
 	sgkDB := k.cfg.To
 	sgkDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
-	db, dbConns, err := createConns(k.tctx, k.cfg, sgkDB, 1)
+	db, dbConns, err := dbconn.CreateConns(k.tctx, k.cfg, sgkDB, 1)
 	if err != nil {
 		return err
 	}
@@ -478,8 +463,8 @@ func (k *ShardingGroupKeeper) ResetGroups() {
 // LeaveGroup leaves group according to target schema, table and source IDs
 // LeaveGroup doesn't affect in syncing process.
 func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sources []string) error {
-	schemaID, _ := GenTableID(targetSchema, "")
-	targetTableID, _ := GenTableID(targetSchema, targetTable)
+	schemaID, _ := utils.GenTableID(targetSchema, "")
+	targetTableID, _ := utils.GenTableID(targetSchema, targetTable)
 	k.Lock()
 	defer k.Unlock()
 	if group, ok := k.groups[targetTableID]; ok {
@@ -511,7 +496,7 @@ func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sourc
 func (k *ShardingGroupKeeper) TrySync(
 	targetSchema, targetTable, source string, location, endLocation binlog.Location, ddls []string) (
 	needShardingHandle bool, group *ShardingGroup, synced, active bool, remain int, err error) {
-	targetTableID, schemaOnly := GenTableID(targetSchema, targetTable)
+	targetTableID, schemaOnly := utils.GenTableID(targetSchema, targetTable)
 	if schemaOnly {
 		// NOTE: now we don't support syncing for schema only sharding DDL
 		return false, nil, true, false, 0, nil
@@ -561,7 +546,7 @@ func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, [][]string) {
 
 // Group returns target table's group, nil if not exist.
 func (k *ShardingGroupKeeper) Group(targetSchema, targetTable string) *ShardingGroup {
-	targetTableID, _ := GenTableID(targetSchema, targetTable)
+	targetTableID, _ := utils.GenTableID(targetSchema, targetTable)
 	k.RLock()
 	defer k.RUnlock()
 	return k.groups[targetTableID]
@@ -680,12 +665,12 @@ func (k *ShardingGroupKeeper) prepare() error {
 
 // Close closes sharding group keeper.
 func (k *ShardingGroupKeeper) Close() {
-	closeBaseDB(k.tctx, k.db)
+	dbconn.CloseBaseDB(k.tctx, k.db)
 }
 
 func (k *ShardingGroupKeeper) createSchema() error {
 	stmt := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", k.shardMetaSchema)
-	_, err := k.dbConn.executeSQL(k.tctx, []string{stmt})
+	_, err := k.dbConn.ExecuteSQL(k.tctx, []string{stmt})
 	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
@@ -702,7 +687,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 		update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		UNIQUE KEY uk_source_id_table_id_source (source_id, target_table_id, source_table_id)
 	)`, k.shardMetaTableName)
-	_, err := k.dbConn.executeSQL(k.tctx, []string{stmt})
+	_, err := k.dbConn.ExecuteSQL(k.tctx, []string{stmt})
 	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
@@ -710,7 +695,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 // LoadShardMeta implements CheckPoint.LoadShardMeta.
 func (k *ShardingGroupKeeper) LoadShardMeta(flavor string, enableGTID bool) (map[string]*shardmeta.ShardingMeta, error) {
 	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM %s WHERE `source_id`='%s'", k.shardMetaTableName, k.cfg.SourceID)
-	rows, err := k.dbConn.querySQL(k.tctx, query)
+	rows, err := k.dbConn.QuerySQL(k.tctx, query)
 	if err != nil {
 		return nil, terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -738,6 +723,26 @@ func (k *ShardingGroupKeeper) LoadShardMeta(flavor string, enableGTID bool) (map
 		}
 	}
 	return meta, terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
+}
+
+// CheckAndFix try to check and fix the schema/table case-sensitive issue.
+//
+// NOTE: CheckAndFix is called before sharding groups are inited.
+func (k *ShardingGroupKeeper) CheckAndFix(metas map[string]*shardmeta.ShardingMeta, schemaMap map[string]string, tablesMap map[string]map[string]string) error {
+	k.Lock()
+	defer k.Unlock()
+	for targetID, meta := range metas {
+		sqls, args, err := meta.CheckAndUpdate(targetID, schemaMap, tablesMap)
+		if err != nil {
+			return err
+		}
+		_, err = k.dbConn.ExecuteSQL(k.tctx, sqls, args...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // ShardingReSync represents re-sync info for a sharding DDL group.

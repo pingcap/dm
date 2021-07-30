@@ -227,12 +227,14 @@ func WatchOperationPut(ctx context.Context, cli *clientv3.Client,
 	task, source, upSchema, upTable string, revision int64,
 	outCh chan<- Operation, errCh chan<- error) {
 	var ch clientv3.WatchChan
+	wCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	// caller may use empty keys to expect a prefix watch
 	if upTable == "" {
-		ch = cli.Watch(ctx, common.ShardDDLOptimismOperationKeyAdapter.Path(), clientv3.WithPrefix(),
+		ch = cli.Watch(wCtx, common.ShardDDLOptimismOperationKeyAdapter.Path(), clientv3.WithPrefix(),
 			clientv3.WithRev(revision))
 	} else {
-		ch = cli.Watch(ctx, common.ShardDDLOptimismOperationKeyAdapter.Encode(task, source, upSchema, upTable),
+		ch = cli.Watch(wCtx, common.ShardDDLOptimismOperationKeyAdapter.Encode(task, source, upSchema, upTable),
 			clientv3.WithRev(revision))
 	}
 
@@ -279,4 +281,49 @@ func WatchOperationPut(ctx context.Context, cli *clientv3.Client,
 // deleteOperationOp returns a DELETE etcd operation for Operation.
 func deleteOperationOp(op Operation) clientv3.Op {
 	return clientv3.OpDelete(common.ShardDDLOptimismOperationKeyAdapter.Encode(op.Task, op.Source, op.UpSchema, op.UpTable))
+}
+
+// CheckOperations try to check and fix all the schema and table names for operation infos.
+func CheckOperations(cli *clientv3.Client, source string, schemaMap map[string]string, tablesMap map[string]map[string]string) error {
+	allOperations, rev, err := GetAllOperations(cli)
+	if err != nil {
+		return err
+	}
+
+	for _, taskTableOps := range allOperations {
+		sourceOps, ok := taskTableOps[source]
+		if !ok {
+			continue
+		}
+		for schema, tblOps := range sourceOps {
+			realSchema, hasChange := schemaMap[schema]
+			if !hasChange {
+				realSchema = schema
+			}
+
+			tblMap := tablesMap[schema]
+			for tbl, info := range tblOps {
+				realTable, tblChange := tblMap[tbl]
+				if !tblChange {
+					realTable = tbl
+					tblChange = hasChange
+				}
+				if tblChange {
+					newOperation := info
+					newOperation.UpSchema = realSchema
+					newOperation.UpTable = realTable
+					_, _, err = PutOperation(cli, false, newOperation, rev)
+					if err != nil {
+						return err
+					}
+					deleteOp := deleteOperationOp(info)
+					_, _, err = etcdutil.DoOpsInOneTxnWithRetry(cli, deleteOp)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return err
 }

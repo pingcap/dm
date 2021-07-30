@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -124,7 +125,7 @@ func (s *testCheckpointSuite) TestCheckPoint(c *C) {
 
 	dbConn, err := db.Conn(tcontext.Background().Context())
 	c.Assert(err, IsNil)
-	conn := &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	conn := &dbconn.DBConn{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 
 	cp.(*RemoteCheckPoint).dbConn = conn
 	err = cp.(*RemoteCheckPoint).prepare(tctx)
@@ -340,23 +341,23 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	)
 
 	// not exist
-	newer := cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
-	c.Assert(newer, IsTrue)
+	older := cp.IsOlderThanTablePoint(schema, table, binlog.Location{Position: pos1}, false)
+	c.Assert(older, IsFalse)
 
 	// save
 	cp.SaveTablePoint(schema, table, binlog.Location{Position: pos2}, nil)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
-	c.Assert(newer, IsFalse)
+	older = cp.IsOlderThanTablePoint(schema, table, binlog.Location{Position: pos1}, false)
+	c.Assert(older, IsTrue)
 
 	// rollback, to min
 	cp.Rollback(s.tracker)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
-	c.Assert(newer, IsTrue)
+	older = cp.IsOlderThanTablePoint(schema, table, binlog.Location{Position: pos1}, false)
+	c.Assert(older, IsFalse)
 
 	// save again
 	cp.SaveTablePoint(schema, table, binlog.Location{Position: pos2}, nil)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
-	c.Assert(newer, IsFalse)
+	older = cp.IsOlderThanTablePoint(schema, table, binlog.Location{Position: pos1}, false)
+	c.Assert(older, IsTrue)
 
 	// flush + rollback
 	s.mock.ExpectBegin()
@@ -365,13 +366,13 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	err = cp.FlushPointsExcept(tctx, nil, nil, nil)
 	c.Assert(err, IsNil)
 	cp.Rollback(s.tracker)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
-	c.Assert(newer, IsFalse)
+	older = cp.IsOlderThanTablePoint(schema, table, binlog.Location{Position: pos1}, false)
+	c.Assert(older, IsTrue)
 
 	// save
 	cp.SaveTablePoint(schema, table, binlog.Location{Position: pos2}, nil)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
-	c.Assert(newer, IsFalse)
+	older = cp.IsOlderThanTablePoint(schema, table, binlog.Location{Position: pos1}, false)
+	c.Assert(older, IsTrue)
 
 	// delete
 	s.mock.ExpectBegin()
@@ -431,8 +432,8 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	s.mock.ExpectCommit()
 	err = cp.Clear(tctx)
 	c.Assert(err, IsNil)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
-	c.Assert(newer, IsTrue)
+	older = cp.IsOlderThanTablePoint(schema, table, binlog.Location{Position: pos1}, false)
+	c.Assert(older, IsFalse)
 
 	// test save table point less than global point
 	func() {
@@ -452,8 +453,8 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	err = cp.FlushPointsExcept(tctx, [][]string{{schema, table}}, nil, nil)
 	c.Assert(err, IsNil)
 	cp.Rollback(s.tracker)
-	newer = cp.IsNewerTablePoint(schema, table, binlog.Location{Position: pos1}, false)
-	c.Assert(newer, IsTrue)
+	older = cp.IsOlderThanTablePoint(schema, table, binlog.Location{Position: pos1}, false)
+	c.Assert(older, IsFalse)
 
 	s.mock.ExpectBegin()
 	s.mock.ExpectExec(clearCheckPointSQL).WithArgs(cpid).WillReturnResult(sqlmock.NewResult(0, 1))

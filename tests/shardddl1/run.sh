@@ -10,6 +10,7 @@ source $cur/../_utils/shardddl_lib.sh
 function DM_001_CASE() {
 	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int;"
 	run_sql_source1 "alter table ${shardddl1}.${tb2} add column new_col1 int;"
+	# schema tracker could track per table without error
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
 		"Duplicate column name 'new_col1'" 1
@@ -342,16 +343,6 @@ function DM_RemoveLock() {
 		"bound" 2
 }
 
-function restart_master() {
-	echo "restart dm-master"
-	kill_dm_master
-	check_port_offline $MASTER_PORT 20
-	sleep 2
-
-	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-}
-
 function DM_RestartMaster_CASE() {
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,'aaa');"
 	run_sql_source2 "insert into ${shardddl1}.${tb1} values(2,'bbb');"
@@ -509,18 +500,19 @@ function DM_DropAddColumn() {
 function run() {
 	init_cluster
 	init_database
+
+	DM_DropAddColumn
+	DM_RENAME_TABLE
+	DM_RENAME_COLUMN_OPTIMISTIC
+	DM_RECOVER_LOCK
+	DM_RemoveLock
+	DM_RestartMaster
 	start=1
 	end=5
 	for i in $(seq -f "%03g" ${start} ${end}); do
 		DM_${i}
 		sleep 1
 	done
-	DM_RENAME_TABLE
-	DM_RENAME_COLUMN_OPTIMISTIC
-	DM_RECOVER_LOCK
-	DM_RemoveLock
-	DM_RestartMaster
-	DM_DropAddColumn
 }
 
 cleanup_data $shardddl
