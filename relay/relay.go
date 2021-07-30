@@ -558,7 +558,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		}
 		if _, ok := e.Event.(*replication.RotateEvent); ok {
 			if !utils.IsFakeRotateEvent(e.Header) {
-				// if the binlog is rotated, we need to save and flush the current relay log file name to meta
+				// if the binlog is rotated, we need to save and flush the next binlog filename to meta
 				lastPos.Name = tResult.NextLogName
 				err := r.SaveMeta(lastPos, lastGTID.Clone())
 				if err != nil {

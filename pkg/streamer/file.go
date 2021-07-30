@@ -222,10 +222,11 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 			case cmp > 0:
 				updatePathCh <- latestFilePath
 				return
-			default: // no new write
-				// our relay meat file will be updated immediately after new relay log file created
-				// although we can't ensure the binlog file name is the next one we expected
-				// if we return a different filename with latestFile the outer logic (parseDirAsPossible) will find the right one
+			default:
+				// current watched file size have no change means that no new writes have beed made
+				// our relay meat file will be updated immediately after receive the rotate event
+				// although we can't ensure the binlog file name in meta is the next one we expected
+				// but if we return a different filename with latestFile,the outer logic (parseDirAsPossible) will find the right one
 				metaFile, err := os.Open(filepath.Join(dir, utils.MetaFilename))
 				if err != nil {
 					errCh <- terror.Annotatef(err, "open metaFile from %s in dir %s", utils.MetaFilename, dir)
