@@ -54,7 +54,7 @@ func NewConfigCmd() *cobra.Command {
 		newExportCfgsCmd(),
 		newImportCfgsCmd(),
 	)
-	cmd.PersistentFlags().StringP("dir", "d", "configs", "specify the configs directory, default is `./configs`")
+	cmd.PersistentFlags().StringP("dir", "d", "", "specify the configs directory, default is `./configs`")
 
 	return cmd
 }
@@ -200,6 +200,9 @@ func exportCfgsFunc(cmd *cobra.Command, args []string) error {
 		common.PrintLinesf("can not get directory")
 		return err
 	}
+	if dir == "" {
+		dir = "configs"
+	}
 
 	// get all configs
 	sourceCfgsMap, subTaskCfgsMap, relayWorkersSet, err := getAllCfgs(common.GlobalCtlClient.EtcdClient)
@@ -234,6 +237,9 @@ func importCfgsFunc(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		common.PrintLinesf("can not get directory")
 		return err
+	}
+	if dir == "" {
+		dir = "configs"
 	}
 
 	sourceCfgs, taskCfgs, relayWorkers, err := collectCfgs(dir)
