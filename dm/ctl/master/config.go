@@ -109,7 +109,7 @@ func newConfigSourceCmd() *cobra.Command {
 }
 
 func configSourceList(cmd *cobra.Command, args []string) error {
-	if len(args) == 0 || len(args) > 1 {
+	if len(args) != 1 {
 		return cmd.Help()
 	}
 	name := args[0]
