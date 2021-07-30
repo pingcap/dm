@@ -1,11 +1,9 @@
 module github.com/pingcap/dm
 
-replace github.com/chaos-mesh/go-sqlsmith => /Users/ehco/Documents/pingcap/go-sqlsmith
-
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
-	github.com/chaos-mesh/go-sqlsmith v0.0.0-20201120053641-47c50b530c01
+	github.com/chaos-mesh/go-sqlsmith v0.0.0-20210730091118-5201af078b27
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/coreos/go-semver v0.3.0
 	github.com/docker/go-units v0.4.0
@@ -43,7 +41,6 @@ require (
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200824191128-ae9734ed278b
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.18.1
-	golang.org/x/exp v0.0.0-20200513190911-00229845015e // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210510120138-977fb7262007
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
