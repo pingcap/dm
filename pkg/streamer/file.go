@@ -201,7 +201,7 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 }
 
 // relayLogUpdatedOrNewCreated checks whether current relay log file is updated or new relay log is created.
-// we check the size of the file first, if the size is the same as the latest file, we assume there is no new wirte
+// we check the size of the file first, if the size is the same as the latest file, we assume there is no new write
 // so we need to chenk relay meta file to see if the new relay log is created.
 func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Duration, dir string,
 	latestFilePath, latestFile string, latestFileSize int64, updatePathCh chan string, errCh chan error) {
@@ -210,9 +210,6 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 	for {
 		select {
 		case <-ctx.Done():
-			if err := ctx.Err(); err != nil {
-				errCh <- err
-			}
 			return
 		case <-ticker.C:
 			// check the latest relay log file whether updated when adding watching and collecting newer
@@ -228,16 +225,17 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 				updatePathCh <- latestFilePath
 				return
 			default:
-				// current watched file size have no change means that no new writes have beed made
-				// our relay meat file will be updated immediately after receive the rotate event
-				// although we can't ensure the binlog file name in meta is the next one we expected
-				// but if we return a different filename with latestFile,the outer logic (parseDirAsPossible) will find the right one
+				// current watched file size have no change means that no new writes have been made
+				// our relay meta file will be updated immediately after receive the rotate event
+				// although we can't ensure the binlog filename in meta is the next one we expected
+				// but if we return a different filename with latestFile,the outer logic (parseDirAsPossible)
+				// will find the right one
 				metaFile, err := os.Open(filepath.Join(dir, utils.MetaFilename))
 				if err != nil {
 					errCh <- terror.Annotatef(err, "open metaFile from %s in dir %s", utils.MetaFilename, dir)
 					return
 				}
-				defer metaFile.Close()
+				metaFile.Close()
 				meta := &Meta{}
 				_, err = toml.DecodeReader(metaFile, meta)
 				if err != nil {
@@ -247,8 +245,8 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 				if meta.BinLogName != latestFile {
 					nextFilePath := filepath.Join(dir, meta.BinLogName)
 					log.L().Info("newer relay log file is already generated, start parse from it",
-						zap.String("now file", latestFilePath),
-						zap.String("new file", nextFilePath))
+						zap.String("now file path", latestFilePath),
+						zap.String("new file path", nextFilePath))
 					updatePathCh <- nextFilePath
 					return
 				}
