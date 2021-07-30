@@ -900,30 +900,48 @@ func (s *Syncer) saveTablePoint(db, table string, location binlog.Location) {
 
 // only used in tests.
 var (
-	lastPos        mysql.Position
-	lastPosNum     int
-	waitJobsDone   bool
-	failExecuteSQL bool
-	failOnce       atomic.Bool
+	lastLocation    binlog.Location
+	lastLocationNum int
+	waitJobsDone    bool
+	failExecuteSQL  bool
+	failOnce        atomic.Bool
 )
 
 func (s *Syncer) addJob(job *job) error {
 	failpoint.Inject("countJobFromOneEvent", func() {
-		if job.currentLocation.Position.Compare(lastPos) == 0 {
-			lastPosNum++
+		if job.currentLocation.Position.Compare(lastLocation.Position) == 0 {
+			lastLocationNum++
 		} else {
-			lastPos = job.currentLocation.Position
-			lastPosNum = 1
+			lastLocation = job.currentLocation
+			lastLocationNum = 1
 		}
 		// trigger a flush after see one job
-		if lastPosNum == 1 {
+		if lastLocationNum == 1 {
 			waitJobsDone = true
-			s.tctx.L().Info("meet the first job of an event", zap.Any("binlog position", lastPos))
+			s.tctx.L().Info("meet the first job of an event", zap.Any("binlog position", lastLocation))
 		}
 		// mock a execution error after see two jobs.
-		if lastPosNum == 2 {
+		if lastLocationNum == 2 {
 			failExecuteSQL = true
-			s.tctx.L().Info("meet the second job of an event", zap.Any("binlog position", lastPos))
+			s.tctx.L().Info("meet the second job of an event", zap.Any("binlog position", lastLocation))
+		}
+	})
+	failpoint.Inject("countJobFromOneGTID", func() {
+		if binlog.CompareLocation(job.currentLocation, lastLocation, true) == 0 {
+			lastLocationNum++
+		} else {
+			lastLocation = job.currentLocation
+			lastLocationNum = 1
+		}
+		// trigger a flush after see one job
+		if lastLocationNum == 1 {
+			waitJobsDone = true
+			s.tctx.L().Info("meet the first job of a GTID", zap.Any("binlog position", lastLocation))
+		}
+		// mock a execution error after see two jobs.
+		if lastLocationNum == 2 {
+			failExecuteSQL = true
+			s.tctx.L().Info("meet the second job of a GTID", zap.Any("binlog position", lastLocation))
 		}
 	})
 	var queueBucket int
@@ -966,9 +984,9 @@ func (s *Syncer) addJob(job *job) error {
 
 	// nolint:ifshort
 	wait := s.checkWait(job)
-	failpoint.Inject("flushFirstJobOfEvent", func() {
+	failpoint.Inject("flushFirstJob", func() {
 		if waitJobsDone {
-			s.tctx.L().Info("trigger flushFirstJobOfEvent")
+			s.tctx.L().Info("trigger flushFirstJob")
 			waitJobsDone = false
 			wait = true
 		}
@@ -1280,10 +1298,10 @@ func (s *Syncer) syncDML(
 			return 0, nil
 		}
 
-		failpoint.Inject("failSecondJobOfEvent", func() {
+		failpoint.Inject("failSecondJob", func() {
 			if failExecuteSQL && failOnce.CAS(false, true) {
-				s.tctx.L().Info("trigger failSecondJobOfEvent")
-				failpoint.Return(0, terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJobOfEvent"), "mock"))
+				s.tctx.L().Info("trigger failSecondJob")
+				failpoint.Return(0, terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJob"), "mock"))
 			}
 		})
 
@@ -1300,7 +1318,14 @@ func (s *Syncer) syncDML(
 		// use background context to execute sqls as much as possible
 		ctctx, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLExecutionDuration)
 		defer cancel()
-		return db.ExecuteSQL(ctctx, queries, args...)
+		affect, err := db.ExecuteSQL(ctctx, queries, args...)
+		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
+			if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
+				s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
+				affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
+			}
+		})
+		return affect, err
 	}
 
 	var err error
@@ -1311,13 +1336,26 @@ func (s *Syncer) syncDML(
 		tickerInterval = time.Duration(t) * time.Second
 		tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
 	})
+	timer := time.NewTimer(tickerInterval)
+	defer timer.Stop()
 
-	ticker := time.NewTicker(tickerInterval)
-	defer ticker.Stop()
 	for {
 		// resets the time interval for each loop to prevent a certain amount of time being spent on the previous ticker
-		// execution to `executeSQLs` resulting in the next tikcer not waiting for the full waitTime.
-		ticker.Reset(tickerInterval)
+		// execution to `executeSQLs` resulting in the next ticker not waiting for the full waitTime.
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timer.Reset(tickerInterval)
+		failpoint.Inject("noJobInQueueLog", func() {
+			tctx.L().Debug("timer Reset",
+				zap.String("workerLagKey", workerLagKey),
+				zap.Duration("tickerInterval", tickerInterval),
+				zap.Int64("current ts", time.Now().Unix()))
+		})
+
 		select {
 		case sqlJob, ok := <-jobChan:
 			metrics.QueueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
@@ -1333,13 +1371,6 @@ func (s *Syncer) syncDML(
 
 			if idx >= count || sqlJob.tp == flush {
 				affect, err = executeSQLs()
-
-				failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
-					if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
-						s.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
-						affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
-					}
-				})
 				if err != nil {
 					fatalF(affect, err)
 					continue
@@ -1347,7 +1378,7 @@ func (s *Syncer) syncDML(
 				successF()
 				clearF()
 			}
-		case <-ticker.C:
+		case <-timer.C:
 			if len(jobs) > 0 {
 				failpoint.Inject("syncDMLTicker", func() {
 					tctx.L().Info("job queue not full, executeSQLs by ticker")
@@ -1565,7 +1596,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		} else {
 			err2 = s.flushCheckPoints()
 		}
-		tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
+		if err2 != nil {
+			tctx.L().Warn("failed to flush checkpoints when exit task", zap.Error(err2))
+		} else {
+			tctx.L().Info("flush checkpoints when exit task")
+		}
 	}()
 
 	s.start = time.Now()
@@ -1781,7 +1816,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		// check pass SafeModeExitLoc and try disable safe mode, but not in sharding or replacing error
 		safeModeExitLoc := s.checkpoint.SafeModeExitPoint()
 		if safeModeExitLoc != nil && !s.isReplacingErr && shardingReSync == nil {
-			if binlog.CompareLocation(currentLocation, *safeModeExitLoc, s.cfg.EnableGTID) >= 0 {
+			// TODO: for RowsEvent (in fact other than QueryEvent), `currentLocation` is updated in `handleRowsEvent`
+			// so here the meaning of `currentLocation` is the location of last event
+			if binlog.CompareLocation(currentLocation, *safeModeExitLoc, s.cfg.EnableGTID) > 0 {
 				s.checkpoint.SaveSafeModeExitPoint(nil)
 				// must flush here to avoid the following situation:
 				// 1. quit safe mode
@@ -1984,13 +2021,21 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 	}
 
-	// DML position before table checkpoint, ignore it
+	// For DML position before table checkpoint, ignore it. When the position equals to table checkpoint, this event may
+	// be partially replicated to downstream, we rely on safe-mode to handle it.
 	if s.checkpoint.IsOlderThanTablePoint(originSchema, originTable, *ec.currentLocation, false) {
 		ec.tctx.L().Debug("ignore obsolete event that is old than table checkpoint", zap.String("event", "row"), log.WrapStringerField("location", ec.currentLocation), zap.String("origin schema", originSchema), zap.String("origin table", originTable))
 		return nil
 	}
 
-	ec.tctx.L().Debug("", zap.String("event", "row"), zap.String("origin schema", originSchema), zap.String("origin table", originTable), zap.String("target schema", schemaName), zap.String("target table", tableName), log.WrapStringerField("location", ec.currentLocation), zap.Reflect("raw event data", ev.Rows))
+	ec.tctx.L().Debug("",
+		zap.String("event", "row"),
+		zap.String("origin schema", originSchema),
+		zap.String("origin table", originTable),
+		zap.String("target schema", schemaName),
+		zap.String("target table", tableName),
+		log.WrapStringerField("location", ec.currentLocation),
+		zap.Reflect("raw event data", ev.Rows))
 
 	// TODO(ehco) remove heartbeat
 	if s.cfg.EnableHeartbeat {
@@ -2116,6 +2161,12 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, originSQL string) error {
 	if originSQL == "BEGIN" {
+		// GTID event: GTID_NEXT = xxx:11
+		// Query event: BEGIN (GTID set = xxx:1-11)
+		// Rows event: ... (GTID set = xxx:1-11)  if we update lastLocation below,
+		//                                        otherwise that is xxx:1-10 when dealing with table checkpoints
+		// Xid event: GTID set = xxx:1-11  this event is related to global checkpoint
+		*ec.lastLocation = *ec.currentLocation
 		return nil
 	}
 
