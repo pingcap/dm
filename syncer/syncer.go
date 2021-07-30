@@ -1343,7 +1343,10 @@ func (s *Syncer) syncDML(
 		// resets the time interval for each loop to prevent a certain amount of time being spent on the previous ticker
 		// execution to `executeSQLs` resulting in the next ticker not waiting for the full waitTime.
 		if !timer.Stop() {
-			<-timer.C
+			select {
+			case <-timer.C:
+			default:
+			}
 		}
 		timer.Reset(tickerInterval)
 		failpoint.Inject("noJobInQueueLog", func() {
