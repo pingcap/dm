@@ -24,10 +24,11 @@ type Security struct {
 	SSLCert       string   `toml:"ssl-cert" json:"ssl-cert" yaml:"ssl-cert"`
 	SSLKey        string   `toml:"ssl-key" json:"ssl-key" yaml:"ssl-key"`
 	CertAllowedCN strArray `toml:"cert-allowed-cn" json:"cert-allowed-cn" yaml:"cert-allowed-cn"`
-
-	SSLCABytes   []byte `toml:"ssl-ca-bytes" json:"ssl-ca-bytes" yaml:"ssl-ca-bytes"`
-	SSLCertBytes []byte `toml:"ssl-cert-bytes" json:"ssl-cert-bytes" yaml:"ssl-cert-bytes"`
-	SSLKEYBytes  []byte `toml:"ssl-key-bytes" json:"ssl-key-bytes" yaml:"ssl-key-bytes"`
+	// we store this config into etcd as toml format, but `get-config` use yaml format
+	// we don't want to user see bytes, so hide `SSLxxByte` field when use json/yaml.
+	SSLCABytes   []byte `toml:"ssl-ca-bytes" json:"-" yaml:"-"`
+	SSLCertBytes []byte `toml:"ssl-cert-bytes" json:"-" yaml:"-"`
+	SSLKEYBytes  []byte `toml:"ssl-key-bytes" json:"-" yaml:"-"`
 }
 
 // used for parse string slice in flag.
