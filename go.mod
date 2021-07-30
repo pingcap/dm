@@ -15,9 +15,7 @@ require (
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.3.4
 	github.com/google/uuid v1.1.1
-	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.14.3
-	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8 // indirect
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/dumpling v0.0.0-20210729023417-f9dd668ffe54
@@ -32,7 +30,6 @@ require (
 	github.com/rakyll/statik v0.1.6
 	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b // indirect
 	github.com/shopspring/decimal v0.0.0-20200105231215-408a2507e114
-	github.com/siddontang/go-log v0.0.0-20190221022429-1e957dd83bed // indirect
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/cobra v1.0.0
@@ -51,9 +48,7 @@ require (
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/genproto v0.0.0-20200224152610-e50cd9704f63
 	google.golang.org/grpc v1.27.1
-	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
 	gopkg.in/yaml.v2 v2.4.0
-	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
 go 1.16
