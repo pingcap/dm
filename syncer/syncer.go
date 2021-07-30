@@ -1336,24 +1336,22 @@ func (s *Syncer) syncDML(
 		tickerInterval = time.Duration(t) * time.Second
 		tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
 	})
+	timer := time.NewTimer(tickerInterval)
+	defer timer.Stop()
 
-	ticker := time.NewTicker(tickerInterval)
-	defer ticker.Stop()
 	for {
 		// resets the time interval for each loop to prevent a certain amount of time being spent on the previous ticker
 		// execution to `executeSQLs` resulting in the next ticker not waiting for the full waitTime.
-		ticker.Reset(tickerInterval)
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset(tickerInterval)
 		failpoint.Inject("noJobInQueueLog", func() {
-			tctx.L().Debug("ticker Reset",
+			tctx.L().Debug("timer Reset",
 				zap.String("workerLagKey", workerLagKey),
 				zap.Duration("tickerInterval", tickerInterval),
 				zap.Int64("current ts", time.Now().Unix()))
 		})
-		// drain the tick in C generated before Reset
-		select {
-		case <- ticker.C:
-		default:
-		}
 
 		select {
 		case sqlJob, ok := <-jobChan:
@@ -1377,7 +1375,7 @@ func (s *Syncer) syncDML(
 				successF()
 				clearF()
 			}
-		case <-ticker.C:
+		case <-timer.C:
 			if len(jobs) > 0 {
 				failpoint.Inject("syncDMLTicker", func() {
 					tctx.L().Info("job queue not full, executeSQLs by ticker")
