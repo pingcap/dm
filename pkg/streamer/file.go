@@ -235,9 +235,9 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 					errCh <- terror.Annotatef(err, "open metaFile from %s in dir %s", utils.MetaFilename, dir)
 					return
 				}
-				metaFile.Close()
 				meta := &Meta{}
 				_, err = toml.DecodeReader(metaFile, meta)
+				metaFile.Close()
 				if err != nil {
 					errCh <- terror.Annotate(err, "decode meta toml faild")
 					return
