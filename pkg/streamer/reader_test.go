@@ -599,7 +599,6 @@ func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	// create new meta file
 	t.createMetaFile(c, filenamePrefix, "", path.Join(baseDir, UUIDs[2]), lastPos)
 
 	// read extra events back
@@ -810,7 +809,6 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 				c.Assert(err, IsNil)
 			}
 			f.Close()
-			// write meta file
 			t.createMetaFile(c, fileEventResult.filename, previousGset.String(), uuidDir, lastPos)
 		}
 	}
