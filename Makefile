@@ -188,6 +188,7 @@ dm_integration_test_build_worker: tools_setup
 check_third_party_binary:
 	@which bin/tidb-server
 	@which bin/sync_diff_inspector
+	@bin/sync_diff_inspector -V
 
 integration_test: check_third_party_binary
 	@which bin/dm-master.test

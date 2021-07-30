@@ -26,14 +26,13 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/failpoint"
 
-	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/go-sql-driver/mysql"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 var customID int64
