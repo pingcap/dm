@@ -54,32 +54,32 @@ function config_wrong_arg() {
 
 function diff_get_config() {
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"config task test --output $WORK_DIR/get_task.yaml" \
+		"config task test --dir $WORK_DIR/get_task.yaml" \
 		"\"result\": true" 1
 	diff $WORK_DIR/get_task.yaml $cur/conf/get_task.yaml || exit 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"config master master1 --output $dm_master_conf" \
+		"config master master1 --dir $dm_master_conf" \
 		"\"result\": true" 1
 	diff $dm_master_conf $cur/conf/get_master1.toml || exit 1
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"config worker worker1 --output $dm_worker1_conf" \
+		"config worker worker1 --dir $dm_worker1_conf" \
 		"\"result\": true" 1
 	diff $dm_worker1_conf $cur/conf/get_worker1.toml || exit 1
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"config worker worker2 --output $dm_worker2_conf" \
+		"config worker worker2 --dir $dm_worker2_conf" \
 		"\"result\": true" 1
 	diff $dm_worker2_conf $cur/conf/get_worker2.toml || exit 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"config source mysql-replica-01 --output $WORK_DIR/get_source1.yaml" \
+		"config source mysql-replica-01 --dir $WORK_DIR/get_source1.yaml" \
 		"\"result\": true" 1
 	diff $WORK_DIR/get_source1.yaml $cur/conf/get_source1.yaml || exit 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"config source mysql-replica-02 --output $WORK_DIR/get_source2.yaml" \
+		"config source mysql-replica-02 --dir $WORK_DIR/get_source2.yaml" \
 		"\"result\": true" 1
 	diff $WORK_DIR/get_source2.yaml $cur/conf/get_source2.yaml || exit 1
 }
