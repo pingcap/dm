@@ -43,7 +43,7 @@ func newBinlogSkipCmd() *cobra.Command {
 		Use:   "skip <task-name>",
 		Short: "skip the current error event or a specific binlog position (binlog-pos) event",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
+			if len(args) != 1 {
 				return cmd.Help()
 			}
 			taskName := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0))
@@ -58,7 +58,7 @@ func newBinlogReplaceCmd() *cobra.Command {
 		Use:   "replace <task-name> <replace-sql1> <replace-sql2>...",
 		Short: "replace the current error event or a specific binlog position (binlog-pos) ddl event with some ddls",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
+			if len(args) <= 1 {
 				return cmd.Help()
 			}
 			taskName := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0))

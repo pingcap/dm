@@ -27,9 +27,10 @@ import (
 // NewOperateSchemaCmd creates a OperateSchema command.
 func NewOperateSchemaCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "operate-schema <operate-type> <-s source ...> <task-name | task-file> <-d database> <-t table> [schema-file] [--flush] [--sync]",
-		Short: "`get`/`set`/`remove` the schema for an upstream table",
-		RunE:  operateSchemaCmd,
+		Use:    "operate-schema <operate-type> <-s source ...> <task-name | task-file> <-d database> <-t table> [schema-file] [--flush] [--sync]",
+		Short:  "`get`/`set`/`remove` the schema for an upstream table",
+		Hidden: true,
+		RunE:   operateSchemaCmd,
 	}
 	cmd.Flags().StringP("database", "d", "", "database name of the table")
 	cmd.Flags().StringP("table", "t", "", "table name")
