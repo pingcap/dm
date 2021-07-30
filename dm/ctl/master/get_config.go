@@ -32,7 +32,7 @@ const cmdGetTaskConfig = "get-task-config"
 func NewGetCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "get-config <task | master | worker | source> <name> [--file filename]",
-		Short:   "Gets the configuration.",
+		Short:   "Gets the configuration",
 		RunE:    getCfgFunc,
 		Aliases: []string{cmdGetTaskConfig},
 	}

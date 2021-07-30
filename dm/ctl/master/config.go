@@ -40,7 +40,7 @@ var (
 	yamlSuffix           = ".yaml"
 )
 
-// NewConfigCmd creates a OperateSchema command.
+// NewConfigCmd creates a Config command.
 func NewConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config <command>",
@@ -86,10 +86,11 @@ func configTaskList(cmd *cobra.Command, args []string) error {
 // FIXME: implement this later.
 func newConfigTaskUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update <command>",
-		Short: "update config task",
+		Use:    "update <command>",
+		Short:  "update config task",
+		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return nil
+			return errors.Errorf("this function will be supported later")
 		},
 	}
 	return cmd
@@ -122,10 +123,11 @@ func configSourceList(cmd *cobra.Command, args []string) error {
 // FIXME: implement this later.
 func newConfigSourceUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update <command>",
-		Short: "update config source",
+		Use:    "update <command>",
+		Short:  "update config source",
+		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return nil
+			return errors.Errorf("this function will be supported later")
 		},
 	}
 	return cmd
@@ -177,7 +179,7 @@ func configWorkerList(cmd *cobra.Command, args []string) error {
 func newExportCfgsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "export",
-		Short: "Export the configurations of sources and tasks.",
+		Short: "Export the configurations of sources and tasks",
 		RunE:  exportCfgsFunc,
 	}
 	return cmd
@@ -187,7 +189,7 @@ func newExportCfgsCmd() *cobra.Command {
 func newImportCfgsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "import",
-		Short: "Import the configurations of sources and tasks.",
+		Short: "Import the configurations of sources and tasks",
 		RunE:  importCfgsFunc,
 	}
 	return cmd

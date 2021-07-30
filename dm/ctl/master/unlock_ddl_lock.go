@@ -29,7 +29,7 @@ import (
 func NewUnlockDDLLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unlock-ddl-lock <lock-ID>",
-		Short: "Unlocks DDL lock forcefully.",
+		Short: "Unlocks DDL lock forcefully",
 		RunE:  unlockDDLLockFunc,
 	}
 	cmd.Flags().StringP("owner", "o", "", "source to replace the default owner")

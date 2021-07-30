@@ -34,7 +34,7 @@ func NewShardDDLLockCmd() *cobra.Command {
 func newDDLLockUnlockCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unlock <lock-id>",
-		Short: "Unlock un-resolved DDL locks forcely.",
+		Short: "Unlock un-resolved DDL locks forcely",
 		RunE:  unlockDDLLockFunc,
 	}
 	cmd.Flags().StringP("owner", "o", "", "source to replace the default owner")

@@ -17,6 +17,7 @@ import (
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
+	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +41,7 @@ func NewBinlogCmd() *cobra.Command {
 func newBinlogSkipCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "skip <task-name>",
-		Short: "skip the current error event or a specific binlog position (binlog-pos) event.",
+		Short: "skip the current error event or a specific binlog position (binlog-pos) event",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help()
@@ -55,7 +56,7 @@ func newBinlogSkipCmd() *cobra.Command {
 func newBinlogReplaceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "replace <task-name> <replace-sql1> <replace-sql2>...",
-		Short: "replace the current error event or a specific binlog position (binlog-pos) ddl event with some ddls.",
+		Short: "replace the current error event or a specific binlog position (binlog-pos) ddl event with some ddls",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help()
@@ -74,7 +75,7 @@ func newBinlogReplaceCmd() *cobra.Command {
 func newBinlogRevertCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "revert <task-name>",
-		Short: "revert the current binlog operation or a specific binlog position (binlog-pos) operation.",
+		Short: "revert the current binlog operation or a specific binlog position (binlog-pos) operation",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help()
@@ -89,10 +90,11 @@ func newBinlogRevertCmd() *cobra.Command {
 // FIXME: implement this later.
 func newBinlogInjectCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "inject <task-name> <inject-sql1> <replace-sql2>...",
-		Short: "inject the current error event or a specific binlog position (binlog-pos) ddl event with some ddls.",
+		Use:    "inject <task-name> <inject-sql1> <replace-sql2>...",
+		Short:  "inject the current error event or a specific binlog position (binlog-pos) ddl event with some ddls",
+		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return nil
+			return errors.Errorf("this function will be supported later")
 		},
 	}
 	return cmd
