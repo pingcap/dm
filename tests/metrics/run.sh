@@ -92,26 +92,27 @@ function run() {
 		"\"secondsBehindMaster\": \"0\"" 2
 	echo "check zero job done!"
 
-	kill_dm_worker
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/changeTickerInterval=return(5);github.com/pingcap/dm/syncer/noJobInQueueLog=return(true);github.com/pingcap/dm/syncer/WaitUserCancel=return(1)"
+	# restart dm-worker1
+	pkill -hup -f dm-worker1.toml 2>/dev/null || true
+	wait_pattern_exit dm-worker1.toml
+	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/changeTickerInterval=return(5);github.com/pingcap/dm/syncer/noJobInQueueLog=return()"
 	# First set the ticker interval to 5s -> expect the execSQL interval to be greater than 5s
 	# At 5s, the first no job log will appear in the log
 	# At 6s, the ticker has already waited 1s and the ticker goes to 1/5th of the way
-	# At 6s, a dml job is added to jobchan and the ticker is reset
-	# At 11s the ticker write the log of the second nojob
+	# At 6s, a dml job is added to job chan and the ticker is reset
+	# At 11s the ticker write the log of the second no job
 	# Check that the interval between the two ticker logs is > 5s
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
 	echo "sleep 6s"
 	sleep 6
 	echo "make a dml job"
-	run_sql_source1 "use metrics;insert into t1 (id, name, ts) values (1004, 'zmj4', '2022-05-11 12:01:05')"
+	run_sql_source1 "insert into metrics.t1 (id, name, ts) values (1004, 'zmj4', '2022-05-11 12:01:05')"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	echo "sleep 6s"
 	sleep 6
-	$cur/../_utils/check_ticker_interval.py $WORK_DIR/worker1/log/dm-worker.log 5
+	check_ticker_interval $WORK_DIR/worker1/log/dm-worker.log 5
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"stop-task test" \
 		"\"result\": true" 3
