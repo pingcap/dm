@@ -40,8 +40,6 @@ import (
 const (
 	// TiDBClusteredIndex is the variable name for clustered index.
 	TiDBClusteredIndex = "tidb_enable_clustered_index"
-	// TiDBChangeColumnType is the variable name for column type changing.
-	TiDBChangeColumnType = "tidb_enable_change_column_type"
 )
 
 var (
@@ -49,8 +47,7 @@ var (
 	// we always using OFF tidb_enable_clustered_index unless user set it in config.
 	downstreamVars    = []string{"sql_mode", "tidb_skip_utf8_check"}
 	defaultGlobalVars = map[string]string{
-		TiDBClusteredIndex:   "OFF",
-		TiDBChangeColumnType: "ON", // NOTE The default value of tidb_enable_change_column_type was changed to ON after the release of TiDB 5.1.
+		TiDBClusteredIndex: "OFF",
 	}
 )
 
@@ -104,7 +101,7 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 		}
 	}
 
-	store, err := mockstore.NewMockStore(mockstore.WithStoreType(mockstore.MockTiKV))
+	store, err := mockstore.NewMockStore(mockstore.WithStoreType(mockstore.EmbedUnistore))
 	if err != nil {
 		return nil, err
 	}
