@@ -209,10 +209,11 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 		case <-ticker.C:
 			// check the latest relay log file whether updated when adding watching and collecting newer
 			cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
-			switch {
-			case err != nil:
+			if err != nil {
 				errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize= %d", latestFilePath, latestFileSize)
 				return
+			}
+			switch {
 			case cmp < 0:
 				errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
 				return
@@ -222,8 +223,8 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 			default:
 				// current watched file size have no change means that no new writes have been made
 				// our relay meta file will be updated immediately after receive the rotate event
-				// although we can't ensure the binlog filename in meta is the next one we expected
-				// but if we return a different filename with latestFile,the outer logic (parseDirAsPossible)
+				// although we cannot ensure that the binlog filename in the meta is the next file after latestFile
+				// but if we return a different filename with latestFile, the outer logic (parseDirAsPossible)
 				// will find the right one
 				metaFile, err := os.Open(filepath.Join(dir, utils.MetaFilename))
 				if err != nil {
@@ -238,11 +239,23 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 					return
 				}
 				if meta.BinLogName != latestFile {
-					nextFilePath := filepath.Join(dir, meta.BinLogName)
-					log.L().Info("newer relay log file is already generated, start parse from it",
-						zap.String("now file path", latestFilePath),
-						zap.String("new file path", nextFilePath))
-					updatePathCh <- nextFilePath
+					// we need recheck file size again, as the file may have been changed during our metafile check.
+					cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
+					if err != nil {
+						errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
+					}
+					switch {
+					case cmp < 0:
+						errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
+					case cmp > 0:
+						updatePathCh <- latestFilePath
+					default:
+						nextFilePath := filepath.Join(dir, meta.BinLogName)
+						log.L().Info("newer relay log file is already generated",
+							zap.String("now file path", latestFilePath),
+							zap.String("new file path", nextFilePath))
+						updatePathCh <- nextFilePath
+					}
 					return
 				}
 			}
