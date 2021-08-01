@@ -17,6 +17,7 @@ package master
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -37,10 +38,28 @@ const (
 	docJSONBasePath = "/api/v1/dm.json"
 )
 
-// TODO check if we can handle request in no-leader node
+// redirectRequestToLeader is used to redirect the request to leader.
+// because the leader has some data in memory, only the leader can process the request.
+func (s *Server) redirectRequestToLeader(ctx context.Context) (needRedirect bool, host string, err error) {
+	isLeader, _ := s.isLeaderAndNeedForward(ctx)
+	if isLeader {
+		return false, s.cfg.OpenAPIAddr, nil
+	}
+	// nolint:dogsled
+	_, _, _, leaderOpenAPIAddr, err := s.election.LeaderInfo(ctx)
+	return true, leaderOpenAPIAddr, err
+}
 
 // DMAPICreateSource url is:(POST /api/v1/sources).
 func (s *Server) DMAPICreateSource(ctx echo.Context) error {
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusPermanentRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+
 	var createSourceReq openapi.Source
 	if err := ctx.Bind(&createSourceReq); err != nil {
 		return err
@@ -143,13 +162,15 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 
 // StartOpenAPIServer start OpenAPI server.
 func (s *Server) StartOpenAPIServer(ctx context.Context) {
+	if s.cfg.OpenAPIAddr == "" {
+		return
+	}
 	swagger, err := openapi.GetSwagger()
 	if err != nil {
 		exitServer(err)
 	}
 
-	// TODO(ehco) remove this
-	swagger.AddServer(&openapi3.Server{URL: "http://127.0.0.1:1323", Description: "测试服务器"})
+	swagger.AddServer(&openapi3.Server{URL: fmt.Sprintf("http://%s", s.cfg.OpenAPIAddr)})
 	swaggerJSON, err := swagger.MarshalJSON()
 	if err != nil {
 		exitServer(err)
@@ -174,7 +195,7 @@ func (s *Server) StartOpenAPIServer(ctx context.Context) {
 
 	// Start server
 	go func() {
-		if err := e.Start(s.cfg.OpenAPIAddr); err != nil {
+		if err := e.Start(s.cfg.OpenAPIAddr); err != nil && err != http.ErrServerClosed {
 			exitServer(err)
 		}
 	}()
@@ -182,7 +203,7 @@ func (s *Server) StartOpenAPIServer(ctx context.Context) {
 	// Wait for ctx.Done()
 	<-ctx.Done()
 	if err := e.Shutdown(ctx); err != nil {
-		log.L().Error("shutdown echo openapi server", zap.Error(err))
+		log.L().Warn("shutdown echo openapi server", zap.Error(err))
 	}
 }
 

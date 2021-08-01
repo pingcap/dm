@@ -205,7 +205,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// start leader election
 	// TODO: s.cfg.Name -> address
-	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name, s.cfg.AdvertiseAddr, getLeaderBlockTime)
+	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL,
+		electionKey, s.cfg.Name, s.cfg.AdvertiseAddr, s.cfg.OpenAPIAddr, getLeaderBlockTime)
 	if err != nil {
 		return
 	}
@@ -1792,7 +1793,7 @@ func (s *Server) listMemberLeader(ctx context.Context, names []string) *pb.Membe
 		set[name] = true
 	}
 
-	_, name, addr, err := s.election.LeaderInfo(ctx)
+	_, name, addr, _, err := s.election.LeaderInfo(ctx)
 	if err != nil {
 		resp.Leader.Msg = err.Error()
 		return resp

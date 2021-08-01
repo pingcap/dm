@@ -1,4 +1,4 @@
-// Copyright 2020 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,27 +11,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// this file implement all of the APIs of the DataMigration service.
+
 package master
 
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/pingcap/check"
-	"github.com/pingcap/failpoint"
 	"github.com/tikv/pd/pkg/tempurl"
 
-	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var _ = check.Suite(&testElectionSuite{})
+var _ = check.Suite(&testOpenAPISuite{})
 
-type testElectionSuite struct{}
+type testOpenAPISuite struct{}
 
-func (t *testElectionSuite) TestFailToStartLeader(c *check.C) {
+func (t *testOpenAPISuite) TestredirectRequestToLeader(c *check.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -44,6 +43,7 @@ func (t *testElectionSuite) TestFailToStartLeader(c *check.C) {
 	cfg1.PeerUrls = tempurl.Alloc()
 	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
 	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
+	cfg1.OpenAPIAddr = tempurl.Alloc()[len("http://"):]
 
 	s1 := NewServer(cfg1)
 	c.Assert(s1.Start(ctx), check.IsNil)
@@ -63,43 +63,19 @@ func (t *testElectionSuite) TestFailToStartLeader(c *check.C) {
 	cfg2.PeerUrls = tempurl.Alloc()
 	cfg2.AdvertisePeerUrls = cfg2.PeerUrls
 	cfg2.Join = cfg1.MasterAddr // join to an existing cluster
+	cfg2.OpenAPIAddr = tempurl.Alloc()[len("http://"):]
 
 	s2 := NewServer(cfg2)
 	c.Assert(s2.Start(ctx), check.IsNil)
 	defer s2.Close()
 
-	client, err := etcdutil.CreateClient(strings.Split(cfg1.AdvertisePeerUrls, ","), nil)
+	needRedirect1, openAPIAddrFromS1, err := s1.redirectRequestToLeader(ctx)
 	c.Assert(err, check.IsNil)
-	defer client.Close()
+	c.Assert(needRedirect1, check.Equals, false)
+	c.Assert(openAPIAddrFromS1, check.Equals, s1.cfg.OpenAPIAddr)
 
-	// s1 is still the leader
-	_, leaderID, _, openAPIAddr, err := s2.election.LeaderInfo(ctx)
+	needRedirect2, openAPIAddrFromS2, err := s2.redirectRequestToLeader(ctx)
 	c.Assert(err, check.IsNil)
-	c.Assert(leaderID, check.Equals, cfg1.Name)
-	c.Assert(openAPIAddr, check.Equals, cfg1.OpenAPIAddr)
-
-	// fail to start scheduler/pessimism/optimism
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/FailToStartLeader", `return("dm-master-2")`), check.IsNil)
-	//nolint:errcheck
-	defer failpoint.Disable("github.com/pingcap/dm/dm/master/FailToStartLeader")
-
-	s1.election.Resign()
-	time.Sleep(1 * time.Second)
-
-	// s1 is still the leader
-	_, leaderID, _, openAPIAddr, err = s2.election.LeaderInfo(ctx)
-	c.Assert(err, check.IsNil)
-	c.Assert(leaderID, check.Equals, cfg1.Name)
-	c.Assert(openAPIAddr, check.Equals, cfg1.OpenAPIAddr)
-
-	//nolint:errcheck
-	failpoint.Disable("github.com/pingcap/dm/dm/master/FailToStartLeader")
-	s1.election.Resign()
-	time.Sleep(1 * time.Second)
-
-	// s2 now become leader
-	_, leaderID, _, openAPIAddr, err = s2.election.LeaderInfo(ctx)
-	c.Assert(err, check.IsNil)
-	c.Assert(leaderID, check.Equals, cfg2.Name)
-	c.Assert(openAPIAddr, check.Equals, cfg2.OpenAPIAddr)
+	c.Assert(needRedirect2, check.Equals, true)
+	c.Assert(openAPIAddrFromS2, check.Equals, s1.cfg.OpenAPIAddr)
 }

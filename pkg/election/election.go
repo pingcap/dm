@@ -54,13 +54,15 @@ type CampaignerInfo struct {
 	ID string `json:"id"`
 	// addr is the campaigner's advertise address
 	Addr string `json:"addr"`
+	// openAddr is the campaigner's advertise address
+	OpenAPIAddr string `json:"openAPIAddr,omitempty"`
 }
 
 func (c *CampaignerInfo) String() string {
 	infoBytes, err := json.Marshal(c)
 	if err != nil {
 		// this should never happened
-		return fmt.Sprintf("id: %s, addr: %s", c.ID, c.Addr)
+		return fmt.Sprintf("id: %s, addr: %s openAPIAddr: %s", c.ID, c.Addr, c.OpenAPIAddr)
 	}
 
 	return string(infoBytes)
@@ -111,15 +113,17 @@ type Election struct {
 }
 
 // NewElection creates a new etcd leader Election instance and starts the campaign loop.
-func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id, addr string, notifyBlockTime time.Duration) (*Election, error) {
+func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id, addr, openAPIAddr string,
+	notifyBlockTime time.Duration) (*Election, error) {
 	ctx2, cancel2 := context.WithCancel(ctx)
 	e := &Election{
 		cli:        cli,
 		sessionTTL: sessionTTL,
 		key:        key,
 		info: &CampaignerInfo{
-			ID:   id,
-			Addr: addr,
+			ID:          id,
+			Addr:        addr,
+			OpenAPIAddr: openAPIAddr,
 		},
 		notifyBlockTime: notifyBlockTime,
 		leaderCh:        make(chan *CampaignerInfo, 1),
@@ -155,23 +159,23 @@ func (e *Election) ID() string {
 	return e.info.ID
 }
 
-// LeaderInfo returns the current leader's key, ID and address.
+// LeaderInfo returns the current leader's key, ID and address,openAPIAddr.
 // it's similar with https://github.com/etcd-io/etcd/blob/v3.4.3/clientv3/concurrency/election.go#L147.
-func (e *Election) LeaderInfo(ctx context.Context) (string, string, string, error) {
+func (e *Election) LeaderInfo(ctx context.Context) (string, string, string, string, error) {
 	resp, err := e.cli.Get(ctx, e.key, clientv3.WithFirstCreate()...)
 	if err != nil {
-		return "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
+		return "", "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
 	} else if len(resp.Kvs) == 0 {
 		// no leader currently elected
-		return "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
+		return "", "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
 	}
 
 	leaderInfo, err := getCampaignerInfo(resp.Kvs[0].Value)
 	if err != nil {
-		return "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
+		return "", "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
 	}
 
-	return string(resp.Kvs[0].Key), leaderInfo.ID, leaderInfo.Addr, nil
+	return string(resp.Kvs[0].Key), leaderInfo.ID, leaderInfo.Addr, leaderInfo.OpenAPIAddr, nil
 }
 
 // LeaderNotify returns a channel that can fetch the leader's information when the member become the leader or retire from the leader, or get a new leader.

@@ -89,15 +89,20 @@ func (t *testElectionSuite) TearDownTest(c *C) {
 
 func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	var (
-		timeout    = 3 * time.Second
-		sessionTTL = 60
-		key        = "unit-test/election-2-after-1"
-		ID1        = "member1"
-		ID2        = "member2"
-		ID3        = "member3"
-		addr1      = "127.0.0.1:1"
-		addr2      = "127.0.0.1:2"
-		addr3      = "127.0.0.1:3"
+		timeout      = 3 * time.Second
+		sessionTTL   = 60
+		key          = "unit-test/election-2-after-1"
+		ID1          = "member1"
+		ID2          = "member2"
+		ID3          = "member3"
+		addr1        = "127.0.0.1:1"
+		openAPIADDR1 = "127.0.0.1:11"
+
+		addr2        = "127.0.0.1:2"
+		openAPIADDR2 = "127.0.0.1:21"
+
+		addr3        = "127.0.0.1:3"
+		openAPIADDR3 = "127.0.0.1:31"
 	)
 	cli, err := etcdutil.CreateClient([]string{t.endPoint}, nil)
 	c.Assert(err, IsNil)
@@ -114,7 +119,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 		//nolint:errcheck
 		defer failpoint.Disable("github.com/pingcap/dm/pkg/election/mockCampaignLoopExitedAbnormally")
 	}
-	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, t.notifyBlockTime)
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, openAPIADDR1, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e1.Close()
 
@@ -126,7 +131,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e1.IsLeader(), IsTrue)
-	_, leaderID, leaderAddr, err := e1.LeaderInfo(ctx1)
+	_, leaderID, leaderAddr, _, err := e1.LeaderInfo(ctx1)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
@@ -137,7 +142,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2, t.notifyBlockTime)
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2, openAPIADDR2, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e2.Close()
 	select {
@@ -147,7 +152,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 		c.Fatal("leader campaign timeout")
 	}
 	// but the leader should still be e1
-	_, leaderID, leaderAddr, err = e2.LeaderInfo(ctx2)
+	_, leaderID, leaderAddr, _, err = e2.LeaderInfo(ctx2)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
@@ -177,7 +182,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e2.IsLeader(), IsTrue)
-	_, leaderID, leaderAddr, err = e2.LeaderInfo(ctx2)
+	_, leaderID, leaderAddr, _, err = e2.LeaderInfo(ctx2)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e2.ID())
 	c.Assert(leaderAddr, Equals, addr2)
@@ -208,7 +213,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	// can not elect with closed client.
 	ctx5, cancel5 := context.WithCancel(context.Background())
 	defer cancel5()
-	_, err = NewElection(ctx5, cli, sessionTTL, key, ID3, addr3, t.notifyBlockTime)
+	_, err = NewElection(ctx5, cli, sessionTTL, key, ID3, addr3, openAPIADDR3, t.notifyBlockTime)
 	c.Assert(terror.ErrElectionCampaignFail.Equal(err), IsTrue)
 	c.Assert(err, ErrorMatches, ".*, Message: fail to campaign leader: create the initial session, RawCause: context canceled.*")
 }
@@ -225,8 +230,12 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 		key        = "unit-test/election-always-1"
 		ID1        = "member1"
 		ID2        = "member2"
-		addr1      = "127.0.0.1:1234"
-		addr2      = "127.0.0.1:2345"
+
+		addr1        = "127.0.0.1:1234"
+		openAPIADDR1 = "127.0.0.1:12341"
+
+		addr2        = "127.0.0.1:2345"
+		openAPIADDR2 = "127.0.0.1:23451"
 	)
 	cli, err := etcdutil.CreateClient([]string{t.endPoint}, nil)
 	c.Assert(err, IsNil)
@@ -234,7 +243,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
-	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, t.notifyBlockTime)
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, openAPIADDR1, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e1.Close()
 
@@ -246,7 +255,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e1.IsLeader(), IsTrue)
-	_, leaderID, leaderAddr, err := e1.LeaderInfo(ctx1)
+	_, leaderID, leaderAddr, _, err := e1.LeaderInfo(ctx1)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
@@ -254,12 +263,12 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2, t.notifyBlockTime)
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2, openAPIADDR2, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e2.Close()
 	time.Sleep(100 * time.Millisecond) // wait 100ms to start the campaign
 	// but the leader should still be e1
-	_, leaderID, leaderAddr, err = e2.LeaderInfo(ctx2)
+	_, leaderID, leaderAddr, _, err = e2.LeaderInfo(ctx2)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
@@ -281,7 +290,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 
 	// e1 is still the leader
 	c.Assert(e1.IsLeader(), IsTrue)
-	_, leaderID, leaderAddr, err = e1.LeaderInfo(ctx1)
+	_, leaderID, leaderAddr, _, err = e1.LeaderInfo(ctx1)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
@@ -295,8 +304,12 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 		key        = "unit-test/election-evict-leader"
 		ID1        = "member1"
 		ID2        = "member2"
-		addr1      = "127.0.0.1:1234"
-		addr2      = "127.0.0.1:2345"
+
+		addr1        = "127.0.0.1:1234"
+		openAPIADDR1 = "127.0.0.1:12341"
+
+		addr2        = "127.0.0.1:2345"
+		openAPIADDR2 = "127.0.0.1:23451"
 	)
 	cli, err := etcdutil.CreateClient([]string{t.endPoint}, nil)
 	c.Assert(err, IsNil)
@@ -304,7 +317,7 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
-	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, t.notifyBlockTime)
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, addr1, openAPIADDR1, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e1.Close()
 
@@ -316,7 +329,7 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e1.IsLeader(), IsTrue)
-	_, leaderID, leaderAddr, err := e1.LeaderInfo(ctx1)
+	_, leaderID, leaderAddr, _, err := e1.LeaderInfo(ctx1)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
@@ -324,12 +337,12 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2, t.notifyBlockTime)
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, addr2, openAPIADDR2, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e2.Close()
 	time.Sleep(100 * time.Millisecond) // wait 100ms to start the campaign
 	// but the leader should still be e1
-	_, leaderID, leaderAddr, err = e2.LeaderInfo(ctx2)
+	_, leaderID, leaderAddr, _, err = e2.LeaderInfo(ctx2)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
@@ -338,10 +351,10 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 	// e1 evict leader, and e2 will be the leader
 	e1.EvictLeader()
 	utils.WaitSomething(8, 250*time.Millisecond, func() bool {
-		_, leaderID, _, _ = e2.LeaderInfo(ctx2)
+		_, leaderID, _, _, _ = e2.LeaderInfo(ctx2)
 		return leaderID == e2.ID()
 	})
-	_, leaderID, leaderAddr, err = e2.LeaderInfo(ctx2)
+	_, leaderID, leaderAddr, _, err = e2.LeaderInfo(ctx2)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e2.ID())
 	c.Assert(leaderAddr, Equals, addr2)
@@ -353,10 +366,10 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 	e1.CancelEvictLeader()
 	e2.EvictLeader()
 	utils.WaitSomething(8, 250*time.Millisecond, func() bool {
-		_, leaderID, _, _ = e1.LeaderInfo(ctx1)
+		_, leaderID, _, _, _ = e1.LeaderInfo(ctx1)
 		return leaderID == e1.ID()
 	})
-	_, leaderID, leaderAddr, err = e1.LeaderInfo(ctx1)
+	_, leaderID, leaderAddr, _, err = e1.LeaderInfo(ctx1)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
 	c.Assert(leaderAddr, Equals, addr1)
@@ -367,11 +380,12 @@ func (t *testElectionSuite) TestElectionEvictLeader(c *C) {
 
 func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 	var (
-		timeout    = 3 * time.Second
-		sessionTTL = 60
-		key        = "unit-test/election-delete-key"
-		ID         = "member"
-		addr       = "127.0.0.1:1234"
+		timeout     = 3 * time.Second
+		sessionTTL  = 60
+		key         = "unit-test/election-delete-key"
+		ID          = "member"
+		addr        = "127.0.0.1:1234"
+		openAPIADDR = "127.0.0.1:12341"
 	)
 	cli, err := etcdutil.CreateClient([]string{t.endPoint}, nil)
 	c.Assert(err, IsNil)
@@ -379,7 +393,7 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	e, err := NewElection(ctx, cli, sessionTTL, key, ID, addr, t.notifyBlockTime)
+	e, err := NewElection(ctx, cli, sessionTTL, key, ID, addr, openAPIADDR, t.notifyBlockTime)
 	c.Assert(err, IsNil)
 	defer e.Close()
 
@@ -391,7 +405,7 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e.IsLeader(), IsTrue)
-	leaderKey, leaderID, leaderAddr, err := e.LeaderInfo(ctx)
+	leaderKey, leaderID, leaderAddr, _, err := e.LeaderInfo(ctx)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e.ID())
 	c.Assert(leaderAddr, Equals, addr)
