@@ -19,7 +19,6 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -50,30 +49,12 @@ type SwitchPath struct {
 	nextBinlogName string
 }
 
-// CollectAllBinlogFiles collects all valid binlog files in dir.
+// CollectAllBinlogFiles collects all valid binlog files in dir, and returns filenames in binlog ascending order.
 func CollectAllBinlogFiles(dir string) ([]string, error) {
 	if dir == "" {
 		return nil, terror.ErrEmptyRelayDir.Generate()
 	}
-	files, err := readDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	ret := make([]string, 0, len(files))
-	for _, f := range files {
-		if strings.HasPrefix(f, utils.MetaFilename) {
-			// skip meta file or temp meta file
-			log.L().Debug("skip meta file", zap.String("file", f))
-			continue
-		}
-		if !binlog.VerifyFilename(f) {
-			log.L().Warn("collecting binlog file, ignore invalid file", zap.String("file", f))
-			continue
-		}
-		ret = append(ret, f)
-	}
-	return ret, nil
+	return readSortedBinlogFromDir(dir)
 }
 
 // CollectBinlogFilesCmp collects valid binlog files with a compare condition.
@@ -133,28 +114,19 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 // getFirstBinlogName gets the first binlog file in relay sub directory.
 func getFirstBinlogName(baseDir, uuid string) (string, error) {
 	subDir := filepath.Join(baseDir, uuid)
-	files, err := readDir(subDir)
+	files, err := readSortedBinlogFromDir(subDir)
 	if err != nil {
 		return "", terror.Annotatef(err, "get binlog file for dir %s", subDir)
 	}
 
-	for _, f := range files {
-		if f == utils.MetaFilename {
-			log.L().Debug("skip meta file", zap.String("file", f))
-			continue
-		}
-
-		if !binlog.VerifyFilename(f) {
-			return "", terror.ErrBinlogFileNotValid.Generate(f)
-		}
-		return f, nil
+	if len(files) == 0 {
+		return "", terror.ErrBinlogFilesNotFound.Generate(subDir)
 	}
-
-	return "", terror.ErrBinlogFilesNotFound.Generate(subDir)
+	return files[0], nil
 }
 
-// readDir reads and returns all file(sorted asc) and dir names from directory f.
-func readDir(dirpath string) ([]string, error) {
+// readSortedBinlogFromDir reads and returns all binlog files (sorted ascending by binlog filename and sequence number).
+func readSortedBinlogFromDir(dirpath string) ([]string, error) {
 	dir, err := os.Open(dirpath)
 	if err != nil {
 		return nil, terror.ErrReadDir.Delegate(err, dirpath)
@@ -165,10 +137,43 @@ func readDir(dirpath string) ([]string, error) {
 	if err != nil {
 		return nil, terror.ErrReadDir.Delegate(err, dirpath)
 	}
+	if len(names) == 0 {
+		return nil, nil
+	}
 
-	sort.Strings(names)
+	// sorting bin.100000, ..., bin.1000000, ..., bin.999999
+	type tuple struct {
+		filename string
+		parsed   binlog.Filename
+	}
+	tmp := make([]tuple, 0, len(names)-1)
 
-	return names, nil
+	for _, f := range names {
+		p, err2 := binlog.ParseFilename(f)
+		if err2 != nil {
+			// may contain some file that can't be parsed, like relay meta. ignore them
+			log.L().Info("collecting binlog file, ignore invalid file", zap.String("file", f))
+			continue
+		}
+		tmp = append(tmp, tuple{
+			filename: f,
+			parsed:   p,
+		})
+	}
+
+	sort.Slice(tmp, func(i, j int) bool {
+		if tmp[i].parsed.BaseName != tmp[j].parsed.BaseName {
+			return tmp[i].parsed.BaseName < tmp[j].parsed.BaseName
+		}
+		return tmp[i].parsed.LessThan(tmp[j].parsed)
+	})
+
+	ret := make([]string, len(tmp))
+	for i := range tmp {
+		ret[i] = tmp[i].filename
+	}
+
+	return ret, nil
 }
 
 // fileSizeUpdated checks whether the file's size has updated
