@@ -52,8 +52,10 @@ function setup_mysql_tls() {
 	run_sql 'SHOW VARIABLES WHERE Variable_Name = "datadir"' $MYSQL_PORT1 $MYSQL_PASSWORD1
 	mysql_data_path=$(cat "$TEST_DIR/sql_res.$TEST_NAME.txt" | grep Value | cut -d ':' -f 2 | xargs)
 	echo "mysql_ssl_setup at=$mysql_data_path"
-	mysql_ssl_rsa_setup --datadir "$mysql_data_path"
+
 	# NOTE the mysql_ssl_rsa_setup will create a new cert if there is no cert in datadir
+	# in ci, mysql in other contianer, so we can't use the mysql_ssl_rsa_setup
+	# mysql_ssl_rsa_setup --datadir "$mysql_data_path"
 	# only mysql 8.0 support use `ALTER INSTANCE RELOAD TLS` to reload cert
 	# when use mysql 5.7 we need to restart mysql-server manually if your local server do not enable ssl
 
