@@ -1421,7 +1421,7 @@ func (s *Syncer) syncDML(
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
-	ctx2, cancel := context.WithCancel(context.Background())
+	ctx2, cancel2 := context.WithCancel(context.Background())
 	tctx := s.tctx.WithContext(ctx2)
 
 	defer func() {
@@ -1432,17 +1432,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	go func() {
 		<-ctx.Done()
-		tctx.L().Debug("recieved subtask's done")
+		tctx.L().Debug("received subtask's done")
 		waitTime := 10 * time.Second
 		s.waitXIDJob = waiting
 		tricker := time.NewTicker(waitTime)
 		select {
 		case <-ctx2.Done():
-			tctx.L().Debug("recieved syncer's done")
+			tctx.L().Debug("received syncer's done")
 			return
 		case <-tricker.C:
 			tctx.L().Debug("subtask's done timeout")
-			cancel()
+			cancel2()
 		}
 	}()
 	// some initialization that can't be put in Syncer.Init
@@ -1929,7 +1929,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			job := newXIDJob(currentLocation, startLocation, currentLocation)
 			err2 = s.addJobFunc(job)
 			if s.waitXIDJob == waitComplete {
-				cancel()
+				cancel2()
 				return nil
 			}
 		case *replication.GenericEvent:
