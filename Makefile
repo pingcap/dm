@@ -92,6 +92,7 @@ generate_mock: tools_setup
 
 generate_openapi:
 	@echo "generate_openapi"
+	@go get github.com/deepmap/oapi-codegen/cmd/oapi-codegen
 	oapi-codegen --config=openapi/spec/server-gen-cfg.yaml openapi/spec/dm.yaml
 	oapi-codegen --config=openapi/spec/types-gen-cfg.yaml openapi/spec/dm.yaml
 

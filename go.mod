@@ -6,7 +6,7 @@ require (
 	github.com/chaos-mesh/go-sqlsmith v0.0.0-20201120053641-47c50b530c01
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/coreos/go-semver v0.3.0
-	github.com/deepmap/oapi-codegen v1.8.1
+	github.com/deepmap/oapi-codegen v1.8.2
 	github.com/docker/go-units v0.4.0
 	github.com/dustin/go-humanize v1.0.0
 	github.com/getkin/kin-openapi v0.66.0

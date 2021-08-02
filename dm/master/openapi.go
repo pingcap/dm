@@ -134,13 +134,12 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
 func sourceCfgToModel(cfg config.SourceConfig) openapi.Source {
 	// NOTE we don't return SSL cert here, because we don't want to expose it to the user.
 	return openapi.Source{
-		CaseSensitive: &cfg.CaseSensitive,
-		EnableGtid:    &cfg.EnableGTID,
-		Host:          &cfg.From.Host,
-		Password:      &cfg.From.Password,
-		Port:          &cfg.From.Port,
-		SourceName:    &cfg.SourceID,
-		User:          &cfg.From.User,
+		EnableGtid: &cfg.EnableGTID,
+		Host:       &cfg.From.Host,
+		Password:   &cfg.From.Password,
+		Port:       &cfg.From.Port,
+		SourceName: &cfg.SourceID,
+		User:       &cfg.From.User,
 	}
 }
 
@@ -153,7 +152,6 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 		User:     *source.User,
 		Password: *source.Password,
 	}
-	cfg.CaseSensitive = *source.CaseSensitive
 	cfg.EnableGTID = *source.EnableGtid
 	cfg.SourceID = *source.SourceName
 	cfg.From = from
