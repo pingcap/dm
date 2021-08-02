@@ -10,28 +10,15 @@ on:
   schedule:
     - cron: "0,30 17-22 * * *" # run at minute 0 and 30 every hour from 01:00 ~ 06:00 UTC+8
 
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  pre_job:
-    runs-on: ubuntu-18.04
-    timeout-minutes: 30
-    outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
-    steps:
-      - id: skip_check
-        uses: fkirc/skip-duplicate-actions@master
-        with:
-          # All of these options are optional, so you can remove them if you are happy with the defaults
-          # https://github.com/marketplace/actions/skip-duplicate-actions
-          concurrent_skipping: "never"
-          skip_after_successful_duplicate: "true"
-          paths_ignore: '["**/README.md"]'
-          cancel_others: "true"
-          do_not_skip: '["workflow_dispatch", "schedule"]' # only skip pull_request
   # This workflow contains a single job called "base"
   base:
-    needs: pre_job
-    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     # The type of runner that the job will run on
     runs-on: ubuntu-18.04
     timeout-minutes: 30
@@ -315,20 +302,13 @@ jobs:
 
       - name: Feishu notification
         if: ${{ failure() }}
-        uses: whatwewant/action-robot-feishu@v0.0.10
-        with:
-          url: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
-          title: FIX ME
-          text: |
-            repository: ${{ github.repository }}
-            committer: ${{ github.actor }}
-            compare: ${{ github.event.compare }}
-            job status: ${{ job.status }}
-            job url: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
+        env:
+          FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+          GIT_COMMITTER_NAME: ${{ github.event.pusher.name }}
+        run: go run tests/_utils/send_lark_notify.go
 
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v2
-        with:
-          timeout-minutes: 15
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 15

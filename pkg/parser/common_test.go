@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var _ = Suite(&testParserSuite{})
@@ -63,11 +64,11 @@ var testCases = []testCase{
 		[]string{"DROP DATABASE IF EXISTS `xs1`"},
 	},
 	{
-		"drop table `s1`.`t1`",
-		[]string{"DROP TABLE IF EXISTS `s1`.`t1`"},
-		[][]*filter.Table{{genTableName("s1", "t1")}},
-		[][]*filter.Table{{genTableName("xs1", "xt1")}},
-		[]string{"DROP TABLE IF EXISTS `xs1`.`xt1`"},
+		"drop table `Ss1`.`tT1`",
+		[]string{"DROP TABLE IF EXISTS `Ss1`.`tT1`"},
+		[][]*filter.Table{{genTableName("Ss1", "tT1")}},
+		[][]*filter.Table{{genTableName("xSs1", "xtT1")}},
+		[]string{"DROP TABLE IF EXISTS `xSs1`.`xtT1`"},
 	},
 	{
 		"drop table `s1`.`t1`, `s2`.`t2`",
@@ -374,7 +375,7 @@ func (t *testParserSuite) TestError(c *C) {
 
 	stmts, err := Parse(p, dml, "", "")
 	c.Assert(err, IsNil)
-	_, err = FetchDDLTableNames("test", stmts[0])
+	_, err = FetchDDLTableNames("test", stmts[0], utils.LCTableNamesInsensitive)
 	c.Assert(terror.ErrUnknownTypeDDL.Equal(err), IsTrue)
 
 	_, err = RenameDDLTable(stmts[0], nil)
@@ -406,7 +407,7 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 			c.Assert(err, IsNil)
 			c.Assert(s, HasLen, 1)
 
-			tableNames, err := FetchDDLTableNames("test", s[0])
+			tableNames, err := FetchDDLTableNames("test", s[0], utils.LCTableNamesSensitive)
 			c.Assert(err, IsNil)
 			c.Assert(tableNames, DeepEquals, tbs[j])
 

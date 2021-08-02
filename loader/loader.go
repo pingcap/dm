@@ -541,9 +541,16 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 			break
 		}
 	}
+
 	if !hasSQLMode {
-		lcfg.To.Session["sql_mode"] = l.cfg.LoaderConfig.SQLMode
+		sqlModes, err3 := utils.AdjustSQLModeCompatible(l.cfg.LoaderConfig.SQLMode)
+		if err3 != nil {
+			l.logger.Warn("cannot adjust sql_mode compatible, the sql_mode will stay the same", log.ShortError(err3))
+		}
+		lcfg.To.Session["sql_mode"] = sqlModes
 	}
+
+	l.logger.Info("loader's sql_mode is", zap.String("sqlmode", lcfg.To.Session["sql_mode"]))
 
 	l.toDB, l.toDBConns, err = createConns(tctx, lcfg, l.cfg.PoolSize)
 	if err != nil {
@@ -669,7 +676,7 @@ func (l *Loader) skipSchemaAndTable(table *filter.Table) bool {
 	table.Name = unescapePercent(table.Name, l.logger)
 
 	tbs := []*filter.Table{table}
-	tbs = l.baList.ApplyOn(tbs)
+	tbs = l.baList.Apply(tbs)
 	return len(tbs) == 0
 }
 
@@ -1554,6 +1561,7 @@ func (l *Loader) cleanDumpFiles() {
 		var lastErr error
 		for f := range files {
 			if strings.HasSuffix(f, ".sql") {
+				// TODO: table structure files are not used now, but we plan to used them in future so not delete them
 				if strings.HasSuffix(f, "-schema-create.sql") || strings.HasSuffix(f, "-schema.sql") {
 					continue
 				}

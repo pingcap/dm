@@ -4,6 +4,7 @@ task-mode: all
 is-sharding: true
 shard-mode: optimistic
 enable-heartbeat: true
+case-sensitive: true
 
 target-database:
   host: tidb

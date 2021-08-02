@@ -1,9 +1,10 @@
 source-id: mysql-replica-01
 enable-gtid: false
 enable-relay: false
+server-id: 123456
 from:
   host: mysql1
   user: root
   port: 3306
 checker:
-  check-enable: false
+  check-enable: true
