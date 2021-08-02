@@ -21,9 +21,8 @@ import (
 	"sort"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/BurntSushi/toml"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
