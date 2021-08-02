@@ -139,6 +139,7 @@ type Syncer struct {
 	jobsChanLock       sync.Mutex
 	queueBucketMapping []string
 	waitXIDJob         waitXIDType
+	isXIDLastJob       bool
 
 	c *causality
 
@@ -964,9 +965,11 @@ func (s *Syncer) addJob(job *job) error {
 			s.waitXIDJob = waitComplete
 		}
 		s.saveGlobalPoint(job.location)
+		s.isXIDLastJob = true
 		return nil
 	case skip:
 		s.updateReplicationLag(job, skipLagKey)
+		s.isXIDLastJob = false
 	case flush:
 		metrics.AddedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		// ugly code addJob and sync, refine it later
@@ -977,6 +980,7 @@ func (s *Syncer) addJob(job *job) error {
 			// flush for every DML queue
 			metrics.AddJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		}
+		s.isXIDLastJob = false
 		s.jobWg.Wait()
 		metrics.FinishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		return s.flushCheckPoints()
@@ -987,6 +991,7 @@ func (s *Syncer) addJob(job *job) error {
 		queueBucket = s.cfg.WorkerCount
 		startTime := time.Now()
 		s.jobs[queueBucket] <- job
+		s.isXIDLastJob = false
 		metrics.AddJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	case insert, update, del:
 		s.jobWg.Add(1)
@@ -995,6 +1000,7 @@ func (s *Syncer) addJob(job *job) error {
 		startTime := time.Now()
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
+		s.isXIDLastJob = false
 		metrics.AddJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	}
 
@@ -1439,16 +1445,20 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	go func() {
 		<-ctx.Done()
-		tctx.L().Debug("received subtask's done")
+		tctx.L().Info("received subtask's done")
+		if s.isXIDLastJob {
+			tctx.L().Info("the last job is XID, done directly")
+			cancel2()
+			return
+		}
 		waitTime := 10 * time.Second
 		s.waitXIDJob = waiting
 		tricker := time.NewTicker(waitTime)
 		select {
 		case <-ctx2.Done():
-			tctx.L().Debug("received syncer's done")
-			return
+			tctx.L().Info("received syncer's done")
 		case <-tricker.C:
-			tctx.L().Debug("subtask's done timeout")
+			tctx.L().Info("subtask's done timeout")
 			cancel2()
 		}
 	}()
@@ -1570,8 +1580,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
 		workerLagKey := dmlWorkerLagKey(i)
 		go func(i int, name, workerLagKey string) {
-			ctx2, cancel := context.WithCancel(ctx)
-			ctctx := s.tctx.WithContext(ctx2)
+			ctx3, cancel := context.WithCancel(ctx2)
+			ctctx := s.tctx.WithContext(ctx3)
 			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i], workerLagKey)
 			cancel()
 		}(i, name, workerLagKey)
@@ -1580,16 +1590,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
 	go func() {
-		ctx2, cancel := context.WithCancel(ctx)
-		ctctx := s.tctx.WithContext(ctx2)
+		ctx3, cancel := context.WithCancel(ctx2)
+		ctctx := s.tctx.WithContext(ctx3)
 		s.syncDDL(ctctx, adminQueueName, s.ddlDBConn, s.jobs[s.cfg.WorkerCount])
 		cancel()
 	}()
 
 	s.wg.Add(1)
 	go func() {
-		ctx2, cancel := context.WithCancel(ctx)
-		s.printStatus(ctx2)
+		ctx3, cancel := context.WithCancel(ctx2)
+		s.printStatus(ctx3)
 		cancel()
 	}()
 
