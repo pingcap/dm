@@ -952,11 +952,11 @@ func (s *Syncer) addJob(job *job) error {
 		return nil
 	}
 
-	// failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
-	if s.waitXIDJob == waiting {
-		s.tctx.L().Debug("not receive xid job yet", zap.Any("next job", job))
-	}
-	// })
+	failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
+		if s.waitXIDJob == waiting {
+			s.tctx.L().Debug("not receive xid job yet", zap.Any("next job", job))
+		}
+	})
 	var queueBucket int
 	switch job.tp {
 	case xid:

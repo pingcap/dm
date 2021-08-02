@@ -7,7 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run_big_transaction() {
-	nums=$[ $1 * 1000 ]
+	nums=$(($1 * 1000))
 	sql_file=$2
 	sed -i "s/call dowhile(100);/call dowhile($nums);/g" $sql_file
 	run_sql_file $sql_file $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -23,8 +23,8 @@ function run() {
 	# 7. 运行 db1.increment2.sql（大事务 dml 写 100 条）
 	# 8. stop task
 	# 9. 检查上下游是否一致（syncer_diff）
-	# export GO_FAILPOINTS="github.com/pingcap/dm/syncer/syncer/checkCheckpointInMiddleOfTransaction=return"
-	
+	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/checkCheckpointInMiddleOfTransaction=return"
+
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 1 row affected'
 
@@ -82,7 +82,7 @@ function run() {
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
 		"\"stage\": \"Running\"" 1
-	
+
 	# try 100 times, make sure checkpoint in the middle position of transaction
 	for ((i = 1; i <= 10; i++)); do
 		# copy file
