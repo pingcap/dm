@@ -655,7 +655,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		if utils.IsContextCanceledError(err) {
-			s.tctx.L().Info("filter out error caused by user cancel")
+			s.tctx.L().Info("filter out error caused by user cancel", zap.Any("error:", err))
 		} else {
 			metrics.SyncerExitWithErrorCounter.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Inc()
 			errsMu.Lock()
@@ -934,6 +934,11 @@ func (s *Syncer) addJob(job *job) error {
 		return nil
 	}
 
+	// failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
+	if s.waitXIDJob == waiting {
+		s.tctx.L().Debug("not receive xid job yet", zap.Any("next job", job))
+	}
+	// })
 	var queueBucket int
 	switch job.tp {
 	case xid:
@@ -1392,7 +1397,8 @@ func (s *Syncer) syncDML(
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
-	tctx := s.tctx.WithContext(ctx)
+	ctx2, cancel := context.WithCancel(context.Background())
+	tctx := s.tctx.WithContext(ctx2)
 
 	defer func() {
 		if s.done != nil {
@@ -1400,6 +1406,21 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}()
 
+	go func() {
+		<-ctx.Done()
+		tctx.L().Debug("recieved subtask's done")
+		waitTime := 10 * time.Second
+		s.waitXIDJob = waiting
+		tricker := time.NewTicker(waitTime)
+		select {
+		case <-ctx2.Done():
+			tctx.L().Debug("recieved syncer's done")
+			return
+		case <-tricker.C:
+			tctx.L().Debug("subtask's done timeout")
+			cancel()
+		}
+	}()
 	// some initialization that can't be put in Syncer.Init
 	fresh, err := s.IsFreshTask(ctx)
 	if err != nil {
@@ -1584,7 +1605,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		} else {
 			err2 = s.flushCheckPoints()
 		}
-		tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
+		if err2 != nil {
+			tctx.L().Warn("failed to flush checkpoints when exit task", zap.Error(err2))
+		} else {
+			tctx.L().Info("flush checkpoints when exit task")
+		}
 	}()
 
 	s.start = time.Now()
@@ -1877,6 +1902,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			job := newXIDJob(currentLocation, startLocation, currentLocation)
 			err2 = s.addJobFunc(job)
+			if s.waitXIDJob == waitComplete {
+				cancel()
+				return nil
+			}
 		case *replication.GenericEvent:
 			if e.Header.EventType == replication.HEARTBEAT_EVENT {
 				// flush checkpoint even if there are no real binlog events
@@ -3057,7 +3086,7 @@ func (s *Syncer) stopSync() {
 		<-s.done // wait Run to return
 	}
 
-	s.waitTransactionAndDDL()
+	// s.waitTransactionAndDDL()
 	s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 
@@ -3093,7 +3122,6 @@ func (s *Syncer) Pause() {
 		s.tctx.L().Warn("try to pause, but already closed")
 		return
 	}
-
 	s.stopSync()
 }
 
@@ -3414,8 +3442,8 @@ const (
 	waitComplete
 )
 
+//nolint:unused
 func (s *Syncer) waitTransactionAndDDL() {
-
 	s.waitXIDJob = waiting
 	s.jobWg.Wait()
 	s.waitXIDJob = waitComplete

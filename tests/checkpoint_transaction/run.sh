@@ -16,18 +16,15 @@ function run_big_transaction() {
 function run() {
 	# 1. 运行 db1.prepare sql, db2.prepare.sql
 	# 2. 运行 task.yaml
-	# 3. 运行 db1.increment1.sql（大事务 dml 写 100 条）, db2.increment1.sql （多 ddl 写）
+	# 3. 运行 db1.increment1.sql（大事务 dml 写 100 条）
 	# 4. pause task
 	# 5. 检查上下游是否一致（syncer_diff）
 	# 6. resume task
-	# 7. 运行 db1.increment2.sql（大事务 dml 写 100 条）, db2.increment2.sql （多 ddl 写）
+	# 7. 运行 db1.increment2.sql（大事务 dml 写 100 条）
 	# 8. stop task
 	# 9. 检查上下游是否一致（syncer_diff）
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/syncer/checkCheckpointInMiddleOfTransaction=return"
-
+	# export GO_FAILPOINTS="github.com/pingcap/dm/syncer/syncer/checkCheckpointInMiddleOfTransaction=return"
 	
-	cp $cur/data/db1.increment2.sql $WORK_DIR/db1.increment2.sql
-
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 1 row affected'
 
@@ -48,7 +45,7 @@ function run() {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	# try 100 times, make sure checkpoint in the middle position of transaction
-	for ((i = 1; i <= 1; i++)); do
+	for ((i = 1; i <= 10; i++)); do
 		# copy file
 		cp $cur/data/db1.increment1.sql $WORK_DIR/db1.increment1.sql
 		run_big_transaction $i $WORK_DIR/db1.increment1.sql
@@ -72,8 +69,8 @@ function run() {
 			"query-status test" \
 			"\"stage\": \"Running\"" 1
 	done
-	echo "i: $i"
-	# [[ $i -gt 100 ]]
+	# echo "i: $i"
+	[[ $i -lt 10 ]]
 
 	echo "start check pause diff"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -87,18 +84,29 @@ function run() {
 		"\"stage\": \"Running\"" 1
 	
 	# try 100 times, make sure checkpoint in the middle position of transaction
-	for ((i = 1; i <= 100; i++)); do
-		run_big_transaction $i $WORK_DIR/db1.increment2.sql
+	for ((i = 1; i <= 10; i++)); do
+		# copy file
+		cp $cur/data/db1.increment2.sql $WORK_DIR/db1.increment2.sql
+		run_big_transaction $i $WORK_DIR/db1.increment1.sql
+		echo "stop task"
+		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"stop-task test" \
+			"\"result\": true" 2
+
 		num=$(grep "not receive xid job yet" $WORK_DIR/worker1/log/dm-worker.log | wc -l)
+
 		if [ $num -gt 0 ]; then
 			break
 		fi
+		# start a task in all mode
+		dmctl_start_task_standalone $cur/conf/dm-task.yaml
+		# check diff
+		check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	done
-	[[ $i -gt 100 ]]
+	# echo "i: $i"
+	[[ $i -lt 10 ]]
 
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"stop-task test" \
-		"\"result\": true" 3
+	echo "start check stop diff"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	export GO_FAILPOINTS=""
