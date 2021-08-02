@@ -57,7 +57,7 @@ func (s *Server) DMAPICreateSource(ctx echo.Context) error {
 		return err
 	}
 	if needRedirect {
-		return ctx.Redirect(http.StatusPermanentRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
 	}
 
 	var createSourceReq openapi.Source
@@ -76,6 +76,14 @@ func (s *Server) DMAPICreateSource(ctx echo.Context) error {
 
 // DMAPIGetSourceList url is:(GET /api/v1/sources).
 func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+
 	sourceIDS := s.scheduler.GetSourceCfgIDs()
 	sourceCfgList := make([]*config.SourceConfig, len(sourceIDS))
 	for idx, sourceID := range sourceIDS {
@@ -90,6 +98,13 @@ func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
 
 // DMAPIDeleteSource url is:(DELETE /api/v1/sources).
 func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string) error {
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
 	if err := s.scheduler.RemoveSourceCfg(sourceName); err != nil {
 		return err
 	}
@@ -186,7 +201,8 @@ func (s *Server) StartOpenAPIServer(ctx context.Context) {
 	// Middlewares
 	e.Use(docMW)
 	e.Use(ehcomiddleware.Logger())
-	// e.Use(ehcomiddleware.Recover())
+	// e.Logger.SetOutput()
+	e.Use(ehcomiddleware.Recover())
 	// Use our validation middleware to check all requests against the OpenAPI schema.
 	e.Use(middleware.OapiRequestValidator(swagger))
 	openapi.RegisterHandlers(e, s)

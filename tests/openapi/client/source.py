@@ -2,6 +2,7 @@ import sys
 import requests
 
 API_ENDPOINT = "http://127.0.0.1:1323/api/v1/sources"
+API_ENDPOINT_NOT_LEADER = "http://127.0.0.1:1324/api/v1/sources"
 SOURCE_NAME = "mysql-01"
 
 create_source_req = {
@@ -48,6 +49,15 @@ def delete_source_failed(source_name):
     print("delete_source_failed msg=", resp.json())
 
 
+def list_source_by_openapi_redirect(soucce_count):
+    resp = requests.get(url=API_ENDPOINT_NOT_LEADER)
+    assert resp.status_code == 200
+    data = resp.json()
+    # only create one source
+    assert len(data) == soucce_count
+    print("list_source_by_openapi_redirect resp=", data)
+
+
 if __name__ == "__main__":
     func = sys.argv[1]
 
@@ -61,3 +71,5 @@ if __name__ == "__main__":
         delete_source_success(SOURCE_NAME)
     elif func == "delete_source_failed":
         delete_source_failed(SOURCE_NAME)
+    elif func == "list_source_by_openapi_redirect":
+        list_source_by_openapi_redirect(int(sys.argv[2]))

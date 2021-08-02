@@ -33,6 +33,8 @@ function test_source() {
 	# re delete source failed
 	python $cur/client/source.py "delete_source_failed"
 
+	# send request to not leader node
+	python $cur/client/source.py "list_source_by_openapi_redirect" 0
 	echo "test source openapi success"
 }
 
@@ -40,8 +42,11 @@ function run() {
 	pip install requests
 	prepare_data
 
-	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
+	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
+	# join master2
+	run_dm_master $WORK_DIR/master2 $MASTER_PORT2 $cur/conf/dm-master2.toml
+	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
 
 	test_source
 

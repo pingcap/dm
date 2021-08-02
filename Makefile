@@ -178,6 +178,15 @@ dm_integration_test_build: tools_setup
 	$(FAILPOINT_DISABLE)
 	tests/prepare_tools.sh
 
+dm_integration_test_build_master: tools_setup
+	$(FAILPOINT_ENABLE)
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master \
+		|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(FAILPOINT_DISABLE)
+	tests/prepare_tools.sh
+
 dm_integration_test_build_worker: tools_setup
 	$(FAILPOINT_ENABLE)
 	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
