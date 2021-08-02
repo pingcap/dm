@@ -1,3 +1,6 @@
 use all_mode;
-insert into t2 (id, name) values (10, '10'), (20, '20');
+begin;
+insert into t2 (id, name) values (10, '10');
+insert into t2 (id, name) values (20, '20');
+commit;
 insert into t2 (id, name) values (30, '30');
