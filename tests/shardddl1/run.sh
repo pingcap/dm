@@ -152,10 +152,10 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
 	# TODO: support set schema automatically base on upstream schema
 	echo 'CREATE TABLE `tb1` ( `c` int NOT NULL, `b` varchar(10) DEFAULT NULL, PRIMARY KEY (`c`)) ENGINE=InnoDB DEFAULT CHARSET=latin1' >${WORK_DIR}/schema1.sql
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"source-table-schema update -s mysql-replica-01 test ${shardddl1} ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
+		"binlog-schema update -s mysql-replica-01 test ${shardddl1} ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
 		"\"result\": true" 2
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"source-table-schema update -s mysql-replica-02 test ${shardddl1} ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
+		"binlog-schema update -s mysql-replica-02 test ${shardddl1} ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
 		"\"result\": true" 2
 
 	# fourth, resume-task. don't check "result: true" here, because worker may run quickly and meet the error from tb2
@@ -174,7 +174,7 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
 	# This may only work for a "rename ddl"
 	echo 'CREATE TABLE `tb2` ( `c` int NOT NULL, `b` varchar(10) DEFAULT NULL, PRIMARY KEY (`c`)) ENGINE=InnoDB DEFAULT CHARSET=latin1' >${WORK_DIR}/schema2.sql
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"source-table-schema update -s mysql-replica-02 test ${shardddl1} ${tb2} ${WORK_DIR}/schema2.sql --flush --sync" \
+		"binlog-schema update -s mysql-replica-02 test ${shardddl1} ${tb2} ${WORK_DIR}/schema2.sql --flush --sync" \
 		"\"result\": true" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -468,7 +468,7 @@ function DM_DropAddColumn_CASE() {
 	# try to fix data
 	echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' >${WORK_DIR}/schema.sql
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"source-table-schema update test ${shardddl1} ${tb1} ${WORK_DIR}/schema.sql -s mysql-replica-01" \
+		"binlog-schema update test ${shardddl1} ${tb1} ${WORK_DIR}/schema.sql -s mysql-replica-01" \
 		"\"result\": true" 2
 
 	# skip this error

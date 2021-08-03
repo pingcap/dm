@@ -537,7 +537,7 @@ function DM_117_CASE {
 	# try to fix data
 	echo 'create table tb1(a int primary key, b int, c int) engine=innodb default charset=latin1;' >${WORK_DIR}/schema.sql
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"source-table-schema update test ${shardddl1} ${tb1} ${WORK_DIR}/schema.sql -s mysql-replica-01" \
+		"binlog-schema update test ${shardddl1} ${tb1} ${WORK_DIR}/schema.sql -s mysql-replica-01" \
 		"\"result\": true" 2
 
 	# skip this error

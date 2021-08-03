@@ -181,13 +181,13 @@ run() {
 	check_log_contains ${WORK_DIR}/get_schema.log "Table 'sharding_seq_opt.t1' doesn't exist" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"source-table-schema -s mysql-replica-01,mysql-replica-02 sequence_sharding_optimistic sharding_seq_opt t2" \
+		"binlog-schema -s mysql-replica-01,mysql-replica-02 sequence_sharding_optimistic sharding_seq_opt t2" \
 		"\"result\": true" 3
 
 	# try to set another schema, `c3` `int` -> `bigint`.
 	echo 'CREATE TABLE `t1` ( `id` bigint(20) NOT NULL, `c2` varchar(20) DEFAULT NULL, `c3` bigint(11) DEFAULT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' >${WORK_DIR}/schema.sql
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"source-table-schema update -s mysql-replica-01 sequence_sharding_optimistic sharding_seq_opt t1 ${WORK_DIR}/schema.sql" \
+		"binlog-schema update -s mysql-replica-01 sequence_sharding_optimistic sharding_seq_opt t1 ${WORK_DIR}/schema.sql" \
 		"\"result\": true" 2
 
 	# try to get schema again, the new one got.

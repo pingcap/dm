@@ -23,7 +23,7 @@ import (
 // NewSourceTableSchemaCmd creates a SourceTableSchema command.
 func NewSourceTableSchemaCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "source-table-schema <task-name> <table-filter1> <table-filter2> ...",
+		Use:   "binlog-schema <task-name> <table-filter1> <table-filter2> ...",
 		Short: "manage or show source-table schema schemas",
 		RunE:  sourceTableSchemaList,
 	}
