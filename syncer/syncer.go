@@ -982,7 +982,6 @@ func (s *Syncer) addJob(job *job) error {
 			// flush for every DML queue
 			metrics.AddJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		}
-		s.isTransactionEnd.Store(true)
 		s.jobWg.Wait()
 		metrics.FinishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		return s.flushCheckPoints()
@@ -1436,8 +1435,8 @@ func (s *Syncer) syncDML(
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	tctx := s.tctx.WithContext(ctx2)
+	runCtx, runCancel := context.WithCancel(context.Background())
+	tctx := s.tctx.WithContext(runCtx)
 
 	defer func() {
 		if s.done != nil {
@@ -1450,7 +1449,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		tctx.L().Info("received subtask's done")
 		if s.isTransactionEnd.Load() {
 			tctx.L().Info("the last job is transaction end, done directly")
-			cancel2()
+			runCancel()
 			return
 		}
 		waitTime := 10 * time.Second
@@ -1458,15 +1457,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		tricker := time.NewTicker(waitTime)
 		defer tricker.Stop()
 		select {
-		case <-ctx2.Done():
+		case <-runCtx.Done():
 			tctx.L().Info("received syncer's done")
 		case <-tricker.C:
 			tctx.L().Info("subtask's done timeout")
-			cancel2()
+			runCancel()
 		}
 	}()
 	// some initialization that can't be put in Syncer.Init
-	fresh, err := s.IsFreshTask(ctx2)
+	fresh, err := s.IsFreshTask(runCtx)
 	if err != nil {
 		return err
 	} else if fresh {
@@ -1520,7 +1519,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	updateTSOffset := func() error {
 		t1 := time.Now()
-		ts, tsErr := s.fromDB.getServerUnixTS(ctx2)
+		ts, tsErr := s.fromDB.getServerUnixTS(runCtx)
 		rtt := time.Since(t1).Seconds()
 		if tsErr == nil {
 			s.tsOffset.Store(time.Now().Unix() - ts - int64(rtt/2))
@@ -1544,7 +1543,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if utErr := updateTSOffset(); utErr != nil {
 					s.tctx.L().Error("get server unix ts err", zap.Error(utErr))
 				}
-			case <-ctx2.Done():
+			case <-runCtx.Done():
 				return
 			}
 		}
@@ -1583,27 +1582,19 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
 		workerLagKey := dmlWorkerLagKey(i)
 		go func(i int, name, workerLagKey string) {
-			ctx3, cancel := context.WithCancel(ctx2)
-			ctctx := s.tctx.WithContext(ctx3)
-			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i], workerLagKey)
-			cancel()
+			s.syncDML(tctx, name, s.toDBConns[i], s.jobs[i], workerLagKey)
 		}(i, name, workerLagKey)
 	}
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
 	go func() {
-		ctx3, cancel := context.WithCancel(ctx2)
-		ctctx := s.tctx.WithContext(ctx3)
-		s.syncDDL(ctctx, adminQueueName, s.ddlDBConn, s.jobs[s.cfg.WorkerCount])
-		cancel()
+		s.syncDDL(tctx, adminQueueName, s.ddlDBConn, s.jobs[s.cfg.WorkerCount])
 	}()
 
 	s.wg.Add(1)
 	go func() {
-		ctx3, cancel := context.WithCancel(ctx2)
-		s.printStatus(ctx3)
-		cancel()
+		s.printStatus(runCtx)
 	}()
 
 	// syncing progress with sharding DDL group
@@ -1949,7 +1940,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			job := newXIDJob(currentLocation, startLocation, currentLocation)
 			err2 = s.addJobFunc(job)
 			if s.waitXIDJob == waitComplete {
-				cancel2()
+				runCancel()
 				return nil
 			}
 		case *replication.GenericEvent:
@@ -3145,7 +3136,6 @@ func (s *Syncer) stopSync() {
 	if s.done != nil {
 		<-s.done // wait Run to return
 	}
-
 	s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 
