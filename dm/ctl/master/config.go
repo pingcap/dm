@@ -54,8 +54,7 @@ func NewConfigCmd() *cobra.Command {
 		newExportCfgsCmd(),
 		newImportCfgsCmd(),
 	)
-	cmd.PersistentFlags().StringP("dir", "d", "", "specify the configs directory, default is `./configs`")
-
+	cmd.PersistentFlags().StringP("path", "d", "", "specify the file path to export`")
 	return cmd
 }
 
@@ -182,6 +181,8 @@ func newExportCfgsCmd() *cobra.Command {
 		Short: "Export the configurations of sources and tasks",
 		RunE:  exportCfgsFunc,
 	}
+	cmd.Flags().StringP("dir", "d", "", "specify the configs directory, default is `./configs`")
+	cmd.Flags().MarkHidden("dir")
 	return cmd
 }
 
@@ -192,18 +193,26 @@ func newImportCfgsCmd() *cobra.Command {
 		Short: "Import the configurations of sources and tasks",
 		RunE:  importCfgsFunc,
 	}
+	cmd.Flags().StringP("dir", "d", "", "specify the configs directory, default is `./configs`")
+	cmd.Flags().MarkHidden("dir")
 	return cmd
 }
 
 // exportCfgsFunc exports configs.
 func exportCfgsFunc(cmd *cobra.Command, args []string) error {
-	dir, err := cmd.Flags().GetString("dir")
+	filePath, err := cmd.Flags().GetString("path")
 	if err != nil {
-		common.PrintLinesf("can not get directory")
+		common.PrintLinesf("can not get path")
 		return err
+	} else if filePath == "" {
+		filePath, err = cmd.Flags().GetString("dir")
+		if err != nil {
+			common.PrintLinesf("can not get directory")
+			return err
+		}
 	}
-	if dir == "" {
-		dir = "configs"
+	if filePath == "" {
+		filePath = "configs"
 	}
 
 	// get all configs
@@ -212,7 +221,7 @@ func exportCfgsFunc(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	// create directory
-	taskDir, sourceDir, err := createDirectory(dir)
+	taskDir, sourceDir, err := createDirectory(filePath)
 	if err != nil {
 		return err
 	}
@@ -225,26 +234,32 @@ func exportCfgsFunc(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	// write relayWorkers
-	if err = writeRelayWorkers(path.Join(dir, relayWorkersFilename), relayWorkersSet); err != nil {
+	if err = writeRelayWorkers(path.Join(filePath, relayWorkersFilename), relayWorkersSet); err != nil {
 		return err
 	}
 
-	common.PrintLinesf("export configs to directory `%s` succeed", dir)
+	common.PrintLinesf("export configs to directory `%s` succeed", filePath)
 	return nil
 }
 
 // importCfgsFunc imports configs.
 func importCfgsFunc(cmd *cobra.Command, args []string) error {
-	dir, err := cmd.Flags().GetString("dir")
+	filePath, err := cmd.Flags().GetString("path")
 	if err != nil {
-		common.PrintLinesf("can not get directory")
+		common.PrintLinesf("can not get path")
 		return err
+	} else if filePath == "" {
+		filePath, err = cmd.Flags().GetString("dir")
+		if err != nil {
+			common.PrintLinesf("can not get directory")
+			return err
+		}
 	}
-	if dir == "" {
-		dir = "configs"
+	if filePath == "" {
+		filePath = "configs"
 	}
 
-	sourceCfgs, taskCfgs, relayWorkers, err := collectCfgs(dir)
+	sourceCfgs, taskCfgs, relayWorkers, err := collectCfgs(filePath)
 	if err != nil {
 		return err
 	}
@@ -258,11 +273,11 @@ func importCfgsFunc(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if len(relayWorkers) > 0 {
-		common.PrintLinesf("The original relay workers have been exported to `%s`.", path.Join(dir, relayWorkersFilename))
+		common.PrintLinesf("The original relay workers have been exported to `%s`.", path.Join(filePath, relayWorkersFilename))
 		common.PrintLinesf("Currently DM doesn't support recover relay workers. You may need to execute `transfer-source` and `start-relay` command manually.")
 	}
 
-	common.PrintLinesf("import configs from directory `%s` succeed", dir)
+	common.PrintLinesf("import configs from directory `%s` succeed", filePath)
 	return nil
 }
 
