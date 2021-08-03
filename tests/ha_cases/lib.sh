@@ -219,5 +219,5 @@ function kill_2_worker_ensure_unbound() {
 		"\"source\": \"\"" 2
 
 	# TODO(okJiang): Temporary solution
-	sleep 10  # wait syncer exit
+	# sleep 10  # wait syncer exit
 }
