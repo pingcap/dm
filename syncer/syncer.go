@@ -139,7 +139,7 @@ type Syncer struct {
 	jobsChanLock       sync.Mutex
 	queueBucketMapping []string
 	waitXIDJob         waitXIDType
-	isTransactionEnd   bool
+	isTransactionEnd   atomic.Bool
 
 	c *causality
 
@@ -227,7 +227,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.tctx = tcontext.Background().WithLogger(logger)
 	syncer.jobsClosed.Store(true) // not open yet
 	syncer.waitXIDJob = noWait
-	syncer.isTransactionEnd = true
+	syncer.isTransactionEnd.Store(true)
 	syncer.closed.Store(false)
 	syncer.lastBinlogSizeCount.Store(0)
 	syncer.binlogSizeCount.Store(0)
@@ -549,7 +549,7 @@ func (s *Syncer) reset() {
 	s.setErrLocation(nil, nil, false)
 	s.isReplacingErr = false
 	s.waitXIDJob = noWait
-	s.isTransactionEnd = true
+	s.isTransactionEnd.Store(true)
 
 	switch s.cfg.ShardMode {
 	case config.ShardPessimistic:
@@ -967,11 +967,11 @@ func (s *Syncer) addJob(job *job) error {
 			s.waitXIDJob = waitComplete
 		}
 		s.saveGlobalPoint(job.location)
-		s.isTransactionEnd = true
+		s.isTransactionEnd.Store(true)
 		return nil
 	case skip:
 		s.updateReplicationLag(job, skipLagKey)
-		s.isTransactionEnd = false
+		s.isTransactionEnd.Store(false)
 	case flush:
 		metrics.AddedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		// ugly code addJob and sync, refine it later
@@ -982,7 +982,7 @@ func (s *Syncer) addJob(job *job) error {
 			// flush for every DML queue
 			metrics.AddJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		}
-		s.isTransactionEnd = true
+		s.isTransactionEnd.Store(true)
 		s.jobWg.Wait()
 		metrics.FinishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		return s.flushCheckPoints()
@@ -993,7 +993,7 @@ func (s *Syncer) addJob(job *job) error {
 		queueBucket = s.cfg.WorkerCount
 		startTime := time.Now()
 		s.jobs[queueBucket] <- job
-		s.isTransactionEnd = true
+		s.isTransactionEnd.Store(true)
 		metrics.AddJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	case insert, update, del:
 		s.jobWg.Add(1)
@@ -1002,7 +1002,7 @@ func (s *Syncer) addJob(job *job) error {
 		startTime := time.Now()
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
-		s.isTransactionEnd = false
+		s.isTransactionEnd.Store(true)
 		metrics.AddJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	}
 
@@ -1448,7 +1448,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	go func() {
 		<-ctx.Done()
 		tctx.L().Info("received subtask's done")
-		if s.isTransactionEnd {
+		if s.isTransactionEnd.Load() {
 			tctx.L().Info("the last job is transaction end, done directly")
 			cancel2()
 			return
