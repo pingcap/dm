@@ -7,7 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run_big_transaction() {
-	nums=$(($1 * 1000))
+	nums=$(($1 * 100))
 	sql_file=$2
 	sed -i "s/call dowhile(100);/call dowhile($nums);/g" $sql_file
 	run_sql_file $sql_file $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1

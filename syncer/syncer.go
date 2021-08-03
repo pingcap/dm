@@ -1002,7 +1002,7 @@ func (s *Syncer) addJob(job *job) error {
 		startTime := time.Now()
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
-		s.isTransactionEnd.Store(true)
+		s.isTransactionEnd.Store(false)
 		metrics.AddJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	}
 
@@ -1456,6 +1456,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		waitTime := 10 * time.Second
 		s.waitXIDJob = waiting
 		tricker := time.NewTicker(waitTime)
+		defer tricker.Stop()
 		select {
 		case <-ctx2.Done():
 			tctx.L().Info("received syncer's done")

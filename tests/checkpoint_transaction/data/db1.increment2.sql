@@ -5,7 +5,7 @@ drop procedure if exists dowhile;
 create procedure dowhile(nums int)
 begin
 WHILE nums > 0 DO
-    insert into t1(a) values(nums);
+    insert into t1(b) values(nums);
     set nums = nums - 1;
 END WHILE;
 end $$

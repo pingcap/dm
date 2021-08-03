@@ -1,4 +1,3 @@
-
 use checkpoint_transaction;
 
 delimiter $$
