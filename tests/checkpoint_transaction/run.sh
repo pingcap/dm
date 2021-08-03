@@ -14,15 +14,6 @@ function run_big_transaction() {
 }
 
 function run() {
-	# 1. 运行 db1.prepare sql, db2.prepare.sql
-	# 2. 运行 task.yaml
-	# 3. 运行 db1.increment1.sql（大事务 dml 写 100 条）
-	# 4. pause task
-	# 5. 检查上下游是否一致（syncer_diff）
-	# 6. resume task
-	# 7. 运行 db1.increment2.sql（大事务 dml 写 100 条）
-	# 8. stop task
-	# 9. 检查上下游是否一致（syncer_diff）
 	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/checkCheckpointInMiddleOfTransaction=return"
 
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -44,7 +35,7 @@ function run() {
 	# check diff
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	# try 100 times, make sure checkpoint in the middle position of transaction
+	# try 10 times, make sure checkpoint in the middle position of transaction
 	for ((i = 1; i <= 10; i++)); do
 		# copy file
 		cp $cur/data/db1.increment1.sql $WORK_DIR/db1.increment1.sql
@@ -69,7 +60,6 @@ function run() {
 			"query-status test" \
 			"\"stage\": \"Running\"" 1
 	done
-	# echo "i: $i"
 	[[ $i -lt 10 ]]
 
 	echo "start check pause diff"
@@ -83,7 +73,7 @@ function run() {
 		"query-status test" \
 		"\"stage\": \"Running\"" 1
 
-	# try 100 times, make sure checkpoint in the middle position of transaction
+	# try 10 times, make sure checkpoint in the middle position of transaction
 	for ((i = 1; i <= 10; i++)); do
 		# copy file
 		cp $cur/data/db1.increment2.sql $WORK_DIR/db1.increment2.sql
@@ -103,7 +93,6 @@ function run() {
 		# check diff
 		check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	done
-	# echo "i: $i"
 	[[ $i -lt 10 ]]
 
 	echo "start check stop diff"

@@ -3145,7 +3145,6 @@ func (s *Syncer) stopSync() {
 		<-s.done // wait Run to return
 	}
 
-	// s.waitTransactionAndDDL()
 	s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 
@@ -3500,10 +3499,3 @@ const (
 	waiting
 	waitComplete
 )
-
-//nolint:unused
-func (s *Syncer) waitTransactionAndDDL() {
-	s.waitXIDJob = waiting
-	s.jobWg.Wait()
-	s.waitXIDJob = waitComplete
-}

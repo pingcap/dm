@@ -217,7 +217,4 @@ function kill_2_worker_ensure_unbound() {
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
 		"list-member --name worker$1 --name worker$2" \
 		"\"source\": \"\"" 2
-
-	# TODO(okJiang): Temporary solution
-	# sleep 10  # wait syncer exit
 }
