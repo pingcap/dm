@@ -563,9 +563,9 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
 			}
-		}
-		if err2 := r.FlushMeta(); err2 != nil {
-			return err2
+			if err2 := r.FlushMeta(); err2 != nil {
+				return err2
+			}
 		}
 	}
 }

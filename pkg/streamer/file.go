@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/pingcap/failpoint"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
@@ -217,6 +218,9 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 				errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize= %d", latestFilePath, latestFileSize)
 				return
 			}
+			failpoint.Inject("CMPAlwaysReturn0", func(_ failpoint.Value) {
+				cmp = 0
+			})
 			switch {
 			case cmp < 0:
 				errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
@@ -230,14 +234,8 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 				// although we cannot ensure that the binlog filename in the meta is the next file after latestFile
 				// but if we return a different filename with latestFile, the outer logic (parseDirAsPossible)
 				// will find the right one
-				metaFile, err := os.Open(filepath.Join(dir, utils.MetaFilename))
-				if err != nil {
-					errCh <- terror.Annotatef(err, "open metaFile from %s in dir %s", utils.MetaFilename, dir)
-					return
-				}
 				meta := &Meta{}
-				_, err = toml.DecodeReader(metaFile, meta)
-				metaFile.Close()
+				_, err = toml.DecodeFile(filepath.Join(dir, utils.MetaFilename), meta)
 				if err != nil {
 					errCh <- terror.Annotate(err, "decode meta toml faild")
 					return
@@ -246,7 +244,8 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 					// we need recheck file size again, as the file may have been changed during our metafile check.
 					cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
 					if err != nil {
-						errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
+						errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize= %d",
+							latestFilePath, latestFileSize)
 					}
 					switch {
 					case cmp < 0:
@@ -254,6 +253,10 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 					case cmp > 0:
 						updatePathCh <- latestFilePath
 					default:
+						failpoint.Inject("DoNotReturnEvenMetaChange", func(_ failpoint.Value) {
+							println("xxd")
+							failpoint.Continue()
+						})
 						nextFilePath := filepath.Join(dir, meta.BinLogName)
 						log.L().Info("newer relay log file is already generated",
 							zap.String("now file path", latestFilePath),
