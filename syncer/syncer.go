@@ -2808,6 +2808,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 			totalBinlogSize := s.binlogSizeCount.Load()
 			lastBinlogSize := s.lastBinlogSizeCount.Load()
 
+			ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 			tps, totalTps := int64(0), int64(0)
 			if seconds > 0 {
 				tps = (total - last) / seconds
@@ -2817,7 +2818,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				currentLocation := s.currentLocationMu.currentLocation
 				s.currentLocationMu.RUnlock()
 
-				remainingSize, err2 := s.fromDB.countBinaryLogsSize(currentLocation.Position)
+				remainingSize, err2 := s.fromDB.countBinaryLogsSize(ctx2, currentLocation.Position)
 				if err2 != nil {
 					// log the error, but still handle the rest operation
 					s.tctx.L().Error("fail to estimate unreplicated binlog size", zap.Error(err2))
@@ -2837,7 +2838,6 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				}
 			}
 
-			ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 			latestMasterPos, latestmasterGTIDSet, err = s.getMasterStatus(ctx2)
 			cancel2()
 			if err != nil {
