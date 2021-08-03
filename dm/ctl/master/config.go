@@ -75,7 +75,7 @@ func configTaskList(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	}
 	name := args[0]
-	output, err := cmd.Flags().GetString("dir")
+	output, err := cmd.Flags().GetString("path")
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func configSourceList(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	}
 	name := args[0]
-	output, err := cmd.Flags().GetString("dir")
+	output, err := cmd.Flags().GetString("path")
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func configMasterList(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	}
 	name := args[0]
-	output, err := cmd.Flags().GetString("dir")
+	output, err := cmd.Flags().GetString("path")
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func configWorkerList(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	}
 	name := args[0]
-	output, err := cmd.Flags().GetString("dir")
+	output, err := cmd.Flags().GetString("path")
 	if err != nil {
 		return err
 	}
