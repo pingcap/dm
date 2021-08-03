@@ -246,6 +246,8 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		elec := concurrency.NewElection(session, e.key)
 		ctx2, cancel2 := context.WithCancel(ctx)
 
+		campaignWg.Add(1)
+
 		e.campaignMu.Lock()
 		e.cancelCampaign = func() {
 			cancel2()
@@ -253,7 +255,6 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 		e.campaignMu.Unlock()
 
-		campaignWg.Add(1)
 		go func() {
 			defer campaignWg.Done()
 
