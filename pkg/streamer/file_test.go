@@ -22,12 +22,12 @@ import (
 	"path"
 	"path/filepath"
 	"sync"
-	"testing"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -36,10 +36,6 @@ import (
 var _ = Suite(&testFileSuite{})
 
 type testFileSuite struct{}
-
-func TestFileSuite(t *testing.T) {
-	TestingT(t)
-}
 
 func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 	var (
@@ -306,8 +302,9 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 		relayFiles = []string{
 			"mysql-bin.000001",
 			"mysql-bin.000002",
+			"mysql-bin.000003",
 		}
-		binlogPos       = uint32(1)
+		binlogPos       = uint32(4)
 		binlogGTID      = "ba8f633f-1f15-11eb-b1c7-0242ac110002.000001"
 		relayPaths      = make([]string, len(relayFiles))
 		data            = []byte("meaningless file content")
@@ -360,7 +357,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	err = <-errCh
 	c.Assert(err, ErrorMatches, ".*(no such file or directory|The system cannot find the file specified).*")
 
-	// 1. file increased when adding watching
+	// 1. file increased
 	err = ioutil.WriteFile(relayPaths[0], data, 0o600)
 	c.Assert(err, IsNil)
 	var wg sync.WaitGroup
@@ -410,6 +407,40 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 		c.Assert(len(updatePathCh), Equals, 1)
 		up := <-updatePathCh
 		c.Assert(up, Equals, relayPaths[1])
+	}()
+	wg.Wait()
+
+	// 4. file increased when checking meta and meta file updated
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// update meta file to new file
+		meta := Meta{BinLogName: relayFiles[2], BinLogPos: binlogPos, BinlogGTID: binlogGTID}
+		var buf bytes.Buffer
+		enc := toml.NewEncoder(&buf)
+		err2 := enc.Encode(meta)
+		c.Assert(err2, IsNil)
+		filename := path.Join(subDir, utils.MetaFilename)
+		err3 := utils.WriteFileAtomic(filename, buf.Bytes(), 0o644)
+		c.Assert(err3, IsNil)
+		fi, err4 := os.Stat(relayPaths[1])
+		c.Assert(err4, IsNil)
+		currSize := fi.Size()
+		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0", `return(true)`), IsNil)
+		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange", `return(true)`), IsNil)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			relayLogUpdatedOrNewCreated(ctx, watcherInterval, subDir, relayPaths[1], relayFiles[1], currSize, updatePathCh, errCh)
+		}()
+		// write old file
+		err5 := ioutil.WriteFile(relayPaths[1], data, 0o600)
+		c.Assert(err5, IsNil)
+		c.Assert(len(errCh), Equals, 0)
+		up := <-updatePathCh
+		c.Assert(up, Equals, relayPaths[1])
+		c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0"), IsNil)
+		c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange"), IsNil)
 	}()
 	wg.Wait()
 }
