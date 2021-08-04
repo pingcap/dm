@@ -982,6 +982,7 @@ func (s *Syncer) addJob(job *job) error {
 			// flush for every DML queue
 			metrics.AddJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		}
+		s.isTransactionEnd.Store(true)
 		s.jobWg.Wait()
 		metrics.FinishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		return s.flushCheckPoints()
