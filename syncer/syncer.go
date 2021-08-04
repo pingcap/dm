@@ -2372,7 +2372,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	case config.ShardPessimistic:
 		return s.handleQueryEventPessimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames, originSQL, ddlInfo)
 	}
-	return fmt.Errorf("unsupported shard-mode %s, should not happened", s.cfg.ShardMode)
+	return errors.Errorf("unsupported shard-mode %s, should not happened", s.cfg.ShardMode)
 }
 
 func (s *Syncer) handleQueryEventNoSharding(
