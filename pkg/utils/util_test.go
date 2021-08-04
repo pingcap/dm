@@ -16,6 +16,7 @@ package utils
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -196,4 +197,35 @@ func (t *testUtilsSuite) TestIgnoreErrorCheckpoint(c *C) {
 func (t *testUtilsSuite) TestIsBuildInSkipDDL(c *C) {
 	c.Assert(IsBuildInSkipDDL("alter table tbl add column c1 int"), IsFalse)
 	c.Assert(IsBuildInSkipDDL("DROP PROCEDURE"), IsTrue)
+}
+
+func (t *testUtilsSuite) TestProxyFields(c *C) {
+	revIndex := map[string]int{
+		"http_proxy":  0,
+		"https_proxy": 1,
+		"no_proxy":    2,
+	}
+	envs := [...]string{"http_proxy", "https_proxy", "no_proxy"}
+	envPreset := [...]string{"http://127.0.0.1:8080", "https://127.0.0.1:8443", "localhost,127.0.0.1"}
+
+	// Exhaust all combinations of those environment variables' selection.
+	// Each bit of the mask decided whether this index of `envs` would be set.
+	for mask := 0; mask <= 0b111; mask++ {
+		for _, env := range envs {
+			c.Assert(os.Unsetenv(env), IsNil)
+		}
+
+		for i := 0; i < 3; i++ {
+			if (1<<i)&mask != 0 {
+				c.Assert(os.Setenv(envs[i], envPreset[i]), IsNil)
+			}
+		}
+
+		for _, field := range proxyFields() {
+			idx, ok := revIndex[field.Key]
+			c.Assert(ok, IsTrue)
+			c.Assert((1<<idx)&mask, Not(Equals), 0)
+			c.Assert(field.String, Equals, envPreset[idx])
+		}
+	}
 }

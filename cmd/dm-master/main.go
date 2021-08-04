@@ -56,6 +56,8 @@ func main() {
 		os.Exit(2)
 	}
 
+	utils.LogHTTPProxies()
+
 	// 3. print process version information
 	utils.PrintInfo("dm-master", func() {
 		log.L().Info("", zap.Stringer("dm-master config", cfg))
