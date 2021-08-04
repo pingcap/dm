@@ -67,9 +67,13 @@ func (s *Syncer) initOptimisticShardDDL(ctx context.Context) error {
 
 // handleQueryEventOptimistic handles QueryEvent in the optimistic shard DDL mode.
 func (s *Syncer) handleQueryEventOptimistic(
-	ev *replication.QueryEvent, ec eventContext,
-	needHandleDDLs []string, needTrackDDLs []trackedDDL,
-	onlineDDLTableNames map[string]*filter.Table, originSQL string) error {
+	ev *replication.QueryEvent,
+	ec eventContext,
+	needHandleDDLs []string,
+	needTrackDDLs []trackedDDL,
+	onlineDDLTableNames map[string]*filter.Table,
+	originSQL string,
+) error {
 	// interrupted after flush old checkpoint and before track DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
 		err := handleFlushCheckpointStage(1, val.(int), "before track DDL")
