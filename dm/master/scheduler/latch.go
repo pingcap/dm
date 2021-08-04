@@ -24,10 +24,11 @@ import (
 type latches struct {
 	mu    sync.Mutex
 	inUse map[string]struct{}
+	// TODO: use map[string]semaphore to implement a blocking acquire
 }
 
-// releaseFunc wraps on releasing a latch. It is safe to call multiple times and compiler can warn you of not used
-// releaseFunc variables.
+// releaseFunc wraps on releasing a latch.
+// It is safe to call multiple times. Also compiler can warn you of not used releaseFunc variables.
 type releaseFunc func()
 
 func newLatches() *latches {
@@ -36,7 +37,7 @@ func newLatches() *latches {
 	}
 }
 
-func (l *latches) acquire(name string) (releaseFunc, error) {
+func (l *latches) tryAcquire(name string) (releaseFunc, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if _, ok := l.inUse[name]; ok {

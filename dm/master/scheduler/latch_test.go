@@ -27,13 +27,13 @@ var _ = Suite(&testLatch{})
 
 func (t *testLatch) TestOneAcquireSuccess(c *C) {
 	var (
-		l = newLatches()
-		fire = make(chan struct{})
+		l       = newLatches()
+		fire    = make(chan struct{})
 		success = make(chan string, 2)
-		fail = make(chan struct{}, 8)
-		group1 = "group1"
-		group2 = "group2"
-		wg sync.WaitGroup
+		fail    = make(chan struct{}, 8)
+		group1  = "group1"
+		group2  = "group2"
+		wg      sync.WaitGroup
 	)
 
 	for i := 0; i < 10; i++ {
@@ -47,8 +47,8 @@ func (t *testLatch) TestOneAcquireSuccess(c *C) {
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
-			<- fire
-			_, err := l.acquire(name)
+			<-fire
+			_, err := l.tryAcquire(name)
 			if err != nil {
 				fail <- struct{}{}
 			} else {
@@ -73,25 +73,25 @@ func (t *testLatch) TestOneAcquireSuccess(c *C) {
 
 func (t *testLatch) TestAcquireAfterRelease(c *C) {
 	var (
-		l = newLatches()
-		fire = make(chan struct{})
+		l       = newLatches()
+		fire    = make(chan struct{})
 		success int
-		group = "group1"
-		wg sync.WaitGroup
+		group   = "group1"
+		wg      sync.WaitGroup
 	)
 
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			<- fire
+			<-fire
 
 			for {
-				release, err := l.acquire(group)
+				release, err := l.tryAcquire(group)
 				if err != nil {
-					time.Sleep(10*time.Millisecond)
+					time.Sleep(10 * time.Millisecond)
 				} else {
-					time.Sleep(20*time.Millisecond)
+					time.Sleep(20 * time.Millisecond)
 					success++
 					release()
 					return
@@ -110,19 +110,19 @@ func (t *testLatch) TestAcquireAfterRelease(c *C) {
 
 func (t *testLatch) TestMultiRelease(c *C) {
 	var (
-		l = newLatches()
+		l     = newLatches()
 		names = []string{"name1", "name2", "name3"}
-		fire = make(chan struct{}, len(names))
-		wg sync.WaitGroup
+		fire  = make(chan struct{}, len(names))
+		wg    sync.WaitGroup
 	)
 
-	for repeat := 0; repeat < 3; repeat ++ {
+	for repeat := 0; repeat < 3; repeat++ {
 		for i := range names {
 			wg.Add(1)
 			go func(name string) {
 				defer wg.Done()
-				<- fire
-				release, err := l.acquire(name)
+				<-fire
+				release, err := l.tryAcquire(name)
 				c.Assert(err, IsNil)
 				release()
 				// will not panic or cause other error
@@ -130,7 +130,7 @@ func (t *testLatch) TestMultiRelease(c *C) {
 			}(names[i])
 		}
 
-		for _ = range names {
+		for range names {
 			fire <- struct{}{}
 		}
 		wg.Wait()
@@ -139,24 +139,24 @@ func (t *testLatch) TestMultiRelease(c *C) {
 
 func (t *testLatch) TestWontReleaseOther(c *C) {
 	var (
-		l = newLatches()
+		l     = newLatches()
 		group = "group1"
 	)
 
-	release1, err := l.acquire(group)
+	release1, err := l.tryAcquire(group)
 	c.Assert(err, IsNil)
 	release1()
 
-	// because release1 is called, another acquire should succeed
-	release2, err := l.acquire(group)
+	// because release1 is called, another tryAcquire should succeed
+	release2, err := l.tryAcquire(group)
 	c.Assert(err, IsNil)
 
-	// release1 should not release the latch of release2, we test this by try acquire
+	// release1 should not release the latch of release2, we test this by tryAcquire
 	release1()
-	_, err = l.acquire(group)
+	_, err = l.tryAcquire(group)
 	c.Assert(err, NotNil)
 
 	release2()
-	_, err = l.acquire(group)
+	_, err = l.tryAcquire(group)
 	c.Assert(err, IsNil)
 }

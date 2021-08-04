@@ -560,14 +560,14 @@ func (t *testScheduler) sourceCfgExist(c *C, s *Scheduler, expectCfg *config.Sou
 }
 
 func (t *testScheduler) subTaskCfgNotExist(c *C, s *Scheduler, task, source string) {
-	c.Assert(s.GetSubTaskCfgByTaskSource(task, source), IsNil)
+	c.Assert(s.getSubTaskCfgByTaskSource(task, source), IsNil)
 	cfgM, _, err := ha.GetSubTaskCfg(etcdTestCli, source, task, 0)
 	c.Assert(err, IsNil)
 	c.Assert(cfgM, HasLen, 0)
 }
 
 func (t *testScheduler) subTaskCfgExist(c *C, s *Scheduler, expectCfg config.SubTaskConfig) {
-	cfgP := s.GetSubTaskCfgByTaskSource(expectCfg.Name, expectCfg.SourceID)
+	cfgP := s.getSubTaskCfgByTaskSource(expectCfg.Name, expectCfg.SourceID)
 	c.Assert(cfgP, DeepEquals, &expectCfg)
 	cfgM, _, err := ha.GetSubTaskCfg(etcdTestCli, expectCfg.SourceID, expectCfg.Name, 0)
 	c.Assert(err, IsNil)
