@@ -29,6 +29,11 @@ import (
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
+
+	"go.uber.org/zap"
+	"golang.org/x/net/http/httpproxy"
+
+	"github.com/pingcap/dm/pkg/log"
 )
 
 var (
@@ -228,4 +233,26 @@ func WrapSchemesForInitialCluster(s string, https bool) string {
 // and https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/rpl_binlog_sender.cc#L899
 func IsFakeRotateEvent(header *replication.EventHeader) bool {
 	return header.Timestamp == 0 || header.LogPos == 0
+}
+
+// LogHTTPProxies logs HTTP proxy relative environment variables.
+func LogHTTPProxies() {
+	if fields := proxyFields(); len(fields) > 0 {
+		log.L().Warn("using proxy config", fields...)
+	}
+}
+
+func proxyFields() []zap.Field {
+	proxyCfg := httpproxy.FromEnvironment()
+	fields := make([]zap.Field, 0, 3)
+	if proxyCfg.HTTPProxy != "" {
+		fields = append(fields, zap.String("http_proxy", proxyCfg.HTTPProxy))
+	}
+	if proxyCfg.HTTPSProxy != "" {
+		fields = append(fields, zap.String("https_proxy", proxyCfg.HTTPSProxy))
+	}
+	if proxyCfg.NoProxy != "" {
+		fields = append(fields, zap.String("no_proxy", proxyCfg.NoProxy))
+	}
+	return fields
 }
