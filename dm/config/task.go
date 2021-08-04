@@ -709,8 +709,16 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval
 		cfg.Meta = inst.Meta
 
-		cfg.From = dbCfg
-		cfg.To = *c.TargetDB
+		fromClone, err := dbCfg.Clone()
+		if err != nil {
+			return nil, err
+		}
+		cfg.From = fromClone
+		toClone, err := c.TargetDB.Clone()
+		if err != nil {
+			return nil, err
+		}
+		cfg.To = toClone
 
 		cfg.SourceID = inst.SourceID
 
@@ -724,7 +732,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 			cfg.FilterRules[j] = c.Filters[name]
 		}
 
-		_, err := bf.NewBinlogEvent(cfg.CaseSensitive, cfg.FilterRules)
+		_, err = bf.NewBinlogEvent(cfg.CaseSensitive, cfg.FilterRules)
 		if err != nil {
 			return nil, terror.ErrConfigBinlogEventFilter.Delegate(err)
 		}

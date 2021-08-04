@@ -166,3 +166,32 @@ func (t *testConfig) TestSubTaskBlockAllowList(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(cfg.BAList, Equals, filterRules2)
 }
+
+func (t *testConfig) TestDBConfigClone(c *C) {
+	a := DBConfig{
+		Host:     "127.0.0.1",
+		Port:     4306,
+		User:     "root",
+		Password: "123",
+		Session:  map[string]string{"1": "1"},
+		RawDBCfg: DefaultRawDBConfig(),
+	}
+	b, err := a.Clone()
+	c.Assert(err, IsNil)
+	c.Assert(a, DeepEquals, b)
+
+	a.RawDBCfg.MaxIdleConns = 123
+	c.Assert(a, Not(DeepEquals), b)
+
+	b, err = a.Clone()
+	c.Assert(err, IsNil)
+	c.Assert(a, DeepEquals, b)
+
+	a.Session["2"] = "2"
+	c.Assert(a, Not(DeepEquals), b)
+
+	a.RawDBCfg = nil
+	b, err = a.Clone()
+	c.Assert(err, IsNil)
+	c.Assert(a, DeepEquals, b)
+}

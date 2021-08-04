@@ -122,6 +122,26 @@ func (db *DBConfig) Adjust() {
 	AdjustTargetDBTimeZone(db)
 }
 
+// Clone returns a deep copy of DBConfig. This function only fixes data race when adjusting Session.
+func (db *DBConfig) Clone() (DBConfig, error) {
+	clone := DBConfig{}
+
+	s, err := db.Toml()
+	if err != nil {
+		return clone, err
+	}
+	err = (&clone).Decode(s)
+	if err != nil {
+		return clone, err
+	}
+
+	if db.RawDBCfg != nil {
+		tmp := *(db.RawDBCfg)
+		clone.RawDBCfg = &tmp
+	}
+	return clone, err
+}
+
 // SubTaskConfig is the configuration for SubTask.
 type SubTaskConfig struct {
 	// BurntSushi/toml seems have a bug for flag "-"
