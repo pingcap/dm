@@ -187,22 +187,24 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 	if err != nil {
 		return 0, terror.ErrGetRelayLogStat.Delegate(err, path)
 	}
-	currSize := fi.Size()
+	curSize := fi.Size()
 	switch {
-	case currSize == latestSize:
+	case curSize == latestSize:
 		return 0, nil
-	case currSize > latestSize:
-		log.L().Debug("size of relay log file has been changed", zap.String("file", path), zap.Int64("old size", latestSize), zap.Int64("size", currSize))
+	case curSize > latestSize:
+		log.L().Debug("size of relay log file has been changed", zap.String("file", path),
+			zap.Int64("old size", latestSize), zap.Int64("size", curSize))
 		return 1, nil
 	default:
-		log.L().Error("size of relay log file has been changed", zap.String("file", path), zap.Int64("old size", latestSize), zap.Int64("size", currSize))
+		log.L().Error("size of relay log file has been changed", zap.String("file", path),
+			zap.Int64("old size", latestSize), zap.Int64("size", curSize))
 		return -1, nil
 	}
 }
 
 // relayLogUpdatedOrNewCreated checks whether current relay log file is updated or new relay log is created.
 // we check the size of the file first, if the size is the same as the latest file, we assume there is no new write
-// so we need to chenk relay meta file to see if the new relay log is created.
+// so we need to check relay meta file to see if the new relay log is created.
 // this func will be blocked until current filesize changed or meta file updated or context cancelled.
 func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Duration, dir string,
 	latestFilePath, latestFile string, latestFileSize int64, updatePathCh chan string, errCh chan error) {
@@ -219,7 +221,7 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 			// check the latest relay log file whether updated when adding watching and collecting newer
 			cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
 			if err != nil {
-				errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize= %d", latestFilePath, latestFileSize)
+				errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize=%d", latestFilePath, latestFileSize)
 				return
 			}
 			failpoint.Inject("CMPAlwaysReturn0", func(_ failpoint.Value) {
@@ -241,14 +243,14 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 				meta := &Meta{}
 				_, err = toml.DecodeFile(filepath.Join(dir, utils.MetaFilename), meta)
 				if err != nil {
-					errCh <- terror.Annotate(err, "decode meta toml faild")
+					errCh <- terror.Annotate(err, "decode meta toml failed")
 					return
 				}
 				if meta.BinLogName != latestFile {
-					// we need recheck file size again, as the file may have been changed during our metafile check.
+					// we need check file size again, as the file may have been changed during our metafile check
 					cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
 					if err != nil {
-						errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize= %d",
+						errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize=%d",
 							latestFilePath, latestFileSize)
 					}
 					switch {

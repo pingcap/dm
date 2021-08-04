@@ -562,7 +562,6 @@ func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 			filename := filepath.Join(baseDir, UUIDs[i], filenamePrefix+strconv.Itoa(j))
 			err = ioutil.WriteFile(filename, eventsBuf.Bytes(), 0o600)
 			c.Assert(err, IsNil)
-			// create meta file
 		}
 		t.createMetaFile(c, path.Join(baseDir, UUIDs[i]),
 			notUsedGTIDSetStr, startPos.Pos, filenamePrefix+strconv.Itoa(i+1))
