@@ -136,13 +136,12 @@ function start_multi_tasks_cluster() {
 
 	echo "start DM task"
 
-	dmctl_start_task
+	dmctl_start_task &
+	pid1=$!
+	dmctl_start_task "$cur/conf/dm-task2.yaml" &
+  pid2=$!
 
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"start-task $cur/conf/dm-task2.yaml" \
-		"\"result\": true" 3 \
-		"\"source\": \"$SOURCE_ID1\"" 1 \
-		"\"source\": \"$SOURCE_ID2\"" 1
+	wait "$pid1" "$pid2"
 }
 
 function cleanup() {
