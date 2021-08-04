@@ -439,10 +439,22 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 		c.Assert(len(errCh), Equals, 0)
 		up := <-updatePathCh
 		c.Assert(up, Equals, relayPaths[1])
-		c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0"), IsNil)
-		c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange"), IsNil)
 	}()
 	wg.Wait()
+
+	// 5. context timeout
+	fi, err6 := os.Stat(relayPaths[1])
+	c.Assert(err6, IsNil)
+	currSize := fi.Size()
+	newCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	relayLogUpdatedOrNewCreated(newCtx, watcherInterval, subDir, relayPaths[1], relayFiles[1], currSize, updatePathCh, errCh)
+	c.Assert(len(errCh), Equals, 1)
+	err7 := <-errCh
+	c.Assert(err7, ErrorMatches, "context meet error:.*")
+
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0"), IsNil)
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange"), IsNil)
 }
 
 func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
