@@ -137,11 +137,11 @@ function start_multi_tasks_cluster() {
 	echo "start DM task"
 
 	dmctl_start_task &
-  pid1=$!
-  dmctl_start_task "$cur/conf/dm-task2.yaml" &
-  pid2=$!
+	pid1=$!
+	dmctl_start_task "$cur/conf/dm-task2.yaml" &
+	pid2=$!
 
-  wait "$pid1" "$pid2"
+	wait "$pid1" "$pid2"
 }
 
 function cleanup() {

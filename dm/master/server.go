@@ -453,6 +453,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			if err3 != nil {
 				// TODO: terror
 				resp.Msg = err3.Error()
+				// nolint:nilerr
 				return resp, nil
 			}
 			if scm := s.scheduler.GetSubTaskCfgsByTask(cfg.Name); len(scm) > 0 {
