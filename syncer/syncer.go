@@ -982,7 +982,6 @@ func (s *Syncer) addJob(job *job) error {
 			// flush for every DML queue
 			metrics.AddJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		}
-		s.isTransactionEnd.Store(true)
 		s.jobWg.Wait()
 		metrics.FinishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		return s.flushCheckPoints()
@@ -993,6 +992,9 @@ func (s *Syncer) addJob(job *job) error {
 		queueBucket = s.cfg.WorkerCount
 		startTime := time.Now()
 		s.jobs[queueBucket] <- job
+		if s.waitXIDJob == waiting {
+			s.waitXIDJob = waitComplete
+		}
 		s.isTransactionEnd.Store(true)
 		metrics.AddJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	case insert, update, del:
@@ -1624,6 +1626,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("stack"))
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
+
+		runCancel() // avoid return err is not nil so that runCancel() doesn't run
 
 		s.jobWg.Wait()
 		var (
