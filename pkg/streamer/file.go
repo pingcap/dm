@@ -203,6 +203,7 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 // relayLogUpdatedOrNewCreated checks whether current relay log file is updated or new relay log is created.
 // we check the size of the file first, if the size is the same as the latest file, we assume there is no new write
 // so we need to chenk relay meta file to see if the new relay log is created.
+// this func will be blocked until current filesize changed or meta file updated or context cancelled.
 func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Duration, dir string,
 	latestFilePath, latestFile string, latestFileSize int64, updatePathCh chan string, errCh chan error) {
 	ticker := time.NewTicker(watcherInterval)
@@ -210,6 +211,9 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 	for {
 		select {
 		case <-ctx.Done():
+			if err := ctx.Err(); err != nil {
+				errCh <- terror.Annotate(err, "context meet error")
+			}
 			return
 		case <-ticker.C:
 			// check the latest relay log file whether updated when adding watching and collecting newer
@@ -254,7 +258,6 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 						updatePathCh <- latestFilePath
 					default:
 						failpoint.Inject("DoNotReturnEvenMetaChange", func(_ failpoint.Value) {
-							println("xxd")
 							failpoint.Continue()
 						})
 						nextFilePath := filepath.Join(dir, meta.BinLogName)
