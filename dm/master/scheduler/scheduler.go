@@ -70,7 +70,7 @@ type Scheduler struct {
 
 	etcdCli *clientv3.Client
 
-	// must acquire latch from subtaskLatch before accessing subTaskCfgs, expectSubTaskStages and loadTasks
+	// must acquire latch from subtaskLatch before accessing subTaskCfgs and expectSubTaskStages
 	// TODO: also sourceLatch, relayLatch?
 	subtaskLatch *latches
 
@@ -150,7 +150,7 @@ type Scheduler struct {
 
 	// workers in load stage
 	// task -> source -> worker
-	loadTasks sync.Map
+	loadTasks map[string]map[string]string
 
 	securityCfg config.Security
 }
@@ -167,6 +167,7 @@ func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 		lastBound:         make(map[string]ha.SourceBound),
 		expectRelayStages: make(map[string]ha.Stage),
 		relayWorkers:      make(map[string]map[string]struct{}),
+		loadTasks:         make(map[string]map[string]string),
 		securityCfg:       securityCfg,
 	}
 }
@@ -1418,20 +1419,7 @@ func (s *Scheduler) recoverLoadTasks(cli *clientv3.Client, needLock bool) (int64
 		return 0, err
 	}
 
-	// TODO: support etcdutil.IsRetryableError
-	for task, workerM := range loadTasks {
-		var release releaseFunc
-		if needLock {
-			release, err = s.subtaskLatch.tryAcquire(task)
-			if err != nil {
-				return 0, err
-			}
-		}
-		s.loadTasks.Store(task, workerM)
-		if needLock {
-			release()
-		}
-	}
+	s.loadTasks = loadTasks
 	return rev, nil
 }
 
@@ -2006,7 +1994,7 @@ func (s *Scheduler) reset() {
 	s.unbounds = make(map[string]struct{})
 	s.expectRelayStages = make(map[string]ha.Stage)
 	s.expectSubTaskStages = sync.Map{}
-	s.loadTasks = sync.Map{}
+	s.loadTasks = make(map[string]map[string]string)
 }
 
 // strMapToSlice converts a `map[string]struct{}` to `[]string` in increasing order.
@@ -2075,6 +2063,9 @@ func (s *Scheduler) observeLoadTask(ctx context.Context, etcdCli *clientv3.Clien
 
 // RemoveLoadTask removes the loadtask by task.
 func (s *Scheduler) RemoveLoadTask(task string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if !s.started {
 		return terror.ErrSchedulerNotStarted.Generate()
 	}
@@ -2082,7 +2073,7 @@ func (s *Scheduler) RemoveLoadTask(task string) error {
 	if err != nil {
 		return err
 	}
-	s.loadTasks.Delete(task)
+	delete(s.loadTasks, task)
 	return nil
 }
 
@@ -2134,41 +2125,29 @@ func (s *Scheduler) getNextLoadTaskTransfer(worker, source string) (string, stri
 
 // hasLoadTaskByWorkerAndSource check whether there is a load subtask for the worker and source.
 func (s *Scheduler) hasLoadTaskByWorkerAndSource(worker, source string) bool {
-	ret := false
-	s.loadTasks.Range(func(_, v interface{}) bool {
-		sourceWorkerMap := v.(map[string]string)
+	for _, sourceWorkerMap := range s.loadTasks {
 		if workerName, ok := sourceWorkerMap[source]; ok && workerName == worker {
-			ret = true
-			return false
+			return true
 		}
-		return true
-	})
-
-	return ret
+	}
+	return false
 }
 
 func (s *Scheduler) handleLoadTaskDel(loadTask ha.LoadTask) error {
-	release, err := s.subtaskLatch.tryAcquire(loadTask.Task)
-	if err != nil {
-		// TODO: terror
-		return err
-	}
-	defer release()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	v, ok := s.loadTasks.Load(loadTask.Task)
-	if !ok {
+	if _, ok := s.loadTasks[loadTask.Task]; !ok {
+		return nil
+	}
+	if _, ok := s.loadTasks[loadTask.Task][loadTask.Source]; !ok {
 		return nil
 	}
 
-	workerM := v.(map[string]string)
-	if _, ok = workerM[loadTask.Source]; !ok {
-		return nil
-	}
-
-	originWorker := workerM[loadTask.Source]
-	delete(workerM, loadTask.Source)
-	if len(workerM) == 0 {
-		s.loadTasks.Delete(loadTask.Task)
+	originWorker := s.loadTasks[loadTask.Task][loadTask.Source]
+	delete(s.loadTasks[loadTask.Task], loadTask.Source)
+	if len(s.loadTasks[loadTask.Task]) == 0 {
+		delete(s.loadTasks, loadTask.Task)
 	}
 
 	if s.hasLoadTaskByWorkerAndSource(originWorker, loadTask.Source) {
@@ -2183,18 +2162,14 @@ func (s *Scheduler) handleLoadTaskDel(loadTask ha.LoadTask) error {
 	return s.transferWorkerAndSource(originWorker, loadTask.Source, worker, source)
 }
 
-func (s *Scheduler) handleLoadTaskPut(loadTask ha.LoadTask) error {
-	release, err := s.subtaskLatch.tryAcquire(loadTask.Task)
-	if err != nil {
-		// TODO: terror
-		return err
-	}
-	defer release()
+func (s *Scheduler) handleLoadTaskPut(loadTask ha.LoadTask) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	v, _ := s.loadTasks.LoadOrStore(loadTask.Task, map[string]string{})
-	m := v.(map[string]string)
-	m[loadTask.Source] = loadTask.Worker
-	return nil
+	if _, ok := s.loadTasks[loadTask.Task]; !ok {
+		s.loadTasks[loadTask.Task] = make(map[string]string)
+	}
+	s.loadTasks[loadTask.Task][loadTask.Source] = loadTask.Worker
 }
 
 // handleLoadTask handles the load worker status change event.
@@ -2212,7 +2187,7 @@ func (s *Scheduler) handleLoadTask(ctx context.Context, loadTaskCh <-chan ha.Loa
 			if loadTask.IsDelete {
 				err = s.handleLoadTaskDel(loadTask)
 			} else {
-				err = s.handleLoadTaskPut(loadTask)
+				s.handleLoadTaskPut(loadTask)
 			}
 			if err != nil {
 				s.logger.Error("fail to handle worker status change event", zap.Error(err))

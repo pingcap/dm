@@ -1507,9 +1507,7 @@ func (t *testScheduler) TestWatchLoadTask(c *C) {
 	defer cancel1()
 	loadTasks, startRev, err := ha.GetAllLoadTask(etcdTestCli)
 	c.Assert(err, IsNil)
-	for k, v := range loadTasks {
-		s.loadTasks.Store(k, v)
-	}
+	s.loadTasks = loadTasks
 
 	c.Assert(s.hasLoadTaskByWorkerAndSource(workerName3, sourceID1), IsTrue)
 	c.Assert(s.hasLoadTaskByWorkerAndSource(workerName4, sourceID2), IsTrue)
