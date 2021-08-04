@@ -27,9 +27,9 @@ type latches struct {
 	// TODO: use map[string]semaphore to implement a blocking acquire
 }
 
-// releaseFunc wraps on releasing a latch.
-// It is safe to call multiple times. Also compiler can warn you of not used releaseFunc variables.
-type releaseFunc func()
+// ReleaseFunc wraps on releasing a latch.
+// It is safe to call multiple times. Also compiler can warn you of not used ReleaseFunc variables.
+type ReleaseFunc func()
 
 func newLatches() *latches {
 	return &latches{
@@ -37,11 +37,11 @@ func newLatches() *latches {
 	}
 }
 
-func (l *latches) tryAcquire(name string) (releaseFunc, error) {
+func (l *latches) tryAcquire(name string) (ReleaseFunc, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if _, ok := l.inUse[name]; ok {
-		return nil, errors.Errorf("%s is in use by other client", name)
+		return nil, errors.Errorf("latch %s is in use by other client", name)
 	}
 
 	l.inUse[name] = struct{}{}
@@ -53,7 +53,7 @@ func (l *latches) tryAcquire(name string) (releaseFunc, error) {
 	}, nil
 }
 
-// release should not be called directly, it's recommended to wrap it with releaseFunc to avoid release a latch that not
+// release should not be called directly, it's recommended to wrap it with ReleaseFunc to avoid release a latch that not
 // belongs to caller.
 func (l *latches) release(name string) {
 	l.mu.Lock()

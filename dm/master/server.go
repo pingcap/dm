@@ -98,9 +98,6 @@ type Server struct {
 	leaderClient   pb.MasterClient
 	leaderGrpcConn *grpc.ClientConn
 
-	// removeMetaLock locks start task when removing meta
-	removeMetaLock sync.RWMutex
-
 	// dm-worker-ID(host:ip) -> dm-worker client management
 	scheduler *scheduler.Scheduler
 
@@ -450,23 +447,27 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		for _, stCfg := range stCfgs {
 			sources = append(sources, stCfg.SourceID)
 		}
-		s.removeMetaLock.Lock()
 		if req.RemoveMeta {
+			release, err3 := s.scheduler.AcquireSubtaskLatch(cfg.Name)
+			defer release()
+			if err3 != nil {
+				// TODO: terror
+				resp.Msg = err3.Error()
+				return resp, nil
+			}
 			if scm := s.scheduler.GetSubTaskCfgsByTask(cfg.Name); len(scm) > 0 {
 				resp.Msg = terror.Annotate(terror.ErrSchedulerSubTaskExist.Generate(cfg.Name, sources),
 					"while remove-meta is true").Error()
-				s.removeMetaLock.Unlock()
 				return resp, nil
 			}
 			err = s.removeMetaData(ctx, cfg)
 			if err != nil {
 				resp.Msg = terror.Annotate(err, "while removing metadata").Error()
-				s.removeMetaLock.Unlock()
 				return resp, nil
 			}
+			release()
 		}
 		err = s.scheduler.AddSubTasks(subtaskCfgPointersToInstances(stCfgs...)...)
-		s.removeMetaLock.Unlock()
 		if err != nil {
 			resp.Msg = err.Error()
 			// nolint:nilerr

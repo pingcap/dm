@@ -635,6 +635,11 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 	return nil
 }
 
+// AcquireSubtaskLatch tries acquiring a latch for subtask name.
+func (s *Scheduler) AcquireSubtaskLatch(name string) (ReleaseFunc, error) {
+	return s.subtaskLatch.tryAcquire(name)
+}
+
 // AddSubTasks adds the information of one or more subtasks for one task.
 // use s.mu.RLock() to protect s.bound, and s.subtaskLatch to protect subtask related members.
 func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
