@@ -181,7 +181,7 @@ func newExportCfgsCmd() *cobra.Command {
 		Short: "Export the configurations of sources and tasks",
 		RunE:  exportCfgsFunc,
 	}
-	cmd.Flags().StringP("dir", "d", "", "specify the configs directory, default is `./configs`")
+	cmd.Flags().String("dir", "", "specify the configs directory, default is `./configs`")
 	_ = cmd.Flags().MarkHidden("dir")
 	return cmd
 }
@@ -193,7 +193,7 @@ func newImportCfgsCmd() *cobra.Command {
 		Short: "Import the configurations of sources and tasks",
 		RunE:  importCfgsFunc,
 	}
-	cmd.Flags().StringP("dir", "d", "", "specify the configs directory, default is `./configs`")
+	cmd.Flags().String("dir", "", "specify the configs directory, default is `./configs`")
 	_ = cmd.Flags().MarkHidden("dir")
 	return cmd
 }
