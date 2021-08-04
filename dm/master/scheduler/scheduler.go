@@ -158,16 +158,16 @@ type Scheduler struct {
 // NewScheduler creates a new scheduler instance.
 func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 	return &Scheduler{
-		logger:              pLogger.WithFields(zap.String("component", "scheduler")),
-		subtaskLatch:        newLatches(),
-		sourceCfgs:          make(map[string]*config.SourceConfig),
-		workers:             make(map[string]*Worker),
-		bounds:              make(map[string]*Worker),
-		unbounds:            make(map[string]struct{}),
-		lastBound:           make(map[string]ha.SourceBound),
-		expectRelayStages:   make(map[string]ha.Stage),
-		relayWorkers:        make(map[string]map[string]struct{}),
-		securityCfg:         securityCfg,
+		logger:            pLogger.WithFields(zap.String("component", "scheduler")),
+		subtaskLatch:      newLatches(),
+		sourceCfgs:        make(map[string]*config.SourceConfig),
+		workers:           make(map[string]*Worker),
+		bounds:            make(map[string]*Worker),
+		unbounds:          make(map[string]struct{}),
+		lastBound:         make(map[string]ha.SourceBound),
+		expectRelayStages: make(map[string]ha.Stage),
+		relayWorkers:      make(map[string]map[string]struct{}),
+		securityCfg:       securityCfg,
 	}
 }
 
@@ -759,8 +759,8 @@ func (s *Scheduler) RemoveSubTasks(task string, sources ...string) error {
 	}
 
 	var (
-		stagesM = v1.(map[string]ha.Stage)
-		cfgsM = v2.(map[string]config.SubTaskConfig)
+		stagesM          = v1.(map[string]ha.Stage)
+		cfgsM            = v2.(map[string]config.SubTaskConfig)
 		notExistSourcesM = make(map[string]struct{})
 		stages           = make([]ha.Stage, 0, len(sources))
 		cfgs             = make([]config.SubTaskConfig, 0, len(sources))
@@ -1279,7 +1279,7 @@ func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sou
 	}
 
 	var (
-		stagesM = v.(map[string]ha.Stage)
+		stagesM          = v.(map[string]ha.Stage)
 		notExistSourcesM = make(map[string]struct{})
 		currStagesM      = make(map[string]struct{})
 		stages           = make([]ha.Stage, 0, len(sources))

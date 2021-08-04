@@ -1149,7 +1149,7 @@ func (t *testScheduler) TestTransferSource(c *C) {
 	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/master/scheduler/failToReplaceSourceBound"), IsNil)
 
 	// test can't transfer when there's any running task on the source
-	s.expectSubTaskStages["test"] = map[string]ha.Stage{sourceID1: {Expect: pb.Stage_Running}}
+	s.expectSubTaskStages.Store("test", map[string]ha.Stage{sourceID1: {Expect: pb.Stage_Running}})
 	c.Assert(s.TransferSource(sourceID1, workerName1), NotNil)
 	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
 	c.Assert(worker1.Stage(), Equals, WorkerFree)
@@ -1507,7 +1507,9 @@ func (t *testScheduler) TestWatchLoadTask(c *C) {
 	defer cancel1()
 	loadTasks, startRev, err := ha.GetAllLoadTask(etcdTestCli)
 	c.Assert(err, IsNil)
-	s.loadTasks = loadTasks
+	for k, v := range loadTasks {
+		s.loadTasks.Store(k, v)
+	}
 
 	c.Assert(s.hasLoadTaskByWorkerAndSource(workerName3, sourceID1), IsTrue)
 	c.Assert(s.hasLoadTaskByWorkerAndSource(workerName4, sourceID2), IsTrue)
