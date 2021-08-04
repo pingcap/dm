@@ -117,7 +117,8 @@ func (s *testDBSuite) TestGetServerUnixTS(c *C) {
 }
 
 func (s *testDBSuite) TestBinaryLogs(c *C) {
-	files, err := getBinaryLogs(s.db)
+	ctx := context.Background()
+	files, err := getBinaryLogs(ctx, s.db)
 	c.Assert(err, IsNil)
 	c.Assert(files, Not(HasLen), 0)
 
@@ -127,13 +128,13 @@ func (s *testDBSuite) TestBinaryLogs(c *C) {
 		Pos:  0,
 	}
 
-	remainingSize, err := countBinaryLogsSize(pos, s.db)
+	remainingSize, err := countBinaryLogsSize(ctx, pos, s.db)
 	c.Assert(err, IsNil)
 	c.Assert(remainingSize, Equals, files[fileNum-1].size)
 
 	_, err = s.db.Exec("FLUSH BINARY LOGS")
 	c.Assert(err, IsNil)
-	files, err = getBinaryLogs(s.db)
+	files, err = getBinaryLogs(ctx, s.db)
 	c.Assert(err, IsNil)
 	c.Assert(files, HasLen, fileNum+1)
 
@@ -142,7 +143,7 @@ func (s *testDBSuite) TestBinaryLogs(c *C) {
 		Pos:  0,
 	}
 
-	remainingSize, err = countBinaryLogsSize(pos, s.db)
+	remainingSize, err = countBinaryLogsSize(ctx, pos, s.db)
 	c.Assert(err, IsNil)
 	c.Assert(remainingSize, Equals, files[fileNum].size)
 }
