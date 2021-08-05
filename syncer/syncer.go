@@ -860,7 +860,7 @@ func (s *Syncer) updateReplicationLag(job *job, lagKey string) {
 			lag = wl
 		}
 	}
-	metrics.ReplicationLagGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Set(float64(lag))
+	metrics.ReplicationLagHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Observe(float64(lag))
 	s.secondsBehindMaster.Store(lag)
 }
 
@@ -1255,6 +1255,7 @@ func (s *Syncer) syncDML(
 	jobs := make([]*job, 0, count)
 	// db_schema->db_table->opType
 	tpCnt := make(map[string]map[string]map[opType]int64)
+	queueID := strings.Split(workerLagKey, "lag_")[0]
 
 	// clearF is used to reset job queue.
 	clearF := func() {
@@ -1371,7 +1372,7 @@ func (s *Syncer) syncDML(
 
 		select {
 		case sqlJob, ok := <-jobChan:
-			metrics.QueueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
+			metrics.QueueSizeGauge.WithLabelValues(s.cfg.Name, queueID, s.cfg.SourceID).Set(float64(len(jobChan)))
 			if !ok {
 				return
 			}

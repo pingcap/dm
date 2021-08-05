@@ -127,7 +127,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "queue_size",
 			Help:      "remain size of the DML queue",
-		}, []string{"task", "queueNo", "source_id"})
+		}, []string{"task", "queue_id", "source_id"})
 
 	BinlogPosGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -197,12 +197,13 @@ var (
 			Help:      "counter for syncer exits with error",
 		}, []string{"task", "source_id"})
 
-	ReplicationLagGauge = metricsproxy.NewGaugeVec(
-		prometheus.GaugeOpts{
+	ReplicationLagHistogram = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
 			Name:      "replication_lag",
 			Help:      "replication lag in second between mysql and syncer",
+			Buckets:   prometheus.ExponentialBuckets(0.0000005, 2, 25), // this should be very fast.
 		}, []string{"task", "source_id", "worker"})
 
 	RemainingTimeGauge = metricsproxy.NewGaugeVec(
@@ -282,7 +283,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(StmtHistogram)
 	registry.MustRegister(QueryHistogram)
 	registry.MustRegister(SyncerExitWithErrorCounter)
-	registry.MustRegister(ReplicationLagGauge)
+	registry.MustRegister(ReplicationLagHistogram)
 	registry.MustRegister(RemainingTimeGauge)
 	registry.MustRegister(UnsyncedTableGauge)
 	registry.MustRegister(ShardLockResolving)
@@ -314,7 +315,7 @@ func RemoveLabelValuesWithTaskInMetrics(task string) {
 	StmtHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	QueryHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	SyncerExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	ReplicationLagGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	ReplicationLagHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	RemainingTimeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	UnsyncedTableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	ShardLockResolving.DeleteAllAboutLabels(prometheus.Labels{"task": task})
