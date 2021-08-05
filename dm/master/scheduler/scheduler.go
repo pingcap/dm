@@ -670,8 +670,7 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 
 	release, err := s.subtaskLatch.tryAcquire(taskNames[0])
 	if err != nil {
-		// TODO: terror
-		return err
+		return terror.ErrSchedulerLatchInUse.Generate("AddSubTasks", taskNames[0])
 	}
 	defer release()
 
@@ -752,8 +751,7 @@ func (s *Scheduler) RemoveSubTasks(task string, sources ...string) error {
 
 	release, err := s.subtaskLatch.tryAcquire(task)
 	if err != nil {
-		// TODO: terror
-		return err
+		return terror.ErrSchedulerLatchInUse.Generate("RemoveSubTasks", task)
 	}
 	defer release()
 
@@ -1273,8 +1271,7 @@ func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sou
 
 	release, err := s.subtaskLatch.tryAcquire(task)
 	if err != nil {
-		// TODO: terror
-		return err
+		return terror.ErrSchedulerLatchInUse.Generate("UpdateExpectSubTaskStage", task)
 	}
 	defer release()
 

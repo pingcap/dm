@@ -451,8 +451,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			release, err3 := s.scheduler.AcquireSubtaskLatch(cfg.Name)
 			defer release()
 			if err3 != nil {
-				// TODO: terror
-				resp.Msg = err3.Error()
+				resp.Msg = terror.ErrSchedulerLatchInUse.Generate("RemoveMeta", cfg.Name).Error()
 				// nolint:nilerr
 				return resp, nil
 			}

@@ -388,7 +388,7 @@ func (w *Worker) fetchSubTasksAndAdjust() (map[string]ha.Stage, map[string]confi
 	return subTaskStages, subTaskCfgM, revSubTask, nil
 }
 
-// StartSubTask creates a sub task an run it.
+// StartSubTask creates a subtask and run it.
 func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, needLock bool) error {
 	if needLock {
 		w.Lock()
