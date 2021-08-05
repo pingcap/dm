@@ -305,7 +305,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 			"mysql-bin.000003",
 		}
 		binlogPos       = uint32(4)
-		binlogGTID      = "ba8f633f-1f15-11eb-b1c7-0242ac110002.000001"
+		binlogGTID      = "ba8f633f-1f15-11eb-b1c7-0242ac110002:1"
 		relayPaths      = make([]string, len(relayFiles))
 		data            = []byte("meaningless file content")
 		size            = int64(len(data))
