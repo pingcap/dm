@@ -658,7 +658,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		if utils.IsContextCanceledError(err) {
-			s.tctx.L().Info("filter out error caused by user cancel", zap.Any("error:", err))
+			s.tctx.L().Info("filter out error caused by user cancel", log.ShortError(err))
 		} else {
 			metrics.SyncerExitWithErrorCounter.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Inc()
 			errsMu.Lock()
@@ -950,10 +950,6 @@ func (s *Syncer) addJob(job *job) error {
 			s.tctx.L().Info("meet the second job of a GTID", zap.Any("binlog position", lastLocation))
 		}
 	})
-	if s.waitXIDJob == waitComplete {
-		s.tctx.L().Info("All job is completed before syncer close, the coming job will be abandon", zap.Any("job", job))
-		return nil
-	}
 
 	failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
 		if s.waitXIDJob == waiting {
@@ -971,7 +967,6 @@ func (s *Syncer) addJob(job *job) error {
 		return nil
 	case skip:
 		s.updateReplicationLag(job, skipLagKey)
-		s.isTransactionEnd.Store(false)
 	case flush:
 		metrics.AddedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
 		// ugly code addJob and sync, refine it later
@@ -1439,6 +1434,7 @@ func (s *Syncer) syncDML(
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
 	runCtx, runCancel := context.WithCancel(context.Background())
+	defer runCancel()
 	tctx := s.tctx.WithContext(runCtx)
 
 	defer func() {
@@ -1449,24 +1445,26 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	go func() {
 		<-ctx.Done()
-		tctx.L().Info("received subtask's done")
-		if s.isTransactionEnd.Load() {
-			tctx.L().Info("the last job is transaction end, done directly")
-			runCancel()
-			return
-		}
-		waitTime := 10 * time.Second
-		s.waitXIDJob = waiting
-		tricker := time.NewTicker(waitTime)
-		defer tricker.Stop()
 		select {
 		case <-runCtx.Done():
-			tctx.L().Info("received syncer's done")
-		case <-tricker.C:
-			tctx.L().Info("subtask's done timeout")
-			runCancel()
+		default:
+			tctx.L().Info("received subtask's done")
+			if s.isTransactionEnd.Load() {
+				tctx.L().Info("the last job is transaction end, done directly")
+				runCancel()
+				return
+			}
+			s.waitXIDJob = waiting
+			select {
+			case <-runCtx.Done():
+				tctx.L().Info("received syncer's done")
+			case <-time.After(10 * time.Second):
+				tctx.L().Info("subtask's done timeout")
+				runCancel()
+			}
 		}
 	}()
+
 	// some initialization that can't be put in Syncer.Init
 	fresh, err := s.IsFreshTask(runCtx)
 	if err != nil {
@@ -1627,8 +1625,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
 
-		runCancel() // avoid return err is not nil so that runCancel() doesn't run
-
 		s.jobWg.Wait()
 		var (
 			err2            error
@@ -1733,6 +1729,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		startTime := time.Now()
 		e, err = s.getEvent(tctx, currentLocation)
+
+		if s.waitXIDJob == waitComplete {
+			s.tctx.L().Info("All event is completed before syncer close, the coming event will be reject", zap.Any("event", e))
+			return nil
+		}
 
 		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
 			if intVal, ok := val.(int); ok && intVal == 1 {
