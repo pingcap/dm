@@ -256,9 +256,6 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 					case cmp > 0:
 						updatePathCh <- latestFilePath
 					default:
-						failpoint.Inject("DoNotReturnEvenMetaChange", func() {
-							failpoint.Continue()
-						})
 						nextFilePath := filepath.Join(dir, meta.BinLogName)
 						log.L().Info("newer relay log file is already generated",
 							zap.String("now file path", latestFilePath),
