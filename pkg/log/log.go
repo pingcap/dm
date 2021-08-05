@@ -139,20 +139,26 @@ func InitLogger(cfg *Config) error {
 		return terror.ErrInitLoggerFail.Delegate(err)
 	}
 
-	encodeFormat := "console"
-	if cfg.Format != "" && cfg.Format != "text" {
-		encodeFormat = cfg.Format
+	var grpcLogger grpclog.LoggerV2
+	if cfg.File == "" {
+		grpcLogger = logutil2.NewDiscardLogger()
+	} else {
+		encodeFormat := "console"
+		if cfg.Format != "" && cfg.Format != "text" {
+			encodeFormat = cfg.Format
+		}
+		zCfg := zap.Config{
+			Level:            level,
+			Encoding:         encodeFormat,
+			OutputPaths:      []string{cfg.File},
+			ErrorOutputPaths: []string{cfg.File},
+		}
+		grpcLogger, err = logutil2.NewGRPCLoggerV2(zCfg)
+		if err != nil {
+			return terror.ErrInitLoggerFail.Delegate(err)
+		}
 	}
-	zCfg := zap.Config{
-		Level:            level,
-		Encoding:         encodeFormat,
-		OutputPaths:      []string{cfg.File},
-		ErrorOutputPaths: []string{cfg.File},
-	}
-	grpcLogger, err := logutil2.NewGRPCLoggerV2(zCfg)
-	if err != nil {
-		return terror.ErrInitLoggerFail.Delegate(err)
-	}
+
 	grpclog.SetLoggerV2(grpcLogger)
 
 	return nil
