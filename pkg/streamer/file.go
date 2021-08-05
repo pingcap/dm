@@ -250,6 +250,7 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 					if err != nil {
 						errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize=%d",
 							latestFilePath, latestFileSize)
+						return
 					}
 					switch {
 					case cmp < 0:
