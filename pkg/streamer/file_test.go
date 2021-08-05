@@ -425,13 +425,13 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 		c.Assert(err3, IsNil)
 		fi, err4 := os.Stat(relayPaths[1])
 		c.Assert(err4, IsNil)
-		currSize := fi.Size()
+		curSize := fi.Size()
 		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0", `return(true)`), IsNil)
 		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange", `return(true)`), IsNil)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			relayLogUpdatedOrNewCreated(ctx, watcherInterval, subDir, relayPaths[1], relayFiles[1], currSize, updatePathCh, errCh)
+			relayLogUpdatedOrNewCreated(ctx, watcherInterval, subDir, relayPaths[1], relayFiles[1], curSize, updatePathCh, errCh)
 		}()
 		// write old file
 		err5 := ioutil.WriteFile(relayPaths[1], data, 0o600)
@@ -445,10 +445,10 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	// 5. context timeout
 	fi, err6 := os.Stat(relayPaths[1])
 	c.Assert(err6, IsNil)
-	currSize := fi.Size()
+	curSize := fi.Size()
 	newCtx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
-	relayLogUpdatedOrNewCreated(newCtx, watcherInterval, subDir, relayPaths[1], relayFiles[1], currSize, updatePathCh, errCh)
+	relayLogUpdatedOrNewCreated(newCtx, watcherInterval, subDir, relayPaths[1], relayFiles[1], curSize, updatePathCh, errCh)
 	c.Assert(len(errCh), Equals, 1)
 	err7 := <-errCh
 	c.Assert(err7, ErrorMatches, "context meet error:.*")
