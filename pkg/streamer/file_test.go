@@ -393,14 +393,11 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	go func() {
 		defer wg.Done()
 		// update meta file
-		meta := Meta{BinLogName: relayFiles[1], BinLogPos: binlogPos, BinlogGTID: binlogGTID}
+		meta = Meta{BinLogName: relayFiles[1], BinLogPos: binlogPos, BinlogGTID: binlogGTID}
 		var buf bytes.Buffer
 		enc := toml.NewEncoder(&buf)
-		err2 := enc.Encode(meta)
-		c.Assert(err2, IsNil)
-		filename := path.Join(subDir, utils.MetaFilename)
-		err3 := utils.WriteFileAtomic(filename, buf.Bytes(), 0o644)
-		c.Assert(err3, IsNil)
+		c.Assert(enc.Encode(meta), IsNil)
+		c.Assert(utils.WriteFileAtomic(path.Join(subDir, utils.MetaFilename), buf.Bytes(), 0o644), IsNil)
 
 		relayLogUpdatedOrNewCreated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0, updatePathCh, errCh)
 		c.Assert(len(errCh), Equals, 0)
@@ -415,14 +412,11 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	go func() {
 		defer wg.Done()
 		// update meta file to new file
-		meta := Meta{BinLogName: relayFiles[2], BinLogPos: binlogPos, BinlogGTID: binlogGTID}
+		meta = Meta{BinLogName: relayFiles[2], BinLogPos: binlogPos, BinlogGTID: binlogGTID}
 		var buf bytes.Buffer
 		enc := toml.NewEncoder(&buf)
-		err2 := enc.Encode(meta)
-		c.Assert(err2, IsNil)
-		filename := path.Join(subDir, utils.MetaFilename)
-		err3 := utils.WriteFileAtomic(filename, buf.Bytes(), 0o644)
-		c.Assert(err3, IsNil)
+		c.Assert(enc.Encode(meta), IsNil)
+		c.Assert(utils.WriteFileAtomic(path.Join(subDir, utils.MetaFilename), buf.Bytes(), 0o644), IsNil)
 		fi, err4 := os.Stat(relayPaths[1])
 		c.Assert(err4, IsNil)
 		curSize := fi.Size()
@@ -431,6 +425,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 		c.Assert(err5, IsNil)
 		c.Assert(len(errCh), Equals, 0)
 		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0", `return(true)`), IsNil)
+		//nolint:errcheck
 		defer failpoint.Disable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0")
 		wg.Add(1)
 		go func() {
@@ -443,19 +438,23 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	}()
 	wg.Wait()
 
-	// 5. context timeout
-	fi, err6 := os.Stat(relayPaths[1])
-	c.Assert(err6, IsNil)
+	// 5. context timeout (no new write)
+	// revert meta file to old file
+	meta = Meta{BinLogName: relayFiles[1], BinLogPos: binlogPos, BinlogGTID: binlogGTID}
+	var buf bytes.Buffer
+	enc := toml.NewEncoder(&buf)
+	c.Assert(enc.Encode(meta), IsNil)
+	c.Assert(utils.WriteFileAtomic(path.Join(subDir, utils.MetaFilename), buf.Bytes(), 0o644), IsNil)
+
+	fi, err2 := os.Stat(relayPaths[1])
+	c.Assert(err2, IsNil)
 	curSize := fi.Size()
 	newCtx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange", `return(true)`), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange")
 	relayLogUpdatedOrNewCreated(newCtx, watcherInterval, subDir, relayPaths[1], relayFiles[1], curSize, updatePathCh, errCh)
 	c.Assert(len(errCh), Equals, 1)
 	err7 := <-errCh
 	c.Assert(err7, ErrorMatches, "context meet error:.*")
-	c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange"), IsNil)
 }
 
 func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
