@@ -1,8 +1,8 @@
+drop_column_with_index
 full_mode
 dm_syncer
 sequence_sharding_optimistic
 sequence_sharding_removemeta
-drop_column_with_index
 gtid
 only_dml
 adjust_gtid

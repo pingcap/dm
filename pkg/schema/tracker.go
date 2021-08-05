@@ -47,7 +47,7 @@ var (
 	// we always using OFF tidb_enable_clustered_index unless user set it in config.
 	downstreamVars    = []string{"sql_mode", "tidb_skip_utf8_check"}
 	defaultGlobalVars = map[string]string{
-		TiDBClusteredIndex:   "OFF",
+		TiDBClusteredIndex: "OFF",
 	}
 )
 

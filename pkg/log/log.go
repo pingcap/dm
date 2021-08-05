@@ -21,8 +21,10 @@ import (
 	"github.com/pingcap/errors"
 	pclog "github.com/pingcap/log"
 	"github.com/pingcap/tidb/util/logutil"
+	logutil2 "go.etcd.io/etcd/pkg/logutil"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc/grpclog"
 
 	"github.com/pingcap/dm/pkg/helper"
 	"github.com/pingcap/dm/pkg/terror"
@@ -123,11 +125,15 @@ func InitLogger(cfg *Config) error {
 		return terror.ErrInitLoggerFail.Delegate(err)
 	}
 
+	pclog.ReplaceGlobals(logger, props)
+
 	// Do not log stack traces at all, as we'll get the stack trace from the
 	// error itself.
 	appLogger = Logger{logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))}
 	appLevel = props.Level
 	appProps = props
+
+	grpclog.SetLoggerV2(logutil2.NewDiscardLogger())
 
 	return nil
 }

@@ -31,9 +31,9 @@ function run() {
 
 	# start DM task only
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-    "start-task $cur/conf/dm-task.yaml --remove-meta" \
-    "\"result\": true" 2 \
-    "\"source\": \"$SOURCE_ID2\"" 1
+		"start-task $cur/conf/dm-task.yaml --remove-meta" \
+		"\"result\": true" 2 \
+		"\"source\": \"$SOURCE_ID2\"" 1
 
 	# use sync_diff_inspector to check full dump loader
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
