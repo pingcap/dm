@@ -133,7 +133,27 @@ func InitLogger(cfg *Config) error {
 	appLevel = props.Level
 	appProps = props
 
-	grpclog.SetLoggerV2(logutil2.NewDiscardLogger())
+	level := zap.NewAtomicLevel()
+	err = level.UnmarshalText([]byte(cfg.Level))
+	if err != nil {
+		return terror.ErrInitLoggerFail.Delegate(err)
+	}
+
+	encodeFormat := "console"
+	if cfg.Format != "" && cfg.Format != "text" {
+		encodeFormat = cfg.Format
+	}
+	zCfg := zap.Config{
+		Level:            level,
+		Encoding:         encodeFormat,
+		OutputPaths:      []string{cfg.File},
+		ErrorOutputPaths: []string{cfg.File},
+	}
+	grpcLogger, err := logutil2.NewGRPCLoggerV2(zCfg)
+	if err != nil {
+		return terror.ErrInitLoggerFail.Delegate(err)
+	}
+	grpclog.SetLoggerV2(grpcLogger)
 
 	return nil
 }

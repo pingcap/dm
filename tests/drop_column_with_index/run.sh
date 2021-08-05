@@ -57,7 +57,7 @@ function run() {
 		"\"isCanceled\": true" 1
 
 	sleep 5
-	check_log_not_contains "dispatch auto resume task" $WORK_DIR/worker1/log/dm-worker.log
+	check_log_not_contains $WORK_DIR/worker1/log/dm-worker.log "dispatch auto resume task"
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"resume-task test" \
@@ -65,8 +65,13 @@ function run() {
 
 	run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
-	# use sync_diff_inspector to check data now!
-	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	# TODO: uncomment after sync-diff support expression index
+	#	# use sync_diff_inspector to check data now!
+	#	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	sleep 2
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"result\": true" 2
 
 	# check column covered by multi-column indices won't drop, and its indices won't drop
 	run_sql "alter table drop_column_with_index.t1 drop column c2;" $MYSQL_PORT2 $MYSQL_PASSWORD2
