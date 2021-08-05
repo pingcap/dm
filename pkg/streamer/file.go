@@ -216,13 +216,12 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 			errCh <- terror.Annotate(ctx.Err(), "context meet error")
 			return
 		case <-ticker.C:
-			// check the latest relay log file whether updated when adding watching and collecting newer
 			cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
 			if err != nil {
 				errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize=%d", latestFilePath, latestFileSize)
 				return
 			}
-			failpoint.Inject("CMPAlwaysReturn0", func(_ failpoint.Value) {
+			failpoint.Inject("CMPAlwaysReturn0", func() {
 				cmp = 0
 			})
 			switch {
@@ -241,7 +240,7 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 				meta := &Meta{}
 				_, err = toml.DecodeFile(filepath.Join(dir, utils.MetaFilename), meta)
 				if err != nil {
-					errCh <- terror.Annotate(err, "decode meta toml failed")
+					errCh <- terror.Annotate(err, "decode relay meta toml file failed")
 					return
 				}
 				if meta.BinLogName != latestFile {
@@ -257,7 +256,7 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 					case cmp > 0:
 						updatePathCh <- latestFilePath
 					default:
-						failpoint.Inject("DoNotReturnEvenMetaChange", func(_ failpoint.Value) {
+						failpoint.Inject("DoNotReturnEvenMetaChange", func() {
 							failpoint.Continue()
 						})
 						nextFilePath := filepath.Join(dir, meta.BinLogName)
