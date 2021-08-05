@@ -102,8 +102,8 @@ func (conn *UpStreamConn) FetchAllDoTables(ctx context.Context, bw *filter.Filte
 }
 
 // CountBinaryLogsSize returns the remaining size after given position.
-func (conn *UpStreamConn) CountBinaryLogsSize(pos mysql.Position) (int64, error) {
-	return countBinaryLogsSize(pos, conn.BaseDB.DB)
+func (conn *UpStreamConn) CountBinaryLogsSize(ctx context.Context, pos mysql.Position) (int64, error) {
+	return countBinaryLogsSize(ctx, pos, conn.BaseDB.DB)
 }
 
 // CloseUpstreamConn closes the UpStreamConn.
@@ -113,8 +113,8 @@ func CloseUpstreamConn(tctx *tcontext.Context, conn *UpStreamConn) {
 	}
 }
 
-func countBinaryLogsSize(fromFile mysql.Position, db *sql.DB) (int64, error) {
-	files, err := getBinaryLogs(db)
+func countBinaryLogsSize(ctx context.Context, fromFile mysql.Position, db *sql.DB) (int64, error) {
+	files, err := getBinaryLogs(ctx, db)
 	if err != nil {
 		return 0, err
 	}
@@ -136,9 +136,9 @@ func countBinaryLogsSize(fromFile mysql.Position, db *sql.DB) (int64, error) {
 	return total, nil
 }
 
-func getBinaryLogs(db *sql.DB) ([]binlogSize, error) {
+func getBinaryLogs(ctx context.Context, db *sql.DB) ([]binlogSize, error) {
 	query := "SHOW BINARY LOGS"
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
