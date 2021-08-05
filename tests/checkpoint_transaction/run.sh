@@ -6,13 +6,6 @@ cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
-function run_big_transaction() {
-	nums=$(($1 * 100))
-	sql_file=$2
-	sed -i "s/call (100);/call ($nums);/g" $sql_file
-	run_sql_file $sql_file $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-}
-
 function run() {
 	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/checkCheckpointInMiddleOfTransaction=return"
 
@@ -35,33 +28,20 @@ function run() {
 	# check diff
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	# try 10 times, make sure checkpoint in the middle position of transaction
-	for ((i = 1; i <= 10; i++)); do
-		# copy file
-		cp $cur/data/db1.increment1.sql $WORK_DIR/db1.increment1.sql
-		run_big_transaction $i $WORK_DIR/db1.increment1.sql
-		sleep 0.1  # wait big_transaction start
-		echo "pause task and check status"
-		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"pause-task test" \
-			"\"result\": true" 2
-		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"query-status test" \
-			"\"stage\": \"Paused\"" 1
-		num=$(grep "not receive xid job yet" $WORK_DIR/worker1/log/dm-worker.log | wc -l)
-
-		if [ $num -gt 0 ]; then
-			break
-		fi
-		echo "resume task and check status"
-		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"resume-task test" \
-			"\"result\": true" 2
-		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"query-status test" \
-			"\"stage\": \"Running\"" 1
-	done
-	[[ $i -lt 10 ]]
+	# copy file
+	cp $cur/data/db1.increment1.sql $WORK_DIR/db1.increment1.sql
+	run_sql_file $WORK_DIR/db1.increment1.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	sleep 0.1 # wait big_transaction start
+	echo "pause task and check status"
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"pause-task test" \
+		"\"result\": true" 2
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"stage\": \"Paused\"" 1
+	# check the point is the middle of checkpoint
+	num=$(grep "not receive xid job yet" $WORK_DIR/worker1/log/dm-worker.log | wc -l)
+	[[ $num -gt 0 ]]
 
 	echo "start check pause diff"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -74,28 +54,17 @@ function run() {
 		"query-status test" \
 		"\"stage\": \"Running\"" 1
 
-	# try 10 times, make sure checkpoint in the middle position of transaction
-	for ((i = 1; i <= 10; i++)); do
-		# copy file
-		cp $cur/data/db1.increment2.sql $WORK_DIR/db1.increment2.sql
-		run_big_transaction $i $WORK_DIR/db1.increment2.sql
-		sleep 0.1  # wait big_transaction start
-		echo "stop task"
-		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"stop-task test" \
-			"\"result\": true" 2
-
-		num=$(grep "not receive xid job yet" $WORK_DIR/worker1/log/dm-worker.log | wc -l)
-
-		if [ $num -gt 0 ]; then
-			break
-		fi
-		# start a task in all mode
-		dmctl_start_task_standalone $cur/conf/dm-task.yaml
-		# check diff
-		check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-	done
-	[[ $i -lt 10 ]]
+	# copy file
+	cp $cur/data/db1.increment2.sql $WORK_DIR/db1.increment2.sql
+	run_sql_file $WORK_DIR/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	sleep 0.1 # wait big_transaction start
+	echo "stop task"
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"stop-task test" \
+		"\"result\": true" 2
+	# check the point is the middle of checkpoint
+	num=$(grep "not receive xid job yet" $WORK_DIR/worker1/log/dm-worker.log | wc -l)
+	[[ $num -gt 0 ]]
 
 	echo "start check stop diff"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
