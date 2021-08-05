@@ -9,7 +9,7 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 function run_big_transaction() {
 	nums=$(($1 * 100))
 	sql_file=$2
-	sed -i "s/call dowhile(100);/call dowhile($nums);/g" $sql_file
+	sed -i "s/call (100);/call ($nums);/g" $sql_file
 	run_sql_file $sql_file $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 }
 
@@ -40,6 +40,7 @@ function run() {
 		# copy file
 		cp $cur/data/db1.increment1.sql $WORK_DIR/db1.increment1.sql
 		run_big_transaction $i $WORK_DIR/db1.increment1.sql
+		sleep 0.1  # wait big_transaction start
 		echo "pause task and check status"
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"pause-task test" \
@@ -77,7 +78,8 @@ function run() {
 	for ((i = 1; i <= 10; i++)); do
 		# copy file
 		cp $cur/data/db1.increment2.sql $WORK_DIR/db1.increment2.sql
-		run_big_transaction $i $WORK_DIR/db1.increment1.sql
+		run_big_transaction $i $WORK_DIR/db1.increment2.sql
+		sleep 0.1  # wait big_transaction start
 		echo "stop task"
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"stop-task test" \

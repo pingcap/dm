@@ -953,7 +953,7 @@ func (s *Syncer) addJob(job *job) error {
 
 	failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
 		if s.waitXIDJob == waiting {
-			s.tctx.L().Debug("not receive xid job yet", zap.Any("next job", job))
+			s.tctx.L().Info("not receive xid job yet", zap.Any("next job", job))
 		}
 	})
 	var queueBucket int
@@ -1402,7 +1402,7 @@ func (s *Syncer) syncDML(
 				affect, err = executeSQLs()
 				if err != nil {
 					fatalF(affect, err)
-					continue
+					return
 				}
 				successF()
 				clearF()
