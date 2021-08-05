@@ -589,7 +589,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 
 	var newPos *mysql.Position
 	var newGset gtid.Set
-	var newUUIDSufiix int
+	var newUUIDSuffix int
 	if r.cfg.UUIDSuffix > 0 {
 		// if bound or rebound to a source, clear all relay log and meta
 		if err = r.PurgeRelayDir(); err != nil {
@@ -597,7 +597,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 		}
 		r.ResetMeta()
 
-		newUUIDSufiix = r.cfg.UUIDSuffix
+		newUUIDSuffix = r.cfg.UUIDSuffix
 		// reset the UUIDSuffix
 		r.cfg.UUIDSuffix = 0
 
@@ -611,7 +611,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 			}
 		}
 	}
-	err = r.meta.AddDir(uuid, newPos, newGset, newUUIDSufiix)
+	err = r.meta.AddDir(uuid, newPos, newGset, newUUIDSuffix)
 	if err != nil {
 		return err
 	}
