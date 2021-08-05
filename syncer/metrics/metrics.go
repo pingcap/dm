@@ -253,12 +253,12 @@ var (
 			Help:      "number of sql's contained in a transaction that executed to downstream",
 		}, []string{"worker", "task", "source_id", "queueNo"})
 
-	FlushCheckPointsTotal = metricsproxy.NewCounterVec(
-		prometheus.CounterOpts{
+	FlushCheckPointsTimeInterval = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
-			Name:      "flush_checkpoints_count",
-			Help:      "total number of checkpoint flushed",
+			Name:      "flush_checkpoints_time_interval",
+			Help:      "checkpoint flushed time interval in seconds",
 		}, []string{"worker", "task", "source_id"})
 )
 
@@ -291,7 +291,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(IdealQPS)
 	registry.MustRegister(FinishedTransactionTotal)
 	registry.MustRegister(ReplicationTransactionBatch)
-	registry.MustRegister(FlushCheckPointsTotal)
+	registry.MustRegister(FlushCheckPointsTimeInterval)
 }
 
 // RemoveLabelValuesWithTaskInMetrics cleans metrics.
@@ -322,5 +322,5 @@ func RemoveLabelValuesWithTaskInMetrics(task string) {
 	IdealQPS.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	FinishedTransactionTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	ReplicationTransactionBatch.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	FlushCheckPointsTotal.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	FlushCheckPointsTimeInterval.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 }

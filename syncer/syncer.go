@@ -209,9 +209,10 @@ type Syncer struct {
 	// `lower_case_table_names` setting of upstream db
 	SourceTableNamesFlavor utils.LowerCaseTableNamesFlavor
 
-	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
-	secondsBehindMaster atomic.Int64             // current task delay second behind upstream
-	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:WorkerLagKey val: lag
+	tsOffset                  atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
+	secondsBehindMaster       atomic.Int64             // current task delay second behind upstream
+	workerLagMap              map[string]*atomic.Int64 // worker's sync lag key:WorkerLagKey val: lag
+	lastCheckpointFlushedTime *time.Time
 }
 
 // NewSyncer creates a new Syncer.
@@ -1112,7 +1113,14 @@ func (s *Syncer) flushCheckPoints() error {
 	if err != nil {
 		return err
 	}
-	metrics.FlushCheckPointsTotal.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Inc()
+
+	now := time.Now()
+	if s.lastCheckpointFlushedTime != nil {
+		duration := now.Sub(*s.lastCheckpointFlushedTime).Seconds()
+		println(duration, "==========================")
+		metrics.FlushCheckPointsTimeInterval.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Set(duration)
+	}
+	s.lastCheckpointFlushedTime = &now
 
 	s.tctx.L().Info("after last flushing checkpoint, DM has ignored row changes by expression filter",
 		zap.Int64("number of filtered insert", s.filteredInsert.Load()),
