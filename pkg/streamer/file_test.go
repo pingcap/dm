@@ -410,7 +410,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	}()
 	wg.Wait()
 
-	// 4. file increased when checking meta and meta file updated
+	// 4. file increased when checking meta
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -426,19 +426,20 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 		fi, err4 := os.Stat(relayPaths[1])
 		c.Assert(err4, IsNil)
 		curSize := fi.Size()
+		// write old binlog file
+		err5 := ioutil.WriteFile(relayPaths[1], data, 0o600)
+		c.Assert(err5, IsNil)
+		c.Assert(len(errCh), Equals, 0)
 		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0", `return(true)`), IsNil)
-		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange", `return(true)`), IsNil)
+		defer failpoint.Disable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0")
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			relayLogUpdatedOrNewCreated(ctx, watcherInterval, subDir, relayPaths[1], relayFiles[1], curSize, updatePathCh, errCh)
 		}()
-		// write old file
-		err5 := ioutil.WriteFile(relayPaths[1], data, 0o600)
-		c.Assert(err5, IsNil)
-		c.Assert(len(errCh), Equals, 0)
 		up := <-updatePathCh
 		c.Assert(up, Equals, relayPaths[1])
+		c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0"), IsNil)
 	}()
 	wg.Wait()
 
@@ -448,12 +449,12 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	curSize := fi.Size()
 	newCtx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange", `return(true)`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange")
 	relayLogUpdatedOrNewCreated(newCtx, watcherInterval, subDir, relayPaths[1], relayFiles[1], curSize, updatePathCh, errCh)
 	c.Assert(len(errCh), Equals, 1)
 	err7 := <-errCh
 	c.Assert(err7, ErrorMatches, "context meet error:.*")
-
-	c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0"), IsNil)
 	c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/DoNotReturnEvenMetaChange"), IsNil)
 }
 

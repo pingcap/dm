@@ -430,6 +430,8 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	// return with the annotated writer error
 	err := r.handleEvents(ctx, reader2, transformer2, writer2)
 	c.Assert(errors.Cause(err), Equals, writer2.err)
+	// after handle rotate event, we save and flush the meta immediately
+	c.Assert(r.meta.Dirty(), Equals, false)
 
 	// writer without error
 	writer2.err = nil
@@ -442,13 +444,6 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	_, gs := r.meta.GTID()
 	c.Assert(pos, DeepEquals, binlogPos)
 	c.Assert(gs.String(), Equals, "") // no GTID sets in event yet
-
-	// after handle rotate event, we save and flush the meta immediately
-	newCtx, newCancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	defer newCancel()
-	newErr := r.handleEvents(newCtx, reader2, transformer2, writer2)
-	c.Assert(errors.Cause(newErr), Equals, newCtx.Err())
-	c.Assert(r.meta.Dirty(), Equals, false)
 
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel2()

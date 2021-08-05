@@ -551,7 +551,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		}
 
 		if needSavePos {
-			err = r.SaveMeta(lastPos, lastGTID.Clone())
+			err = r.SaveMeta(lastPos, lastGTID)
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
 			}
@@ -559,12 +559,11 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		if tResult.NextLogName != "" && !utils.IsFakeRotateEvent(e.Header) {
 			// if the binlog is rotated, we need to save and flush the next binlog filename to meta
 			lastPos.Name = tResult.NextLogName
-			err := r.SaveMeta(lastPos, lastGTID.Clone())
-			if err != nil {
+			if err := r.SaveMeta(lastPos, lastGTID); err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
 			}
-			if err2 := r.FlushMeta(); err2 != nil {
-				return err2
+			if err := r.FlushMeta(); err != nil {
+				return err
 			}
 		}
 	}

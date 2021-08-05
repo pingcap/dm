@@ -314,7 +314,7 @@ func (t *testReaderSuite) TestParseFilerelayLogUpdatedOrNewCreated(c *C) {
 	}()
 	ctx2, cancel2 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel2()
-	t.createMetaFile(c, relayDir, notUsedGTIDSetStr, uint32(offset), filename)
+	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
 		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
@@ -337,7 +337,7 @@ func (t *testReaderSuite) TestParseFilerelayLogUpdatedOrNewCreated(c *C) {
 	}()
 	ctx3, cancel3 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel3()
-	t.createMetaFile(c, relayDir, notUsedGTIDSetStr, uint32(offset), nextFilename)
+	t.createMetaFile(c, relayDir, nextFilename, uint32(offset), notUsedGTIDSetStr)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
 		ctx3, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
@@ -390,7 +390,7 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 	t.writeUUIDs(c, baseDir, r.uuids)
 	ctx1, cancel1 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel1()
-	t.createMetaFile(c, relayDir, notUsedGTIDSetStr, uint32(offset), filename)
+	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, ErrorMatches, ".*not valid.*")
@@ -413,7 +413,7 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 	// has relay log file in next sub directory, need to switch
 	ctx2, cancel2 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel2()
-	t.createMetaFile(c, relayDir, notUsedGTIDSetStr, uint32(offset), filename)
+	t.createMetaFile(c, nextRelayDir, filename, uint32(offset), notUsedGTIDSetStr)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
 		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
@@ -456,7 +456,7 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	// file has no data, meet io.EOF error (when reading file header) and ignore it.
 	ctx1, cancel1 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel1()
-	t.createMetaFile(c, relayDir, notUsedGTIDSetStr, uint32(offset), filename)
+	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
@@ -563,8 +563,8 @@ func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 			err = ioutil.WriteFile(filename, eventsBuf.Bytes(), 0o600)
 			c.Assert(err, IsNil)
 		}
-		t.createMetaFile(c, path.Join(baseDir, UUIDs[i]),
-			notUsedGTIDSetStr, startPos.Pos, filenamePrefix+strconv.Itoa(i+1))
+		t.createMetaFile(c, path.Join(baseDir, UUIDs[i]), filenamePrefix+strconv.Itoa(i+1),
+			startPos.Pos, notUsedGTIDSetStr)
 	}
 
 	// start the reader
@@ -625,7 +625,7 @@ func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 	lastFilename = filepath.Join(baseDir, UUIDs[2], filenamePrefix+strconv.Itoa(4))
 	err = ioutil.WriteFile(lastFilename, eventsBuf.Bytes(), 0o600)
 	c.Assert(err, IsNil)
-	t.createMetaFile(c, path.Join(baseDir, UUIDs[2]), notUsedGTIDSetStr, lastPos, lastFilename)
+	t.createMetaFile(c, path.Join(baseDir, UUIDs[2]), lastFilename, lastPos, notUsedGTIDSetStr)
 
 	obtainExtraEvents2 := make([]*replication.BinlogEvent, 0, len(baseEvents)-1)
 	for {
@@ -812,7 +812,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 				c.Assert(err, IsNil)
 			}
 			f.Close()
-			t.createMetaFile(c, uuidDir, previousGset.String(), lastPos, fileEventResult.filename)
+			t.createMetaFile(c, uuidDir, fileEventResult.filename, lastPos, previousGset.String())
 		}
 	}
 
@@ -1289,8 +1289,8 @@ func (t *testReaderSuite) writeUUIDs(c *C, relayDir string, uuids []string) []by
 	return buf.Bytes()
 }
 
-func (t *testReaderSuite) createMetaFile(c *C, relayDirPath, gtidSet string, pos uint32, binlogFileName string) {
-	meta := Meta{BinLogName: binlogFileName, BinLogPos: pos, BinlogGTID: gtidSet}
+func (t *testReaderSuite) createMetaFile(c *C, relayDirPath, binlogFileName string, pos uint32, gtid string) {
+	meta := Meta{BinLogName: binlogFileName, BinLogPos: pos, BinlogGTID: gtid}
 	metaFile, err2 := os.Create(path.Join(relayDirPath, utils.MetaFilename))
 	c.Assert(err2, IsNil)
 	err := toml.NewEncoder(metaFile).Encode(meta)
