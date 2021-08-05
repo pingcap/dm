@@ -1,4 +1,4 @@
-source-id: mysql-replica-01
+source-id: mysql-replica-02
 flavor: ''
 enable-gtid: false
 enable-relay: true
@@ -8,7 +8,7 @@ from:
   host: 127.0.0.1
   user: root
   password: /Q7B9DizNLLTTfiZHv9WoEAKamfpIUs=
-  port: 3306
+  port: 3307
 checker:
   check-enable: true
   backoff-rollback: 5m

@@ -7,7 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run() {
-	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 	inject_points=(
 		"github.com/pingcap/dm/syncer/SyncerGetEventError=return"
 		"github.com/pingcap/dm/syncer/GetEventError=1*return"
@@ -21,16 +21,19 @@ function run() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
 	# operate mysql config to worker
-	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
-	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
-	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+	cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source2.yaml
+	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"start-relay -s $SOURCE_ID1 worker1" \
+		"start-relay -s $SOURCE_ID2 worker1" \
 		"\"result\": true" 1
 
 	# start DM task only
-	dmctl_start_task_standalone "$cur/conf/dm-task.yaml" "--remove-meta"
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    "start-task $cur/conf/dm-task.yaml --remove-meta" \
+    "\"result\": true" 2 \
+    "\"source\": \"$SOURCE_ID2\"" 1
 
 	# use sync_diff_inspector to check full dump loader
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -60,13 +63,13 @@ function run() {
 		"resume-task test" \
 		"\"result\": true" 2
 
-	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
 	# use sync_diff_inspector to check data now!
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	# check column covered by multi-column indices won't drop, and its indices won't drop
-	run_sql "alter table drop_column_with_index.t1 drop column c2;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql "alter table drop_column_with_index.t1 drop column c2;" $MYSQL_PORT2 $MYSQL_PASSWORD2
 	run_sql "show index from drop_column_with_index.t1" $TIDB_PORT $TIDB_PASSWORD
 	check_count "Column_name: c2" 3
 

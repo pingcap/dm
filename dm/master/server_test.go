@@ -194,7 +194,6 @@ func (t *testMaster) TearDownSuite(c *check.C) {
 }
 
 func (t *testMaster) SetUpTest(c *check.C) {
-	c.Logf("Current running test=%s", c.TestName())
 	t.testEtcdCluster = integration.NewClusterV3(t.testT, &integration.ClusterConfig{Size: 1})
 	t.etcdTestCli = t.testEtcdCluster.RandClient()
 	t.clearEtcdEnv(c)

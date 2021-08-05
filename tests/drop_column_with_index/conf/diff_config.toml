@@ -22,16 +22,16 @@ schema = "drop_column_with_index"
 table = "t1"
 
 [[table-config.source-tables]]
-instance-id = "source-1"
+instance-id = "source-2"
 schema = "drop_column_with_index"
 table  = "t1"
 
 [[source-db]]
 host = "127.0.0.1"
-port = 3306
+port = 3307
 user = "root"
 password = "123456"
-instance-id = "source-1"
+instance-id = "source-2"
 
 [target-db]
 host = "127.0.0.1"
