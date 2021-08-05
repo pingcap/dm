@@ -213,9 +213,7 @@ func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Durat
 	for {
 		select {
 		case <-ctx.Done():
-			if err := ctx.Err(); err != nil {
-				errCh <- terror.Annotate(err, "context meet error")
-			}
+			errCh <- terror.Annotate(ctx.Err(), "context meet error")
 			return
 		case <-ticker.C:
 			// check the latest relay log file whether updated when adding watching and collecting newer
