@@ -206,6 +206,7 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 // we check the size of the file first, if the size is the same as the latest file, we assume there is no new write
 // so we need to check relay meta file to see if the new relay log is created.
 // this func will be blocked until current filesize changed or meta file updated or context cancelled.
+// we need to make sure that only one channel (updatePathCh or errCh) has events written to it.
 func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Duration, dir string,
 	latestFilePath, latestFile string, latestFileSize int64, updatePathCh chan string, errCh chan error) {
 	ticker := time.NewTicker(watcherInterval)

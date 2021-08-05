@@ -423,7 +423,6 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 		// write old binlog file
 		err5 := ioutil.WriteFile(relayPaths[1], data, 0o600)
 		c.Assert(err5, IsNil)
-		c.Assert(len(errCh), Equals, 0)
 		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0", `return(true)`), IsNil)
 		//nolint:errcheck
 		defer failpoint.Disable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0")
@@ -434,6 +433,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 		}()
 		up := <-updatePathCh
 		c.Assert(up, Equals, relayPaths[1])
+		c.Assert(len(errCh), Equals, 0)
 		c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0"), IsNil)
 	}()
 	wg.Wait()
@@ -453,6 +453,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	defer cancel()
 	relayLogUpdatedOrNewCreated(newCtx, watcherInterval, subDir, relayPaths[1], relayFiles[1], curSize, updatePathCh, errCh)
 	c.Assert(len(errCh), Equals, 1)
+	c.Assert(len(updatePathCh), Equals, 0)
 	err7 := <-errCh
 	c.Assert(err7, ErrorMatches, "context meet error:.*")
 }
