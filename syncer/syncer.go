@@ -104,6 +104,15 @@ const (
 	ddlLagKey  = "ddl"
 )
 
+// waitXIDStatus represents the status for waiting XID event when pause/stop task
+type waitXIDStatus int
+
+const (
+	noWait waitXIDStatus = iota
+	waiting
+	waitComplete
+)
+
 // Syncer can sync your MySQL data to another MySQL database.
 type Syncer struct {
 	sync.RWMutex
@@ -138,7 +147,7 @@ type Syncer struct {
 	jobsClosed         atomic.Bool
 	jobsChanLock       sync.Mutex
 	queueBucketMapping []string
-	waitXIDJob         waitXIDType
+	waitXIDJob         atomic.Int64
 	isTransactionEnd   atomic.Bool
 
 	c *causality
@@ -226,7 +235,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.cfg = cfg
 	syncer.tctx = tcontext.Background().WithLogger(logger)
 	syncer.jobsClosed.Store(true) // not open yet
-	syncer.waitXIDJob = noWait
+	syncer.waitXIDJob.Store(int64(noWait))
 	syncer.isTransactionEnd.Store(true)
 	syncer.closed.Store(false)
 	syncer.lastBinlogSizeCount.Store(0)
@@ -548,7 +557,7 @@ func (s *Syncer) reset() {
 	s.execError.Store(nil)
 	s.setErrLocation(nil, nil, false)
 	s.isReplacingErr = false
-	s.waitXIDJob = noWait
+	s.waitXIDJob.Store(int64(noWait))
 	s.isTransactionEnd.Store(true)
 
 	switch s.cfg.ShardMode {
@@ -952,15 +961,15 @@ func (s *Syncer) addJob(job *job) error {
 	})
 
 	failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
-		if s.waitXIDJob == waiting {
+		if waitXIDStatus(s.waitXIDJob.Load()) == waiting {
 			s.tctx.L().Info("not receive xid job yet", zap.Any("next job", job))
 		}
 	})
 	var queueBucket int
 	switch job.tp {
 	case xid:
-		if s.waitXIDJob == waiting {
-			s.waitXIDJob = waitComplete
+		if waitXIDStatus(s.waitXIDJob.Load()) == waiting {
+			s.waitXIDJob.Store(int64(waitComplete))
 		}
 		s.saveGlobalPoint(job.location)
 		s.isTransactionEnd.Store(true)
@@ -987,8 +996,8 @@ func (s *Syncer) addJob(job *job) error {
 		queueBucket = s.cfg.WorkerCount
 		startTime := time.Now()
 		s.jobs[queueBucket] <- job
-		if s.waitXIDJob == waiting {
-			s.waitXIDJob = waitComplete
+		if waitXIDStatus(s.waitXIDJob.Load()) == waiting {
+			s.waitXIDJob.Store(int64(waitComplete))
 		}
 		s.isTransactionEnd.Store(true)
 		metrics.AddJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
@@ -1385,7 +1394,7 @@ func (s *Syncer) syncDML(
 				affect, err = executeSQLs()
 				if err != nil {
 					fatalF(affect, err)
-					continue
+					return
 				}
 				successF()
 				clearF()
@@ -1402,7 +1411,7 @@ func (s *Syncer) syncDML(
 				affect, err = executeSQLs()
 				if err != nil {
 					fatalF(affect, err)
-					return
+					continue
 				}
 				successF()
 				clearF()
@@ -1454,7 +1463,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				runCancel()
 				return
 			}
-			s.waitXIDJob = waiting
+			s.waitXIDJob.Store(int64(waiting))
 			select {
 			case <-runCtx.Done():
 				tctx.L().Info("received syncer's done")
@@ -1730,7 +1739,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		startTime := time.Now()
 		e, err = s.getEvent(tctx, currentLocation)
 
-		if s.waitXIDJob == waitComplete {
+		if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
 			s.tctx.L().Info("All event is completed before syncer close, the coming event will be reject", zap.Any("event", e))
 			return nil
 		}
@@ -1945,7 +1954,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			job := newXIDJob(currentLocation, startLocation, currentLocation)
 			err2 = s.addJobFunc(job)
-			if s.waitXIDJob == waitComplete {
+			if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
 				runCancel()
 				return nil
 			}
@@ -3488,11 +3497,3 @@ func (s *Syncer) delLoadTask() error {
 	s.tctx.Logger.Info("delete load worker in etcd for all mode", zap.String("task", s.cfg.Name), zap.String("source", s.cfg.SourceID))
 	return nil
 }
-
-type waitXIDType int
-
-const (
-	noWait waitXIDType = iota
-	waiting
-	waitComplete
-)
