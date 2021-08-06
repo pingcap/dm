@@ -267,6 +267,19 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 			err2 := elec.Campaign(ctx2, e.infoStr)
 			if err2 != nil {
+				// sometimes we noticed auto Resign does not work, so we try to manually Resign.
+				e.l.Debug("before manually resign",
+					zap.String("current election key", elec.Key()),
+					zap.Any("current election header", elec.Header()))
+				resignCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				defer cancel()
+				if err3 := elec.Resign(resignCtx); err3 != nil {
+					e.l.Warn("failed to manually resign", zap.Error(err3))
+				}
+				e.l.Debug("after manually resign",
+					zap.String("current election key", elec.Key()),
+					zap.Any("current election header", elec.Header()))
+
 				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
 				e.l.Info("fail to campaign", zap.Stringer("current member", e.info), zap.Error(err2))
 			}
