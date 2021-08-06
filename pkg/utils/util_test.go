@@ -205,8 +205,8 @@ func (t *testUtilsSuite) TestProxyFields(c *C) {
 		"https_proxy": 1,
 		"no_proxy":    2,
 	}
-	envs := [...]string{"http_proxy", "https_proxy", "no_proxy"}
-	envPreset := [...]string{"http://127.0.0.1:8080", "https://127.0.0.1:8443", "localhost,127.0.0.1"}
+	envs := []string{"http_proxy", "https_proxy", "no_proxy"}
+	envPreset := []string{"http://127.0.0.1:8080", "https://127.0.0.1:8443", "localhost,127.0.0.1"}
 
 	// Exhaust all combinations of those environment variables' selection.
 	// Each bit of the mask decided whether this index of `envs` would be set.
