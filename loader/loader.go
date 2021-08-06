@@ -437,7 +437,7 @@ type Loader struct {
 	totalDataSize    atomic.Int64
 	finishedDataSize atomic.Int64
 
-	// to calcaute remainingTimeGauge metric, map will be init in `l.prepare.prepareDataFiles`
+	// to calculate remainingTimeGauge metric, map will be init in `l.prepare.prepareDataFiles`
 	dbTableDataTotalSize        map[string]map[string]*atomic.Int64
 	dbTableDataFinishedSize     map[string]map[string]*atomic.Int64
 	dbTableDataLastFinishedSize map[string]map[string]*atomic.Int64
@@ -695,12 +695,6 @@ func (l *Loader) Restore(ctx context.Context) error {
 	if err := l.putLoadTask(); err != nil {
 		return err
 	}
-	// reset some counter used to calculate progress
-	l.totalDataSize.Store(0)
-	l.finishedDataSize.Store(0) // reset before load from checkpoint
-	l.dbTableDataTotalSize = make(map[string]map[string]*atomic.Int64)
-	l.dbTableDataFinishedSize = make(map[string]map[string]*atomic.Int64)
-	l.dbTableDataLastFinishedSize = make(map[string]map[string]*atomic.Int64)
 
 	if err := l.prepare(); err != nil {
 		l.logger.Error("scan directory failed", zap.String("directory", l.cfg.Dir), log.ShortError(err))
@@ -1077,6 +1071,13 @@ func (l *Loader) prepare() error {
 	defer func() {
 		l.logger.Info("prepare loading", zap.Duration("cost time", time.Since(begin)))
 	}()
+
+	// reset some counter used to calculate progress
+	l.totalDataSize.Store(0)
+	l.finishedDataSize.Store(0) // reset before load from checkpoint
+	l.dbTableDataTotalSize = make(map[string]map[string]*atomic.Int64)
+	l.dbTableDataFinishedSize = make(map[string]map[string]*atomic.Int64)
+	l.dbTableDataLastFinishedSize = make(map[string]map[string]*atomic.Int64)
 
 	// check if mydumper dir data exists.
 	if !utils.IsDirExists(l.cfg.Dir) {
