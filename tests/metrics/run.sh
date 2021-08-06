@@ -6,7 +6,7 @@ cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
-function check_secondsBehindMaster() {
+function check_seconds_behind_master() {
 	min_val=$1
 	need_cnt=$2
 	all_matched=false
@@ -16,7 +16,7 @@ function check_secondsBehindMaster() {
 		query_msg=$(cat $WORK_DIR/query-status.log)
 		cnt=$(echo "${query_msg}" | jq -r --arg min_val $min_val '.sources[].subTaskStatus[].sync | select((.secondsBehindMaster|tonumber)>($min_val | tonumber)).secondsBehindMaster' | wc -l)
 		if [ $cnt != $need_cnt ]; then
-			echo "check secondsBehindMaster faild, cnt: $cnt need_cnt: $need_cnt"
+			echo "check check_seconds_behind_master faild, cnt: $need_cnt current retry cnt: $k"
 		else
 			all_matched=true
 			break
@@ -24,8 +24,11 @@ function check_secondsBehindMaster() {
 		sleep 2
 	done
 
-	if !$all_matched; then
-		exit 112
+	if $all_matched; then
+		echo "check check_seconds_behind_master success"
+	else
+		exit 1
+		echo "check check_seconds_behind_master faild, cnt: $need_cnt after retry 10 times"
 	fi
 
 }
@@ -66,15 +69,15 @@ function run() {
 	run_sql_source2 "alter table metrics.t2 add column new_col1 int;"
 
 	# test dml metric >= 1 beacuse we inject updateReplicationLag(ddl) to sleep(1)
-	# check_metric $WORKER1_PORT 'dm_syncer_replication_lag{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 0 999
-	# check_metric $WORKER2_PORT 'dm_syncer_replication_lag{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 0 999
+	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 0 999
+	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 0 999
 
 	# check new metric dm_syncer_flush_checkpoints_time_interval exists
 	check_metric $WORKER1_PORT 'dm_syncer_flush_checkpoints_time_interval{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 -1 99999
 	check_metric $WORKER2_PORT 'dm_syncer_flush_checkpoints_time_interval{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 -1 99999
 
 	# check two worker's secondsBehindMaster > 0
-	check_secondsBehindMaster 0 2
+	check_seconds_behind_master 0 2
 	echo "check ddl done!"
 
 	# restart dm worker
@@ -91,8 +94,8 @@ function run() {
 
 	# test dml lag metric >= 2 beacuse we inject updateReplicationLag(insert) to sleep(2)
 	# although skip lag is 0 (locally), but we use that lag of all dml/skip lag, so lag still >= 2
-	# check_metric $WORKER1_PORT 'dm_syncer_replication_lag{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 999
-	# check_metric $WORKER2_PORT 'dm_syncer_replication_lag{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 999
+	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 999
+	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 999
 
 	# new metric finished_transaction_total,dm_syncer_ideal_qps,dm_syncer_binlog_event_row exists
 	check_metric $WORKER1_PORT 'dm_syncer_finished_transaction_total{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 99999
@@ -104,7 +107,7 @@ function run() {
 	check_metric $WORKER1_PORT 'dm_syncer_binlog_event_row{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 0 99999
 	check_metric $WORKER2_PORT 'dm_syncer_binlog_event_row{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 0 99999
 
-	check_secondsBehindMaster 1 2
+	check_seconds_behind_master 1 2
 	echo "check dml/skip done!"
 
 	# restart dm worker
@@ -151,7 +154,7 @@ function run() {
 cleanup_data metrics
 # also cleanup dm processes in case of last run failed
 cleanup_process $*
-run $*
+run
 cleanup_process $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
