@@ -264,6 +264,12 @@ function DM_RECOVER_LOCK_CASE() {
 	# TrySync tb2: joined(a,c); tb1(a,c); tb2(a,b)
 	restart_master
 
+	# because we disabled auto-resume feature to satisfy other tests, we manually resume once to handle task was paused by
+	# errors of master restarting
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"resume-task test" \
+		"\"result\": true" 3
+
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(8,'eee');"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"
 
