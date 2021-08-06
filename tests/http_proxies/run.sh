@@ -28,6 +28,12 @@ function test_dm() {
 	# check dm worker log
 	check_log_contains "$WORK_DIR/worker1/log/dm-worker.log" $expected_str 1
 
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status test"
+
+	check_log_contains $cur/../dmctl.log $expected_str 1
+
+	rm -rf $cur/../dmctl.log
+
 	unset $env_name
 }
 
