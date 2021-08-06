@@ -1693,7 +1693,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			lastLocation = savedGlobalLastLocation // restore global last pos
 		}
 		// if suffix>0, we are replacing error
-		s.isReplacingErr = (currentLocation.Suffix != 0)
+		s.isReplacingErr = currentLocation.Suffix != 0
 
 		err3 := s.streamerController.RedirectStreamer(tctx, currentLocation)
 		if err3 != nil {
@@ -2427,74 +2427,104 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		return err
 	}
 
-	if s.cfg.ShardMode == "" {
-		ec.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
+	switch s.cfg.ShardMode {
+	case "":
+		return s.handleQueryEventNoSharding(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames, originSQL, sourceTbls)
+	case config.ShardOptimistic:
+		return s.handleQueryEventOptimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames, originSQL)
+	case config.ShardPessimistic:
+		return s.handleQueryEventPessimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames, originSQL, ddlInfo)
+	}
+	return errors.Errorf("unsupported shard-mode %s, should not happened", s.cfg.ShardMode)
+}
 
-		// interrupted after flush old checkpoint and before track DDL.
-		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-			err = handleFlushCheckpointStage(1, val.(int), "before track DDL")
-			if err != nil {
-				failpoint.Return(err)
-			}
-		})
+func (s *Syncer) handleQueryEventNoSharding(
+	ev *replication.QueryEvent,
+	ec eventContext,
+	needHandleDDLs []string,
+	needTrackDDLs []trackedDDL,
+	onlineDDLTableNames map[string]*filter.Table,
+	originSQL string,
+	sourceTbls map[string]map[string]struct{},
+) error {
+	ec.tctx.L().Info("start to handle ddls in normal mode",
+		zap.String("event", "query"),
+		zap.Strings("ddls", needHandleDDLs),
+		zap.ByteString("raw statement", ev.Query),
+		log.WrapStringerField("location", ec.currentLocation))
 
-		// run trackDDL before add ddl job to make sure checkpoint can be flushed
-		for _, td := range needTrackDDLs {
-			if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
-				return err
-			}
-		}
-
-		// interrupted after track DDL and before execute DDL.
-		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
-			err = handleFlushCheckpointStage(2, val.(int), "before execute DDL")
-			if err != nil {
-				failpoint.Return(err)
-			}
-		})
-
-		job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, sourceTbls, originSQL, ec.header)
-		err = s.addJobFunc(job)
+	// interrupted after flush old checkpoint and before track DDL.
+	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+		err := handleFlushCheckpointStage(1, val.(int), "before track DDL")
 		if err != nil {
+			failpoint.Return(err)
+		}
+	})
+
+	usedSchema := string(ev.Schema)
+
+	// run trackDDL before add ddl job to make sure checkpoint can be flushed
+	for _, td := range needTrackDDLs {
+		if err := s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
 			return err
 		}
+	}
 
-		// when add ddl job, will execute ddl and then flush checkpoint.
-		// if execute ddl failed, the execError will be set to that error.
-		// return nil here to avoid duplicate error message
-		err = s.execError.Load()
+	// interrupted after track DDL and before execute DDL.
+	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
+		err := handleFlushCheckpointStage(2, val.(int), "before execute DDL")
 		if err != nil {
-			ec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
-			// nolint:nilerr
-			return nil
+			failpoint.Return(err)
 		}
+	})
 
-		ec.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
+	job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, sourceTbls, originSQL, ec.header)
+	err := s.addJobFunc(job)
+	if err != nil {
+		return err
+	}
 
-		for _, table := range onlineDDLTableNames {
-			ec.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.String("schema", table.Schema), zap.String("table", table.Name))
-			err = s.onlineDDL.Finish(ec.tctx, table.Schema, table.Name)
-			if err != nil {
-				return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
-			}
-		}
-
+	// when add ddl job, will execute ddl and then flush checkpoint.
+	// if execute ddl failed, the execError will be set to that error.
+	// return nil here to avoid duplicate error message
+	err = s.execError.Load()
+	if err != nil {
+		ec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		// nolint:nilerr
 		return nil
 	}
 
-	// handle shard DDL in optimistic mode.
-	if s.cfg.ShardMode == config.ShardOptimistic {
-		return s.handleQueryEventOptimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames, originSQL)
+	ec.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
+
+	for _, table := range onlineDDLTableNames {
+		ec.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.String("schema", table.Schema), zap.String("table", table.Name))
+		err2 := s.onlineDDL.Finish(ec.tctx, table.Schema, table.Name)
+		if err2 != nil {
+			return terror.Annotatef(err2, "finish online ddl on %s.%s", table.Schema, table.Name)
+		}
 	}
 
-	// handle sharding ddl
+	return nil
+}
+
+func (s *Syncer) handleQueryEventPessimistic(
+	ev *replication.QueryEvent,
+	ec eventContext,
+	needHandleDDLs []string,
+	needTrackDDLs []trackedDDL,
+	onlineDDLTableNames map[string]*filter.Table,
+	originSQL string,
+	ddlInfo *shardingDDLInfo,
+) error {
 	var (
+		err                error
 		needShardingHandle bool
 		group              *ShardingGroup
 		synced             bool
 		active             bool
 		remain             int
 		source             string
+		usedSchema         = string(ev.Schema)
 	)
 	// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
 	// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
@@ -2566,8 +2596,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			return err
 		}
 		// maybe multi-groups' sharding DDL synced in this for-loop (one query-event, multi tables)
-		if cap(*ec.shardingReSyncCh) < len(sqls) {
-			*ec.shardingReSyncCh = make(chan *ShardingReSync, len(sqls))
+		if cap(*ec.shardingReSyncCh) < len(needHandleDDLs) {
+			*ec.shardingReSyncCh = make(chan *ShardingReSync, len(needHandleDDLs))
 		}
 		firstEndLocation := group.FirstEndPosUnresolved()
 		if firstEndLocation == nil {
@@ -2937,7 +2967,9 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				currentLocation := s.currentLocationMu.currentLocation
 				s.currentLocationMu.RUnlock()
 
-				remainingSize, err2 := s.fromDB.countBinaryLogsSize(currentLocation.Position)
+				ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
+				remainingSize, err2 := s.fromDB.countBinaryLogsSize(ctx2, currentLocation.Position)
+				cancel2()
 				if err2 != nil {
 					// log the error, but still handle the rest operation
 					s.tctx.L().Error("fail to estimate unreplicated binlog size", zap.Error(err2))
