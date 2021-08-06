@@ -430,6 +430,8 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	// return with the annotated writer error
 	err := r.handleEvents(ctx, reader2, transformer2, writer2)
 	c.Assert(errors.Cause(err), Equals, writer2.err)
+	// after handle rotate event, we save and flush the meta immediately
+	c.Assert(r.meta.Dirty(), Equals, false)
 
 	// writer without error
 	writer2.err = nil

@@ -582,7 +582,7 @@ func (r *BinlogReader) parseFile(
 	wg.Add(1)
 	go func(latestPos int64) {
 		defer wg.Done()
-		relaySubDirUpdated(newCtx, watcherInterval, relayLogDir, fullPath, relayLogFile, latestPos, updatePathCh, updateErrCh)
+		relayLogUpdatedOrNewCreated(newCtx, watcherInterval, relayLogDir, fullPath, relayLogFile, latestPos, updatePathCh, updateErrCh)
 	}(latestPos)
 
 	select {
