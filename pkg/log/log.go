@@ -20,7 +20,6 @@ import (
 
 	"github.com/pingcap/errors"
 	pclog "github.com/pingcap/log"
-	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -104,10 +103,11 @@ var (
 
 // InitLogger initializes DM's and also the TiDB library's loggers.
 func InitLogger(cfg *Config) error {
-	err := logutil.InitLogger(&logutil.LogConfig{Config: pclog.Config{Level: cfg.Level}})
-	if err != nil {
-		return terror.ErrInitLoggerFail.Delegate(err)
-	}
+	// TODO temp remove for ci test
+	// err := logutil.InitLogger(&logutil.LogConfig{Config: pclog.Config{Level: cfg.Level}})
+	// if err != nil {
+	// 	return terror.ErrInitLoggerFail.Delegate(err)
+	// }
 
 	logger, props, err := pclog.InitLogger(&pclog.Config{
 		Level:  cfg.Level,
@@ -128,7 +128,7 @@ func InitLogger(cfg *Config) error {
 	appLogger = Logger{logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))}
 	appLevel = props.Level
 	appProps = props
-
+	pclog.ReplaceGlobals(logger, props)
 	return nil
 }
 
