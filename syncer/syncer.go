@@ -88,6 +88,8 @@ var (
 	maxDMLConnectionDuration, _ = time.ParseDuration(maxDMLConnectionTimeout)
 	maxDMLExecutionDuration     = 30 * time.Second
 
+	maxPauseOrStopWaitTime = 10 * time.Second
+
 	adminQueueName     = "admin queue"
 	defaultBucketCount = 8
 )
@@ -104,7 +106,7 @@ const (
 	ddlLagKey  = "ddl"
 )
 
-// waitXIDStatus represents the status for waiting XID event when pause/stop task
+// waitXIDStatus represents the status for waiting XID event when pause/stop task.
 type waitXIDStatus int
 
 const (
@@ -1346,7 +1348,7 @@ func (s *Syncer) syncDML(
 			time.Sleep(time.Duration(t) * time.Second)
 		})
 		// use background context to execute sqls as much as possible
-		ctctx, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLExecutionDuration)
+		ctctx, cancel := tctx.WithTimeout(maxDMLExecutionDuration)
 		defer cancel()
 		affect, err := db.ExecuteSQL(ctctx, queries, args...)
 		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
@@ -1467,7 +1469,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			select {
 			case <-runCtx.Done():
 				tctx.L().Info("received syncer's done")
-			case <-time.After(10 * time.Second):
+			case <-time.After(maxPauseOrStopWaitTime):
 				tctx.L().Info("subtask's done timeout")
 				runCancel()
 			}
@@ -1955,7 +1957,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			job := newXIDJob(currentLocation, startLocation, currentLocation)
 			err2 = s.addJobFunc(job)
 			if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
-				runCancel()
 				return nil
 			}
 		case *replication.GenericEvent:
