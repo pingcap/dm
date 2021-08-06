@@ -1796,8 +1796,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						s.isReplacingErr = true
 						// revert currentLocation to startLocation
 						currentLocation = startLocation
+					} else if op == pb.ErrorOp_Skip {
+						s.flushCheckPoints()
 					}
-					// skip the event
+					// skip the current event
 					continue
 				}
 			}
