@@ -1117,7 +1117,6 @@ func (s *Syncer) flushCheckPoints() error {
 	now := time.Now()
 	if s.lastCheckpointFlushedTime != nil {
 		duration := now.Sub(*s.lastCheckpointFlushedTime).Seconds()
-		println(duration, "==========================")
 		metrics.FlushCheckPointsTimeInterval.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Set(duration)
 	}
 	s.lastCheckpointFlushedTime = &now
