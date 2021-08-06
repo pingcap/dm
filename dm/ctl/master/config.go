@@ -62,24 +62,22 @@ func newConfigTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task [task-name]",
 		Short: "manage or show task configs",
-		RunE:  configTaskList,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 || len(args) > 1 {
+				return cmd.Help()
+			}
+			name := args[0]
+			output, err := cmd.Flags().GetString("path")
+			if err != nil {
+				return err
+			}
+			return sendGetConfigRequest(pb.CfgType_TaskType, name, output)
+		},
 	}
 	cmd.AddCommand(
 		newConfigTaskUpdateCmd(),
 	)
 	return cmd
-}
-
-func configTaskList(cmd *cobra.Command, args []string) error {
-	if len(args) == 0 || len(args) > 1 {
-		return cmd.Help()
-	}
-	name := args[0]
-	output, err := cmd.Flags().GetString("path")
-	if err != nil {
-		return err
-	}
-	return sendGetConfigRequest(pb.CfgType_TaskType, name, output)
 }
 
 // FIXME: implement this later.
