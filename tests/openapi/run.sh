@@ -14,28 +14,69 @@ function prepare_data() {
 }
 
 function test_source() {
-	echo "start test source openapi"
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>START TEST OPENAPI: SOURCE"
 	# create source succesfully
-	python $cur/client/source.py "source_success"
+	python $cur/client/source.py "create_source_success"
 
 	# recreate source will failed
-	python $cur/client/source.py "source_failed"
+	python $cur/client/source.py "create_source_failed"
 
 	# get source list success
-	python $cur/client/source.py "source_list_success" 1
+	python $cur/client/source.py "list_source_success" 1
 
 	# delete source success
 	python $cur/client/source.py "delete_source_success"
 
 	# after delete source, source list should be empty
-	python $cur/client/source.py "source_list_success" 0
+	python $cur/client/source.py "list_source_success" 0
 
 	# re delete source failed
 	python $cur/client/source.py "delete_source_failed"
 
 	# send request to not leader node
-	python $cur/client/source.py "list_source_by_openapi_redirect" 0
-	echo "test source openapi success"
+	python $cur/client/source.py "list_source_with_redirect" 0
+
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: SOURCE SUCCESS"
+}
+
+function test_relay() {
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>START TEST OPENAPI: RELAY"
+
+	# create source succesfully
+	python $cur/client/source.py "create_source_success"
+
+	# start realy failed
+	python $cur/client/source.py "start_relay_failed"
+
+	# start realy success
+	python $cur/client/source.py "start_relay_success"
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s mysql-01" \
+		"\"result\": true" 2 \
+		"\"worker\": \"worker1\"" 1 \
+		"\"relayCatchUpMaster\": true" 1
+
+	# get source status failed
+	python $cur/client/source.py "get_source_status_failed"
+
+	# get source status success
+	python $cur/client/source.py "get_source_status_success"
+
+	# stop realy failed
+	python $cur/client/source.py "stop_relay_failed"
+
+	# stop realy success
+	python $cur/client/source.py "stop_relay_success"
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s mysql-01" \
+		"\"result\": true" 2 \
+		"\"worker\": \"worker1\"" 1 \
+		"\"relayStatus\": null" 1
+
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: RELAY SUCCESS"
+
 }
 
 function run() {
@@ -47,15 +88,19 @@ function run() {
 	# join master2
 	run_dm_master $WORK_DIR/master2 $MASTER_PORT2 $cur/conf/dm-master2.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
+	# run dm-worker1
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
 	test_source
+	test_relay
 
 }
 
 cleanup_data openapi
 cleanup_process
 
-run $*
+run
 
 cleanup_process
 

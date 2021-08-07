@@ -24,7 +24,7 @@ import (
 	"github.com/deepmap/oapi-codegen/pkg/middleware"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
-	ehcomiddleware "github.com/labstack/echo/v4/middleware"
+	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -111,18 +111,109 @@ func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string) error {
 	return ctx.NoContent(http.StatusNoContent)
 }
 
-// DMAPIStopRelay url is:(DELETE /api/v1/sources/{source-id}/relay).
-func (s *Server) DMAPIStopRelay(ctx echo.Context, sourceName string) error {
-	panic("not implemented") // TODO: Implement
-}
-
 // DMAPIStartRelay url is:(POST /api/v1/sources/{source-id}/relay).
 func (s *Server) DMAPIStartRelay(ctx echo.Context, sourceName string) error {
-	panic("not implemented") // TODO: Implement
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+
+	var req openapi.StartRelayRequest
+	if err := ctx.Bind(&req); err != nil {
+		return err
+	}
+	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
+	if sourceCfg == nil {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
+	}
+	if req.RelayBinlogName != nil {
+		sourceCfg.RelayBinLogName = *req.RelayBinlogName
+	}
+	if req.RelayBinlogGtid != nil {
+		sourceCfg.RelayBinlogGTID = *req.RelayBinlogGtid
+	}
+	if req.RelayDir != nil {
+		sourceCfg.RelayDir = *req.RelayDir
+	}
+	if purge := req.Purge; purge != nil {
+		if purge.Expires != nil {
+			sourceCfg.Purge.Expires = *purge.Expires
+		}
+		if purge.Interval != nil {
+			sourceCfg.Purge.Interval = *purge.Interval
+		}
+		if purge.RemainSpace != nil {
+			sourceCfg.Purge.RemainSpace = *purge.RemainSpace
+		}
+	}
+	// update current source relay config before start relay
+	if err := s.scheduler.UpdateSourceCfg(sourceCfg); err != nil {
+		return err
+	}
+	return s.scheduler.StartRelay(sourceName, []string{req.WorkerName})
+}
+
+// DMAPIStopRelay url is:(DELETE /api/v1/sources/{source-id}/relay).
+func (s *Server) DMAPIStopRelay(ctx echo.Context, sourceName string) error {
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+	var req openapi.WorkerNameRequest
+	if err := ctx.Bind(&req); err != nil {
+		return err
+	}
+	return s.scheduler.StopRelay(sourceName, []string{req.WorkerName})
 }
 
 // DMAPIGetSourceStatus url is:(GET /api/v1/sources/{source-id}/status).
 func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error {
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+
+	ret := s.getStatusFromWorkers(ctx.Request().Context(), []string{sourceName}, "", true)
+	if len(ret) != 1 {
+		// No response from worker and master means that the current query source has not been created.
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
+	}
+	status := ret[0]
+	if !status.Result {
+		return terror.ErrOpenAPICommonError.New(status.Msg)
+	}
+	sourceStatus := status.SourceStatus
+	relayStatus := sourceStatus.GetRelayStatus()
+	enableRelay := relayStatus == nil
+	resp := openapi.SourceStatus{
+		EnableRelay: &enableRelay,
+		SourceName:  &sourceStatus.Source,
+		WorkerName:  &sourceStatus.Worker,
+	}
+	if enableRelay {
+		resp.RelayStatus = &openapi.RelayStatus{
+			MasterBinlog:       relayStatus.MasterBinlog,
+			MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
+			RelayBinlogGtid:    relayStatus.RelayBinlogGtid,
+			RelayCatchUpMaster: relayStatus.RelayCatchUpMaster,
+			RelayDir:           relayStatus.RelaySubDir,
+			Stage:              relayStatus.Stage.String(),
+		}
+	}
+	return ctx.JSON(http.StatusOK, resp)
+}
+
+// DMAPIStartTask url is:(POST /api/v1/tasks).
+func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -136,11 +227,6 @@ func (s *Server) DMAPIGetTaskList(ctx echo.Context) error {
 	panic("not implemented") // TODO: Implement
 }
 
-// DMAPIStartTask url is:(POST /api/v1/tasks).
-func (s *Server) DMAPIStartTask(ctx echo.Context) error {
-	panic("not implemented") // TODO: Implement
-}
-
 // DMAPIGetTaskStatus url is:(GET /api/v1/tasks/{task-name}/status).
 func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
 	panic("not implemented") // TODO: Implement
@@ -149,12 +235,12 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
 func sourceCfgToModel(cfg config.SourceConfig) openapi.Source {
 	// NOTE we don't return SSL cert here, because we don't want to expose it to the user.
 	return openapi.Source{
-		EnableGtid: &cfg.EnableGTID,
-		Host:       &cfg.From.Host,
-		Password:   &cfg.From.Password,
-		Port:       &cfg.From.Port,
-		SourceName: &cfg.SourceID,
-		User:       &cfg.From.User,
+		EnableGtid: cfg.EnableGTID,
+		Host:       cfg.From.Host,
+		Password:   cfg.From.Password,
+		Port:       cfg.From.Port,
+		SourceName: cfg.SourceID,
+		User:       cfg.From.User,
 	}
 }
 
@@ -162,13 +248,13 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 	//  TODO add Security
 	cfg := config.NewSourceConfig()
 	from := config.DBConfig{
-		Host:     *source.Host,
-		Port:     *source.Port,
-		User:     *source.User,
-		Password: *source.Password,
+		Host:     source.Host,
+		Port:     source.Port,
+		User:     source.User,
+		Password: source.Password,
 	}
-	cfg.EnableGTID = *source.EnableGtid
-	cfg.SourceID = *source.SourceName
+	cfg.EnableGTID = source.EnableGtid
+	cfg.SourceID = source.SourceName
 	cfg.From = from
 	return cfg
 }
@@ -200,9 +286,9 @@ func (s *Server) StartOpenAPIServer(ctx context.Context) {
 	e.HTTPErrorHandler = terrorHTTPErrorHandler
 	// Middlewares
 	e.Use(docMW)
-	e.Use(ehcomiddleware.Logger())
+	e.Use(echomiddleware.Logger())
 	// e.Logger.SetOutput()
-	e.Use(ehcomiddleware.Recover())
+	e.Use(echomiddleware.Recover())
 	// Use our validation middleware to check all requests against the OpenAPI schema.
 	e.Use(middleware.OapiRequestValidator(swagger))
 	openapi.RegisterHandlers(e, s)

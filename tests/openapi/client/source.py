@@ -1,75 +1,129 @@
 import sys
 import requests
 
+SOURCE_NAME = "mysql-01"
+WORKER_NAME = "worker1"
+
+
 API_ENDPOINT = "http://127.0.0.1:1323/api/v1/sources"
 API_ENDPOINT_NOT_LEADER = "http://127.0.0.1:1324/api/v1/sources"
-SOURCE_NAME = "mysql-01"
-
-create_source_req = {
-    "case_sensitive": False,
-    "enable_gtid": False,
-    "host": "127.0.0.1",
-    "password": "123456",
-    "port": 3306,
-    "source_name": SOURCE_NAME,
-    "user": "root",
-}
 
 
-def create_source_by_openapi_success():
+def create_source_failed():
+    resp = requests.post(url=API_ENDPOINT)
+    assert resp.status_code == 400
+    print("create_source_failed resp=", resp.json())
+
+
+def create_source_success():
+    create_source_req = {
+        "case_sensitive": False,
+        "enable_gtid": False,
+        "host": "127.0.0.1",
+        "password": "123456",
+        "port": 3306,
+        "source_name": SOURCE_NAME,
+        "user": "root",
+    }
     resp = requests.post(url=API_ENDPOINT, json=create_source_req)
     assert resp.status_code == 201
     print("create_source_by_openapi_success resp=", resp.json())
 
 
-def create_source_by_openapi_faild():
-    resp = requests.post(url=API_ENDPOINT, json=create_source_req)
-    assert resp.status_code == 400
-    print("create_source_by_openapi_faild resp=", resp.json())
-
-
-def list_source_by_openapi_success(soucce_count):
+def list_source_success(source_count):
     resp = requests.get(url=API_ENDPOINT)
     assert resp.status_code == 200
     data = resp.json()
     # only create one source
-    assert len(data) == soucce_count
+    assert len(data) == int(source_count)
     print("list_source_by_openapi_success resp=", data)
 
 
-def delete_source_success(source_name):
-    resp = requests.delete(url=API_ENDPOINT + "/" + source_name)
+def list_source_with_redirect(source_count):
+    resp = requests.get(url=API_ENDPOINT_NOT_LEADER)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == int(source_count)
+    print("list_source_by_openapi_redirect resp=", data)
+
+
+def delete_source_success():
+    resp = requests.delete(url=API_ENDPOINT + "/" + SOURCE_NAME)
     assert resp.status_code == 204
     print("delete_source_success")
 
 
-def delete_source_failed(source_name):
-    resp = requests.delete(url=API_ENDPOINT + "/" + source_name)
+def delete_source_failed():
+    resp = requests.delete(url=API_ENDPOINT + "/" + SOURCE_NAME)
     assert resp.status_code == 400
     print("delete_source_failed msg=", resp.json())
 
 
-def list_source_by_openapi_redirect(soucce_count):
-    resp = requests.get(url=API_ENDPOINT_NOT_LEADER)
+def start_relay_failed():
+    url = API_ENDPOINT + "/" + SOURCE_NAME + "/start-relay"
+    resp = requests.patch(url=url)
+    # no valid reqyest body
+    assert resp.status_code == 400
+    print("start_relay_failed resp=", resp.json())
+
+
+def start_relay_success():
+    url = API_ENDPOINT + "/" + SOURCE_NAME + "/start-relay"
+    req = {
+        "worker_name": WORKER_NAME,
+        "purge": {"interval": 3600, "expires": 0, "remain_space": 15},
+    }
+    resp = requests.patch(url=url, json=req)
     assert resp.status_code == 200
-    data = resp.json()
-    # only create one source
-    assert len(data) == soucce_count
-    print("list_source_by_openapi_redirect resp=", data)
+
+
+def get_source_status_failed():
+    url = API_ENDPOINT + "/" + "fake_source" + "/status"
+    resp = requests.get(url=url)
+    assert resp.status_code == 400
+    print("get_source_status_failed resp=", resp.json())
+
+
+def get_source_status_success():
+    url = API_ENDPOINT + "/" + SOURCE_NAME + "/status"
+    resp = requests.get(url=url)
+    assert resp.status_code == 200
+    print("get_source_status_success resp=", resp.json())
+
+
+def stop_relay_failed():
+    url = API_ENDPOINT + "/" + SOURCE_NAME + "/stop-relay"
+    resp = requests.patch(url=url)
+    assert resp.status_code == 400
+
+
+def stop_relay_success():
+    url = API_ENDPOINT + "/" + SOURCE_NAME + "/stop-relay"
+    req = {
+        "worker_name": WORKER_NAME,
+    }
+    resp = requests.patch(url=url, json=req)
+    assert resp.status_code == 200
 
 
 if __name__ == "__main__":
-    func = sys.argv[1]
+    FUNC_MAP = {
+        "create_source_failed": create_source_failed,
+        "create_source_success": create_source_success,
+        "list_source_success": list_source_success,
+        "list_source_with_redirect": list_source_with_redirect,
+        "delete_source_failed": delete_source_failed,
+        "delete_source_success": delete_source_success,
+        "start_relay_failed": start_relay_failed,
+        "start_relay_success": start_relay_success,
+        "get_source_status_failed": get_source_status_failed,
+        "get_source_status_success": get_source_status_success,
+        "stop_relay_failed": stop_relay_failed,
+        "stop_relay_success": stop_relay_success,
+    }
 
-    if func == "source_success":
-        create_source_by_openapi_success()
-    elif func == "source_failed":
-        create_source_by_openapi_faild()
-    elif func == "source_list_success":
-        list_source_by_openapi_success(int(sys.argv[2]))
-    elif func == "delete_source_success":
-        delete_source_success(SOURCE_NAME)
-    elif func == "delete_source_failed":
-        delete_source_failed(SOURCE_NAME)
-    elif func == "list_source_by_openapi_redirect":
-        list_source_by_openapi_redirect(int(sys.argv[2]))
+    func = FUNC_MAP[sys.argv[1]]
+    if len(sys.argv) >= 2:
+        func(*sys.argv[2:])
+    else:
+        func()

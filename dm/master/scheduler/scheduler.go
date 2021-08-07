@@ -309,6 +309,34 @@ func (s *Scheduler) AddSourceCfg(cfg *config.SourceConfig) error {
 	return nil
 }
 
+// UpdateSourceCfg update the upstream source config to the cluster.
+// NOTE: please verify the config before call this.
+func (s *Scheduler) UpdateSourceCfg(cfg *config.SourceConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	// 1. check whether the config exists.
+	_, ok := s.sourceCfgs[cfg.SourceID]
+	if !ok {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(cfg.SourceID)
+	}
+
+	// 2. put the config into etcd.
+	_, err := ha.PutSourceCfg(s.etcdCli, cfg)
+	if err != nil {
+		return err
+	}
+
+	// 3. record the config in the scheduler.
+	s.sourceCfgs[cfg.SourceID] = cfg
+
+	return nil
+}
+
 // RemoveSourceCfg removes the upstream source config in the cluster.
 // when removing the upstream source config, it should also remove:
 // - any existing relay stage.

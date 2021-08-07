@@ -54,34 +54,34 @@ type LoadStatus struct {
 // relay log cleanup policy configuration
 type Purge struct {
 	// expiration time of relay log
-	Expires *int `json:"expires"`
+	Expires *int64 `json:"expires"`
 
 	// The interval to periodically check if the relay log is expired, default value: 3600, in seconds
-	Interval *int `json:"interval"`
+	Interval *int64 `json:"interval"`
 
 	// Minimum free disk space, in GB
-	RemainSpace *int `json:"remain_space"`
+	RemainSpace *int64 `json:"remain_space"`
 }
 
 // status of relay log
 type RelayStatus struct {
 	// upstream binlog file information
-	MasterBinlog *string `json:"master_binlog,omitempty"`
+	MasterBinlog string `json:"master_binlog"`
 
 	// GTID of the upstream
-	MasterBinlogGtid *string `json:"master_binlog_gtid,omitempty"`
+	MasterBinlogGtid string `json:"master_binlog_gtid"`
 
 	// relay current GTID
-	RelayBinlogGtid *string `json:"relay_binlog_gtid,omitempty"`
+	RelayBinlogGtid string `json:"relay_binlog_gtid"`
 
 	// whether to catch up with upstream progress
-	RelayCatchUpMaster *bool `json:"relay_catch_up_master,omitempty"`
+	RelayCatchUpMaster bool `json:"relay_catch_up_master"`
 
 	// the directory where the relay log is stored
-	RelayDir *string `json:"relay_dir,omitempty"`
+	RelayDir string `json:"relay_dir"`
 
 	// current status
-	Stage *string `json:"stage,omitempty"`
+	Stage string `json:"stage"`
 }
 
 // data source ssl configuration, the field will be hidden when getting the data source configuration from the interface
@@ -108,25 +108,25 @@ type ShardingGroup struct {
 // source
 type Source struct {
 	// whether to use GTID to pull binlogs from upstream
-	EnableGtid *bool `json:"enable_gtid,omitempty"`
+	EnableGtid bool `json:"enable_gtid"`
 
 	// source address
-	Host *string `json:"host,omitempty"`
+	Host string `json:"host"`
 
 	// source password
-	Password *string `json:"password,omitempty"`
+	Password string `json:"password"`
 
 	// source port
-	Port *int `json:"port,omitempty"`
+	Port int `json:"port"`
 
 	// data source ssl configuration, the field will be hidden when getting the data source configuration from the interface
 	Security *Security `json:"security"`
 
-	// scource name
-	SourceName *string `json:"source_name,omitempty"`
+	// source name
+	SourceName string `json:"source_name"`
 
 	// source username
-	User *string `json:"user,omitempty"`
+	User string `json:"user"`
 }
 
 // source status
@@ -147,7 +147,7 @@ type SourceStatus struct {
 // action to open a relay request
 type StartRelayRequest struct {
 	// relay log cleanup policy configuration
-	Pruge *Purge `json:"pruge,omitempty"`
+	Purge *Purge `json:"purge,omitempty"`
 
 	// starting GTID of the upstream binlog
 	RelayBinlogGtid *string `json:"relay_binlog_gtid"`
@@ -158,8 +158,8 @@ type StartRelayRequest struct {
 	// the directory where the relay log is stored
 	RelayDir *string `json:"relay_dir"`
 
-	// woker name
-	WorkerName *string `json:"worker_name,omitempty"`
+	// worker name
+	WorkerName string `json:"worker_name"`
 }
 
 // SubTaskStatus defines model for SubTaskStatus.
@@ -263,7 +263,7 @@ type TaskEventFilterRule struct {
 	// event type
 	IgnoreEvent *[]string `json:"ignore_event,omitempty"`
 
-	// sql patterm to filter
+	// sql pattern to filter
 	IgnoreSql *[]string `json:"ignore_sql,omitempty"`
 
 	// rule name
@@ -317,13 +317,13 @@ type TaskTableMigrateRule struct {
 
 	// source-related configuration
 	Source *struct {
-		// schema name, wildcard suppor
+		// schema name, wildcard support
 		Schema *string `json:"schema,omitempty"`
 
 		// source name, wildcard support
 		SourceName *string `json:"source_name,omitempty"`
 
-		// table name, wildcard suppor
+		// table name, wildcard support
 		Table *string `json:"table,omitempty"`
 	} `json:"source,omitempty"`
 
@@ -358,7 +358,7 @@ type TaskTargetDataBase struct {
 // requests related to workers
 type WorkerNameRequest struct {
 	// worker name
-	WorkerName *string `json:"worker_name,omitempty"`
+	WorkerName string `json:"worker_name"`
 }
 
 // DMAPICreateSourceJSONBody defines parameters for DMAPICreateSource.

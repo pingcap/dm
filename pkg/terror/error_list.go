@@ -634,6 +634,11 @@ const (
 	codeCtlInvalidTLSCfg
 )
 
+// openapi error code.
+const (
+	codeOpenAPICommon ErrCode = iota + 49001
+)
+
 // default error code.
 const (
 	codeNotSet ErrCode = iota + 50000
@@ -1242,6 +1247,9 @@ var (
 	// dmctl.
 	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")
 	ErrCtlInvalidTLSCfg  = New(codeCtlInvalidTLSCfg, ClassDMCtl, ScopeInternal, LevelMedium, "invalid TLS config", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line.")
+
+	// openapi.
+	ErrOpenAPICommonError = New(codeOpenAPICommon, ClassOpenAPI, ScopeInternal, LevelHigh, "some unforeseen errors have occurred, please check the detailed error message", "")
 
 	// default error.
 	ErrNotSet = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")

@@ -283,16 +283,19 @@ components:
           type: integer
           default: 3600
           description: "The interval to periodically check if the relay log is expired, default value: 3600, in seconds"
+          format: int64
           nullable: true
         expires:
           type: integer
           default: 0
           description: "expiration time of relay log"
+          format: int64
           nullable: true
         remain_space:
           type: integer
           default: 15
           description: "Minimum free disk space, in GB"
+          format: int64
           nullable: true
     RelayStatus:
       description: "status of relay log"
@@ -321,6 +324,13 @@ components:
           type: string
           description: "current status"
           example: "Running"
+      required:
+        - "master_binlog"
+        - "master_binlog_gtid"
+        - "relay_dir"
+        - "relay_binlog_gtid"
+        - "relay_catch_up_master"
+        - stage
     StartRelayRequest:
       description: action to open a relay request
       type: object
@@ -328,7 +338,7 @@ components:
         worker_name:
           type: string
           example: "worker-1"
-          description: "woker name"
+          description: "worker name"
         relay_binlog_name:
           type: string
           example: "mysql-bin.000002"
@@ -344,8 +354,10 @@ components:
           default: "./relay_log"
           description: "the directory where the relay log is stored"
           nullable: true
-        pruge:
+        purge:
           $ref: "#/components/schemas/Purge"
+      required:
+        - "worker_name"
     WorkerNameRequest:
       description: requests related to workers
       type: object
@@ -354,6 +366,9 @@ components:
           type: string
           example: "worker-1"
           description: "worker name"
+      required:
+        - "worker_name"
+
     SourceStatus:
       description: "source status"
       type: object
@@ -380,30 +395,43 @@ components:
         source_name:
           type: string
           example: "mysql-01"
-          description: "scource name"
+          description: "source name"
+          nullable: false
         host:
           type: string
           example: "127.0.0.1"
           description: "source address"
+          nullable: false
         port:
           type: integer
           example: 3306
           description: "source port"
+          nullable: false
         user:
           type: string
           example: "root"
           description: "source username"
+          nullable: false
         password:
           type: string
           example: "123456"
           description: "source password"
+          nullable: false
         enable_gtid:
           type: boolean
           example: false
           default: false
           description: "whether to use GTID to pull binlogs from upstream"
+          nullable: false
         security:
           $ref: "#/components/schemas/Security"
+      required:
+        - "source_name"
+        - "host"
+        - "port"
+        - "user"
+        - "password"
+        - "enable_gtid"
     TaskTargetDataBase:
       type: object
       description: "downstream database configuration"
@@ -442,11 +470,11 @@ components:
             description: "event type"
             example: "all dml"
         ignore_sql:
-          description: "sql patterm to filter"
+          description: "sql pattern to filter"
           type: array
           items:
             type: string
-            description: "sql patterm to filter"
+            description: "sql pattern to filter"
             example: "^Drop"
     TaskTableMigrateRule:
       type: object
@@ -462,11 +490,11 @@ components:
               example: "source-*"
             schema:
               type: string
-              description: schema name, wildcard suppor
+              description: schema name, wildcard support
               example: "db-*"
             table:
               type: string
-              description: table name, wildcard suppor
+              description: table name, wildcard support
               example: "tb-*"
         target:
           type: object

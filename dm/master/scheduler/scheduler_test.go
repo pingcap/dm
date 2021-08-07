@@ -135,6 +135,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 
 	// not started scheduler can't do anything.
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSourceCfg(sourceCfg1)), IsTrue)
+	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.UpdateSourceCfg(sourceCfg1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveSourceCfg(sourceID1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSubTasks(subtaskCfg1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveSubTasks(taskName1, sourceID1)), IsTrue)
@@ -1558,4 +1559,46 @@ func (t *testScheduler) TestWatchLoadTask(c *C) {
 
 	cancel1()
 	wg.Wait()
+}
+
+func (t *testScheduler) TestOperateSourceCfg(c *C) {
+	defer clearTestInfoOperation(c)
+
+	var (
+		logger       = log.L()
+		s            = NewScheduler(&logger, config.Security{})
+		sourceID1    = "mysql-replica-1"
+		testRelayDir = "./test_relay_dir"
+	)
+
+	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
+	sourceCfg1.SourceID = sourceID1
+
+	// start an empty scheduler without listening the worker event
+	s.started = true
+	s.etcdCli = etcdTestCli
+
+	// no source config exist before added.
+	t.sourceCfgNotExist(c, s, sourceID1)
+	c.Assert(s.AddSourceCfg(sourceCfg1), IsNil)
+	c.Assert(terror.ErrSchedulerSourceCfgExist.Equal(s.AddSourceCfg(sourceCfg1)), IsTrue) // can't add multiple times.
+	// the source config added.
+	t.sourceCfgExist(c, s, sourceCfg1)
+
+	// update source cfg
+	sourceCfg1.RelayDir = testRelayDir
+	c.Assert(s.UpdateSourceCfg(sourceCfg1), IsNil)
+	newCfg := s.GetSourceCfgByID(sourceID1)
+	c.Assert(newCfg.RelayDir, Equals, testRelayDir)
+
+	// update with invalid SourceID
+	fake := newCfg.Clone()
+	fake.SourceID = "zmj"
+	c.Assert(s.UpdateSourceCfg(fake), ErrorMatches, "*.not exists.*")
+
+	// remove source
+	c.Assert(s.RemoveSourceCfg(sourceCfg1.SourceID), IsNil)
+	// already removed
+	c.Assert(terror.ErrSchedulerSourceCfgNotExist.Equal(s.RemoveSourceCfg(sourceCfg1.SourceID)), IsTrue)
 }
