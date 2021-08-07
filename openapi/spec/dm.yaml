@@ -368,7 +368,6 @@ components:
           description: "worker name"
       required:
         - "worker_name"
-
     SourceStatus:
       description: "source status"
       type: object
@@ -388,6 +387,10 @@ components:
           description: "whether to enable relay log function"
         relay_status:
           $ref: "#/components/schemas/RelayStatus"
+      required:
+        - "source_name"
+        - "worker_name"
+        - "enable_relay"
     Source:
       type: object
       description: "source"

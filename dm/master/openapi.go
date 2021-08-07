@@ -195,9 +195,9 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	relayStatus := sourceStatus.GetRelayStatus()
 	enableRelay := relayStatus == nil
 	resp := openapi.SourceStatus{
-		EnableRelay: &enableRelay,
-		SourceName:  &sourceStatus.Source,
-		WorkerName:  &sourceStatus.Worker,
+		EnableRelay: enableRelay,
+		SourceName:  sourceStatus.Source,
+		WorkerName:  sourceStatus.Worker,
 	}
 	if enableRelay {
 		resp.RelayStatus = &openapi.RelayStatus{

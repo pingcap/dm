@@ -132,16 +132,16 @@ type Source struct {
 // source status
 type SourceStatus struct {
 	// whether to enable relay log function
-	EnableRelay *bool `json:"enable_relay,omitempty"`
+	EnableRelay bool `json:"enable_relay"`
 
 	// status of relay log
 	RelayStatus *RelayStatus `json:"relay_status,omitempty"`
 
 	// source name
-	SourceName *string `json:"source_name,omitempty"`
+	SourceName string `json:"source_name"`
 
 	// The worker currently bound to the source
-	WorkerName *string `json:"worker_name,omitempty"`
+	WorkerName string `json:"worker_name"`
 }
 
 // action to open a relay request
