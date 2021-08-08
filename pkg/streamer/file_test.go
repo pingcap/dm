@@ -24,8 +24,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -229,12 +231,12 @@ func (t *testFileSuite) TestGetFirstBinlogName(c *C) {
 	c.Assert(err, ErrorMatches, ".*not found.*")
 	c.Assert(name, Equals, "")
 
-	// has file, but not a valid binlog file
+	// has file, but not a valid binlog file. Now the error message is binlog files not found
 	filename := "invalid.bin"
 	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0o600)
 	c.Assert(err, IsNil)
 	_, err = getFirstBinlogName(baseDir, uuid)
-	c.Assert(err, ErrorMatches, ".*not valid.*")
+	c.Assert(err, ErrorMatches, ".*not found.*")
 	err = os.Remove(filepath.Join(subDir, filename))
 	c.Assert(err, IsNil)
 
@@ -295,14 +297,15 @@ func (t *testFileSuite) TestFileSizeUpdated(c *C) {
 	c.Assert(cmp, Equals, 1)
 }
 
-func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
+func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	var (
 		relayFiles = []string{
 			"mysql-bin.000001",
 			"mysql-bin.000002",
 			"mysql-bin.000003",
-			"mysql-bin.000004",
 		}
+		binlogPos       = uint32(4)
+		binlogGTID      = "ba8f633f-1f15-11eb-b1c7-0242ac110002:1"
 		relayPaths      = make([]string, len(relayFiles))
 		data            = []byte("meaningless file content")
 		size            = int64(len(data))
@@ -315,7 +318,7 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	defer cancel()
 
 	// a. relay log dir not exist
-	relaySubDirUpdated(ctx, watcherInterval, "/not-exists-directory", "/not-exists-filepath", "not-exists-file", 0, updatePathCh, errCh)
+	relayLogUpdatedOrNewCreated(ctx, watcherInterval, "/not-exists-directory", "/not-exists-filepath", "not-exists-file", 0, updatePathCh, errCh)
 	c.Assert(len(errCh), Equals, 1)
 	c.Assert(len(updatePathCh), Equals, 0)
 	err := <-errCh
@@ -329,31 +332,39 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	}
 
 	// b. relay file not found
-	relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0, updatePathCh, errCh)
+	relayLogUpdatedOrNewCreated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0, updatePathCh, errCh)
 	c.Assert(len(errCh), Equals, 1)
 	c.Assert(len(updatePathCh), Equals, 0)
 	err = <-errCh
-	c.Assert(err, ErrorMatches, ".*not found.*")
+	c.Assert(err, ErrorMatches, ".*no such file or directory*")
 
 	// create the first relay file
 	err = ioutil.WriteFile(relayPaths[0], nil, 0o600)
 	c.Assert(err, IsNil)
 
+	// write meta file
+	meta := Meta{BinLogName: relayFiles[0], BinLogPos: binlogPos, BinlogGTID: binlogGTID}
+	metaFile, err2 := os.Create(path.Join(subDir, utils.MetaFilename))
+	c.Assert(err2, IsNil)
+	err = toml.NewEncoder(metaFile).Encode(meta)
+	c.Assert(err, IsNil)
+	metaFile.Close()
+
 	// c. latest file path not exist
-	relaySubDirUpdated(ctx, watcherInterval, subDir, "/no-exists-filepath", relayFiles[0], 0, updatePathCh, errCh)
+	relayLogUpdatedOrNewCreated(ctx, watcherInterval, subDir, "/no-exists-filepath", relayFiles[0], 0, updatePathCh, errCh)
 	c.Assert(len(errCh), Equals, 1)
 	c.Assert(len(updatePathCh), Equals, 0)
 	err = <-errCh
 	c.Assert(err, ErrorMatches, ".*(no such file or directory|The system cannot find the file specified).*")
 
-	// 1. file increased when adding watching
+	// 1. file increased
 	err = ioutil.WriteFile(relayPaths[0], data, 0o600)
 	c.Assert(err, IsNil)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0, updatePathCh, errCh)
+		relayLogUpdatedOrNewCreated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0, updatePathCh, errCh)
 		c.Assert(len(errCh), Equals, 0)
 		c.Assert(len(updatePathCh), Equals, 1)
 		up := <-updatePathCh
@@ -367,7 +378,7 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], size, updatePathCh, errCh)
+		relayLogUpdatedOrNewCreated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], size, updatePathCh, errCh)
 		c.Assert(len(errCh), Equals, 1)
 		c.Assert(len(updatePathCh), Equals, 0)
 		err = <-errCh
@@ -375,13 +386,20 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	}()
 	wg.Wait()
 
-	// 3. new file created when adding watching
+	// 3. new binlog file created
 	err = ioutil.WriteFile(relayPaths[1], nil, 0o600)
 	c.Assert(err, IsNil)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0, updatePathCh, errCh)
+		// update meta file
+		meta = Meta{BinLogName: relayFiles[1], BinLogPos: binlogPos, BinlogGTID: binlogGTID}
+		var buf bytes.Buffer
+		enc := toml.NewEncoder(&buf)
+		c.Assert(enc.Encode(meta), IsNil)
+		c.Assert(utils.WriteFileAtomic(path.Join(subDir, utils.MetaFilename), buf.Bytes(), 0o644), IsNil)
+
+		relayLogUpdatedOrNewCreated(ctx, watcherInterval, subDir, relayPaths[0], relayFiles[0], 0, updatePathCh, errCh)
 		c.Assert(len(errCh), Equals, 0)
 		c.Assert(len(updatePathCh), Equals, 1)
 		up := <-updatePathCh
@@ -389,74 +407,55 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	}()
 	wg.Wait()
 
-	// 4. file updated
+	// 4. file increased when checking meta
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[1], relayFiles[1], 0, updatePathCh, errCh)
-		c.Assert(len(errCh), Equals, 0)
-		c.Assert(len(updatePathCh), Equals, 1)
+		// update meta file to new file
+		meta = Meta{BinLogName: relayFiles[2], BinLogPos: binlogPos, BinlogGTID: binlogGTID}
+		var buf bytes.Buffer
+		enc := toml.NewEncoder(&buf)
+		c.Assert(enc.Encode(meta), IsNil)
+		c.Assert(utils.WriteFileAtomic(path.Join(subDir, utils.MetaFilename), buf.Bytes(), 0o644), IsNil)
+		fi, err4 := os.Stat(relayPaths[1])
+		c.Assert(err4, IsNil)
+		curSize := fi.Size()
+		// write old binlog file
+		err5 := ioutil.WriteFile(relayPaths[1], data, 0o600)
+		c.Assert(err5, IsNil)
+		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0", `return(true)`), IsNil)
+		//nolint:errcheck
+		defer failpoint.Disable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0")
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			relayLogUpdatedOrNewCreated(ctx, watcherInterval, subDir, relayPaths[1], relayFiles[1], curSize, updatePathCh, errCh)
+		}()
 		up := <-updatePathCh
 		c.Assert(up, Equals, relayPaths[1])
-	}()
-
-	// wait watcher started, update the file
-	time.Sleep(2 * watcherInterval)
-	err = ioutil.WriteFile(relayPaths[1], data, 0o600)
-	c.Assert(err, IsNil)
-	wg.Wait()
-
-	// 5. file created
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[1], relayFiles[1], size, updatePathCh, errCh)
 		c.Assert(len(errCh), Equals, 0)
-		c.Assert(len(updatePathCh), Equals, 1)
-		up := <-updatePathCh
-		c.Assert(up, Equals, relayPaths[2])
+		c.Assert(failpoint.Disable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0"), IsNil)
 	}()
-
-	// wait watcher started, create a new file
-	time.Sleep(2 * watcherInterval)
-	err = ioutil.WriteFile(relayPaths[2], data, 0o600)
-	c.Assert(err, IsNil)
 	wg.Wait()
 
-	// 6.
-	// directory created will be ignored
-	// invalid binlog name will be ignored
-	// rename file will be ignore
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		relaySubDirUpdated(ctx, watcherInterval, subDir, relayPaths[2], relayFiles[2], size, updatePathCh, errCh)
-		c.Assert(len(errCh), Equals, 0)
-		c.Assert(len(updatePathCh), Equals, 1)
-		up := <-updatePathCh
-		c.Assert(up, Equals, relayPaths[2])
-	}()
+	// 5. context timeout (no new write)
+	// revert meta file to old file
+	meta = Meta{BinLogName: relayFiles[1], BinLogPos: binlogPos, BinlogGTID: binlogGTID}
+	var buf bytes.Buffer
+	enc := toml.NewEncoder(&buf)
+	c.Assert(enc.Encode(meta), IsNil)
+	c.Assert(utils.WriteFileAtomic(path.Join(subDir, utils.MetaFilename), buf.Bytes(), 0o644), IsNil)
 
-	// wait watcher started, create new directory
-	time.Sleep(2 * watcherInterval)
-	err = os.MkdirAll(filepath.Join(subDir, "new-directory"), 0o700)
-	c.Assert(err, IsNil)
-
-	// wait again, create an invalid binlog file
-	time.Sleep(2 * watcherInterval)
-	err = ioutil.WriteFile(filepath.Join(subDir, "invalid-binlog-filename"), data, 0o600)
-	c.Assert(err, IsNil)
-
-	// wait again, rename an older filename, seems watch can not handle `RENAME` operation well
-	// time.Sleep(2 * watcherInterval)
-	// err = os.Rename(relayPaths[0], relayPaths[3])
-	// c.Assert(err, IsNil)
-
-	// wait again, update the file
-	time.Sleep(2 * watcherInterval)
-	err = ioutil.WriteFile(relayPaths[2], data, 0o600)
-	c.Assert(err, IsNil)
-	wg.Wait()
+	fi, err2 := os.Stat(relayPaths[1])
+	c.Assert(err2, IsNil)
+	curSize := fi.Size()
+	newCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	relayLogUpdatedOrNewCreated(newCtx, watcherInterval, subDir, relayPaths[1], relayFiles[1], curSize, updatePathCh, errCh)
+	c.Assert(len(errCh), Equals, 1)
+	c.Assert(len(updatePathCh), Equals, 0)
+	err7 := <-errCh
+	c.Assert(err7, ErrorMatches, "context meet error:.*")
 }
 
 func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
@@ -541,4 +540,20 @@ func (t *testFileSuite) writeUUIDs(c *C, relayDir string, uuids []string) []byte
 	err := ioutil.WriteFile(indexPath, buf.Bytes(), 0o600)
 	c.Assert(err, IsNil)
 	return buf.Bytes()
+}
+
+func (t *testFileSuite) TestReadSortedBinlogFromDir(c *C) {
+	dir := c.MkDir()
+	filenames := []string{
+		"bin.000001", "bin.000002", "bin.100000", "bin.100001", "bin.1000000", "bin.1000001", "bin.999999", "relay.meta",
+	}
+	expected := []string{
+		"bin.000001", "bin.000002", "bin.100000", "bin.100001", "bin.999999", "bin.1000000", "bin.1000001",
+	}
+	for _, f := range filenames {
+		c.Assert(ioutil.WriteFile(filepath.Join(dir, f), nil, 0o600), IsNil)
+	}
+	ret, err := readSortedBinlogFromDir(dir)
+	c.Assert(err, IsNil)
+	c.Assert(ret, DeepEquals, expected)
 }

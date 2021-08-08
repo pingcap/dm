@@ -19,10 +19,10 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
-	"github.com/pingcap/tidb-tools/pkg/watcher"
+	"github.com/BurntSushi/toml"
+	"github.com/pingcap/failpoint"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
@@ -49,30 +49,12 @@ type SwitchPath struct {
 	nextBinlogName string
 }
 
-// CollectAllBinlogFiles collects all valid binlog files in dir.
+// CollectAllBinlogFiles collects all valid binlog files in dir, and returns filenames in binlog ascending order.
 func CollectAllBinlogFiles(dir string) ([]string, error) {
 	if dir == "" {
 		return nil, terror.ErrEmptyRelayDir.Generate()
 	}
-	files, err := readDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	ret := make([]string, 0, len(files))
-	for _, f := range files {
-		if strings.HasPrefix(f, utils.MetaFilename) {
-			// skip meta file or temp meta file
-			log.L().Debug("skip meta file", zap.String("file", f))
-			continue
-		}
-		if !binlog.VerifyFilename(f) {
-			log.L().Warn("collecting binlog file, ignore invalid file", zap.String("file", f))
-			continue
-		}
-		ret = append(ret, f)
-	}
-	return ret, nil
+	return readSortedBinlogFromDir(dir)
 }
 
 // CollectBinlogFilesCmp collects valid binlog files with a compare condition.
@@ -132,28 +114,19 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 // getFirstBinlogName gets the first binlog file in relay sub directory.
 func getFirstBinlogName(baseDir, uuid string) (string, error) {
 	subDir := filepath.Join(baseDir, uuid)
-	files, err := readDir(subDir)
+	files, err := readSortedBinlogFromDir(subDir)
 	if err != nil {
 		return "", terror.Annotatef(err, "get binlog file for dir %s", subDir)
 	}
 
-	for _, f := range files {
-		if f == utils.MetaFilename {
-			log.L().Debug("skip meta file", zap.String("file", f))
-			continue
-		}
-
-		if !binlog.VerifyFilename(f) {
-			return "", terror.ErrBinlogFileNotValid.Generate(f)
-		}
-		return f, nil
+	if len(files) == 0 {
+		return "", terror.ErrBinlogFilesNotFound.Generate(subDir)
 	}
-
-	return "", terror.ErrBinlogFilesNotFound.Generate(subDir)
+	return files[0], nil
 }
 
-// readDir reads and returns all file(sorted asc) and dir names from directory f.
-func readDir(dirpath string) ([]string, error) {
+// readSortedBinlogFromDir reads and returns all binlog files (sorted ascending by binlog filename and sequence number).
+func readSortedBinlogFromDir(dirpath string) ([]string, error) {
 	dir, err := os.Open(dirpath)
 	if err != nil {
 		return nil, terror.ErrReadDir.Delegate(err, dirpath)
@@ -164,10 +137,43 @@ func readDir(dirpath string) ([]string, error) {
 	if err != nil {
 		return nil, terror.ErrReadDir.Delegate(err, dirpath)
 	}
+	if len(names) == 0 {
+		return nil, nil
+	}
 
-	sort.Strings(names)
+	// sorting bin.100000, ..., bin.1000000, ..., bin.999999
+	type tuple struct {
+		filename string
+		parsed   binlog.Filename
+	}
+	tmp := make([]tuple, 0, len(names)-1)
 
-	return names, nil
+	for _, f := range names {
+		p, err2 := binlog.ParseFilename(f)
+		if err2 != nil {
+			// may contain some file that can't be parsed, like relay meta. ignore them
+			log.L().Info("collecting binlog file, ignore invalid file", zap.String("file", f))
+			continue
+		}
+		tmp = append(tmp, tuple{
+			filename: f,
+			parsed:   p,
+		})
+	}
+
+	sort.Slice(tmp, func(i, j int) bool {
+		if tmp[i].parsed.BaseName != tmp[j].parsed.BaseName {
+			return tmp[i].parsed.BaseName < tmp[j].parsed.BaseName
+		}
+		return tmp[i].parsed.LessThan(tmp[j].parsed)
+	})
+
+	ret := make([]string, len(tmp))
+	for i := range tmp {
+		ret[i] = tmp[i].filename
+	}
+
+	return ret, nil
 }
 
 // fileSizeUpdated checks whether the file's size has updated
@@ -181,141 +187,88 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 	if err != nil {
 		return 0, terror.ErrGetRelayLogStat.Delegate(err, path)
 	}
-	currSize := fi.Size()
+	curSize := fi.Size()
 	switch {
-	case currSize == latestSize:
+	case curSize == latestSize:
 		return 0, nil
-	case currSize > latestSize:
-		log.L().Debug("size of relay log file has been changed", zap.String("file", path), zap.Int64("old size", latestSize), zap.Int64("size", currSize))
+	case curSize > latestSize:
+		log.L().Debug("size of relay log file has been changed", zap.String("file", path),
+			zap.Int64("old size", latestSize), zap.Int64("size", curSize))
 		return 1, nil
 	default:
-		log.L().Error("size of relay log file has been changed", zap.String("file", path), zap.Int64("old size", latestSize), zap.Int64("size", currSize))
+		log.L().Error("size of relay log file has been changed", zap.String("file", path),
+			zap.Int64("old size", latestSize), zap.Int64("size", curSize))
 		return -1, nil
 	}
 }
 
-// relaySubDirUpdated checks whether the relay sub directory updated
-// including file changed, created, removed, etc.
-func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir string,
+// relayLogUpdatedOrNewCreated checks whether current relay log file is updated or new relay log is created.
+// we check the size of the file first, if the size is the same as the latest file, we assume there is no new write
+// so we need to check relay meta file to see if the new relay log is created.
+// this func will be blocked until current filesize changed or meta file updated or context cancelled.
+// we need to make sure that only one channel (updatePathCh or errCh) has events written to it.
+func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Duration, dir string,
 	latestFilePath, latestFile string, latestFileSize int64, updatePathCh chan string, errCh chan error) {
-	var err error
-	defer func() {
-		if err != nil {
-			errCh <- err
-		}
-	}()
-
-	// create polling watcher
-	watcher2 := watcher.NewWatcher()
-
-	// Add before Start
-	// no need to Remove, it will be closed and release when return
-	err = watcher2.Add(dir)
-	if err != nil {
-		err = terror.ErrAddWatchForRelayLogDir.Delegate(err, dir)
-		return
-	}
-
-	err = watcher2.Start(watcherInterval)
-	if err != nil {
-		err = terror.ErrWatcherStart.Delegate(err, dir)
-		return
-	}
-	defer watcher2.Close()
-
-	type watchResult struct {
-		updatePath string
-		err        error
-	}
-
-	result := make(chan watchResult, 1) // buffered chan to ensure not block the sender even return in the halfway
-	newCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go func() {
-		for {
-			select {
-			case <-newCtx.Done():
-				result <- watchResult{
-					updatePath: "",
-					err:        newCtx.Err(),
-				}
+	ticker := time.NewTicker(watcherInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			errCh <- terror.Annotate(ctx.Err(), "context meet error")
+			return
+		case <-ticker.C:
+			cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
+			if err != nil {
+				errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize=%d", latestFilePath, latestFileSize)
 				return
-			case err2, ok := <-watcher2.Errors:
-				if !ok {
-					result <- watchResult{
-						updatePath: "",
-						err:        terror.ErrWatcherChanClosed.Generate("errors", dir),
-					}
-				} else {
-					result <- watchResult{
-						updatePath: "",
-						err:        terror.ErrWatcherChanRecvError.Delegate(err2, dir),
-					}
-				}
+			}
+			failpoint.Inject("CMPAlwaysReturn0", func() {
+				cmp = 0
+			})
+			switch {
+			case cmp < 0:
+				errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
 				return
-			case event, ok := <-watcher2.Events:
-				if !ok {
-					result <- watchResult{
-						updatePath: "",
-						err:        terror.ErrWatcherChanClosed.Generate("events", dir),
+			case cmp > 0:
+				updatePathCh <- latestFilePath
+				return
+			default:
+				// current watched file size have no change means that no new writes have been made
+				// our relay meta file will be updated immediately after receive the rotate event
+				// although we cannot ensure that the binlog filename in the meta is the next file after latestFile
+				// but if we return a different filename with latestFile, the outer logic (parseDirAsPossible)
+				// will find the right one
+				meta := &Meta{}
+				_, err = toml.DecodeFile(filepath.Join(dir, utils.MetaFilename), meta)
+				if err != nil {
+					errCh <- terror.Annotate(err, "decode relay meta toml file failed")
+					return
+				}
+				if meta.BinLogName != latestFile {
+					// we need check file size again, as the file may have been changed during our metafile check
+					cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
+					if err != nil {
+						errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize=%d",
+							latestFilePath, latestFileSize)
+						return
+					}
+					switch {
+					case cmp < 0:
+						errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
+					case cmp > 0:
+						updatePathCh <- latestFilePath
+					default:
+						nextFilePath := filepath.Join(dir, meta.BinLogName)
+						log.L().Info("newer relay log file is already generated",
+							zap.String("now file path", latestFilePath),
+							zap.String("new file path", nextFilePath))
+						updatePathCh <- nextFilePath
 					}
 					return
 				}
-				log.L().Debug("watcher receive event", zap.Reflect("event", event))
-				if event.IsDirEvent() {
-					log.L().Debug("skip watched event for directory", zap.Reflect("event", event))
-					continue
-				} else if !event.HasOps(watcher.Modify, watcher.Create) {
-					log.L().Debug("skip uninterested event", zap.Stringer("operation", event.Op), zap.String("path", event.Path))
-					continue
-				}
-				baseName := filepath.Base(event.Path)
-				if !binlog.VerifyFilename(baseName) {
-					log.L().Debug("skip watcher event for invalid relay log file", zap.Reflect("event", event))
-					continue // not valid binlog created, updated
-				}
-				result <- watchResult{
-					updatePath: event.Path,
-					err:        nil,
-				}
-				return
 			}
 		}
-	}()
-
-	// try collect newer relay log file to check whether newer exists before watching
-	newerFiles, err := CollectBinlogFilesCmp(dir, latestFile, FileCmpBigger)
-	if err != nil {
-		err = terror.Annotatef(err, "collect newer files from %s in dir %s", latestFile, dir)
-		return
 	}
-
-	// check the latest relay log file whether updated when adding watching and collecting newer
-	cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
-	switch {
-	case err != nil:
-		return
-	case cmp < 0:
-		err = terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
-		return
-	case cmp > 0:
-		updatePathCh <- latestFilePath
-		return
-	case len(newerFiles) > 0:
-		// check whether newer relay log file exists
-		nextFilePath := filepath.Join(dir, newerFiles[0])
-		log.L().Info("newer relay log file is already generated, start parse from it", zap.String("new file", nextFilePath))
-		updatePathCh <- nextFilePath
-		return
-	}
-
-	res := <-result
-	if res.err != nil {
-		err = res.err
-		return
-	}
-
-	updatePathCh <- res.updatePath
 }
 
 // needSwitchSubDir checks whether the reader need to switch to next relay sub directory.

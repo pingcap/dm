@@ -14,6 +14,11 @@ on:
       toVer:
         dmVer: "nightly"
 
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 jobs:
   from_v1:
     name: From V1
@@ -57,6 +62,7 @@ jobs:
         if: ${{ failure() }}
         env:
           FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+          GIT_COMMITTER_NAME: ${{ github.event.pusher.name }}
         run: go run tests/_utils/send_lark_notify.go
 
       # Debug via SSH if previous steps failed
@@ -73,7 +79,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        previous_v2: ["v2.0.0", "v2.0.1", "v2.0.3", "v2.0.4"]
+        previous_v2: ["v2.0.0", "v2.0.1", "v2.0.3", "v2.0.4", "v2.0.5"]
 
     steps:
       - name: Set up Go 1.16
@@ -172,6 +178,7 @@ jobs:
         if: ${{ failure() }}
         env:
           FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+          GIT_COMMITTER_NAME: ${{ github.event.pusher.name }}
         run: go run tests/_utils/send_lark_notify.go
 
       # Debug via SSH if previous steps failed
@@ -237,6 +244,7 @@ jobs:
         if: ${{ failure() }}
         env:
           FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+          GIT_COMMITTER_NAME: ${{ github.event.pusher.name }}
         run: go run tests/_utils/send_lark_notify.go
       # Debug via SSH if previous steps failed
       - name: Set up tmate session

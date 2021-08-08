@@ -116,6 +116,49 @@ function run() {
 
 	run_sql_file $cur/data/db1.increment4.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	# config export
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"config export -d /tmp/configs" \
+		"export configs to directory .* succeed" 1
+
+	# check configs
+	sed '/password/d' /tmp/configs/tasks/test.yaml | diff $cur/configs/tasks/test.yaml - || exit 1
+	sed '/password/d' /tmp/configs/sources/mysql-replica-01.yaml | diff $cur/configs/sources/mysql-replica-01.yaml - || exit 1
+	diff <(jq --sort-keys . /tmp/configs/relay_workers.json) <(jq --sort-keys . $cur/configs/relay_workers.json) || exit 1
+
+	# destroy cluster
+	cleanup_process $*
+	rm -rf $WORK_DIR
+	mkdir $WORK_DIR
+
+	# insert new data
+	run_sql_file $cur/data/db1.increment5.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+
+	# deploy new cluster
+	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+	# import configs
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"config import -d /tmp/configs" \
+		"creating sources" 1 \
+		"creating tasks" 1 \
+		"The original relay workers have been exported to" 1 \
+		"Currently DM doesn't support recover relay workers.*transfer-source.*start-relay" 1
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"operate-source show" \
+		"mysql-replica-01" 1
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s $SOURCE_ID1" \
+		"\"result\": true" 2
+
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 cleanup_data $TEST_NAME

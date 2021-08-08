@@ -11,6 +11,11 @@ on:
       - master
       - release-2.0
 
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 jobs:
   make_build:
     name: Make Build
@@ -84,6 +89,7 @@ jobs:
         if: ${{ failure() }}
         env:
           FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
+          GIT_COMMITTER_NAME: ${{ github.event.pusher.name }}
         run: go run tests/_utils/send_lark_notify.go
 
   lint:

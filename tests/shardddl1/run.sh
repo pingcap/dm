@@ -13,10 +13,7 @@ function DM_001_CASE() {
 	# schema tracker could track per table without error
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"\"result\": true" 2 \
-		"\"synced\": true" 1
-	# only downstream sees a duplicate error, but currently ignored by DM
-	check_log_contain_with_retry "Duplicate column name 'new_col1'" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+		"Duplicate column name 'new_col1'" 1
 }
 
 function DM_001() {
@@ -266,6 +263,12 @@ function DM_RECOVER_LOCK_CASE() {
 	# TrySync tb1: joined(a,b,c); tb1(a,c); tb2(a)
 	# TrySync tb2: joined(a,c); tb1(a,c); tb2(a,b)
 	restart_master
+
+	# because we disabled auto-resume feature to satisfy other tests, we manually resume once to handle task was paused by
+	# errors of master restarting
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"resume-task test" \
+		"\"result\": true" 3
 
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(8,'eee');"
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(9,9);"

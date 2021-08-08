@@ -551,9 +551,19 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		}
 
 		if needSavePos {
-			err = r.SaveMeta(lastPos, lastGTID.Clone())
+			err = r.SaveMeta(lastPos, lastGTID)
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
+			}
+		}
+		if tResult.NextLogName != "" && !utils.IsFakeRotateEvent(e.Header) {
+			// if the binlog is rotated, we need to save and flush the next binlog filename to meta
+			lastPos.Name = tResult.NextLogName
+			if err := r.SaveMeta(lastPos, lastGTID); err != nil {
+				return terror.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
+			}
+			if err := r.FlushMeta(); err != nil {
+				return err
 			}
 		}
 	}
@@ -578,7 +588,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 
 	var newPos *mysql.Position
 	var newGset gtid.Set
-	var newUUIDSufiix int
+	var newUUIDSuffix int
 	if r.cfg.UUIDSuffix > 0 {
 		// if bound or rebound to a source, clear all relay log and meta
 		if err = r.PurgeRelayDir(); err != nil {
@@ -586,7 +596,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 		}
 		r.ResetMeta()
 
-		newUUIDSufiix = r.cfg.UUIDSuffix
+		newUUIDSuffix = r.cfg.UUIDSuffix
 		// reset the UUIDSuffix
 		r.cfg.UUIDSuffix = 0
 
@@ -600,7 +610,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 			}
 		}
 	}
-	err = r.meta.AddDir(uuid, newPos, newGset, newUUIDSufiix)
+	err = r.meta.AddDir(uuid, newPos, newGset, newUUIDSuffix)
 	if err != nil {
 		return err
 	}

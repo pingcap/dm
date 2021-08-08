@@ -128,7 +128,11 @@ unit_test_pkg_binlog: tools_setup
 unit_test_others: tools_setup
 	$(call run_unit_test,$(PACKAGES_OTHERS),unit_test_others)
 
-check: tools_setup lint fmt terror_check tidy_mod
+check: check_merge_conflicts tools_setup lint fmt terror_check tidy_mod
+
+check_merge_conflicts:
+	@echo "check-merge-conflicts"
+	@! git --no-pager grep -E '^<<<<<<< '
 
 fmt: tools_setup
 	@if [[ "${nolint}" != "true" ]]; then\
