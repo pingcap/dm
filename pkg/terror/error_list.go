@@ -1249,7 +1249,8 @@ var (
 	ErrCtlInvalidTLSCfg  = New(codeCtlInvalidTLSCfg, ClassDMCtl, ScopeInternal, LevelMedium, "invalid TLS config", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line.")
 
 	// openapi.
-	ErrOpenAPICommonError = New(codeOpenAPICommon, ClassOpenAPI, ScopeInternal, LevelHigh, "some unforeseen errors have occurred, please check the detailed error message", "")
+	ErrOpenAPICommonError        = New(codeOpenAPICommon, ClassOpenAPI, ScopeInternal, LevelHigh, "some unforeseen errors have occurred, please check the detailed error message", "")
+	ErrOpenAPITaskSourceNotFound = New(codeOpenAPICommon, ClassOpenAPI, ScopeInternal, LevelHigh, "data source configuration not found", "please check if the data source exists in the configuration file")
 
 	// default error.
 	ErrNotSet = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")

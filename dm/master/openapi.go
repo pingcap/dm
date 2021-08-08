@@ -25,6 +25,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -37,6 +38,54 @@ const (
 	docBasePath     = "/api/v1/docs"
 	docJSONBasePath = "/api/v1/dm.json"
 )
+
+// StartOpenAPIServer start OpenAPI server.
+func (s *Server) StartOpenAPIServer(ctx context.Context) {
+	if s.cfg.OpenAPIAddr == "" {
+		return
+	}
+	swagger, err := openapi.GetSwagger()
+	if err != nil {
+		exitServer(err)
+	}
+
+	swagger.AddServer(&openapi3.Server{URL: fmt.Sprintf("http://%s", s.cfg.OpenAPIAddr)})
+	swaggerJSON, err := swagger.MarshalJSON()
+	if err != nil {
+		exitServer(err)
+	}
+	docMW := openapi.NewSwaggerDocUI(openapi.NewSwaggerConfig(docBasePath, docJSONBasePath, ""), swaggerJSON)
+
+	// Clear out the servers array in the swagger spec, that skips validating
+	// that server names match. We don't know how this thing will be run.
+	swagger.Servers = nil
+
+	// Echo instance
+	e := echo.New()
+	// inject err handler
+	e.HTTPErrorHandler = terrorHTTPErrorHandler
+	// Middlewares
+	e.Use(docMW)
+	e.Use(echomiddleware.Logger())
+	// e.Logger.SetOutput()
+	e.Use(echomiddleware.Recover())
+	// Use our validation middleware to check all requests against the OpenAPI schema.
+	e.Use(middleware.OapiRequestValidator(swagger))
+	openapi.RegisterHandlers(e, s)
+
+	// Start server
+	go func() {
+		if err := e.Start(s.cfg.OpenAPIAddr); err != nil && err != http.ErrServerClosed {
+			exitServer(err)
+		}
+	}()
+
+	// Wait for ctx.Done()
+	<-ctx.Done()
+	if err := e.Shutdown(ctx); err != nil {
+		log.L().Warn("shutdown echo openapi server", zap.Error(err))
+	}
+}
 
 // redirectRequestToLeader is used to redirect the request to leader.
 // because the leader has some data in memory, only the leader can process the request.
@@ -214,7 +263,20 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 
 // DMAPIStartTask url is:(POST /api/v1/tasks).
 func (s *Server) DMAPIStartTask(ctx echo.Context) error {
-	panic("not implemented") // TODO: Implement
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+
+	var req openapi.Task
+	if err := ctx.Bind(&req); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // DMAPIDeleteTask url is:(DELETE /api/v1/tasks).
@@ -259,52 +321,143 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 	return cfg
 }
 
-// StartOpenAPIServer start OpenAPI server.
-func (s *Server) StartOpenAPIServer(ctx context.Context) {
-	if s.cfg.OpenAPIAddr == "" {
-		return
+func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) ([]*config.SubTaskConfig, error) {
+	// applay some default values
+	// TODO(ehco) mv this to another func
+	if task.MetaSchema == nil {
+		defaultMetaSchema := "dm_meta"
+		task.MetaSchema = &defaultMetaSchema
 	}
-	swagger, err := openapi.GetSwagger()
+
+	// check target database is valid
+	TODbCfg := &config.DBConfig{
+		Host:     task.TargetConfig.Host,
+		Port:     task.TargetConfig.Port,
+		User:     task.TargetConfig.User,
+		Password: task.TargetConfig.Password,
+	}
+	// TODO(ehco): add security
+	err := adjustTargetDB(ctx, TODbCfg)
 	if err != nil {
-		exitServer(err)
+		return nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
-
-	swagger.AddServer(&openapi3.Server{URL: fmt.Sprintf("http://%s", s.cfg.OpenAPIAddr)})
-	swaggerJSON, err := swagger.MarshalJSON()
-	if err != nil {
-		exitServer(err)
-	}
-	docMW := openapi.NewSwaggerDocUI(openapi.NewSwaggerConfig(docBasePath, docJSONBasePath, ""), swaggerJSON)
-
-	// Clear out the servers array in the swagger spec, that skips validating
-	// that server names match. We don't know how this thing will be run.
-	swagger.Servers = nil
-
-	// Echo instance
-	e := echo.New()
-	// inject err handler
-	e.HTTPErrorHandler = terrorHTTPErrorHandler
-	// Middlewares
-	e.Use(docMW)
-	e.Use(echomiddleware.Logger())
-	// e.Logger.SetOutput()
-	e.Use(echomiddleware.Recover())
-	// Use our validation middleware to check all requests against the OpenAPI schema.
-	e.Use(middleware.OapiRequestValidator(swagger))
-	openapi.RegisterHandlers(e, s)
-
-	// Start server
-	go func() {
-		if err := e.Start(s.cfg.OpenAPIAddr); err != nil && err != http.ErrServerClosed {
-			exitServer(err)
+	// get source database config from cluster
+	sourceDBCfgMap := make(map[string]config.DBConfig)
+	sourceDBMetaMap := make(map[string]*config.Meta)
+	for _, cfg := range task.SourceConfig.SourceConf {
+		if sourceCfg := s.scheduler.GetSourceCfgByID(cfg.SourceName); sourceCfg != nil {
+			sourceCfg.DecryptPassword()
+			// new meta from source config
+			sourceDBCfgMap[cfg.SourceName] = sourceCfg.From
+			var needAddMeta bool
+			meta := &config.Meta{}
+			if cfg.BinlogGtid != nil {
+				sourceDBMetaMap[cfg.SourceName].BinLogGTID = *cfg.BinlogGtid
+				needAddMeta = true
+			}
+			if cfg.BinlogName != nil {
+				sourceDBMetaMap[cfg.SourceName].BinLogName = *cfg.BinlogName
+				needAddMeta = true
+			}
+			if cfg.BinlogPos != nil {
+				pos := uint32(*cfg.BinlogPos)
+				sourceDBMetaMap[cfg.SourceName].BinLogPos = pos
+				needAddMeta = true
+			}
+			if needAddMeta {
+				sourceDBMetaMap[cfg.SourceName] = meta
+			}
+		} else {
+			return nil, terror.ErrOpenAPITaskSourceNotFound.Generatef("source name=%s", cfg.SourceName)
 		}
-	}()
-
-	// Wait for ctx.Done()
-	<-ctx.Done()
-	if err := e.Shutdown(ctx); err != nil {
-		log.L().Warn("shutdown echo openapi server", zap.Error(err))
 	}
+
+	eventFilterTemplateMap := make(map[string]bf.BinlogEventRule)
+	if task.EventFilterRule != nil {
+		for _, rule := range *task.EventFilterRule {
+			ruleT := bf.BinlogEventRule{Action: bf.Ignore}
+			if rule.IgnoreEvent != nil {
+				events := make([]bf.EventType, len(*rule.IgnoreEvent))
+				for i, eventStr := range *rule.IgnoreEvent {
+					events[i] = bf.EventType(eventStr)
+				}
+				ruleT.Events = events
+			}
+			if rule.IgnoreSql != nil {
+				ruleT.SQLPattern = *rule.IgnoreSql
+			}
+			eventFilterTemplateMap[rule.RuleName] = ruleT
+		}
+	}
+
+	// start to generate sub task configs
+	subTaskCfgList := make([]*config.SubTaskConfig, len(task.SourceConfig.SourceConf))
+	for i, sourceCfg := range task.SourceConfig.SourceConf {
+		subTaskCfg := config.NewSubTaskConfig()
+		// set target db config
+		subTaskCfg.To = *TODbCfg
+		// set source db config
+		subTaskCfg.From = sourceDBCfgMap[sourceCfg.SourceName]
+		// set source meta
+		subTaskCfg.MetaFile = *task.MetaSchema
+		if meta, ok := sourceDBMetaMap[sourceCfg.SourceName]; ok {
+			subTaskCfg.Meta = meta
+		}
+		subTaskCfg.SourceID = sourceCfg.SourceName
+		// set task mode
+		subTaskCfg.Mode = string(task.TaskMode)
+		// set shard config
+		if task.ShardMode != nil {
+			subTaskCfg.IsSharding = true
+			mode := *task.ShardMode
+			subTaskCfg.ShardMode = string(mode)
+		} else {
+			subTaskCfg.IsSharding = false
+		}
+		// set online ddl pulgin config
+		// TODO(ehco) fix this
+		subTaskCfg.OnlineDDLScheme = ""
+
+		// set full unit config
+		subTaskCfg.MydumperConfig = config.DefaultMydumperConfig()
+		subTaskCfg.LoaderConfig = config.DefaultLoaderConfig()
+		if fullCfg := task.SourceConfig.FullMigrateConf; fullCfg != nil {
+			if fullCfg.ExportThreads != nil {
+				subTaskCfg.MydumperConfig.Threads = *fullCfg.ExportThreads
+			}
+			if fullCfg.DataDir != nil {
+				subTaskCfg.Dir = *fullCfg.DataDir
+			}
+		}
+		// set incremental config
+		subTaskCfg.SyncerConfig = config.DefaultSyncerConfig()
+		if incrCfg := task.SourceConfig.IncrMigrateConf; incrCfg != nil {
+			if incrCfg.ReplThreads != nil {
+				subTaskCfg.SyncerConfig.WorkerCount = *incrCfg.ReplThreads
+			}
+			if incrCfg.ReplBatch != nil {
+				subTaskCfg.SyncerConfig.Batch = *incrCfg.ReplBatch
+			}
+		}
+		// set filter rule config
+		// subTaskCfg.FilterRules = make([]*bf.BinlogEventRule, len(*task.EventFilterRule))
+		// for j, name := range inst.FilterRules {
+		// 	// cfg.FilterRules[j] = c.Filters[name]
+		// }
+
+		// set migrate rule config
+		// subTaskCfg.RouteRules = make([]*router.TableRule, len(task.TableMigrateRule))
+		// for j, name := range inst.RouteRules {
+		// 	cfg.RouteRules[j] = c.Routes[name]
+		// }
+
+		// adjust sub task config
+		if err := subTaskCfg.Adjust(true); err != nil {
+			return nil, terror.Annotatef(err, "source name=%s", sourceCfg.SourceName)
+		}
+		subTaskCfgList[i] = subTaskCfg
+	}
+	return subTaskCfgList, nil
 }
 
 func terrorHTTPErrorHandler(err error, c echo.Context) {

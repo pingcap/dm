@@ -178,7 +178,8 @@ type MydumperConfig struct {
 	// TODO zxc: combine -B -T --regex with filter rules?
 }
 
-func defaultMydumperConfig() MydumperConfig {
+// DefaultMydumperConfig return DefaultMydumperConfig.
+func DefaultMydumperConfig() MydumperConfig {
 	return MydumperConfig{
 		MydumperPath:  defaultMydumperPath,
 		Threads:       defaultThreads,
@@ -192,7 +193,7 @@ type rawMydumperConfig MydumperConfig
 
 // UnmarshalYAML implements Unmarshaler.UnmarshalYAML.
 func (m *MydumperConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	raw := rawMydumperConfig(defaultMydumperConfig())
+	raw := rawMydumperConfig(DefaultMydumperConfig())
 	if err := unmarshal(&raw); err != nil {
 		return terror.ErrConfigYamlTransform.Delegate(err, "unmarshal mydumper config")
 	}
@@ -207,7 +208,8 @@ type LoaderConfig struct {
 	SQLMode  string `yaml:"-" toml:"-" json:"-"` // wrote by dump unit
 }
 
-func defaultLoaderConfig() LoaderConfig {
+// DefaultLoaderConfig return DefaultLoaderConfig.
+func DefaultLoaderConfig() LoaderConfig {
 	return LoaderConfig{
 		PoolSize: defaultPoolSize,
 		Dir:      defaultDir,
@@ -219,7 +221,7 @@ type rawLoaderConfig LoaderConfig
 
 // UnmarshalYAML implements Unmarshaler.UnmarshalYAML.
 func (m *LoaderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	raw := rawLoaderConfig(defaultLoaderConfig())
+	raw := rawLoaderConfig(DefaultLoaderConfig())
 	if err := unmarshal(&raw); err != nil {
 		return terror.ErrConfigYamlTransform.Delegate(err, "unmarshal loader config")
 	}
@@ -248,7 +250,8 @@ type SyncerConfig struct {
 	EnableANSIQuotes bool `yaml:"enable-ansi-quotes" toml:"enable-ansi-quotes" json:"enable-ansi-quotes"`
 }
 
-func defaultSyncerConfig() SyncerConfig {
+// DefaultSyncerConfig return DefaultSyncerConfig.
+func DefaultSyncerConfig() SyncerConfig {
 	return SyncerConfig{
 		WorkerCount:             defaultWorkerCount,
 		Batch:                   defaultBatch,
@@ -262,7 +265,7 @@ type rawSyncerConfig SyncerConfig
 
 // UnmarshalYAML implements Unmarshaler.UnmarshalYAML.
 func (m *SyncerConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	raw := rawSyncerConfig(defaultSyncerConfig())
+	raw := rawSyncerConfig(DefaultSyncerConfig())
 	if err := unmarshal(&raw); err != nil {
 		return terror.ErrConfigYamlTransform.Delegate(err, "unmarshal syncer config")
 	}
@@ -541,7 +544,7 @@ func (c *TaskConfig) adjust() error {
 			if len(c.Mydumpers) != 0 {
 				log.L().Warn("mysql instance don't refer mydumper's configuration with mydumper-config-name, the default configuration will be used", zap.String("mysql instance", inst.SourceID))
 			}
-			defaultCfg := defaultMydumperConfig()
+			defaultCfg := DefaultMydumperConfig()
 			inst.Mydumper = &defaultCfg
 		} else if inst.Mydumper.ChunkFilesize == "" {
 			// avoid too big dump file that can't sent concurrently
@@ -569,7 +572,7 @@ func (c *TaskConfig) adjust() error {
 			if len(c.Loaders) != 0 {
 				log.L().Warn("mysql instance don't refer loader's configuration with loader-config-name, the default configuration will be used", zap.String("mysql instance", inst.SourceID))
 			}
-			defaultCfg := defaultLoaderConfig()
+			defaultCfg := DefaultLoaderConfig()
 			inst.Loader = &defaultCfg
 		}
 		if inst.LoaderThread != 0 {
@@ -589,7 +592,7 @@ func (c *TaskConfig) adjust() error {
 			if len(c.Syncers) != 0 {
 				log.L().Warn("mysql instance don't refer syncer's configuration with syncer-config-name, the default configuration will be used", zap.String("mysql instance", inst.SourceID))
 			}
-			defaultCfg := defaultSyncerConfig()
+			defaultCfg := DefaultSyncerConfig()
 			inst.Syncer = &defaultCfg
 		}
 		if inst.SyncerThread != 0 {

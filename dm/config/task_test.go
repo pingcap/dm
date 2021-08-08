@@ -940,7 +940,7 @@ func (t *testConfig) TestDefaultConfig(c *C) {
 	cfg.TargetDB = &DBConfig{}
 	cfg.MySQLInstances = append(cfg.MySQLInstances, &MySQLInstance{SourceID: "source1"})
 	c.Assert(cfg.adjust(), IsNil)
-	c.Assert(*cfg.MySQLInstances[0].Mydumper, DeepEquals, defaultMydumperConfig())
+	c.Assert(*cfg.MySQLInstances[0].Mydumper, DeepEquals, DefaultMydumperConfig())
 
 	cfg.MySQLInstances[0].Mydumper = &MydumperConfig{MydumperPath: "test"}
 	c.Assert(cfg.adjust(), IsNil)

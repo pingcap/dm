@@ -457,6 +457,11 @@ components:
           description: "source password"
         security:
           $ref: "#/components/schemas/Security"
+      required:
+        - "host"
+        - "port"
+        - "user"
+        - "password"
     TaskEventFilterRule:
       description: "Filtering rules at binlog level"
       type: object
@@ -479,6 +484,8 @@ components:
             type: string
             description: "sql pattern to filter"
             example: "^Drop"
+      required:
+        - "rule_name"
     TaskTableMigrateRule:
       type: object
       description: "upstream table to downstream migrate rules"
@@ -517,6 +524,9 @@ components:
           items:
             type: string
             example: rule-1
+      required:
+        - "source"
+        - "target"
     TaskSourceConfig:
       type: object
       description: "source-related configuration"
@@ -537,13 +547,6 @@ components:
               type: string
               example: "./exported_data"
               description: "storage dir name"
-            consistency:
-              type: string
-              example: ""
-              description: "consistency level at full export"
-              enum:
-                - "snapshot"
-                - "none"
         incr_migrate_conf:
           description: configuration of incremental tasks
           type: object
@@ -551,11 +554,11 @@ components:
             repl_threads:
               type: integer
               description: incremental task of concurrent
-              default: 32
-            batch:
+              default: 16
+            repl_batch:
               type: integer
               description: incremental synchronization of batch execution sql quantities
-              default: 200
+              default: 100
         source_conf:
           type: array
           description: "source configuration"
@@ -575,6 +578,10 @@ components:
               binlog_gtid:
                 type: string
                 example: "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170"
+            required:
+              - "source_name"
+      required:
+        - "source_conf"
     TaskCheckerConfig:
       type: object
       description: "task status checker configuration"
@@ -709,7 +716,6 @@ components:
         shard_mode:
           type: string
           description: the way to coordinate DDL
-          nullable: true
           enum:
             - "pessimistic"
             - "optimistic"
@@ -717,11 +723,17 @@ components:
           type: string
           example: "dm-meta"
           description: "downstream database for storing meta information"
+          default: "dm-meta"
+        remove_meta:
+          type: boolean
+          example: true
+          description: whether to remove meta database in downstream database
+          default: false
         enhance_online_schema_change:
           type: boolean
           example: true
-          description: whether to enable support for the onlineddl plugin
-          nullable: true
+          description: whether to enable support for the online ddl plugin
+          default: true
         on_duplication:
           type: string
           description: "how to handle conflicted data"
@@ -743,11 +755,15 @@ components:
           items:
             $ref: "#/components/schemas/TaskTableMigrateRule"
         source_config:
-          type: array
-          description: "task configuration list of upstream data sources"
-          items:
-            $ref: "#/components/schemas/TaskSourceConfig"
-
+          $ref: "#/components/schemas/TaskSourceConfig"
+      required:
+        - "name"
+        - "task_mode"
+        - "enhance_online_schema_change"
+        - "on_duplication"
+        - "target_config"
+        - "table_migrate_rule"
+        - "source_config"
     ErrorWithMessage:
       description: "operation error"
       type: object

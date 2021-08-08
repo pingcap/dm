@@ -26,13 +26,6 @@ const (
 	TaskTaskModeIncremental TaskTaskMode = "incremental"
 )
 
-// Defines values for TaskSourceConfigFullMigrateConfConsistency.
-const (
-	TaskSourceConfigFullMigrateConfConsistencyNone TaskSourceConfigFullMigrateConfConsistency = "none"
-
-	TaskSourceConfigFullMigrateConfConsistencySnapshot TaskSourceConfigFullMigrateConfConsistency = "snapshot"
-)
-
 // operation error
 type ErrorWithMessage struct {
 	// error code
@@ -206,8 +199,8 @@ type Task struct {
 	// task status checker configuration
 	CheckerConfig *TaskCheckerConfig `json:"checker_config,omitempty"`
 
-	// whether to enable support for the onlineddl plugin
-	EnhanceOnlineSchemaChange *bool `json:"enhance_online_schema_change"`
+	// whether to enable support for the online ddl plugin
+	EnhanceOnlineSchemaChange bool `json:"enhance_online_schema_change"`
 
 	// binlog event filter rule set
 	EventFilterRule *[]TaskEventFilterRule `json:"event_filter_rule,omitempty"`
@@ -216,25 +209,28 @@ type Task struct {
 	MetaSchema *string `json:"meta_schema,omitempty"`
 
 	// task name
-	Name *string `json:"name,omitempty"`
+	Name string `json:"name"`
 
 	// how to handle conflicted data
-	OnDuplication *TaskOnDuplication `json:"on_duplication,omitempty"`
+	OnDuplication TaskOnDuplication `json:"on_duplication"`
+
+	// whether to remove meta database in downstream database
+	RemoveMeta *bool `json:"remove_meta,omitempty"`
 
 	// the way to coordinate DDL
-	ShardMode *TaskShardMode `json:"shard_mode"`
+	ShardMode *TaskShardMode `json:"shard_mode,omitempty"`
 
-	// task configuration list of upstream data sources
-	SourceConfig *[]TaskSourceConfig `json:"source_config,omitempty"`
+	// source-related configuration
+	SourceConfig TaskSourceConfig `json:"source_config"`
 
 	// table migrate rule
-	TableMigrateRule *[]TaskTableMigrateRule `json:"table_migrate_rule,omitempty"`
+	TableMigrateRule []TaskTableMigrateRule `json:"table_migrate_rule"`
 
 	// downstream database configuration
-	TargetConfig *TaskTargetDataBase `json:"target_config,omitempty"`
+	TargetConfig TaskTargetDataBase `json:"target_config"`
 
 	// migrate mode
-	TaskMode *TaskTaskMode `json:"task_mode,omitempty"`
+	TaskMode TaskTaskMode `json:"task_mode"`
 }
 
 // how to handle conflicted data
@@ -267,16 +263,13 @@ type TaskEventFilterRule struct {
 	IgnoreSql *[]string `json:"ignore_sql,omitempty"`
 
 	// rule name
-	RuleName *string `json:"rule_name,omitempty"`
+	RuleName string `json:"rule_name"`
 }
 
 // source-related configuration
 type TaskSourceConfig struct {
 	// configuration of full migrate tasks
 	FullMigrateConf *struct {
-		// consistency level at full export
-		Consistency *TaskSourceConfigFullMigrateConfConsistency `json:"consistency,omitempty"`
-
 		// storage dir name
 		DataDir *string `json:"data_dir,omitempty"`
 
@@ -290,25 +283,22 @@ type TaskSourceConfig struct {
 	// configuration of incremental tasks
 	IncrMigrateConf *struct {
 		// incremental synchronization of batch execution sql quantities
-		Batch *int `json:"batch,omitempty"`
+		ReplBatch *int `json:"repl_batch,omitempty"`
 
 		// incremental task of concurrent
 		ReplThreads *int `json:"repl_threads,omitempty"`
 	} `json:"incr_migrate_conf,omitempty"`
 
 	// source configuration
-	SourceConf *[]struct {
+	SourceConf []struct {
 		BinlogGtid *string `json:"binlog_gtid,omitempty"`
 		BinlogName *string `json:"binlog_name,omitempty"`
 		BinlogPos  *int    `json:"binlog_pos,omitempty"`
 
 		// source name
-		SourceName *string `json:"source_name,omitempty"`
-	} `json:"source_conf,omitempty"`
+		SourceName string `json:"source_name"`
+	} `json:"source_conf"`
 }
-
-// consistency level at full export
-type TaskSourceConfigFullMigrateConfConsistency string
 
 // upstream table to downstream migrate rules
 type TaskTableMigrateRule struct {
@@ -316,7 +306,7 @@ type TaskTableMigrateRule struct {
 	EventFilterName *[]string `json:"event_filter_name,omitempty"`
 
 	// source-related configuration
-	Source *struct {
+	Source struct {
 		// schema name, wildcard support
 		Schema *string `json:"schema,omitempty"`
 
@@ -325,34 +315,34 @@ type TaskTableMigrateRule struct {
 
 		// table name, wildcard support
 		Table *string `json:"table,omitempty"`
-	} `json:"source,omitempty"`
+	} `json:"source"`
 
 	// downstream-related configuration
-	Target *struct {
+	Target struct {
 		// schema name, does not support wildcards
 		Schema *string `json:"schema,omitempty"`
 
 		// table name, does not support wildcards
 		Table *string `json:"table,omitempty"`
-	} `json:"target,omitempty"`
+	} `json:"target"`
 }
 
 // downstream database configuration
 type TaskTargetDataBase struct {
 	// source address
-	Host *string `json:"host,omitempty"`
+	Host string `json:"host"`
 
 	// source password
-	Password *string `json:"password,omitempty"`
+	Password string `json:"password"`
 
 	// ource port
-	Port *int `json:"port,omitempty"`
+	Port int `json:"port"`
 
 	// data source ssl configuration, the field will be hidden when getting the data source configuration from the interface
 	Security *Security `json:"security"`
 
 	// source username
-	User *string `json:"user,omitempty"`
+	User string `json:"user"`
 }
 
 // requests related to workers
