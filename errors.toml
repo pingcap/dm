@@ -3088,6 +3088,18 @@ description = ""
 workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line."
 tags = ["internal", "medium"]
 
+[error.DM-unknown error class: 19-49001]
+message = "some unforeseen errors have occurred, please check the detailed error message"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
+[error.DM-unknown error class: 19-49002]
+message = "data source configuration not found"
+description = ""
+workaround = "please check if the data source exists in the configuration file"
+tags = ["internal", "high"]
+
 [error.DM-not-set-50000]
 message = ""
 description = ""

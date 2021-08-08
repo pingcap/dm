@@ -496,8 +496,8 @@ components:
           properties:
             source_name:
               type: string
-              description: source name, wildcard support
-              example: "source-*"
+              description: source name
+              example: "source-name"
             schema:
               type: string
               description: schema name, wildcard support
@@ -506,6 +506,10 @@ components:
               type: string
               description: table name, wildcard support
               example: "tb-*"
+          required:
+            - "source_name"
+            - "schema"
+            - "table"
         target:
           type: object
           description: downstream-related configuration
@@ -518,6 +522,9 @@ components:
               type: string
               description: table name, does not support wildcards
               example: "tb1"
+          required:
+            - "schema"
+            - "table"
         event_filter_name:
           type: array
           description: "filter rule name"

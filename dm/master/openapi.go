@@ -26,6 +26,8 @@ import (
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -322,13 +324,17 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 }
 
 func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) ([]*config.SubTaskConfig, error) {
+	// check some not implemented features
+	if task.OnDuplication != openapi.TaskOnDuplicationError {
+		return nil, terror.ErrOpenAPICommonError.New("on duplication is currently only implemented at the error level")
+	}
+
 	// applay some default values
 	// TODO(ehco) mv this to another func
 	if task.MetaSchema == nil {
 		defaultMetaSchema := "dm_meta"
 		task.MetaSchema = &defaultMetaSchema
 	}
-
 	// check target database is valid
 	TODbCfg := &config.DBConfig{
 		Host:     task.TargetConfig.Host,
@@ -341,10 +347,12 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 	if err != nil {
 		return nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
-	// get source database config from cluster
+	// source name -> source config
 	sourceDBCfgMap := make(map[string]config.DBConfig)
+	// source name -> meta config
 	sourceDBMetaMap := make(map[string]*config.Meta)
 	for _, cfg := range task.SourceConfig.SourceConf {
+		// get source database config from cluster
 		if sourceCfg := s.scheduler.GetSourceCfgByID(cfg.SourceName); sourceCfg != nil {
 			sourceCfg.DecryptPassword()
 			// new meta from source config
@@ -372,6 +380,16 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 		}
 	}
 
+	// source name -> migrate rule list
+	tableMigrateRuleMap := make(map[string][]openapi.TaskTableMigrateRule)
+	for _, rule := range task.TableMigrateRule {
+		if _, ok := tableMigrateRuleMap[rule.Source.SourceName]; !ok {
+			tableMigrateRuleMap[rule.Source.SourceName] = []openapi.TaskTableMigrateRule{rule}
+		} else {
+			tableMigrateRuleMap[rule.Source.SourceName] = append(tableMigrateRuleMap[rule.Source.SourceName], rule)
+		}
+	}
+	// rule name -> rule
 	eventFilterTemplateMap := make(map[string]bf.BinlogEventRule)
 	if task.EventFilterRule != nil {
 		for _, rule := range *task.EventFilterRule {
@@ -404,7 +422,8 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 			subTaskCfg.Meta = meta
 		}
 		subTaskCfg.SourceID = sourceCfg.SourceName
-		// set task mode
+		// set task mode and name
+		subTaskCfg.Name = task.Name
 		subTaskCfg.Mode = string(task.TaskMode)
 		// set shard config
 		if task.ShardMode != nil {
@@ -415,9 +434,11 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 			subTaskCfg.IsSharding = false
 		}
 		// set online ddl pulgin config
-		// TODO(ehco) fix this
-		subTaskCfg.OnlineDDLScheme = ""
-
+		subTaskCfg.OnlineDDL = task.EnhanceOnlineSchemaChange
+		// TODO set meet error policy
+		// TODO task checker
+		// TODO case insensitive?
+		// TODO ExprFilter?
 		// set full unit config
 		subTaskCfg.MydumperConfig = config.DefaultMydumperConfig()
 		subTaskCfg.LoaderConfig = config.DefaultLoaderConfig()
@@ -439,17 +460,38 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 				subTaskCfg.SyncerConfig.Batch = *incrCfg.ReplBatch
 			}
 		}
-		// set filter rule config
-		// subTaskCfg.FilterRules = make([]*bf.BinlogEventRule, len(*task.EventFilterRule))
-		// for j, name := range inst.FilterRules {
-		// 	// cfg.FilterRules[j] = c.Filters[name]
-		// }
-
-		// set migrate rule config
-		// subTaskCfg.RouteRules = make([]*router.TableRule, len(task.TableMigrateRule))
-		// for j, name := range inst.RouteRules {
-		// 	cfg.RouteRules[j] = c.Routes[name]
-		// }
+		// set route , blockAllowList, filter config
+		doDBs := []string{}
+		doTables := []*filter.Table{}
+		routeRules := []*router.TableRule{}
+		filterRules := []*bf.BinlogEventRule{}
+		for _, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
+			// route
+			routeRules = append(routeRules, &router.TableRule{
+				SchemaPattern: rule.Source.Schema,
+				TablePattern:  rule.Source.Table,
+				TargetSchema:  rule.Target.Schema,
+				TargetTable:   rule.Target.Table,
+			})
+			// filter
+			if rule.EventFilterName != nil {
+				for _, name := range *rule.EventFilterName {
+					filterRule := eventFilterTemplateMap[name] // note: there is a cpoied value
+					filterRule.SchemaPattern = rule.Source.Schema
+					filterRule.TablePattern = rule.Source.Table
+					filterRules = append(filterRules, &filterRule)
+				}
+			}
+			// BlockAllowList
+			doDBs = append(doDBs, rule.Source.Schema)
+			doTables = append(doTables, &filter.Table{
+				Schema: rule.Source.Schema,
+				Name:   rule.Source.Table,
+			})
+		}
+		subTaskCfg.RouteRules = routeRules
+		subTaskCfg.FilterRules = filterRules
+		subTaskCfg.BAList = &filter.Rules{DoDBs: doDBs, DoTables: doTables}
 
 		// adjust sub task config
 		if err := subTaskCfg.Adjust(true); err != nil {
