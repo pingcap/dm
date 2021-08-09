@@ -261,3 +261,13 @@ function run_dmctl_with_retry() {
 	cat $dmctl_log
 	exit 1
 }
+
+function ensure_start_relay() {
+	# manually enable relay for source-2 after v2.0.2
+	if [[ "$PRE_VER" != "v2.0.0" ]] && [[ "$PRE_VER" != "v2.0.1" ]]; then
+		dmctl_log="get-worker.txt"
+		tiup dmctl:$PRE_VER --master-addr=master1:8261 operate-source show -s mariadb-replica-02 >$dmctl_log 2>&1
+		worker=$(grep "worker" $dmctl_log | awk -F'"' '{ print $4 }')
+		run_dmctl_with_retry $PRE_VER "start-relay -s mariadb-replica-02 $worker" "\"result\": true" 1
+	fi
+}
