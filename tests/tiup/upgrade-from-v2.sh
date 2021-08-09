@@ -28,7 +28,8 @@ function migrate_in_previous_v2() {
 	exec_full_stage
 
 	# v2.0.0 doesn't implement relay log, and enable-gtid for MariaDB has a bug
-	if [[ "$PRE_VER" == "v2.0.0" ]]; then
+	# v2.0.1 forgets to handle MARIADB_GTID_LIST_EVENT, so we disable relay for it.
+	if [[ "$PRE_VER" == "v2.0.0" ]] || [[ "$PRE_VER" == "v2.0.1" ]]; then
 		sed -i "s/enable-relay: true/enable-relay: false/g" $CUR/conf/source2.yaml
 		sed -i "s/enable-gtid: true/enable-gtid: false/g" $CUR/conf/source2.yaml
 	fi
@@ -44,7 +45,7 @@ function migrate_in_previous_v2() {
 	tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task_optimistic.yaml
 	tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task_pessimistic.yaml
 
-	ensure_start_relay
+	ensure_start_relay $PRE_VER
 
 	exec_incremental_stage1
 
@@ -69,7 +70,7 @@ function upgrade_to_current_v2() {
 
 	tiup dm upgrade --yes $CLUSTER_NAME $CUR_VER
 
-	ensure_start_relay
+	ensure_start_relay $CUR_VER
 }
 
 function migrate_in_v2() {
@@ -123,12 +124,6 @@ function diff_configs() {
 function downgrade_to_previous_v2() {
 	echo "downgrade to previous version $PRE_VER"
 
-	# v2.0.1 forgets to handle MARIADB_GTID_LIST_EVENT, so we disable relay for it.
-	if [[ "$PRE_VER" == "v2.0.1" ]]; then
-		sed -i "s/enable-relay: true/enable-relay: false/g" $CUR/conf/source2.yaml
-		sed -i "s/enable-gtid: true/enable-gtid: false/g" $CUR/conf/source2.yaml
-	fi
-
 	# destory current cluster
 	tiup dm destroy --yes $CLUSTER_NAME
 
@@ -141,7 +136,7 @@ function downgrade_to_previous_v2() {
 	# config import
 	tiup dmctl:$CUR_VER --master-addr=master1:8261 config import -d new_configs
 
-	ensure_start_relay
+	ensure_start_relay $PRE_VER
 
 	exec_incremental_stage4
 
