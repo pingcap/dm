@@ -172,6 +172,9 @@ type SubTaskStatus struct {
 	// task unit type
 	Unit                *string `json:"unit,omitempty"`
 	UnresolvedDdlLockId *string `json:"unresolved_ddl_lock_id,omitempty"`
+
+	// worker name
+	WorkerName *string `json:"worker_name,omitempty"`
 }
 
 // status of sync uuit

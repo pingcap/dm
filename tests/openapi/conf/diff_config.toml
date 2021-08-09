@@ -24,6 +24,13 @@ password = "123456"
 port = 3306
 user = "root"
 
+[[source-db]]
+host = "127.0.0.1"
+instance-id = "source-2"
+password = "123456"
+port = 3307
+user = "root"
+
 [target-db]
 host = "127.0.0.1"
 password = ""

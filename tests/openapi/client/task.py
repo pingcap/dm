@@ -3,6 +3,7 @@ import requests
 
 TASK_NAME = "test"
 SOURCE1_NAME = "mysql-01"
+SOURCE2_NAME = "mysql-02"
 
 
 API_ENDPOINT = "http://127.0.0.1:1323/api/v1/tasks"
@@ -31,10 +32,21 @@ def start_task_success():
                     "table": "*",
                 },
                 "target": {"schema": "openapi", "table": "t"},
-            }
+            },
+            {
+                "source": {
+                    "source_name": SOURCE2_NAME,
+                    "schema": "openapi",
+                    "table": "*",
+                },
+                "target": {"schema": "openapi", "table": "t"},
+            },
         ],
         "source_config": {
-            "source_conf": [{"source_name": SOURCE1_NAME}],
+            "source_conf": [
+                {"source_name": SOURCE1_NAME},
+                {"source_name": SOURCE2_NAME},
+            ],
         },
     }
     resp = requests.post(url=API_ENDPOINT, json=req)

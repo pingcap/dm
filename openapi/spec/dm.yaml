@@ -248,7 +248,9 @@ paths:
           content:
             "application/json":
               schema:
-                $ref: "#/components/schemas/SubTaskStatus"
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubTaskStatus"
         "400":
           description: "failed"
           content:
@@ -688,6 +690,9 @@ components:
         name:
           type: string
           description: task name
+        worker_name:
+          type: string
+          description: worker name
         stage:
           type: string
           example: "runing"

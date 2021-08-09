@@ -1,8 +1,10 @@
 import sys
 import requests
 
-SOURCE_NAME = "mysql-01"
-WORKER_NAME = "worker1"
+SOURCE1_NAME = "mysql-01"
+SOURCE2_NAME = "mysql-02"
+WORKER1_NAME = "worker1"
+WORKER2_NAME = "worker2"
 
 
 API_ENDPOINT = "http://127.0.0.1:1323/api/v1/sources"
@@ -15,19 +17,34 @@ def create_source_failed():
     print("create_source_failed resp=", resp.json())
 
 
-def create_source_success():
-    create_source_req = {
+def create_source1_success():
+    req = {
         "case_sensitive": False,
         "enable_gtid": False,
         "host": "127.0.0.1",
         "password": "123456",
         "port": 3306,
-        "source_name": SOURCE_NAME,
+        "source_name": SOURCE1_NAME,
         "user": "root",
     }
-    resp = requests.post(url=API_ENDPOINT, json=create_source_req)
+    resp = requests.post(url=API_ENDPOINT, json=req)
     assert resp.status_code == 201
-    print("create_source_by_openapi_success resp=", resp.json())
+    print("create_source1_success resp=", resp.json())
+
+
+def create_source2_success():
+    req = {
+        "case_sensitive": False,
+        "enable_gtid": False,
+        "host": "127.0.0.1",
+        "password": "123456",
+        "port": 3307,
+        "source_name": SOURCE2_NAME,
+        "user": "root",
+    }
+    resp = requests.post(url=API_ENDPOINT, json=req)
+    assert resp.status_code == 201
+    print("create_source1_success resp=", resp.json())
 
 
 def list_source_success(source_count):
@@ -47,60 +64,66 @@ def list_source_with_redirect(source_count):
     print("list_source_by_openapi_redirect resp=", data)
 
 
-def delete_source_success():
-    resp = requests.delete(url=API_ENDPOINT + "/" + SOURCE_NAME)
+def delete_source_success(source_name):
+    resp = requests.delete(url=API_ENDPOINT + "/" + source_name)
     assert resp.status_code == 204
     print("delete_source_success")
 
 
-def delete_source_failed():
-    resp = requests.delete(url=API_ENDPOINT + "/" + SOURCE_NAME)
+def delete_source_failed(source_name):
+    resp = requests.delete(url=API_ENDPOINT + "/" + source_name)
     assert resp.status_code == 400
     print("delete_source_failed msg=", resp.json())
 
 
-def start_relay_failed():
-    url = API_ENDPOINT + "/" + SOURCE_NAME + "/start-relay"
-    resp = requests.patch(url=url)
-    # no valid reqyest body
+def start_relay_failed(source_name, worker_name):
+    url = API_ENDPOINT + "/" + source_name + "/start-relay"
+    req = {
+        "worker_name": worker_name,
+    }
+    resp = requests.patch(url=url, json=req)
     assert resp.status_code == 400
     print("start_relay_failed resp=", resp.json())
 
 
-def start_relay_success():
-    url = API_ENDPOINT + "/" + SOURCE_NAME + "/start-relay"
+def start_relay_success(source_name, worker_name):
+    url = API_ENDPOINT + "/" + source_name + "/start-relay"
     req = {
-        "worker_name": WORKER_NAME,
+        "worker_name": worker_name,
         "purge": {"interval": 3600, "expires": 0, "remain_space": 15},
     }
     resp = requests.patch(url=url, json=req)
     assert resp.status_code == 200
 
 
-def get_source_status_failed():
-    url = API_ENDPOINT + "/" + "fake_source" + "/status"
+def get_source_status_failed(source_name):
+    url = API_ENDPOINT + "/" + source_name + "/status"
     resp = requests.get(url=url)
     assert resp.status_code == 400
     print("get_source_status_failed resp=", resp.json())
 
 
-def get_source_status_success():
-    url = API_ENDPOINT + "/" + SOURCE_NAME + "/status"
+def get_source_status_success(source_name):
+    url = API_ENDPOINT + "/" + source_name + "/status"
     resp = requests.get(url=url)
     assert resp.status_code == 200
     print("get_source_status_success resp=", resp.json())
 
 
-def stop_relay_failed():
-    url = API_ENDPOINT + "/" + SOURCE_NAME + "/stop-relay"
-    resp = requests.patch(url=url)
-    assert resp.status_code == 400
-
-
-def stop_relay_success():
-    url = API_ENDPOINT + "/" + SOURCE_NAME + "/stop-relay"
+def stop_relay_failed(source_name, worker_name):
+    url = API_ENDPOINT + "/" + source_name + "/stop-relay"
     req = {
-        "worker_name": WORKER_NAME,
+        "worker_name": worker_name,
+    }
+    resp = requests.patch(url=url, json=req)
+    assert resp.status_code == 400
+    print("stop_relay_failed resp=", resp.json())
+
+
+def stop_relay_success(source_name, worker_name):
+    url = API_ENDPOINT + "/" + source_name + "/stop-relay"
+    req = {
+        "worker_name": worker_name,
     }
     resp = requests.patch(url=url, json=req)
     assert resp.status_code == 200
@@ -109,7 +132,8 @@ def stop_relay_success():
 if __name__ == "__main__":
     FUNC_MAP = {
         "create_source_failed": create_source_failed,
-        "create_source_success": create_source_success,
+        "create_source1_success": create_source1_success,
+        "create_source2_success": create_source2_success,
         "list_source_success": list_source_success,
         "list_source_with_redirect": list_source_with_redirect,
         "delete_source_failed": delete_source_failed,
