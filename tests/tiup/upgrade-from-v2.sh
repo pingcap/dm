@@ -27,11 +27,9 @@ function deploy_previous_v2() {
 function migrate_in_previous_v2() {
 	exec_full_stage
 
-	# v2.0.0 doesn't implement relay log, and enable-gtid for MariaDB has a bug
-	# v2.0.1 forgets to handle MARIADB_GTID_LIST_EVENT, so we disable relay for it.
-	if [[ "$PRE_VER" == "v2.0.0" ]] || [[ "$PRE_VER" == "v2.0.1" ]]; then
-		sed -i "s/enable-relay: true/enable-relay: false/g" $CUR/conf/source2.yaml
-		sed -i "s/enable-gtid: true/enable-gtid: false/g" $CUR/conf/source2.yaml
+	# v2.0.0 doesn't implement relay log
+	if [[ "$PRE_VER" == "v2.0.0" ]]; then
+		sed -i "s/enable-relay: true/enable-relay: false/g" $CUR/conf/source1.yaml
 	fi
 
 	sed -i "s/enable-heartbeat: true/enable-heartbeat: false/g" $CUR/conf/task.yaml
