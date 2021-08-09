@@ -52,7 +52,7 @@ def list_source_success(source_count):
     assert resp.status_code == 200
     data = resp.json()
     # only create one source
-    assert len(data) == int(source_count)
+    assert data["total"] == int(source_count)
     print("list_source_by_openapi_success resp=", data)
 
 
@@ -60,7 +60,7 @@ def list_source_with_redirect(source_count):
     resp = requests.get(url=API_ENDPOINT_NOT_LEADER)
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) == int(source_count)
+    assert data["total"] == int(source_count)
     print("list_source_by_openapi_redirect resp=", data)
 
 

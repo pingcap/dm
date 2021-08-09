@@ -142,10 +142,11 @@ func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
 	for idx, sourceID := range sourceIDS {
 		sourceCfgList[idx] = s.scheduler.GetSourceCfgByID(sourceID)
 	}
-	resp := make([]openapi.Source, len(sourceCfgList))
+	sourceList := make([]openapi.Source, len(sourceCfgList))
 	for idx, cfg := range sourceCfgList {
-		resp[idx] = sourceCfgToModel(*cfg)
+		sourceList[idx] = sourceCfgToModel(*cfg)
 	}
+	resp := openapi.GetSourceListResponse{Total: len(sourceList), Data: sourceList}
 	return ctx.JSON(http.StatusOK, resp)
 }
 

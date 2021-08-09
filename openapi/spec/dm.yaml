@@ -52,9 +52,7 @@ paths:
           content:
             "application/json":
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Source"
+                $ref: "#/components/schemas/GetSourceListResponse"
   /api/v1/sources/{source-name}:
     delete:
       tags:
@@ -196,9 +194,7 @@ paths:
           content:
             "application/json":
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Task"
+                $ref: "#/components/schemas/GetTaskListResponse"
         "400":
           description: "failed"
           content:
@@ -818,6 +814,30 @@ components:
           type: integer
           description: "error code"
 
+    GetSourceListResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Source"
+      required:
+        - "total"
+        - "data"
+    GetTaskListResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+      required:
+        - "total"
+        - "data"
     GetTaskStatusResponse:
       type: object
       properties:

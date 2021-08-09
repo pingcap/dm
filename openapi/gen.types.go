@@ -35,6 +35,18 @@ type ErrorWithMessage struct {
 	ErrorMsg *string `json:"error_msg,omitempty"`
 }
 
+// GetSourceListResponse defines model for GetSourceListResponse.
+type GetSourceListResponse struct {
+	Data  []Source `json:"data"`
+	Total int      `json:"total"`
+}
+
+// GetTaskListResponse defines model for GetTaskListResponse.
+type GetTaskListResponse struct {
+	Data  []Task `json:"data"`
+	Total int    `json:"total"`
+}
+
 // GetTaskStatusResponse defines model for GetTaskStatusResponse.
 type GetTaskStatusResponse struct {
 	Data  []SubTaskStatus `json:"data"`
