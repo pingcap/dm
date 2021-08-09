@@ -107,7 +107,7 @@ const (
 )
 
 // waitXIDStatus represents the status for waiting XID event when pause/stop task.
-type waitXIDStatus int
+type waitXIDStatus int64
 
 const (
 	noWait waitXIDStatus = iota
@@ -998,10 +998,6 @@ func (s *Syncer) addJob(job *job) error {
 		queueBucket = s.cfg.WorkerCount
 		startTime := time.Now()
 		s.jobs[queueBucket] <- job
-		if waitXIDStatus(s.waitXIDJob.Load()) == waiting {
-			s.waitXIDJob.Store(int64(waitComplete))
-		}
-		s.isTransactionEnd.Store(true)
 		metrics.AddJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	case insert, update, del:
 		s.jobWg.Add(1)
