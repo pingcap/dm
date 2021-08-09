@@ -80,6 +80,8 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	cfg2 := scm2[source]
 	c.Assert(cfg2, DeepEquals, cfg)
 	c.Assert(strings.Contains(string(cfg2.From.Security.SSLCertBytes), "test no content"), Equals, true)
+	c.Assert(strings.Contains(string(cfg2.From.Security.SSLCABytes), "test no content"), Equals, true)
+	c.Assert(strings.Contains(string(cfg2.From.Security.SSLCertBytes), "test no content"), Equals, true)
 
 	// put another source config.
 	rev2, err = PutSourceCfg(etcdTestCli, &cfgExtra)

@@ -30,12 +30,11 @@ EOF
 		--path $WORK_DIR/tidb \
 		--store mocktikv \
 		--config $WORK_DIR/tidb-tls-config.toml \
-		-status=10081 \
 		--log-file "$WORK_DIR/tidb.log" &
 
 	sleep 3
 	# if execute failed, print tidb's log for debug
-	mysql -uroot -h127.0.0.1 -P4400 --default-character-set utf8 --ssl-ca $cur/conf/ca.pem --ssl-cert $cur/conf/dm.pem --ssl-key $cur/conf/dm.key -E -e "drop database if exists tls"
+	mysql -uroot -h127.0.0.1 -P4400 --default-character-set utf8 --ssl-ca $cur/conf/ca.pem --ssl-cert $cur/conf/dm.pem --ssl-key $cur/conf/dm.key -E -e "drop database if exists tls" || (cat $WORK_DIR/tidb.log && exit 1)
 	mysql -uroot -h127.0.0.1 -P4400 --default-character-set utf8 --ssl-ca $cur/conf/ca.pem --ssl-cert $cur/conf/dm.pem --ssl-key $cur/conf/dm.key -E -e "drop database if exists dm_meta"
 }
 
@@ -53,9 +52,8 @@ function setup_mysql_tls() {
 	mysql_data_path=$(cat "$TEST_DIR/sql_res.$TEST_NAME.txt" | grep Value | cut -d ':' -f 2 | xargs)
 	echo "mysql_ssl_setup at=$mysql_data_path"
 
-	# NOTE the mysql_ssl_rsa_setup will create a new cert if there is no cert in datadir
+	# NOTE we can use ` mysql_ssl_rsa_setup --datadir "$mysql_data_path"` to create a new cert in datadir
 	# in ci, mysql in other contianer, so we can't use the mysql_ssl_rsa_setup
-	# mysql_ssl_rsa_setup --datadir "$mysql_data_path"
 	# only mysql 8.0 support use `ALTER INSTANCE RELOAD TLS` to reload cert
 	# when use mysql 5.7 we need to restart mysql-server manually if your local server do not enable ssl
 

@@ -1,4 +1,4 @@
-// Copyright 2020 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
 package config
 
 import (
+	"strings"
+
 	. "github.com/pingcap/check"
 )
 
@@ -28,4 +30,7 @@ func (t *testConfig) TestLoadContent(c *C) {
 	c.Assert(len(s.SSLCABytes) > 0, Equals, true)
 	c.Assert(len(s.SSLCertBytes) > 0, Equals, true)
 	c.Assert(len(s.SSLKEYBytes) > 0, Equals, true)
+	c.Assert(strings.Contains(string(s.SSLCertBytes), "test no content"), Equals, true)
+	c.Assert(strings.Contains(string(s.SSLKEYBytes), "test no content"), Equals, true)
+	c.Assert(strings.Contains(string(s.SSLCABytes), "test no content"), Equals, true)
 }

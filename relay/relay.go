@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
@@ -48,8 +49,6 @@ import (
 	"github.com/pingcap/dm/relay/retry"
 	"github.com/pingcap/dm/relay/transformer"
 	"github.com/pingcap/dm/relay/writer"
-
-	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 // used to fill RelayLogInfo.
