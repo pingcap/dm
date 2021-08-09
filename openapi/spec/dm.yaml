@@ -248,9 +248,7 @@ paths:
           content:
             "application/json":
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/SubTaskStatus"
+                $ref: "#/components/schemas/GetTaskStatusResponse"
         "400":
           description: "failed"
           content:
@@ -631,6 +629,12 @@ components:
           items:
             type: string
           description: ""
+      required:
+        - "target"
+        - "ddl_list"
+        - "first_location"
+        - "synced"
+        - "unsynced"
     LoadStatus:
       type: object
       description: "status of load unit"
@@ -647,6 +651,12 @@ components:
           type: string
         meta_binlog_gtid:
           type: string
+      required:
+        - "finished_bytes"
+        - "total_bytes"
+        - "progress"
+        - "meta_binlog"
+        - "meta_binlog_gtid"
     SyncStatus:
       type: object
       description: "status of sync uuit"
@@ -684,12 +694,29 @@ components:
           type: string
         seconds_behind_master:
           type: integer
+          format: int64
+      required:
+        - "total_events"
+        - "total_tps"
+        - "recent_tps"
+        - "master_binlog"
+        - "master_binlog_gtid"
+        - "syncer_binlog"
+        - "syncer_binlog_gtid"
+        - "blocking_ddls"
+        - "unresolved_groups"
+        - "synced"
+        - "binlog_type"
+        - "seconds_behind_master"
     SubTaskStatus:
       type: object
       properties:
         name:
           type: string
           description: task name
+        source_name:
+          type: string
+          description: source name
         worker_name:
           type: string
           description: worker name
@@ -709,6 +736,12 @@ components:
         sync_status:
           nullable: true
           $ref: "#/components/schemas/SyncStatus"
+      required:
+        - "name"
+        - "source_name"
+        - "worker_name"
+        - "stage"
+        - "unit"
     Task:
       description: "task"
       type: object
@@ -784,3 +817,16 @@ components:
         error_code:
           type: integer
           description: "error code"
+
+    GetTaskStatusResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubTaskStatus"
+      required:
+        - "total"
+        - "data"

@@ -111,6 +111,9 @@ function test_task() {
 	# get source status success
 	python $cur/client/source.py "get_source_status_success" "mysql-02"
 
+	# start task success: not vaild task create request
+	python $cur/client/task.py "start_task_failed"
+
 	# start task success
 	python $cur/client/task.py "start_task_success"
 
@@ -120,6 +123,12 @@ function test_task() {
 
 	incr_data
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	# get task status failed
+	python $cur/client/task.py "get_task_status_failed" "no-task"
+
+	# get task status success
+	python $cur/client/task.py "get_task_status_success" "test" 2
 
 	# stop task success
 	python $cur/client/task.py "stop_task_success" "test"

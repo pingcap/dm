@@ -35,13 +35,19 @@ type ErrorWithMessage struct {
 	ErrorMsg *string `json:"error_msg,omitempty"`
 }
 
+// GetTaskStatusResponse defines model for GetTaskStatusResponse.
+type GetTaskStatusResponse struct {
+	Data  []SubTaskStatus `json:"data"`
+	Total int             `json:"total"`
+}
+
 // status of load unit
 type LoadStatus struct {
-	FinishedBytes  *int64  `json:"finished_bytes,omitempty"`
-	MetaBinlog     *string `json:"meta_binlog,omitempty"`
-	MetaBinlogGtid *string `json:"meta_binlog_gtid,omitempty"`
-	Progress       *string `json:"progress,omitempty"`
-	TotalBytes     *int64  `json:"total_bytes,omitempty"`
+	FinishedBytes  int64  `json:"finished_bytes"`
+	MetaBinlog     string `json:"meta_binlog"`
+	MetaBinlogGtid string `json:"meta_binlog_gtid"`
+	Progress       string `json:"progress"`
+	TotalBytes     int64  `json:"total_bytes"`
 }
 
 // relay log cleanup policy configuration
@@ -91,11 +97,11 @@ type Security struct {
 
 // ShardingGroup defines model for ShardingGroup.
 type ShardingGroup struct {
-	DdlList       *[]string `json:"ddl_list,omitempty"`
-	FirstLocation *string   `json:"first_location,omitempty"`
-	Synced        *[]string `json:"synced,omitempty"`
-	Target        *string   `json:"target,omitempty"`
-	Unsynced      *[]string `json:"unsynced,omitempty"`
+	DdlList       []string `json:"ddl_list"`
+	FirstLocation string   `json:"first_location"`
+	Synced        []string `json:"synced"`
+	Target        string   `json:"target"`
+	Unsynced      []string `json:"unsynced"`
 }
 
 // source
@@ -161,40 +167,43 @@ type SubTaskStatus struct {
 	LoadStatus *LoadStatus `json:"load_status,omitempty"`
 
 	// task name
-	Name *string `json:"name,omitempty"`
+	Name string `json:"name"`
+
+	// source name
+	SourceName string `json:"source_name"`
 
 	// current stage of the task
-	Stage *string `json:"stage,omitempty"`
+	Stage string `json:"stage"`
 
 	// status of sync uuit
 	SyncStatus *SyncStatus `json:"sync_status,omitempty"`
 
 	// task unit type
-	Unit                *string `json:"unit,omitempty"`
+	Unit                string  `json:"unit"`
 	UnresolvedDdlLockId *string `json:"unresolved_ddl_lock_id,omitempty"`
 
 	// worker name
-	WorkerName *string `json:"worker_name,omitempty"`
+	WorkerName string `json:"worker_name"`
 }
 
 // status of sync uuit
 type SyncStatus struct {
-	BinlogType *string `json:"binlog_type,omitempty"`
+	BinlogType string `json:"binlog_type"`
 
 	// sharding DDL which current is blocking
-	BlockingDdls        *[]string `json:"blocking_ddls,omitempty"`
-	MasterBinlog        *string   `json:"master_binlog,omitempty"`
-	MasterBinlogGtid    *string   `json:"master_binlog_gtid,omitempty"`
-	RecentTps           *int64    `json:"recent_tps,omitempty"`
-	SecondsBehindMaster *int      `json:"seconds_behind_master,omitempty"`
-	Synced              *bool     `json:"synced,omitempty"`
-	SyncerBinlog        *string   `json:"syncer_binlog,omitempty"`
-	SyncerBinlogGtid    *string   `json:"syncer_binlog_gtid,omitempty"`
-	TotalEvents         *int64    `json:"total_events,omitempty"`
-	TotalTps            *int64    `json:"total_tps,omitempty"`
+	BlockingDdls        []string `json:"blocking_ddls"`
+	MasterBinlog        string   `json:"master_binlog"`
+	MasterBinlogGtid    string   `json:"master_binlog_gtid"`
+	RecentTps           int64    `json:"recent_tps"`
+	SecondsBehindMaster int64    `json:"seconds_behind_master"`
+	Synced              bool     `json:"synced"`
+	SyncerBinlog        string   `json:"syncer_binlog"`
+	SyncerBinlogGtid    string   `json:"syncer_binlog_gtid"`
+	TotalEvents         int64    `json:"total_events"`
+	TotalTps            int64    `json:"total_tps"`
 
 	// sharding groups which current are un-resolved
-	UnresolvedGroups *[]ShardingGroup `json:"unresolved_groups,omitempty"`
+	UnresolvedGroups []ShardingGroup `json:"unresolved_groups"`
 }
 
 // task

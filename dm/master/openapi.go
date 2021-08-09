@@ -25,12 +25,14 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
+	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -318,12 +320,97 @@ func (s *Server) DMAPIDeleteTask(ctx echo.Context, taskName string) error {
 
 // DMAPIGetTaskList url is:(GET /api/v1/tasks).
 func (s *Server) DMAPIGetTaskList(ctx echo.Context) error {
-	panic("not implemented") // TODO: Implement
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+
+	return nil
 }
 
 // DMAPIGetTaskStatus url is:(GET /api/v1/tasks/{task-name}/status).
 func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
-	panic("not implemented") // TODO: Implement
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+
+	// 1. get task source list from scheduler
+	sourceList := s.getTaskResources(taskName)
+	if len(sourceList) == 0 {
+		return errors.Errorf("task %s has no source or not exist", taskName)
+	}
+	// 2. get status from workers
+	ret := s.getStatusFromWorkers(ctx.Request().Context(), sourceList, taskName, true)
+
+	subTaskStatusList := make([]openapi.SubTaskStatus, len(ret))
+	for i, status := range ret {
+		if !status.Result {
+			// can't get this worker's status just skip it
+			continue
+		}
+		ss := status.SourceStatus
+		// TODO check why there is more than one sub task status in one worker?
+		sts := status.SubTaskStatus[0]
+		subTaskStatus := openapi.SubTaskStatus{
+			Name:                taskName,
+			SourceName:          ss.GetSource(),
+			WorkerName:          ss.GetWorker(),
+			Stage:               sts.GetStage().String(),
+			Unit:                sts.GetUnit().String(),
+			UnresolvedDdlLockId: &sts.UnresolvedDDLLockID,
+		}
+		// add load status
+		loadS := sts.GetLoad()
+		if sts.Unit == pb.UnitType_Load && loadS != nil {
+			subTaskStatus.LoadStatus = &openapi.LoadStatus{
+				FinishedBytes:  loadS.FinishedBytes,
+				MetaBinlog:     loadS.MetaBinlog,
+				MetaBinlogGtid: loadS.MetaBinlogGTID,
+				Progress:       loadS.Progress,
+				TotalBytes:     loadS.TotalBytes,
+			}
+		}
+		// add syncer status
+		syncerS := sts.GetSync()
+		if sts.Unit == pb.UnitType_Sync && syncerS != nil {
+			subTaskStatus.SyncStatus = &openapi.SyncStatus{
+				BinlogType:          syncerS.GetBinlogType(),
+				BlockingDdls:        syncerS.GetBlockingDDLs(),
+				MasterBinlog:        syncerS.GetMasterBinlog(),
+				MasterBinlogGtid:    syncerS.GetMasterBinlogGtid(),
+				RecentTps:           syncerS.RecentTps,
+				SecondsBehindMaster: syncerS.SecondsBehindMaster,
+				Synced:              syncerS.Synced,
+				SyncerBinlog:        syncerS.SyncerBinlog,
+				SyncerBinlogGtid:    syncerS.SyncerBinlogGtid,
+				TotalEvents:         syncerS.TotalEvents,
+				TotalTps:            syncerS.TotalTps,
+			}
+			unResolvedGroups := syncerS.GetUnresolvedGroups()
+			if len(unResolvedGroups) > 0 {
+				subTaskStatus.SyncStatus.UnresolvedGroups = make([]openapi.ShardingGroup, len(unResolvedGroups))
+				for i, unResolvedGroup := range unResolvedGroups {
+					subTaskStatus.SyncStatus.UnresolvedGroups[i] = openapi.ShardingGroup{
+						DdlList:       unResolvedGroup.DDLs,
+						FirstLocation: unResolvedGroup.FirstLocation,
+						Synced:        unResolvedGroup.Synced,
+						Target:        unResolvedGroup.Target,
+						Unsynced:      unResolvedGroup.Unsynced,
+					}
+				}
+			}
+		}
+		subTaskStatusList[i] = subTaskStatus
+	}
+	resp := openapi.GetTaskStatusResponse{Total: len(subTaskStatusList), Data: subTaskStatusList}
+	return ctx.JSON(http.StatusOK, resp)
 }
 
 func sourceCfgToModel(cfg config.SourceConfig) openapi.Source {
@@ -357,7 +444,8 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 	[]config.SubTaskConfig, *config.DBConfig, error) {
 	// check some not implemented features
 	if task.OnDuplication != openapi.TaskOnDuplicationError {
-		return nil, nil, terror.ErrOpenAPICommonError.New("on duplication is currently only implemented at the error level")
+		return nil, nil, terror.ErrOpenAPICommonError.New(
+			"now on duplication is currently only implemented at the error level")
 	}
 
 	// applay some default values
@@ -467,9 +555,8 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 		// set online ddl pulgin config
 		subTaskCfg.OnlineDDL = task.EnhanceOnlineSchemaChange
 		// TODO set meet error policy
-		// TODO task checker
 		// TODO case insensitive?
-		// TODO ExprFilter?
+		// TODO ExprFilter
 		// set full unit config
 		subTaskCfg.MydumperConfig = config.DefaultMydumperConfig()
 		subTaskCfg.LoaderConfig = config.DefaultLoaderConfig()
