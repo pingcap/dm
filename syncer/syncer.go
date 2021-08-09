@@ -1797,6 +1797,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						// revert currentLocation to startLocation
 						currentLocation = startLocation
 					} else if op == pb.ErrorOp_Skip {
+						s.saveGlobalPoint(currentLocation)
 						err = s.flushCheckPoints()
 						if err != nil {
 							tctx.L().Warn("failed to flush checkpoints when handle-error skip", zap.Error(err))
