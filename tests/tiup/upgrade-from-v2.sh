@@ -28,7 +28,8 @@ function migrate_in_previous_v2() {
 	exec_full_stage
 
 	# v2.0.0 doesn't implement relay log
-	if [[ "$PRE_VER" == "v2.0.0" ]]; then
+	# v2.0.1 doesn't reset to the beginning GTID of file when requesting relay, so will generate a hole in relay log
+	if [[ "$PRE_VER" == "v2.0.0" ]] || [[ "$PRE_VER" == "v2.0.1" ]]; then
 		sed -i "s/enable-relay: true/enable-relay: false/g" $CUR/conf/source1.yaml
 	fi
 
@@ -43,7 +44,7 @@ function migrate_in_previous_v2() {
 	tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task_optimistic.yaml
 	tiup dmctl:$PRE_VER --master-addr=master1:8261 start-task $CUR/conf/task_pessimistic.yaml
 
-	ensure_start_relay $PRE_VER
+	ensure_start_relay
 
 	exec_incremental_stage1
 
@@ -68,7 +69,7 @@ function upgrade_to_current_v2() {
 
 	tiup dm upgrade --yes $CLUSTER_NAME $CUR_VER
 
-	ensure_start_relay $CUR_VER
+	ensure_start_relay
 }
 
 function migrate_in_v2() {
@@ -134,7 +135,7 @@ function downgrade_to_previous_v2() {
 	# config import
 	tiup dmctl:$CUR_VER --master-addr=master1:8261 config import -d new_configs
 
-	ensure_start_relay $PRE_VER
+	ensure_start_relay
 
 	exec_incremental_stage4
 
