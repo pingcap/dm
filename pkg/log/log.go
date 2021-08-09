@@ -103,11 +103,11 @@ var (
 
 // InitLogger initializes DM's and also the TiDB library's loggers.
 func InitLogger(cfg *Config) error {
-	// TODO temp remove for ci test
-	// err := logutil.InitLogger(&logutil.LogConfig{Config: pclog.Config{Level: cfg.Level}})
-	// if err != nil {
-	// 	return terror.ErrInitLoggerFail.Delegate(err)
-	// }
+	// currently only schema tracker use global logger(std logger)
+	confG := &pclog.Config{Level: cfg.Level}
+	lg, r, _ := pclog.InitLogger(confG)
+	lg = lg.With(zap.String("component", "tracker tracker"))
+	pclog.ReplaceGlobals(lg, r)
 
 	logger, props, err := pclog.InitLogger(&pclog.Config{
 		Level:  cfg.Level,
@@ -128,7 +128,6 @@ func InitLogger(cfg *Config) error {
 	appLogger = Logger{logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))}
 	appLevel = props.Level
 	appProps = props
-	pclog.ReplaceGlobals(logger, props)
 	return nil
 }
 
