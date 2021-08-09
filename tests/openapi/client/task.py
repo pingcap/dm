@@ -115,6 +115,15 @@ def get_task_status_success(task_name, total):
     print("get_task_status_failed resp=", data)
 
 
+def get_task_list(task_count):
+    url = API_ENDPOINT
+    resp = requests.get(url=url)
+    data = resp.json()
+    assert resp.status_code == 200
+    assert data["total"] == int(task_count)
+    print("get_task_list resp=", data)
+
+
 def stop_task_failed(task_name):
     resp = requests.delete(url=API_ENDPOINT + "/" + task_name)
     assert resp.status_code == 400
@@ -133,6 +142,7 @@ if __name__ == "__main__":
         "start_task_success": start_task_success,
         "stop_task_failed": stop_task_failed,
         "stop_task_success": stop_task_success,
+        "get_task_list": get_task_list,
         "get_task_status_failed": get_task_status_failed,
         "get_task_status_success": get_task_status_success,
     }

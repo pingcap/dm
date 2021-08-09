@@ -275,38 +275,47 @@ type TaskEventFilterRule struct {
 	RuleName string `json:"rule_name"`
 }
 
+// configuration of full migrate tasks
+type TaskFullMigrateConf struct {
+	// storage dir name
+	DataDir *string `json:"data_dir,omitempty"`
+
+	// full export of concurrent
+	ExportThreads *int `json:"export_threads,omitempty"`
+
+	// full import of concurrent
+	ImportThreads *int `json:"import_threads,omitempty"`
+}
+
+// configuration of incremental tasks
+type TaskIncrMigrateConf struct {
+	// incremental synchronization of batch execution sql quantities
+	ReplBatch *int `json:"repl_batch,omitempty"`
+
+	// incremental task of concurrent
+	ReplThreads *int `json:"repl_threads,omitempty"`
+}
+
+// TaskSourceConf defines model for TaskSourceConf.
+type TaskSourceConf struct {
+	BinlogGtid *string `json:"binlog_gtid,omitempty"`
+	BinlogName *string `json:"binlog_name,omitempty"`
+	BinlogPos  *int    `json:"binlog_pos,omitempty"`
+
+	// source name
+	SourceName string `json:"source_name"`
+}
+
 // source-related configuration
 type TaskSourceConfig struct {
 	// configuration of full migrate tasks
-	FullMigrateConf *struct {
-		// storage dir name
-		DataDir *string `json:"data_dir,omitempty"`
-
-		// full export of concurrent
-		ExportThreads *int `json:"export_threads,omitempty"`
-
-		// full import of concurrent
-		ImportThreads *int `json:"import_threads,omitempty"`
-	} `json:"full_migrate_conf,omitempty"`
+	FullMigrateConf *TaskFullMigrateConf `json:"full_migrate_conf,omitempty"`
 
 	// configuration of incremental tasks
-	IncrMigrateConf *struct {
-		// incremental synchronization of batch execution sql quantities
-		ReplBatch *int `json:"repl_batch,omitempty"`
-
-		// incremental task of concurrent
-		ReplThreads *int `json:"repl_threads,omitempty"`
-	} `json:"incr_migrate_conf,omitempty"`
+	IncrMigrateConf *TaskIncrMigrateConf `json:"incr_migrate_conf,omitempty"`
 
 	// source configuration
-	SourceConf []struct {
-		BinlogGtid *string `json:"binlog_gtid,omitempty"`
-		BinlogName *string `json:"binlog_name,omitempty"`
-		BinlogPos  *int    `json:"binlog_pos,omitempty"`
-
-		// source name
-		SourceName string `json:"source_name"`
-	} `json:"source_conf"`
+	SourceConf []TaskSourceConf `json:"source_conf"`
 }
 
 // upstream table to downstream migrate rules

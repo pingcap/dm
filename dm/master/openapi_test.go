@@ -79,3 +79,15 @@ func (t *testOpenAPISuite) TestredirectRequestToLeader(c *check.C) {
 	c.Assert(needRedirect2, check.Equals, true)
 	c.Assert(openAPIAddrFromS2, check.Equals, s1.cfg.OpenAPIAddr)
 }
+
+func (t *testOpenAPISuite) TestOpenAPITaskToSubTaskConfig(c *check.C) {
+	// normal simple task
+	// shard merge task
+	// shard merge task with event filter
+}
+
+func (t *testOpenAPISuite) TestConfigTaskToOpenAPITask(c *check.C) {
+	// normal simple task
+	// shard merge task
+	// shard merge task with event filter
+}

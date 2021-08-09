@@ -130,11 +130,16 @@ function test_task() {
 	# get task status success
 	python $cur/client/task.py "get_task_status_success" "test" 2
 
+	# get task list
+	python $cur/client/task.py "get_task_list" 1
+
 	# stop task success
 	python $cur/client/task.py "stop_task_success" "test"
 
 	# stop task failed
 	python $cur/client/task.py "stop_task_failed" "test"
+
+	python $cur/client/task.py "get_task_list" 0
 
 	# delete source success
 	python $cur/client/source.py "delete_source_success" "mysql-01"

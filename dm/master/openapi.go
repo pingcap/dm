@@ -281,7 +281,17 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		return err
 	}
 	newCtx := ctx.Request().Context()
-	subTaskConfigList, ToDBCfg, err := s.modelToSubTaskConfigs(newCtx, task)
+	// prepare source db config first source name -> db config
+	sourceDBCfgMap := make(map[string]config.DBConfig)
+	for _, cfg := range task.SourceConfig.SourceConf {
+		if sourceCfg := s.scheduler.GetSourceCfgByID(cfg.SourceName); sourceCfg != nil {
+			sourceCfg.DecryptPassword()
+			sourceDBCfgMap[cfg.SourceName] = sourceCfg.From
+		} else {
+			return terror.ErrOpenAPITaskSourceNotFound.Generatef("source name=%s", cfg.SourceName)
+		}
+	}
+	subTaskConfigList, ToDBCfg, err := modelToSubTaskConfigs(newCtx, sourceDBCfgMap, task)
 	if err != nil {
 		return err
 	}
@@ -297,6 +307,7 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 	if err != nil {
 		return err
 	}
+
 	return ctx.JSON(http.StatusCreated, task)
 }
 
@@ -328,8 +339,11 @@ func (s *Server) DMAPIGetTaskList(ctx echo.Context) error {
 	if needRedirect {
 		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
 	}
-
-	return nil
+	// get sub task config by task name task name->source name->subtask config
+	subTaskConfigMap := s.scheduler.GetSubTaskCfgs()
+	taskList := subtaskCfgListToModelTask(subTaskConfigMap)
+	resp := openapi.GetTaskListResponse{Total: len(taskList), Data: taskList}
+	return ctx.JSON(http.StatusOK, resp)
 }
 
 // DMAPIGetTaskStatus url is:(GET /api/v1/tasks/{task-name}/status).
@@ -349,16 +363,25 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
 	}
 	// 2. get status from workers
 	ret := s.getStatusFromWorkers(ctx.Request().Context(), sourceList, taskName, true)
-
+	s.fillUnsyncedStatus(ret)
 	subTaskStatusList := make([]openapi.SubTaskStatus, len(ret))
-	for i, status := range ret {
-		if !status.Result {
+	for i, res := range ret {
+		if !res.Result {
 			// can't get this worker's status just skip it
 			continue
 		}
-		ss := status.SourceStatus
-		// TODO check why there is more than one sub task status in one worker?
-		sts := status.SubTaskStatus[0]
+		ss := res.SourceStatus
+		// find right task name
+		var sts *pb.SubTaskStatus
+		for _, cfg := range res.SubTaskStatus {
+			if cfg.Name == taskName {
+				sts = cfg
+			}
+		}
+		if sts == nil {
+			// this may not happen
+			return terror.ErrOpenAPICommonError.Generatef("can not find task=%s status", taskName)
+		}
 		subTaskStatus := openapi.SubTaskStatus{
 			Name:                taskName,
 			SourceName:          ss.GetSource(),
@@ -441,15 +464,16 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 	return cfg
 }
 
-func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
-	[]config.SubTaskConfig, *config.DBConfig, error) {
+func modelToSubTaskConfigs(ctx context.Context,
+	sourceDBCfgMap map[string]config.DBConfig, task openapi.Task) ([]config.SubTaskConfig, *config.DBConfig, error) {
+	// NOTE need make sure all source configs(sourceDBCfgMap) are valid and not empty
+
 	// check some not implemented features
 	if task.OnDuplication != openapi.TaskOnDuplicationError {
 		return nil, nil, terror.ErrOpenAPICommonError.New(
 			"now on duplication is currently only implemented at the error level")
 	}
-
-	// applay some default values
+	// apply some default values
 	// TODO(ehco) mv this to another func
 	if task.MetaSchema == nil {
 		defaultMetaSchema := "dm_meta"
@@ -467,36 +491,27 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 	if err != nil {
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
-	// source name -> source config
-	sourceDBCfgMap := make(map[string]config.DBConfig)
 	// source name -> meta config
 	sourceDBMetaMap := make(map[string]*config.Meta)
 	for _, cfg := range task.SourceConfig.SourceConf {
-		// get source database config from cluster
-		if sourceCfg := s.scheduler.GetSourceCfgByID(cfg.SourceName); sourceCfg != nil {
-			sourceCfg.DecryptPassword()
-			// new meta from source config
-			sourceDBCfgMap[cfg.SourceName] = sourceCfg.From
-			var needAddMeta bool
-			meta := &config.Meta{}
-			if cfg.BinlogGtid != nil {
-				sourceDBMetaMap[cfg.SourceName].BinLogGTID = *cfg.BinlogGtid
-				needAddMeta = true
-			}
-			if cfg.BinlogName != nil {
-				sourceDBMetaMap[cfg.SourceName].BinLogName = *cfg.BinlogName
-				needAddMeta = true
-			}
-			if cfg.BinlogPos != nil {
-				pos := uint32(*cfg.BinlogPos)
-				sourceDBMetaMap[cfg.SourceName].BinLogPos = pos
-				needAddMeta = true
-			}
-			if needAddMeta {
-				sourceDBMetaMap[cfg.SourceName] = meta
-			}
-		} else {
-			return nil, nil, terror.ErrOpenAPITaskSourceNotFound.Generatef("source name=%s", cfg.SourceName)
+		// check if need to set source meta
+		var needAddMeta bool
+		meta := &config.Meta{}
+		if cfg.BinlogGtid != nil {
+			sourceDBMetaMap[cfg.SourceName].BinLogGTID = *cfg.BinlogGtid
+			needAddMeta = true
+		}
+		if cfg.BinlogName != nil {
+			sourceDBMetaMap[cfg.SourceName].BinLogName = *cfg.BinlogName
+			needAddMeta = true
+		}
+		if cfg.BinlogPos != nil {
+			pos := uint32(*cfg.BinlogPos)
+			sourceDBMetaMap[cfg.SourceName].BinLogPos = pos
+			needAddMeta = true
+		}
+		if needAddMeta {
+			sourceDBMetaMap[cfg.SourceName] = meta
 		}
 	}
 
@@ -622,6 +637,143 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 		subTaskCfgList[i] = *subTaskCfg
 	}
 	return subTaskCfgList, TODbCfg, nil
+}
+
+func strToModelTaskMode(s string) openapi.TaskTaskMode {
+	switch s {
+	case string(openapi.TaskTaskModeAll):
+		return openapi.TaskTaskModeAll
+	case string(openapi.TaskTaskModeFull):
+		return openapi.TaskTaskModeFull
+	default:
+		return openapi.TaskTaskModeIncremental
+	}
+}
+
+func strToModelTaskShardMode(s string) openapi.TaskShardMode {
+	switch s {
+	case string(openapi.TaskShardModeOptimistic):
+		return openapi.TaskShardModeOptimistic
+	default:
+		return openapi.TaskShardModePessimistic
+	}
+}
+
+func genFilterRuleName(sourceName string, idx int) string {
+	// NOTE that we don't have user input filter rule name in sub task config,so we make one by ourself
+	return fmt.Sprintf("%s-filter-rule-%d", sourceName, idx)
+}
+
+func subtaskCfgListToModelTask(subTaskConfigMap map[string]map[string]config.SubTaskConfig) []openapi.Task {
+	taskList := []openapi.Task{}
+	for taskName, sourceMap := range subTaskConfigMap {
+		var oneSubtaskConfig config.SubTaskConfig // need this to get target db config
+		taskSourceConfig := openapi.TaskSourceConfig{}
+		sourceConfList := []openapi.TaskSourceConf{}
+		// source name ->filter rule list
+		filterMap := make(map[string][]*bf.BinlogEventRule)
+		// source name -> route rule list
+		routeMap := make(map[string][]*router.TableRule)
+		// source name -> BlockAllowList rule
+		bAMap := make(map[string]*filter.Rules)
+		for sourceName, cfg := range sourceMap {
+			oneSubtaskConfig = cfg
+			oneConf := openapi.TaskSourceConf{
+				SourceName: sourceName,
+			}
+			if meta := cfg.Meta; meta != nil {
+				oneConf.BinlogGtid = &meta.BinLogGTID
+				oneConf.BinlogName = &meta.BinLogName
+				pos := int(meta.BinLogPos)
+				oneConf.BinlogPos = &pos
+			}
+			sourceConfList = append(sourceConfList, oneConf)
+			filterMap[sourceName] = cfg.FilterRules
+			routeMap[sourceName] = cfg.RouteRules
+			bAMap[sourceName] = cfg.BAList
+		}
+		taskSourceConfig.SourceConf = sourceConfList
+		taskSourceConfig.FullMigrateConf = &openapi.TaskFullMigrateConf{
+			DataDir:       &oneSubtaskConfig.LoaderConfig.Dir,
+			ExportThreads: &oneSubtaskConfig.MydumperConfig.Threads,
+			ImportThreads: &oneSubtaskConfig.LoaderConfig.PoolSize,
+		}
+		taskSourceConfig.IncrMigrateConf = &openapi.TaskIncrMigrateConf{
+			ReplBatch:   &oneSubtaskConfig.SyncerConfig.Batch,
+			ReplThreads: &oneSubtaskConfig.SyncerConfig.WorkerCount,
+		}
+		// set filter rules
+		filterRuleList := []openapi.TaskEventFilterRule{}
+		for sourceName, ruleList := range filterMap {
+			for idx, rule := range ruleList {
+				events := []string{}
+				if len(rule.Events) > 0 {
+					for _, event := range rule.Events {
+						events = append(events, string(event))
+					}
+				}
+				filterRuleList = append(filterRuleList, openapi.TaskEventFilterRule{
+					RuleName:    genFilterRuleName(sourceName, idx),
+					IgnoreEvent: &events,
+					IgnoreSql:   &rule.SQLPattern,
+				})
+			}
+		}
+		// set table migrate rules
+		tableMigrateRuleList := []openapi.TaskTableMigrateRule{}
+		for sourceName, ruleList := range routeMap {
+			for _, rule := range ruleList {
+				tableMigrateRule := openapi.TaskTableMigrateRule{
+					Source: struct {
+						Schema     string "json:\"schema\""
+						SourceName string "json:\"source_name\""
+						Table      string "json:\"table\""
+					}{
+						Schema:     rule.SchemaPattern,
+						SourceName: sourceName,
+						Table:      rule.TablePattern,
+					},
+					Target: struct {
+						Schema string "json:\"schema\""
+						Table  string "json:\"table\""
+					}{
+						Schema: rule.TargetSchema,
+						Table:  rule.TargetTable,
+					},
+				}
+				if filterRuleList, ok := filterMap[sourceName]; ok {
+					ruleNameList := make([]string, len(filterRuleList))
+					for idx := range filterRuleList {
+						ruleNameList[idx] = genFilterRuleName(sourceName, idx)
+					}
+					tableMigrateRule.EventFilterName = &ruleNameList
+				}
+				tableMigrateRuleList = append(tableMigrateRuleList, tableMigrateRule)
+			}
+		}
+		// set basic global config
+		taskShardMode := strToModelTaskShardMode(oneSubtaskConfig.ShardMode)
+		task := openapi.Task{
+			Name:                      taskName,
+			TaskMode:                  strToModelTaskMode(oneSubtaskConfig.Mode),
+			EnhanceOnlineSchemaChange: oneSubtaskConfig.OnlineDDL,
+			MetaSchema:                &oneSubtaskConfig.MetaSchema,
+			OnDuplication:             openapi.TaskOnDuplicationError, // currently only support error
+			RemoveMeta:                nil,                            // currently subtask doesn't have remove-meta
+			ShardMode:                 &taskShardMode,
+			SourceConfig:              taskSourceConfig,
+			TargetConfig: openapi.TaskTargetDataBase{
+				Host:     oneSubtaskConfig.To.Host,
+				Port:     oneSubtaskConfig.To.Port,
+				User:     oneSubtaskConfig.To.User,
+				Password: oneSubtaskConfig.To.Password,
+			},
+		}
+		task.EventFilterRule = &filterRuleList
+		task.TableMigrateRule = tableMigrateRuleList
+		taskList = append(taskList, task)
+	}
+	return taskList
 }
 
 func terrorHTTPErrorHandler(err error, c echo.Context) {

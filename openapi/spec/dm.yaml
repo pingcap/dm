@@ -530,59 +530,66 @@ components:
       required:
         - "source"
         - "target"
+
+    TaskFullMigrateConf:
+      description: configuration of full migrate tasks
+      type: object
+      properties:
+        export_threads:
+          type: integer
+          description: full export of concurrent
+          default: 4
+        import_threads:
+          type: integer
+          description: full import of concurrent
+          default: 16
+        data_dir:
+          type: string
+          example: "./exported_data"
+          description: "storage dir name"
+    TaskIncrMigrateConf:
+      description: configuration of incremental tasks
+      type: object
+      properties:
+        repl_threads:
+          type: integer
+          description: incremental task of concurrent
+          default: 16
+        repl_batch:
+          type: integer
+          description: incremental synchronization of batch execution sql quantities
+          default: 100
+    TaskSourceConf:
+      type: object
+      properties:
+        source_name:
+          type: string
+          example: "mysql-replica-01"
+          description: "source name"
+        binlog_name:
+          type: string
+          example: "binlog.000001"
+        binlog_pos:
+          type: integer
+          example: 4
+        binlog_gtid:
+          type: string
+          example: "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170"
+      required:
+        - "source_name"
     TaskSourceConfig:
       type: object
       description: "source-related configuration"
       properties:
         full_migrate_conf:
-          description: configuration of full migrate tasks
-          type: object
-          properties:
-            export_threads:
-              type: integer
-              description: full export of concurrent
-              default: 4
-            import_threads:
-              type: integer
-              description: full import of concurrent
-              default: 16
-            data_dir:
-              type: string
-              example: "./exported_data"
-              description: "storage dir name"
+          $ref: "#/components/schemas/TaskFullMigrateConf"
         incr_migrate_conf:
-          description: configuration of incremental tasks
-          type: object
-          properties:
-            repl_threads:
-              type: integer
-              description: incremental task of concurrent
-              default: 16
-            repl_batch:
-              type: integer
-              description: incremental synchronization of batch execution sql quantities
-              default: 100
+          $ref: "#/components/schemas/TaskIncrMigrateConf"
         source_conf:
           type: array
           description: "source configuration"
           items:
-            type: object
-            properties:
-              source_name:
-                type: string
-                example: "mysql-replica-01"
-                description: "source name"
-              binlog_name:
-                type: string
-                example: "binlog.000001"
-              binlog_pos:
-                type: integer
-                example: 4
-              binlog_gtid:
-                type: string
-                example: "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170"
-            required:
-              - "source_name"
+            $ref: "#/components/schemas/TaskSourceConf"
       required:
         - "source_conf"
     TaskCheckerConfig:
