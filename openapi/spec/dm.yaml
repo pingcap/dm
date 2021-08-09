@@ -749,8 +749,6 @@ components:
             - "error"
         target_config:
           $ref: "#/components/schemas/TaskTargetDataBase"
-        checker_config:
-          $ref: "#/components/schemas/TaskCheckerConfig"
         event_filter_rule:
           type: array
           description: "binlog event filter rule set"

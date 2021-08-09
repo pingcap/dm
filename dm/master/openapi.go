@@ -244,7 +244,7 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	}
 	sourceStatus := status.SourceStatus
 	relayStatus := sourceStatus.GetRelayStatus()
-	enableRelay := relayStatus == nil
+	enableRelay := relayStatus != nil
 	resp := openapi.SourceStatus{
 		EnableRelay: enableRelay,
 		SourceName:  sourceStatus.Source,
@@ -273,17 +273,47 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
 	}
 
-	var req openapi.Task
-	if err := ctx.Bind(&req); err != nil {
+	var task openapi.Task
+	if bindErr := ctx.Bind(&task); bindErr != nil {
 		return err
 	}
-
-	return nil
+	newCtx := ctx.Request().Context()
+	subTaskConfigList, ToDBCfg, err := s.modelToSubTaskConfigs(newCtx, task)
+	if err != nil {
+		return err
+	}
+	if task.RemoveMeta != nil && *task.RemoveMeta {
+		s.removeMetaLock.Lock()
+		if removeMetaErr := s.removeMetaData(newCtx, task.Name, *task.MetaSchema, *ToDBCfg); removeMetaErr != nil {
+			s.removeMetaLock.Unlock()
+			return terror.Annotate(removeMetaErr, "while removing metadata")
+		}
+	}
+	err = s.scheduler.AddSubTasks(subTaskConfigList...)
+	s.removeMetaLock.Unlock()
+	if err != nil {
+		return err
+	}
+	return ctx.JSON(http.StatusCreated, task)
 }
 
 // DMAPIDeleteTask url is:(DELETE /api/v1/tasks).
 func (s *Server) DMAPIDeleteTask(ctx echo.Context, taskName string) error {
-	panic("not implemented") // TODO: Implement
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+	sourceList := s.getTaskResources(taskName)
+	if len(sourceList) == 0 {
+		return terror.ErrSchedulerTaskNotExist.Generate(taskName)
+	}
+	if err := s.scheduler.RemoveSubTasks(taskName, sourceList...); err != nil {
+		return err
+	}
+	return ctx.NoContent(http.StatusNoContent)
 }
 
 // DMAPIGetTaskList url is:(GET /api/v1/tasks).
@@ -323,10 +353,11 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 	return cfg
 }
 
-func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) ([]*config.SubTaskConfig, error) {
+func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
+	[]config.SubTaskConfig, *config.DBConfig, error) {
 	// check some not implemented features
 	if task.OnDuplication != openapi.TaskOnDuplicationError {
-		return nil, terror.ErrOpenAPICommonError.New("on duplication is currently only implemented at the error level")
+		return nil, nil, terror.ErrOpenAPICommonError.New("on duplication is currently only implemented at the error level")
 	}
 
 	// applay some default values
@@ -345,7 +376,7 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 	// TODO(ehco): add security
 	err := adjustTargetDB(ctx, TODbCfg)
 	if err != nil {
-		return nil, terror.WithClass(err, terror.ClassDMMaster)
+		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 	// source name -> source config
 	sourceDBCfgMap := make(map[string]config.DBConfig)
@@ -376,7 +407,7 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 				sourceDBMetaMap[cfg.SourceName] = meta
 			}
 		} else {
-			return nil, terror.ErrOpenAPITaskSourceNotFound.Generatef("source name=%s", cfg.SourceName)
+			return nil, nil, terror.ErrOpenAPITaskSourceNotFound.Generatef("source name=%s", cfg.SourceName)
 		}
 	}
 
@@ -389,7 +420,7 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 			tableMigrateRuleMap[rule.Source.SourceName] = append(tableMigrateRuleMap[rule.Source.SourceName], rule)
 		}
 	}
-	// rule name -> rule
+	// rule name -> rule template
 	eventFilterTemplateMap := make(map[string]bf.BinlogEventRule)
 	if task.EventFilterRule != nil {
 		for _, rule := range *task.EventFilterRule {
@@ -409,7 +440,7 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 	}
 
 	// start to generate sub task configs
-	subTaskCfgList := make([]*config.SubTaskConfig, len(task.SourceConfig.SourceConf))
+	subTaskCfgList := make([]config.SubTaskConfig, len(task.SourceConfig.SourceConf))
 	for i, sourceCfg := range task.SourceConfig.SourceConf {
 		subTaskCfg := config.NewSubTaskConfig()
 		// set target db config
@@ -476,7 +507,10 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 			// filter
 			if rule.EventFilterName != nil {
 				for _, name := range *rule.EventFilterName {
-					filterRule := eventFilterTemplateMap[name] // note: there is a cpoied value
+					filterRule, ok := eventFilterTemplateMap[name] // note: there is a cpoied value
+					if !ok {
+						return nil, nil, terror.ErrOpenAPICommonError.Generatef("filter rule name=%s not found", name)
+					}
 					filterRule.SchemaPattern = rule.Source.Schema
 					filterRule.TablePattern = rule.Source.Table
 					filterRules = append(filterRules, &filterRule)
@@ -495,11 +529,11 @@ func (s *Server) modelToSubTaskConfigs(ctx context.Context, task openapi.Task) (
 
 		// adjust sub task config
 		if err := subTaskCfg.Adjust(true); err != nil {
-			return nil, terror.Annotatef(err, "source name=%s", sourceCfg.SourceName)
+			return nil, nil, terror.Annotatef(err, "source name=%s", sourceCfg.SourceName)
 		}
-		subTaskCfgList[i] = subTaskCfg
+		subTaskCfgList[i] = *subTaskCfg
 	}
-	return subTaskCfgList, nil
+	return subTaskCfgList, TODbCfg, nil
 }
 
 func terrorHTTPErrorHandler(err error, c echo.Context) {

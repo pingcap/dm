@@ -7,10 +7,14 @@ source $cur/../_utils/test_prepare
 
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
-function prepare_data() {
+function prepare_database() {
 	run_sql 'DROP DATABASE if exists openapi;' $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql 'CREATE DATABASE openapi;' $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql "CREATE TABLE openapi.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+}
+
+function incr_data() {
+	run_sql "INSERT INTO openapi.t(i,j) VALUES (1, 2);" $MYSQL_PORT1 $MYSQL_PASSWORD1
 }
 
 function test_source() {
@@ -45,10 +49,10 @@ function test_relay() {
 	# create source succesfully
 	python $cur/client/source.py "create_source_success"
 
-	# start realy failed
+	# start relay failed
 	python $cur/client/source.py "start_relay_failed"
 
-	# start realy success
+	# start relay success
 	python $cur/client/source.py "start_relay_success"
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -63,10 +67,10 @@ function test_relay() {
 	# get source status success
 	python $cur/client/source.py "get_source_status_success"
 
-	# stop realy failed
+	# stop relay failed
 	python $cur/client/source.py "stop_relay_failed"
 
-	# stop realy success
+	# stop relay success
 	python $cur/client/source.py "stop_relay_success"
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -75,13 +79,48 @@ function test_relay() {
 		"\"worker\": \"worker1\"" 1 \
 		"\"relayStatus\": null" 1
 
+	# delete source success
+	python $cur/client/source.py "delete_source_success"
+
 	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: RELAY SUCCESS"
+
+}
+
+function test_task() {
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>START TEST OPENAPI: TASK"
+
+	# create source succesfully
+	python $cur/client/source.py "create_source_success"
+
+	# get source status success
+	python $cur/client/source.py "get_source_status_success"
+
+	# start task success
+	python $cur/client/task.py "start_task_success"
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"stage\": \"Running\"" 1
+
+	incr_data
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	# stop task success
+	python $cur/client/task.py "stop_task_success" "test"
+
+	# stop task failed
+	python $cur/client/task.py "stop_task_failed" "test"
+
+	# delete source success
+	python $cur/client/source.py "delete_source_success"
+
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: TASK SUCCESS"
 
 }
 
 function run() {
 	pip install requests
-	prepare_data
+	prepare_database
 
 	run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
@@ -94,7 +133,7 @@ function run() {
 
 	test_source
 	test_relay
-
+	test_task
 }
 
 cleanup_data openapi

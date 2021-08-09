@@ -1,6 +1,6 @@
 source env_variables
 
-# we do clean staff at beginning of each run, so we can keep logs of the latset run
+# we do clean staff at beginning of each run, so we can keep logs of the latest run
 function cleanup_data() {
     rm -rf $WORK_DIR
     mkdir $WORK_DIR

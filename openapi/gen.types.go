@@ -196,9 +196,6 @@ type SyncStatus struct {
 
 // task
 type Task struct {
-	// task status checker configuration
-	CheckerConfig *TaskCheckerConfig `json:"checker_config,omitempty"`
-
 	// whether to enable support for the online ddl plugin
 	EnhanceOnlineSchemaChange bool `json:"enhance_online_schema_change"`
 
@@ -241,18 +238,6 @@ type TaskShardMode string
 
 // migrate mode
 type TaskTaskMode string
-
-// task status checker configuration
-type TaskCheckerConfig struct {
-	// sets the longest time interval for the automatic recovery after errors are detected.
-	BackoffMax *string `json:"backoff_max,omitempty"`
-
-	// sets the time interval for adjusting the waiting time of the automatic recovery.
-	BackoffRollback *string `json:"backoff_rollback,omitempty"`
-
-	// determines whether to enable task status checker
-	Enable *bool `json:"enable,omitempty"`
-}
 
 // Filtering rules at binlog level
 type TaskEventFilterRule struct {
