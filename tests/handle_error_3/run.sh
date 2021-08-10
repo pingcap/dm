@@ -166,10 +166,10 @@ function DM_4193_CASE() {
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test revert -s $source1 -b $first_name1:$first_pos1" \
-		"operator not exist" 1
+		"\"result\": false" 1
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test revert -s $source2 -b $first_name2:$first_pos2" \
-		"operator not exist" 1
+		"\"result\": false" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test skip -s $source1 -b $first_name1:$second_pos1" \
@@ -177,7 +177,7 @@ function DM_4193_CASE() {
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test revert -b $first_name1:$second_pos1" \
-		"operator not exist" 1
+		"\"result\": false" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test skip -s $source1 -b $first_name1:$second_pos1" \
@@ -185,7 +185,7 @@ function DM_4193_CASE() {
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test revert -s $source2 -b $first_name2:$second_pos2" \
-		"operator not exist" 1
+		"\"result\": false" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test skip" \
