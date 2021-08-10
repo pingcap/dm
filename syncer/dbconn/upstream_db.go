@@ -1,4 +1,4 @@
-// Copyright 2019 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package syncer
+package dbconn
 
 import (
 	"context"
@@ -31,7 +31,6 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 // in MySQL, we can set `max_binlog_size` to control the max size of a binlog file.
@@ -56,7 +55,17 @@ type UpStreamConn struct {
 	BaseDB *conn.BaseDB
 }
 
-func (conn *UpStreamConn) getMasterStatus(ctx context.Context, flavor string) (mysql.Position, gtid.Set, error) {
+// NewUpStreamConn creates an UpStreamConn from config.
+func NewUpStreamConn(dbCfg config.DBConfig) (*UpStreamConn, error) {
+	baseDB, err := CreateBaseDB(dbCfg)
+	if err != nil {
+		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
+	}
+	return &UpStreamConn{BaseDB: baseDB}, nil
+}
+
+// GetMasterStatus returns binlog location that extracted from SHOW MASTER STATUS.
+func (conn *UpStreamConn) GetMasterStatus(ctx context.Context, flavor string) (mysql.Position, gtid.Set, error) {
 	pos, gtidSet, err := utils.GetMasterStatus(ctx, conn.BaseDB.DB, flavor)
 
 	failpoint.Inject("GetMasterStatusFailed", func(val failpoint.Value) {
@@ -67,41 +76,40 @@ func (conn *UpStreamConn) getMasterStatus(ctx context.Context, flavor string) (m
 	return pos, gtidSet, err
 }
 
-func (conn *UpStreamConn) getServerUUID(ctx context.Context, flavor string) (string, error) {
+// GetServerUUID returns upstream server UUID.
+func (conn *UpStreamConn) GetServerUUID(ctx context.Context, flavor string) (string, error) {
 	return utils.GetServerUUID(ctx, conn.BaseDB.DB, flavor)
 }
 
-func (conn *UpStreamConn) getServerUnixTS(ctx context.Context) (int64, error) {
+// GetServerUnixTS returns the result of current timestamp in upstream.
+func (conn *UpStreamConn) GetServerUnixTS(ctx context.Context) (int64, error) {
 	return utils.GetServerUnixTS(ctx, conn.BaseDB.DB)
 }
 
-func (conn *UpStreamConn) getParser(ctx context.Context) (*parser.Parser, error) {
+// GetParser returns the parser with correct flag for upstream.
+func (conn *UpStreamConn) GetParser(ctx context.Context) (*parser.Parser, error) {
 	return utils.GetParser(ctx, conn.BaseDB.DB)
 }
 
-func (conn *UpStreamConn) killConn(ctx context.Context, connID uint32) error {
+// KillConn kills a connection in upstream.
+func (conn *UpStreamConn) KillConn(ctx context.Context, connID uint32) error {
 	return utils.KillConn(ctx, conn.BaseDB.DB, connID)
 }
 
-func (conn *UpStreamConn) fetchAllDoTables(ctx context.Context, bw *filter.Filter) (map[string][]string, error) {
+// FetchAllDoTables returns tables matches allow-list.
+func (conn *UpStreamConn) FetchAllDoTables(ctx context.Context, bw *filter.Filter) (map[string][]string, error) {
 	return utils.FetchAllDoTables(ctx, conn.BaseDB.DB, bw)
 }
 
-func (conn *UpStreamConn) countBinaryLogsSize(ctx context.Context, pos mysql.Position) (int64, error) {
+// CountBinaryLogsSize returns the remaining size after given position.
+func (conn *UpStreamConn) CountBinaryLogsSize(ctx context.Context, pos mysql.Position) (int64, error) {
 	return countBinaryLogsSize(ctx, pos, conn.BaseDB.DB)
 }
 
-func createUpStreamConn(dbCfg config.DBConfig) (*UpStreamConn, error) {
-	baseDB, err := dbconn.CreateBaseDB(dbCfg)
-	if err != nil {
-		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
-	}
-	return &UpStreamConn{BaseDB: baseDB}, nil
-}
-
-func closeUpstreamConn(tctx *tcontext.Context, conn *UpStreamConn) {
+// CloseUpstreamConn closes the UpStreamConn.
+func CloseUpstreamConn(tctx *tcontext.Context, conn *UpStreamConn) {
 	if conn != nil {
-		dbconn.CloseBaseDB(tctx, conn.BaseDB)
+		CloseBaseDB(tctx, conn.BaseDB)
 	}
 }
 
