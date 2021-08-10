@@ -283,12 +283,12 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		return err
 	}
 	task := req.Task
-	// prepare source db config first source name -> db config
-	sourceDBCfgMap := make(map[string]config.DBConfig)
+	// prepare source db config source name -> source db config
+	sourceDBCfgMap := make(map[string]*config.SourceConfig)
 	for _, cfg := range task.SourceConfig.SourceConf {
 		if sourceCfg := s.scheduler.GetSourceCfgByID(cfg.SourceName); sourceCfg != nil {
 			sourceCfg.DecryptPassword()
-			sourceDBCfgMap[cfg.SourceName] = sourceCfg.From
+			sourceDBCfgMap[cfg.SourceName] = sourceCfg
 		} else {
 			return terror.ErrOpenAPITaskSourceNotFound.Generatef("source name=%s", cfg.SourceName)
 		}
@@ -489,7 +489,7 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 	return cfg
 }
 
-func modelToSubTaskConfigList(toDBCfg *config.DBConfig, sourceDBCfgMap map[string]config.DBConfig,
+func modelToSubTaskConfigList(toDBCfg *config.DBConfig, sourceDBCfgMap map[string]*config.SourceConfig,
 	task openapi.Task) ([]config.SubTaskConfig, error) {
 	// NOTE need make sure all source configs(sourceDBCfgMap) are valid and not empty
 
@@ -563,7 +563,7 @@ func modelToSubTaskConfigList(toDBCfg *config.DBConfig, sourceDBCfgMap map[strin
 		// set target db config
 		subTaskCfg.To = *toDBCfg
 		// set source db config
-		subTaskCfg.From = sourceDBCfgMap[sourceCfg.SourceName]
+		subTaskCfg.From = sourceDBCfgMap[sourceCfg.SourceName].From
 		// set source meta
 		subTaskCfg.MetaFile = *task.MetaSchema
 		if meta, ok := sourceDBMetaMap[sourceCfg.SourceName]; ok {
@@ -584,7 +584,8 @@ func modelToSubTaskConfigList(toDBCfg *config.DBConfig, sourceDBCfgMap map[strin
 		// set online ddl pulgin config
 		subTaskCfg.OnlineDDL = task.EnhanceOnlineSchemaChange
 		// TODO set meet error policy
-		// TODO case insensitive?
+		// set case sensitive from source
+		subTaskCfg.CaseSensitive = sourceDBCfgMap[sourceCfg.SourceName].CaseSensitive
 		// TODO ExprFilter
 		// set full unit config
 		subTaskCfg.MydumperConfig = config.DefaultMydumperConfig()

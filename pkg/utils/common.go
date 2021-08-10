@@ -182,6 +182,19 @@ func FetchLowerCaseTableNamesSetting(ctx context.Context, conn *sql.Conn) (Lower
 	return LowerCaseTableNamesFlavor(res), nil
 }
 
+// GetDBCaseSensitive returns the case sensitive setting of target db.
+func GetDBCaseSensitive(ctx context.Context, db *sql.DB) (bool, error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return true, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	lcFlavor, err := FetchLowerCaseTableNamesSetting(ctx, conn)
+	if err != nil {
+		return true, err
+	}
+	return lcFlavor == LCTableNamesSensitive, nil
+}
+
 // CompareShardingDDLs compares s and t ddls
 // only concern in content, ignore order of ddl.
 func CompareShardingDDLs(s, t []string) bool {
