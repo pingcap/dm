@@ -15,6 +15,7 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"regexp"
 	"strconv"
@@ -234,9 +235,17 @@ func IsFakeRotateEvent(header *replication.EventHeader) bool {
 }
 
 // LogHTTPProxies logs HTTP proxy relative environment variables.
-func LogHTTPProxies() {
+func LogHTTPProxies(useLogger bool) {
 	if fields := proxyFields(); len(fields) > 0 {
-		log.L().Warn("using proxy config", fields...)
+		if useLogger {
+			log.L().Warn("using proxy config", fields...)
+		} else {
+			filedsStr := make([]string, 0, len(fields))
+			for _, field := range fields {
+				filedsStr = append(filedsStr, field.Key+"="+field.String)
+			}
+			fmt.Printf("\n[Warning] [using proxy config] [%v]\n", strings.Join(filedsStr, ", "))
+		}
 	}
 }
 
