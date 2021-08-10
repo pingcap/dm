@@ -91,7 +91,6 @@ func (s *testLogSuite) TestLogLevel(c *C) {
 
 func captureStdout(f func()) ([]string, error) {
 	r, w, _ := os.Pipe()
-	// 替换原有os.Stdout
 	stdout := os.Stdout
 	os.Stdout = w
 
