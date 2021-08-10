@@ -27,8 +27,13 @@ function deploy_previous_v2() {
 function migrate_in_previous_v2() {
 	exec_full_stage
 
-	# v2.0.0 doesn't implement relay log
-	# v2.0.1 doesn't reset to the beginning GTID of file when requesting relay, so will generate a hole in relay log
+	# v2.0.0 doesn't implement relay log.
+	# v2.0.1 downgrading has a problem, we use config import which create sources and then create tasks, so for a cluster
+	#   1. source is created and bound to a worker.
+	#   2. worker starts relay when see the bound and config of the source (after v2.0.2 a manual `start-relay` is needed)
+	#      and currently no task created, so it pulls relay log from GTID of SHOW MASTER STATUS, which is later than
+	#      expected task checkpoint position. And also v2.0.1 didn't reset to the starting GTID of a binlog file.
+	#   3. create task, now the events between checkpoint and SHOW MASTER STATUS in step2 are lost.
 	if [[ "$PRE_VER" == "v2.0.0" ]] || [[ "$PRE_VER" == "v2.0.1" ]]; then
 		sed -i "s/enable-relay: true/enable-relay: false/g" $CUR/conf/source1.yaml
 	fi
