@@ -283,12 +283,12 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		return err
 	}
 	task := req.Task
-	// prepare source db config source name -> source db config
-	sourceDBCfgMap := make(map[string]*config.SourceConfig)
+	// prepare source db config source name -> source config
+	sourceCfgMap := make(map[string]*config.SourceConfig)
 	for _, cfg := range task.SourceConfig.SourceConf {
 		if sourceCfg := s.scheduler.GetSourceCfgByID(cfg.SourceName); sourceCfg != nil {
 			sourceCfg.DecryptPassword()
-			sourceDBCfgMap[cfg.SourceName] = sourceCfg
+			sourceCfgMap[cfg.SourceName] = sourceCfg
 		} else {
 			return terror.ErrOpenAPITaskSourceNotFound.Generatef("source name=%s", cfg.SourceName)
 		}
@@ -307,7 +307,7 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		return terror.WithClass(err, terror.ClassDMMaster)
 	}
 	// generate sub task config list
-	subTaskConfigList, err := modelToSubTaskConfigList(toDBCfg, sourceDBCfgMap, task)
+	subTaskConfigList, err := modelToSubTaskConfigList(toDBCfg, sourceCfgMap, task)
 	if err != nil {
 		return err
 	}
@@ -489,9 +489,9 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 	return cfg
 }
 
-func modelToSubTaskConfigList(toDBCfg *config.DBConfig, sourceDBCfgMap map[string]*config.SourceConfig,
+func modelToSubTaskConfigList(toDBCfg *config.DBConfig, sourceCfgMap map[string]*config.SourceConfig,
 	task openapi.Task) ([]config.SubTaskConfig, error) {
-	// NOTE need make sure all source configs(sourceDBCfgMap) are valid and not empty
+	// NOTE need make sure all source configs(sourceCfgMap) are valid and not empty
 
 	// check some not implemented features
 	if task.OnDuplication != openapi.TaskOnDuplicationError {
@@ -560,19 +560,14 @@ func modelToSubTaskConfigList(toDBCfg *config.DBConfig, sourceDBCfgMap map[strin
 	subTaskCfgList := make([]config.SubTaskConfig, len(task.SourceConfig.SourceConf))
 	for i, sourceCfg := range task.SourceConfig.SourceConf {
 		subTaskCfg := config.NewSubTaskConfig()
-		// set target db config
-		subTaskCfg.To = *toDBCfg
-		// set source db config
-		subTaskCfg.From = sourceDBCfgMap[sourceCfg.SourceName].From
-		// set source meta
+		// set task name and mode
+		subTaskCfg.Name = task.Name
+		subTaskCfg.Mode = string(task.TaskMode)
+		// set task meta
 		subTaskCfg.MetaFile = *task.MetaSchema
 		if meta, ok := sourceDBMetaMap[sourceCfg.SourceName]; ok {
 			subTaskCfg.Meta = meta
 		}
-		subTaskCfg.SourceID = sourceCfg.SourceName
-		// set task mode and name
-		subTaskCfg.Name = task.Name
-		subTaskCfg.Mode = string(task.TaskMode)
 		// set shard config
 		if task.ShardMode != nil {
 			subTaskCfg.IsSharding = true
@@ -583,9 +578,14 @@ func modelToSubTaskConfigList(toDBCfg *config.DBConfig, sourceDBCfgMap map[strin
 		}
 		// set online ddl pulgin config
 		subTaskCfg.OnlineDDL = task.EnhanceOnlineSchemaChange
-		// TODO set meet error policy
 		// set case sensitive from source
-		subTaskCfg.CaseSensitive = sourceDBCfgMap[sourceCfg.SourceName].CaseSensitive
+		subTaskCfg.CaseSensitive = sourceCfgMap[sourceCfg.SourceName].CaseSensitive
+		// set source db config
+		subTaskCfg.SourceID = sourceCfg.SourceName
+		subTaskCfg.From = sourceCfgMap[sourceCfg.SourceName].From
+		// set target db config
+		subTaskCfg.To = *toDBCfg
+		// TODO set meet error policy
 		// TODO ExprFilter
 		// set full unit config
 		subTaskCfg.MydumperConfig = config.DefaultMydumperConfig()
@@ -595,7 +595,7 @@ func modelToSubTaskConfigList(toDBCfg *config.DBConfig, sourceDBCfgMap map[strin
 				subTaskCfg.MydumperConfig.Threads = *fullCfg.ExportThreads
 			}
 			if fullCfg.DataDir != nil {
-				subTaskCfg.Dir = *fullCfg.DataDir
+				subTaskCfg.LoaderConfig.Dir = *fullCfg.DataDir
 			}
 		}
 		// set incremental config
