@@ -28,11 +28,12 @@ function test_dm() {
 	# check dm worker log
 	check_log_contains "$WORK_DIR/worker1/log/dm-worker.log" $expected_str 1
 
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status test"
+	# replace url forward slash with backward and forward slash
+	env_val=$(echo "$env_val" | sed "s/\/\//\\\\\/\\\\\//")
 
-	check_log_contains $cur/../dmctl.log $expected_str 1
-
-	rm -rf $cur/../dmctl.log
+	# check dm ctl output
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+	"query-status test" "$env_name=$env_val" 1
 
 	unset $env_name
 }

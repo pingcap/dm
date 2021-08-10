@@ -56,7 +56,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	utils.LogHTTPProxies()
+	utils.LogHTTPProxies(true)
 
 	// 3. print process version information
 	utils.PrintInfo("dm-master", func() {

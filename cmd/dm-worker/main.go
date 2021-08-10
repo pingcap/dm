@@ -54,7 +54,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	utils.LogHTTPProxies()
+	utils.LogHTTPProxies(true)
 
 	// currently only schema tracker use global logger(std logger), simply replace it with `error` level
 	// may be we should support config logger in mock tidb later

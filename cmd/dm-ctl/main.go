@@ -38,7 +38,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	utils.LogHTTPProxies()
+	utils.LogHTTPProxies(false)
 
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc,
