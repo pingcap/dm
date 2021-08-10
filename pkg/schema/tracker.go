@@ -128,13 +128,13 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 	}
 
 	for k, v := range sessionCfg {
-		err = se.GetSessionVars().SetSystemVar(k, v)
+		err = se.GetSessionVars().SetSystemVarWithRelaxedValidation(k, v)
 		if err != nil {
 			return nil, err
 		}
 	}
 	for k, v := range globalVarsToSet {
-		err = se.GetSessionVars().SetSystemVar(k, v)
+		err = se.GetSessionVars().SetSystemVarWithRelaxedValidation(k, v)
 		if err != nil {
 			return nil, err
 		}
