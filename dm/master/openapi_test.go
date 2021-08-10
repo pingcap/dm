@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/check"
 	"github.com/tikv/pd/pkg/tempurl"
 
+	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -80,13 +81,56 @@ func (t *testOpenAPISuite) TestredirectRequestToLeader(c *check.C) {
 	c.Assert(openAPIAddrFromS2, check.Equals, s1.cfg.OpenAPIAddr)
 }
 
-func (t *testOpenAPISuite) TestOpenAPITaskToSubTaskConfig(c *check.C) {
-	// normal simple task
-	// shard merge task
+func (t *testOpenAPISuite) TestModelToSubTaskConfigList(c *check.C) {
+	/* simple task (no shard)
+
+	name: test
+	conf-ver:v2
+	shard-mode: "pessimistic"
+
+	meta-schema: "dm_meta"
+	enhance-online-schema-change: True
+	on-duplication: error
+
+	target-config:
+	  host: "192.168.0.1"
+	  port: 4000
+	  user: "root"
+	  password: "123456"
+
+	source-config:
+	  full-migrate-conf:
+		export-threads：4
+		import-threads: 16
+		data-dir: "./exported_data"
+		consistency: snapshot/none
+	  incr-migrate-conf:
+		repl-threads：32
+		repl-batch: 200
+	  source:
+	  - source-name: "source-01"
+	    binlog-name: ""
+	    binlog-pos: 0
+	    gtid: ""
+
+	# 上游表到下游的同步规则
+	table-migrate-rule:
+	  - source:
+	       source-name: "source-01"
+	       schema: "some_db"
+	       table: "*"
+	    target:
+	       schema: "new_name_db"
+
+	*/
+
+	simpelTask := &openapi.Task{}
+
+	println(simpelTask)
 	// shard merge task with event filter
 }
 
-func (t *testOpenAPISuite) TestConfigTaskToOpenAPITask(c *check.C) {
+func (t *testOpenAPISuite) TestSubTaskConfigMapToModelTask(c *check.C) {
 	// normal simple task
 	// shard merge task
 	// shard merge task with event filter

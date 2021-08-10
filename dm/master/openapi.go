@@ -31,7 +31,9 @@ import (
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/pkg/log"
@@ -280,7 +282,6 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 	if bindErr := ctx.Bind(&task); bindErr != nil {
 		return err
 	}
-	newCtx := ctx.Request().Context()
 	// prepare source db config first source name -> db config
 	sourceDBCfgMap := make(map[string]config.DBConfig)
 	for _, cfg := range task.SourceConfig.SourceConf {
@@ -291,13 +292,36 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 			return terror.ErrOpenAPITaskSourceNotFound.Generatef("source name=%s", cfg.SourceName)
 		}
 	}
-	subTaskConfigList, ToDBCfg, err := modelToSubTaskConfigs(newCtx, sourceDBCfgMap, task)
+	// prepare target db config
+	newCtx := ctx.Request().Context()
+	toDBCfg := &config.DBConfig{
+		Host:     task.TargetConfig.Host,
+		Port:     task.TargetConfig.Port,
+		User:     task.TargetConfig.User,
+		Password: task.TargetConfig.Password,
+	}
+	// TODO(ehco): add security
+	adjustDBErr := adjustTargetDB(newCtx, toDBCfg)
+	if adjustDBErr != nil {
+		return terror.WithClass(err, terror.ClassDMMaster)
+	}
+	// generate sub task config list
+	subTaskConfigList, err := modelToSubTaskConfigList(toDBCfg, sourceDBCfgMap, task)
 	if err != nil {
 		return err
 	}
+	// check subtask config
+	subTaskConfigPList := make([]*config.SubTaskConfig, len(subTaskConfigList))
+	for i := range subTaskConfigList {
+		subTaskConfigPList[i] = &subTaskConfigList[i]
+	}
+	if err = checker.CheckSyncConfigFunc(newCtx, subTaskConfigPList,
+		common.DefaultErrorCnt, common.DefaultWarnCnt); err != nil {
+		return terror.WithClass(err, terror.ClassDMMaster)
+	}
 	if task.RemoveMeta != nil && *task.RemoveMeta {
 		s.removeMetaLock.Lock()
-		if removeMetaErr := s.removeMetaData(newCtx, task.Name, *task.MetaSchema, *ToDBCfg); removeMetaErr != nil {
+		if removeMetaErr := s.removeMetaData(newCtx, task.Name, *task.MetaSchema, *toDBCfg); removeMetaErr != nil {
 			s.removeMetaLock.Unlock()
 			return terror.Annotate(removeMetaErr, "while removing metadata")
 		}
@@ -341,7 +365,7 @@ func (s *Server) DMAPIGetTaskList(ctx echo.Context) error {
 	}
 	// get sub task config by task name task name->source name->subtask config
 	subTaskConfigMap := s.scheduler.GetSubTaskCfgs()
-	taskList := subtaskCfgListToModelTask(subTaskConfigMap)
+	taskList := subTaskConfigMapToModelTask(subTaskConfigMap)
 	resp := openapi.GetTaskListResponse{Total: len(taskList), Data: taskList}
 	return ctx.JSON(http.StatusOK, resp)
 }
@@ -464,13 +488,13 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 	return cfg
 }
 
-func modelToSubTaskConfigs(ctx context.Context,
-	sourceDBCfgMap map[string]config.DBConfig, task openapi.Task) ([]config.SubTaskConfig, *config.DBConfig, error) {
+func modelToSubTaskConfigList(toDBCfg *config.DBConfig, sourceDBCfgMap map[string]config.DBConfig,
+	task openapi.Task) ([]config.SubTaskConfig, error) {
 	// NOTE need make sure all source configs(sourceDBCfgMap) are valid and not empty
 
 	// check some not implemented features
 	if task.OnDuplication != openapi.TaskOnDuplicationError {
-		return nil, nil, terror.ErrOpenAPICommonError.New(
+		return nil, terror.ErrOpenAPICommonError.New(
 			"now on duplication is currently only implemented at the error level")
 	}
 	// apply some default values
@@ -478,18 +502,6 @@ func modelToSubTaskConfigs(ctx context.Context,
 	if task.MetaSchema == nil {
 		defaultMetaSchema := "dm_meta"
 		task.MetaSchema = &defaultMetaSchema
-	}
-	// check target database is valid
-	TODbCfg := &config.DBConfig{
-		Host:     task.TargetConfig.Host,
-		Port:     task.TargetConfig.Port,
-		User:     task.TargetConfig.User,
-		Password: task.TargetConfig.Password,
-	}
-	// TODO(ehco): add security
-	err := adjustTargetDB(ctx, TODbCfg)
-	if err != nil {
-		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 	// source name -> meta config
 	sourceDBMetaMap := make(map[string]*config.Meta)
@@ -548,7 +560,7 @@ func modelToSubTaskConfigs(ctx context.Context,
 	for i, sourceCfg := range task.SourceConfig.SourceConf {
 		subTaskCfg := config.NewSubTaskConfig()
 		// set target db config
-		subTaskCfg.To = *TODbCfg
+		subTaskCfg.To = *toDBCfg
 		// set source db config
 		subTaskCfg.From = sourceDBCfgMap[sourceCfg.SourceName]
 		// set source meta
@@ -610,9 +622,9 @@ func modelToSubTaskConfigs(ctx context.Context,
 			// filter
 			if rule.EventFilterName != nil {
 				for _, name := range *rule.EventFilterName {
-					filterRule, ok := eventFilterTemplateMap[name] // note: there is a cpoied value
+					filterRule, ok := eventFilterTemplateMap[name] // NOTE: there is a cpoied value
 					if !ok {
-						return nil, nil, terror.ErrOpenAPICommonError.Generatef("filter rule name=%s not found", name)
+						return nil, terror.ErrOpenAPICommonError.Generatef("filter rule name=%s not found", name)
 					}
 					filterRule.SchemaPattern = rule.Source.Schema
 					filterRule.TablePattern = rule.Source.Table
@@ -629,14 +641,19 @@ func modelToSubTaskConfigs(ctx context.Context,
 		subTaskCfg.RouteRules = routeRules
 		subTaskCfg.FilterRules = filterRules
 		subTaskCfg.BAList = &filter.Rules{DoDBs: doDBs, DoTables: doTables}
-
 		// adjust sub task config
 		if err := subTaskCfg.Adjust(true); err != nil {
-			return nil, nil, terror.Annotatef(err, "source name=%s", sourceCfg.SourceName)
+			return nil, terror.Annotatef(err, "source name=%s", sourceCfg.SourceName)
+		}
+		// pre-check filter rules
+		_, err := bf.NewBinlogEvent(subTaskCfg.CaseSensitive, subTaskCfg.FilterRules)
+		if err != nil {
+			return nil, terror.ErrConfigBinlogEventFilter.Delegate(err)
 		}
 		subTaskCfgList[i] = *subTaskCfg
 	}
-	return subTaskCfgList, TODbCfg, nil
+
+	return subTaskCfgList, nil
 }
 
 func strToModelTaskMode(s string) openapi.TaskTaskMode {
@@ -664,7 +681,7 @@ func genFilterRuleName(sourceName string, idx int) string {
 	return fmt.Sprintf("%s-filter-rule-%d", sourceName, idx)
 }
 
-func subtaskCfgListToModelTask(subTaskConfigMap map[string]map[string]config.SubTaskConfig) []openapi.Task {
+func subTaskConfigMapToModelTask(subTaskConfigMap map[string]map[string]config.SubTaskConfig) []openapi.Task {
 	taskList := []openapi.Task{}
 	for taskName, sourceMap := range subTaskConfigMap {
 		var oneSubtaskConfig config.SubTaskConfig // need this to get target db config
