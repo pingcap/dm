@@ -26,6 +26,15 @@ const (
 	TaskTaskModeIncremental TaskTaskMode = "incremental"
 )
 
+// CreateTaskRequest defines model for CreateTaskRequest.
+type CreateTaskRequest struct {
+	// whether to remove meta database in downstream database
+	RemoveMeta bool `json:"remove_meta"`
+
+	// task
+	Task Task `json:"task"`
+}
+
 // operation error
 type ErrorWithMessage struct {
 	// error code
@@ -235,9 +244,6 @@ type Task struct {
 	// how to handle conflicted data
 	OnDuplication TaskOnDuplication `json:"on_duplication"`
 
-	// whether to remove meta database in downstream database
-	RemoveMeta *bool `json:"remove_meta,omitempty"`
-
 	// the way to coordinate DDL
 	ShardMode *TaskShardMode `json:"shard_mode,omitempty"`
 
@@ -379,7 +385,7 @@ type DMAPIStartRelayJSONBody StartRelayRequest
 type DMAPIStopRelayJSONBody WorkerNameRequest
 
 // DMAPIStartTaskJSONBody defines parameters for DMAPIStartTask.
-type DMAPIStartTaskJSONBody Task
+type DMAPIStartTaskJSONBody CreateTaskRequest
 
 // DMAPICreateSourceJSONRequestBody defines body for DMAPICreateSource for application/json ContentType.
 type DMAPICreateSourceJSONRequestBody DMAPICreateSourceJSONBody

@@ -11,7 +11,7 @@ API_ENDPOINT = "http://127.0.0.1:1323/api/v1/tasks"
 
 
 def start_task_failed():
-    req = {
+    task = {
         "name": "test",
         "task_mode": "all",
         "shard_mode": "pessimistic_xxd",  # pessimistic_xxd is not a valid shard mode
@@ -50,14 +50,13 @@ def start_task_failed():
             ],
         },
     }
-    resp = requests.post(url=API_ENDPOINT, json=req)
+    resp = requests.post(url=API_ENDPOINT, json={"remove_meta": True, "task": task})
     assert resp.status_code == 400
     print("start_task_failed resp=", resp.json())
 
 
 def start_noshard_task_success():
-    # start
-    req = {
+    task = {
         "name": NO_SHARD_TASK_NAME,
         "task_mode": "all",
         "shard_mode": "pessimistic",
@@ -96,14 +95,13 @@ def start_noshard_task_success():
             ],
         },
     }
-    resp = requests.post(url=API_ENDPOINT, json=req)
+    resp = requests.post(url=API_ENDPOINT, json={"remove_meta": True, "task": task})
     assert resp.status_code == 201
     print("start_noshard_task_success resp=", resp.json())
 
 
 def start_shard_task_success():
-    # start
-    req = {
+    task = {
         "name": SHARD_TASK_NAME,
         "task_mode": "all",
         "shard_mode": "pessimistic",
@@ -154,7 +152,7 @@ def start_shard_task_success():
             },
         ],
     }
-    resp = requests.post(url=API_ENDPOINT, json=req)
+    resp = requests.post(url=API_ENDPOINT, json={"remove_meta": True, "task": task})
     assert resp.status_code == 201
     print("start_shard_task_success resp=", resp.json())
 

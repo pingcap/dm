@@ -35,6 +35,10 @@ paths:
       responses:
         "201":
           description: "success"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Source"
         "400":
           description: "failed"
           content:
@@ -173,10 +177,14 @@ paths:
         content:
           "application/json":
             schema:
-              $ref: "#/components/schemas/Task"
+              $ref: "#/components/schemas/CreateTaskRequest"
       responses:
         "201":
           description: "success"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Task"
         "400":
           description: "failed"
           content:
@@ -772,11 +780,6 @@ components:
           example: "dm-meta"
           description: "downstream database for storing meta information"
           default: "dm-meta"
-        remove_meta:
-          type: boolean
-          example: true
-          description: whether to remove meta database in downstream database
-          default: false
         enhance_online_schema_change:
           type: boolean
           example: true
@@ -820,7 +823,18 @@ components:
         error_code:
           type: integer
           description: "error code"
-
+    CreateTaskRequest:
+      type: object
+      properties:
+        remove_meta:
+          type: boolean
+          default: false
+          description: whether to remove meta database in downstream database
+        task:
+          $ref: "#/components/schemas/Task"
+      required:
+        - "remove_meta"
+        - "task"
     GetSourceListResponse:
       type: object
       properties:

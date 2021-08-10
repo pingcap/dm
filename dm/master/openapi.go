@@ -278,10 +278,11 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
 	}
 
-	var task openapi.Task
-	if bindErr := ctx.Bind(&task); bindErr != nil {
+	var req openapi.CreateTaskRequest
+	if bindErr := ctx.Bind(&req); bindErr != nil {
 		return err
 	}
+	task := req.Task
 	// prepare source db config first source name -> db config
 	sourceDBCfgMap := make(map[string]config.DBConfig)
 	for _, cfg := range task.SourceConfig.SourceConf {
@@ -319,7 +320,7 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		common.DefaultErrorCnt, common.DefaultWarnCnt); err != nil {
 		return terror.WithClass(err, terror.ClassDMMaster)
 	}
-	if task.RemoveMeta != nil && *task.RemoveMeta {
+	if req.RemoveMeta {
 		s.removeMetaLock.Lock()
 		if removeMetaErr := s.removeMetaData(newCtx, task.Name, *task.MetaSchema, *toDBCfg); removeMetaErr != nil {
 			s.removeMetaLock.Unlock()
@@ -691,8 +692,6 @@ func subTaskConfigMapToModelTask(subTaskConfigMap map[string]map[string]config.S
 		filterMap := make(map[string][]*bf.BinlogEventRule)
 		// source name -> route rule list
 		routeMap := make(map[string][]*router.TableRule)
-		// source name -> BlockAllowList rule
-		bAMap := make(map[string]*filter.Rules)
 		for sourceName, cfg := range sourceMap {
 			oneSubtaskConfig = cfg
 			oneConf := openapi.TaskSourceConf{
@@ -707,7 +706,6 @@ func subTaskConfigMapToModelTask(subTaskConfigMap map[string]map[string]config.S
 			sourceConfList = append(sourceConfList, oneConf)
 			filterMap[sourceName] = cfg.FilterRules
 			routeMap[sourceName] = cfg.RouteRules
-			bAMap[sourceName] = cfg.BAList
 		}
 		taskSourceConfig.SourceConf = sourceConfList
 		taskSourceConfig.FullMigrateConf = &openapi.TaskFullMigrateConf{
@@ -776,7 +774,6 @@ func subTaskConfigMapToModelTask(subTaskConfigMap map[string]map[string]config.S
 			EnhanceOnlineSchemaChange: oneSubtaskConfig.OnlineDDL,
 			MetaSchema:                &oneSubtaskConfig.MetaSchema,
 			OnDuplication:             openapi.TaskOnDuplicationError, // currently only support error
-			RemoveMeta:                nil,                            // currently subtask doesn't have remove-meta
 			ShardMode:                 &taskShardMode,
 			SourceConfig:              taskSourceConfig,
 			TargetConfig: openapi.TaskTargetDataBase{

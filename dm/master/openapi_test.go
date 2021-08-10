@@ -82,8 +82,7 @@ func (t *testOpenAPISuite) TestredirectRequestToLeader(c *check.C) {
 }
 
 func (t *testOpenAPISuite) TestModelToSubTaskConfigList(c *check.C) {
-	/* simple task (no shard)
-
+	/* no shard task
 	name: test
 	conf-ver:v2
 	shard-mode: "pessimistic"
@@ -113,7 +112,6 @@ func (t *testOpenAPISuite) TestModelToSubTaskConfigList(c *check.C) {
 	    binlog-pos: 0
 	    gtid: ""
 
-	# 上游表到下游的同步规则
 	table-migrate-rule:
 	  - source:
 	       source-name: "source-01"
@@ -121,12 +119,45 @@ func (t *testOpenAPISuite) TestModelToSubTaskConfigList(c *check.C) {
 	       table: "*"
 	    target:
 	       schema: "new_name_db"
-
+		   table: ""
 	*/
 
-	simpelTask := &openapi.Task{}
+	metaSchema := "dm_meta"
 
-	println(simpelTask)
+	noShardTask := openapi.Task{
+		EnhanceOnlineSchemaChange: true,
+		MetaSchema:                &metaSchema,
+		Name:                      "test",
+		OnDuplication:             "error",
+		ShardMode:                 nil,
+		SourceConfig: openapi.TaskSourceConfig{
+			FullMigrateConf: &openapi.TaskFullMigrateConf{
+				DataDir:       nil,
+				ExportThreads: nil,
+				ImportThreads: nil,
+			},
+			IncrMigrateConf: &openapi.TaskIncrMigrateConf{
+				ReplBatch:   nil,
+				ReplThreads: nil,
+			},
+			SourceConf: nil,
+		},
+		TableMigrateRule: nil,
+		TargetConfig: openapi.TaskTargetDataBase{
+			Host:     "",
+			Password: "",
+			Port:     0,
+			Security: &openapi.Security{
+				SslCaContent:   nil,
+				SslCertContent: nil,
+				SslKeyContent:  nil,
+			},
+			User: "",
+		},
+		TaskMode: "",
+	}
+
+	println(noShardTask)
 	// shard merge task with event filter
 }
 
