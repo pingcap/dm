@@ -1007,6 +1007,10 @@ func (s *Syncer) addJob(job *job) error {
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
 		s.isTransactionEnd.Store(false)
+		failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
+			s.tctx.L().Info("receive dml job", zap.Any("dml job", job))
+			time.Sleep(100 * time.Millisecond)
+		})
 		metrics.AddJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	}
 
@@ -1952,9 +1956,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			job := newXIDJob(currentLocation, startLocation, currentLocation)
 			err2 = s.addJobFunc(job)
-			if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
-				return nil
-			}
 		case *replication.GenericEvent:
 			if e.Header.EventType == replication.HEARTBEAT_EVENT {
 				// flush checkpoint even if there are no real binlog events
