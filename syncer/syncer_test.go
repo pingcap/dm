@@ -1864,8 +1864,8 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 
 	// will ignore the first error, and continue execute the second sql
 	mock.ExpectBegin()
-	mock.ExpectExec("alter table t1 add column a int").WillReturnError(newMysqlErr(uint16(infoschema.ErrColumnExists.Code()), "column a already exists"))
-	mock.ExpectExec("alter table t1 add column b int").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(sqls[0]).WillReturnError(newMysqlErr(uint16(infoschema.ErrColumnExists.Code()), "column a already exists"))
+	mock.ExpectExec(sqls[1]).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestExecuteSQLSWithIgnore")))
@@ -1875,7 +1875,7 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 
 	// will return error when execute the first sql
 	mock.ExpectBegin()
-	mock.ExpectExec("alter table t1 add column a int").WillReturnError(newMysqlErr(uint16(infoschema.ErrColumnExists.Code()), "column a already exists"))
+	mock.ExpectExec(sqls[0]).WillReturnError(newMysqlErr(uint16(infoschema.ErrColumnExists.Code()), "column a already exists"))
 	mock.ExpectRollback()
 
 	n, err = conn.ExecuteSQL(tctx, sqls)
