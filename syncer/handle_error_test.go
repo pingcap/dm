@@ -20,6 +20,7 @@ import (
 	. "github.com/pingcap/check"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 func (s *testSyncerSuite) TestHandleError(c *C) {
@@ -63,7 +64,7 @@ func (s *testSyncerSuite) TestHandleError(c *C) {
 	)
 
 	var err error
-	syncer.fromDB, err = createUpStreamConn(s.cfg.From) // used to get parser
+	syncer.fromDB, err = dbconn.NewUpStreamConn(s.cfg.From) // used to get parser
 	c.Assert(err, IsNil)
 
 	for _, cs := range cases {

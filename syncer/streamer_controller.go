@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 // StreamerProducer provides the ability to generate binlog streamer by StartSync()
@@ -108,7 +109,7 @@ type StreamerController struct {
 	// if binlogType is local and meetError is true, then need to create remote binlog stream
 	meetError bool
 
-	fromDB *UpStreamConn
+	fromDB *dbconn.UpStreamConn
 
 	uuidSuffix string
 
@@ -119,7 +120,7 @@ type StreamerController struct {
 }
 
 // NewStreamerController creates a new streamer controller.
-func NewStreamerController(syncCfg replication.BinlogSyncerConfig, enableGTID bool, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location) *StreamerController {
+func NewStreamerController(syncCfg replication.BinlogSyncerConfig, enableGTID bool, fromDB *dbconn.UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location) *StreamerController {
 	streamerController := &StreamerController{
 		initBinlogType:    binlogType,
 		currentBinlogType: binlogType,
@@ -321,7 +322,7 @@ func (c *StreamerController) closeBinlogSyncer(logtctx *tcontext.Context, binlog
 		// try to KILL the conn in default timeout, but it's not a big problem even failed.
 		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
 		defer cancel()
-		err := c.fromDB.killConn(ctx, lastSlaveConnectionID)
+		err := c.fromDB.KillConn(ctx, lastSlaveConnectionID)
 		if err != nil {
 			logtctx.L().Error("fail to kill last connection", zap.Uint32("connection ID", lastSlaveConnectionID), log.ShortError(err))
 			if !utils.IsNoSuchThreadError(err) {
@@ -382,7 +383,7 @@ func (c *StreamerController) setUUIDIfExists(filename string) bool {
 }
 
 // UpdateSyncCfg updates sync config and fromDB.
-func (c *StreamerController) UpdateSyncCfg(syncCfg replication.BinlogSyncerConfig, fromDB *UpStreamConn) {
+func (c *StreamerController) UpdateSyncCfg(syncCfg replication.BinlogSyncerConfig, fromDB *dbconn.UpStreamConn) {
 	c.Lock()
 	c.fromDB = fromDB
 	c.syncCfg = syncCfg
