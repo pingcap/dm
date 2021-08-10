@@ -122,8 +122,11 @@ func (s *testLogSuite) TestInitSlowQueryLogger(c *C) {
 	output, err := captureStdout(func() {
 		c.Assert(InitLogger(cfg), IsNil)
 		logutil.SlowQueryLogger.Debug("this is test info")
+		appLogger.Debug("this is from applogger")
+		// test there are two different loggers
+		c.Assert(appLogger, Not(Equals), logutil.SlowQueryLogger)
 	})
 	c.Assert(err, IsNil)
-	c.Assert(len(output), Equals, 2)
-	c.Assert(output[0], Matches, ".*component.*slow query logger.*")
+	c.Assert(output[0], Matches, ".*this is test info.*component.*slow query logger.*")
+	c.Assert(output[1], Matches, ".*this is from applogger.*")
 }
