@@ -33,7 +33,7 @@ function test_dm() {
 
 	# check dm ctl output
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-	"query-status test" "$env_name=$env_val" 1
+		"query-status test" "$env_name=$env_val" 1
 
 	unset $env_name
 }
