@@ -155,6 +155,16 @@ func ParseYaml(content string) (*SourceConfig, error) {
 	return c, nil
 }
 
+// ParseToml parses flag definitions from the argument list, content should be toml format.
+func ParseToml(content string) (*SourceConfig, error) {
+	c := newSourceConfig()
+	if err := toml.Unmarshal([]byte(content), c); err != nil {
+		return nil, terror.ErrConfigTomlTransform.Delegate(err, "decode source config")
+	}
+	c.adjust()
+	return c, nil
+}
+
 // EncodeToml encodes config.
 func (c *SourceConfig) EncodeToml() (string, error) {
 	buf := new(bytes.Buffer)

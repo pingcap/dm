@@ -1092,9 +1092,11 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 	for i, content := range contents {
 		cfg, err := config.ParseYaml(content)
 		if err != nil {
-			return cfgs, err
+			// there is also the possibility of a toml string being passed in here, so try parsing it in toml format
+			if cfg, err = config.ParseToml(content); err != nil {
+				return cfgs, err
+			}
 		}
-
 		dbConfig := cfg.GenerateDBConfig()
 
 		fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)

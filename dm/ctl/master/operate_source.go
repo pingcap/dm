@@ -113,6 +113,27 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) error {
 			}
 			return err
 		}
+		// If source is configured with tls certificate related content
+		// the contents of the certificate need to be read and transferred to the dm-master
+		// When the user uses get-config to get the source configuration,
+		// it is presented in yaml format, but the data we have in etcd is in toml format
+		// so I convert the source configuration to toml format and transfer it
+		// because I don't want the user to see a lot of meaningless bytes in get-config
+		cfg, yamlErr := config.ParseYaml(string(content))
+		if yamlErr != nil {
+			return yamlErr
+		}
+		if cfg.From.Security != nil {
+			loadErr := cfg.From.Security.LoadTLSContent()
+			if loadErr != nil {
+				return loadErr
+			}
+			y, tomlErr := cfg.Toml()
+			if tomlErr != nil {
+				return tomlErr
+			}
+			content = []byte(y)
+		}
 		contents = append(contents, string(content))
 	}
 
