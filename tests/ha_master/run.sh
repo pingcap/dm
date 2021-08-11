@@ -284,9 +284,9 @@ function run() {
 	# kill dm-master1 and dm-master2 to simulate the first two dm-master addr in join config are invalid
 	echo "kill dm-master1 and kill dm-master2"
 	ps aux | grep dm-master1 | awk '{print $2}' | xargs kill || true
-	check_master_port_offline $1
+	check_master_port_offline 1
 	ps aux | grep dm-master2 | awk '{print $2}' | xargs kill || true
-	check_master_port_offline $2
+	check_master_port_offline 2
 
 	# wait for master switch leader and re-setup
 	get_leader $WORK_DIR 127.0.0.1:$MASTER_PORT3
@@ -336,9 +336,9 @@ function run() {
 
 	echo "kill dm-master1 and kill dm-master2"
 	ps aux | grep dm-master1 | awk '{print $2}' | xargs kill || true
-	check_master_port_offline $1
+	check_master_port_offline 1
 	ps aux | grep dm-master2 | awk '{print $2}' | xargs kill || true
-	check_master_port_offline $2
+	check_master_port_offline 2
 
 	echo "wait and check task running"
 	check_http_alive 127.0.0.1:$MASTER_PORT3/apis/${API_VERSION}/status/test '"stage": "Running"' 10
@@ -362,7 +362,7 @@ function run() {
 
 	echo "kill dm-master3"
 	ps aux | grep dm-master3 | awk '{print $2}' | xargs kill || true
-	check_master_port_offline $3
+	check_master_port_offline 3
 
 	sleep 2
 	# the last two masters should elect a new leader and serve service
