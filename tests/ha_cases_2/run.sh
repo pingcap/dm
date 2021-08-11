@@ -49,7 +49,7 @@ function test_kill_master_in_sync() {
 	load_data $MYSQL_PORT2 $MYSQL_PASSWORD2 "b" &
 
 	ps aux | grep dm-master1 | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT1 20
+	check_master_port_offline $1
 
 	echo "wait and check task running"
 	sleep 1
