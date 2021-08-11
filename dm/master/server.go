@@ -1092,10 +1092,7 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 	for i, content := range contents {
 		cfg, err := config.ParseYaml(content)
 		if err != nil {
-			// there is also the possibility of a toml string being passed in here, so try parsing it in toml format
-			if cfg, err = config.ParseToml(content); err != nil {
-				return cfgs, err
-			}
+			return cfgs, err
 		}
 		dbConfig := cfg.GenerateDBConfig()
 
@@ -1986,7 +1983,8 @@ func (s *Server) GetCfg(ctx context.Context, req *pb.GetCfgRequest) (*pb.GetCfgR
 	if shouldRet {
 		return resp2, err2
 	}
-
+	// For the get-config command, you want to filter out fields that are not easily readable by humans,
+	// such as SSLXXBytes field in `Security` struct
 	switch req.Type {
 	case pb.CfgType_TaskType:
 		subCfgMap := s.scheduler.GetSubTaskCfgsByTask(req.Name)
@@ -2004,6 +2002,9 @@ func (s *Server) GetCfg(ctx context.Context, req *pb.GetCfgRequest) (*pb.GetCfgR
 
 		taskCfg := config.FromSubTaskConfigs(subCfgList...)
 		taskCfg.TargetDB.Password = "******"
+		if taskCfg.TargetDB.Security != nil {
+			taskCfg.TargetDB.Security.ClearSSLBytesData()
+		}
 		cfg = taskCfg.String()
 	case pb.CfgType_MasterType:
 		if req.Name == s.cfg.Name {
@@ -2056,6 +2057,9 @@ func (s *Server) GetCfg(ctx context.Context, req *pb.GetCfgRequest) (*pb.GetCfgR
 			return resp2, nil
 		}
 		sourceCfg.From.Password = "******"
+		if sourceCfg.From.Security != nil {
+			sourceCfg.From.Security.ClearSSLBytesData()
+		}
 		cfg, err2 = sourceCfg.Yaml()
 		if err2 != nil {
 			resp2.Msg = err2.Error()

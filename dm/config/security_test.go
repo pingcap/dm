@@ -14,12 +14,12 @@
 package config
 
 import (
-	"strings"
+	"bytes"
 
 	. "github.com/pingcap/check"
 )
 
-func (t *testConfig) TestLoadContent(c *C) {
+func (t *testConfig) TestLoadAndClearContent(c *C) {
 	s := &Security{
 		SSLCA:   "testdata/ca.pem",
 		SSLCert: "testdata/cert.pem",
@@ -30,7 +30,15 @@ func (t *testConfig) TestLoadContent(c *C) {
 	c.Assert(len(s.SSLCABytes) > 0, Equals, true)
 	c.Assert(len(s.SSLCertBytes) > 0, Equals, true)
 	c.Assert(len(s.SSLKEYBytes) > 0, Equals, true)
-	c.Assert(strings.Contains(string(s.SSLCertBytes), "test no content"), Equals, true)
-	c.Assert(strings.Contains(string(s.SSLKEYBytes), "test no content"), Equals, true)
-	c.Assert(strings.Contains(string(s.SSLCABytes), "test no content"), Equals, true)
+
+	noContentBytes := []byte("test no content")
+
+	c.Assert(bytes.Contains(s.SSLCABytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(s.SSLKEYBytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(s.SSLCertBytes, noContentBytes), Equals, true)
+
+	s.ClearSSLBytesData()
+	c.Assert(s.SSLCABytes, HasLen, 0)
+	c.Assert(s.SSLCertBytes, HasLen, 0)
+	c.Assert(s.SSLKEYBytes, HasLen, 0)
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/checker"
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 )
@@ -46,6 +47,29 @@ func startTaskFunc(cmd *cobra.Command, _ []string) error {
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
 		return err
+	}
+
+	// If task's target db is configured with tls certificate related content
+	// the contents of the certificate need to be read and transferred to the dm-master
+	task := config.NewTaskConfig()
+	yamlErr := task.Decode(string(content))
+	if yamlErr != nil {
+		return yamlErr
+	}
+	if task.TargetDB.Security != nil {
+		loadErr := task.TargetDB.Security.LoadTLSContent()
+		if loadErr != nil {
+			return loadErr
+		}
+		// After decode and encode the task configuration yaml, we need to clear some duplicate configurations
+		// otherwise some error will occur such as:
+		// ErrConfigSyncerCfgConflict/ErrConfigLoaderCfgConflict/ErrConfigMydumperCfgConflict
+		for idx := range task.MySQLInstances {
+			task.MySQLInstances[idx].Syncer = nil
+			task.MySQLInstances[idx].Mydumper = nil
+			task.MySQLInstances[idx].Loader = nil
+		}
+		content = []byte(task.String())
 	}
 
 	sources, err := common.GetSourceArgs(cmd)

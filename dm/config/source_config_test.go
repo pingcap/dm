@@ -50,10 +50,6 @@ func (t *testConfig) TestConfig(c *C) {
 	tomlStr, err := clone1.Toml()
 	c.Assert(err, IsNil)
 	c.Assert(tomlStr, Matches, `(.|\n)*server-id = 100(.|\n)*`)
-	// test parse toml str to cfg
-	tomlCfg, err := ParseToml(tomlStr)
-	c.Assert(err, IsNil)
-	c.Assert(tomlCfg.String(), Equals, clone1.String())
 	yamlStr, err := clone1.Yaml()
 	c.Assert(err, IsNil)
 	c.Assert(yamlStr, Matches, `(.|\n)*server-id: 100(.|\n)*`)

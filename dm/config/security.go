@@ -24,11 +24,9 @@ type Security struct {
 	SSLCert       string   `toml:"ssl-cert" json:"ssl-cert" yaml:"ssl-cert"`
 	SSLKey        string   `toml:"ssl-key" json:"ssl-key" yaml:"ssl-key"`
 	CertAllowedCN strArray `toml:"cert-allowed-cn" json:"cert-allowed-cn" yaml:"cert-allowed-cn"`
-	// we store this config into etcd as toml format, but `get-config` use yaml format
-	// we don't want to user see bytes, so hide `SSLxxByte` field when use json/yaml.
-	SSLCABytes   []byte `toml:"ssl-ca-bytes" json:"-" yaml:"-"`
-	SSLCertBytes []byte `toml:"ssl-cert-bytes" json:"-" yaml:"-"`
-	SSLKEYBytes  []byte `toml:"ssl-key-bytes" json:"-" yaml:"-"`
+	SSLCABytes    []byte   `toml:"ssl-ca-bytes" json:"-" yaml:"ssl-ca-bytes"`
+	SSLKEYBytes   []byte   `toml:"ssl-key-bytes" json:"-" yaml:"ssl-key-bytes"`
+	SSLCertBytes  []byte   `toml:"ssl-cert-bytes" json:"-" yaml:"ssl-cert-bytes"`
 }
 
 // used for parse string slice in flag.
@@ -72,4 +70,11 @@ func (s *Security) LoadTLSContent() error {
 		s.SSLKEYBytes = dat
 	}
 	return nil
+}
+
+// ClearSSLBytesData clear all tls config bytes data.
+func (s *Security) ClearSSLBytesData() {
+	s.SSLCABytes = s.SSLCABytes[:0]
+	s.SSLKEYBytes = s.SSLKEYBytes[:0]
+	s.SSLCertBytes = s.SSLCertBytes[:0]
 }
