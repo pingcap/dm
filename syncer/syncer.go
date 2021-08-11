@@ -970,9 +970,7 @@ func (s *Syncer) addJob(job *job) error {
 	var queueBucket int
 	switch job.tp {
 	case xid:
-		if waitXIDStatus(s.waitXIDJob.Load()) == waiting {
-			s.waitXIDJob.Store(int64(waitComplete))
-		}
+		s.waitXIDJob.CAS(int64(waiting), int64(waitComplete))
 		s.saveGlobalPoint(job.location)
 		s.isTransactionEnd.Store(true)
 		return nil
