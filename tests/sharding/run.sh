@@ -80,8 +80,7 @@ function run() {
 
 	# resume-task to next stage
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"resume-task test" \
-		"\"result\": true" 3
+		"resume-task test"
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
@@ -89,8 +88,7 @@ function run() {
 
 	# resume-task to next stage
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"resume-task test" \
-		"\"result\": true" 3
+		"resume-task test"
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
@@ -139,8 +137,7 @@ function run() {
 		"detect inconsistent DDL sequence" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"resume-task test" \
-		"\"result\": true" 3
+		"resume-task test"
 
 	# still conflict
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
