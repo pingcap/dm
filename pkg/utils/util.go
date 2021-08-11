@@ -15,6 +15,7 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"regexp"
 	"strconv"
@@ -26,8 +27,11 @@ import (
 	gmysql "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/errno"
+	"go.uber.org/zap"
+	"golang.org/x/net/http/httpproxy"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -228,4 +232,34 @@ func WrapSchemesForInitialCluster(s string, https bool) string {
 // and https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/rpl_binlog_sender.cc#L899
 func IsFakeRotateEvent(header *replication.EventHeader) bool {
 	return header.Timestamp == 0 || header.LogPos == 0
+}
+
+// LogHTTPProxies logs HTTP proxy relative environment variables.
+func LogHTTPProxies(useLogger bool) {
+	if fields := proxyFields(); len(fields) > 0 {
+		if useLogger {
+			log.L().Warn("using proxy config", fields...)
+		} else {
+			filedsStr := make([]string, 0, len(fields))
+			for _, field := range fields {
+				filedsStr = append(filedsStr, field.Key+"="+field.String)
+			}
+			fmt.Printf("\n[Warning] [using proxy config] [%v]\n", strings.Join(filedsStr, ", "))
+		}
+	}
+}
+
+func proxyFields() []zap.Field {
+	proxyCfg := httpproxy.FromEnvironment()
+	fields := make([]zap.Field, 0, 3)
+	if proxyCfg.HTTPProxy != "" {
+		fields = append(fields, zap.String("http_proxy", proxyCfg.HTTPProxy))
+	}
+	if proxyCfg.HTTPSProxy != "" {
+		fields = append(fields, zap.String("https_proxy", proxyCfg.HTTPSProxy))
+	}
+	if proxyCfg.NoProxy != "" {
+		fields = append(fields, zap.String("no_proxy", proxyCfg.NoProxy))
+	}
+	return fields
 }
