@@ -30,7 +30,7 @@ type testHeartbeatSuite struct {
 }
 
 func (t *testHeartbeatSuite) SetUpSuite(c *C) {
-	t.from = getDBConfigFromEnv()
+	t.from = config.GetDBConfigFromEnv()
 	t.lag = make(map[string]float64)
 	reportLagFunc = t.reportLag
 }

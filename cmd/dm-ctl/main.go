@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func main() {
@@ -36,6 +37,8 @@ func main() {
 		common.PrintLinesf("init logger error %s", terror.Message(err))
 		os.Exit(2)
 	}
+
+	utils.LogHTTPProxies(false)
 
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc,

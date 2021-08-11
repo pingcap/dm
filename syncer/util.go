@@ -15,8 +15,6 @@ package syncer
 
 import (
 	"fmt"
-	"os"
-	"strconv"
 
 	dcontext "github.com/pingcap/dumpling/v4/context"
 	"github.com/pingcap/dumpling/v4/export"
@@ -25,7 +23,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 
-	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
@@ -85,28 +82,6 @@ func tableNameResultSet(rs ast.ResultSetNode) (schema, table string, err error) 
 		return "", "", terror.ErrSyncUnitTableNameQuery.Generate(fmt.Sprintf("TableSource %s", ts.Text()))
 	}
 	return tn.Schema.O, tn.Name.O, nil
-}
-
-func getDBConfigFromEnv() config.DBConfig {
-	host := os.Getenv("MYSQL_HOST")
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
-	if port == 0 {
-		port = 3306
-	}
-	user := os.Getenv("MYSQL_USER")
-	if user == "" {
-		user = "root"
-	}
-	pswd := os.Getenv("MYSQL_PSWD")
-	return config.DBConfig{
-		Host:     host,
-		User:     user,
-		Password: pswd,
-		Port:     port,
-	}
 }
 
 // record source tbls record the tables that need to flush checkpoints.
