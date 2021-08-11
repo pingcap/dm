@@ -1798,11 +1798,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						currentLocation = startLocation
 					} else if op == pb.ErrorOp_Skip {
 						s.saveGlobalPoint(currentLocation)
-						err = s.flushCheckPoints()
+						err = s.flushJobs()
 						if err != nil {
-							tctx.L().Warn("failed to flush checkpoints when handle-error skip", zap.Error(err))
+							tctx.L().Warn("failed to flush jobs when handle-error skip", zap.Error(err))
 						} else {
-							tctx.L().Info("flush checkpoints when handle-error skip")
+							tctx.L().Info("flush jobs when handle-error skip")
 						}
 					}
 					// skip the current event
