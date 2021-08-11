@@ -511,16 +511,16 @@ func modelToSubTaskConfigList(toDBCfg *config.DBConfig, sourceCfgMap map[string]
 		var needAddMeta bool
 		meta := &config.Meta{}
 		if cfg.BinlogGtid != nil {
-			sourceDBMetaMap[cfg.SourceName].BinLogGTID = *cfg.BinlogGtid
+			meta.BinLogGTID = *cfg.BinlogGtid
 			needAddMeta = true
 		}
 		if cfg.BinlogName != nil {
-			sourceDBMetaMap[cfg.SourceName].BinLogName = *cfg.BinlogName
+			meta.BinLogName = *cfg.BinlogName
 			needAddMeta = true
 		}
 		if cfg.BinlogPos != nil {
 			pos := uint32(*cfg.BinlogPos)
-			sourceDBMetaMap[cfg.SourceName].BinLogPos = pos
+			meta.BinLogPos = pos
 			needAddMeta = true
 		}
 		if needAddMeta {
