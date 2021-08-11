@@ -130,6 +130,12 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 	for k, v := range sessionCfg {
 		err = se.GetSessionVars().SetSystemVarWithRelaxedValidation(k, v)
 		if err != nil {
+			// when user set some unsupported variable, we just ignore it
+			// tidb error message: https://github.com/pingcap/tidb/blob/f570e8fb679df0686a4023333333e046547b7ff1/errors.toml#L1934
+			if strings.HasPrefix(err.Error(), "[variable:1193]Unknown system variable") {
+				log.L().Warn("can not set this variable", zap.Error(err))
+				continue
+			}
 			return nil, err
 		}
 	}

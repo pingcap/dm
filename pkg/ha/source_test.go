@@ -69,6 +69,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(cfgM, HasLen, 0)
 
 	// put a source config.
+	c.Assert(cfg.From.Security.LoadTLSContent(), IsNil)
 	rev2, err := PutSourceCfg(etcdTestCli, cfg)
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
