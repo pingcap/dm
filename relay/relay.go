@@ -650,7 +650,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 		}
 	}
 
-	r.logger.Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gs))
+	r.logger.Info("adjusted meta to start pos", zap.Any("start pos", pos), zap.Stringer("start pos's binlog gtid", gs))
 	r.updateMetricsRelaySubDirIndex()
 	r.logger.Info("resetup meta", zap.String("uuid", uuid))
 

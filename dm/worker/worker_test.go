@@ -16,8 +16,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -419,28 +417,6 @@ func (t *testWorkerEtcdCompact) TearDownSuite(c *C) {
 	createUnits = createRealUnits
 }
 
-func getDBConfigFromEnv() config.DBConfig {
-	host := os.Getenv("MYSQL_HOST")
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
-	if port == 0 {
-		port = 3306
-	}
-	user := os.Getenv("MYSQL_USER")
-	if user == "" {
-		user = "root"
-	}
-	pswd := os.Getenv("MYSQL_PSWD")
-	return config.DBConfig{
-		Host:     host,
-		User:     user,
-		Password: pswd,
-		Port:     port,
-	}
-}
-
 func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	var (
 		masterAddr   = tempurl.Alloc()[len("http://"):]
@@ -465,7 +441,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	})
 	c.Assert(err, IsNil)
 	sourceCfg := loadSourceConfigWithoutPassword(c)
-	sourceCfg.From = getDBConfigFromEnv()
+	sourceCfg.From = config.GetDBConfigFromEnv()
 	sourceCfg.EnableRelay = false
 
 	// step 1: start worker
