@@ -52,7 +52,7 @@ func startTaskFunc(cmd *cobra.Command, _ []string) error {
 	// If task's target db is configured with tls certificate related content
 	// the contents of the certificate need to be read and transferred to the dm-master
 	task := config.NewTaskConfig()
-	yamlErr := task.Decode(string(content))
+	yamlErr := task.RawDecode(string(content))
 	if yamlErr != nil {
 		return yamlErr
 	}
@@ -61,17 +61,8 @@ func startTaskFunc(cmd *cobra.Command, _ []string) error {
 		if loadErr != nil {
 			return loadErr
 		}
-		// After decode and encode the task configuration yaml, we need to clear some duplicate configurations
-		// otherwise some error will occur such as:
-		// ErrConfigSyncerCfgConflict/ErrConfigLoaderCfgConflict/ErrConfigMydumperCfgConflict
-		for idx := range task.MySQLInstances {
-			task.MySQLInstances[idx].Syncer = nil
-			task.MySQLInstances[idx].Mydumper = nil
-			task.MySQLInstances[idx].Loader = nil
-		}
 		content = []byte(task.String())
 	}
-
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		return err

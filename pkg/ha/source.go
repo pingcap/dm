@@ -28,12 +28,6 @@ import (
 // PutSourceCfg puts the config of the upstream source into etcd.
 // k/v: sourceID -> source config.
 func PutSourceCfg(cli *clientv3.Client, cfg *config.SourceConfig) (int64, error) {
-	if cfg.From.Security != nil {
-		// NOTE also put tls config data into etcd.
-		if err := cfg.From.Security.LoadTLSContent(); err != nil {
-			return 0, err
-		}
-	}
 	value, err := cfg.Toml()
 	if err != nil {
 		return 0, err

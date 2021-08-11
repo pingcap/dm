@@ -114,17 +114,12 @@ func captureStdout(f func()) ([]string, error) {
 
 func (s *testLogSuite) TestInitSlowQueryLogger(c *C) {
 	logLevel := "debug"
-	cfg := &Config{
-		Level: logLevel,
-	}
+	cfg := &Config{Level: logLevel, Format: "json"}
 	cfg.Adjust()
-
 	output, err := captureStdout(func() {
 		c.Assert(InitLogger(cfg), IsNil)
 		logutil.SlowQueryLogger.Debug("this is test info")
 		appLogger.Debug("this is from applogger")
-		// test there are two different loggers
-		c.Assert(appLogger, Not(Equals), logutil.SlowQueryLogger)
 	})
 	c.Assert(err, IsNil)
 	c.Assert(output[0], Matches, ".*this is test info.*component.*slow query logger.*")

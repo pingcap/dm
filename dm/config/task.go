@@ -393,6 +393,15 @@ func (c *TaskConfig) Decode(data string) error {
 	return c.adjust()
 }
 
+// RawDecode loads config from file data.
+func (c *TaskConfig) RawDecode(data string) error {
+	err := yaml.UnmarshalStrict([]byte(data), c)
+	if err != nil {
+		return terror.ErrConfigYamlTransform.Delegate(err, "decode task config failed")
+	}
+	return nil
+}
+
 // find unused items in config.
 var configRefPrefixes = []string{"RouteRules", "FilterRules", "ColumnMappingRules", "Mydumper", "Loader", "Syncer", "ExprFilter"}
 
