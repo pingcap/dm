@@ -105,6 +105,9 @@ function escape_schema() {
 	dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
 	check_sync_diff $WORK_DIR $WORK_DIR/diff_config.toml
 
+	check_log_contain_with_retry 'clean dump files' $WORK_DIR/worker1/log/dm-worker.log
+  check_log_contain_with_retry 'clean dump files' $WORK_DIR/worker2/log/dm-worker.log
+
 	echo "check dump files have been cleaned"
 	ls $WORK_DIR/worker1/dumped_data.test && exit 1 || echo "worker1 auto removed dump files"
 	ls $WORK_DIR/worker2/dumped_data.test && exit 1 || echo "worker2 auto removed dump files"
