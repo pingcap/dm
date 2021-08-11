@@ -104,13 +104,6 @@ var (
 
 // InitLogger initializes DM's and also the TiDB library's loggers.
 func InitLogger(cfg *Config) error {
-	// init and set tidb slow query logger to stdout if log level is debug
-	if cfg.Level == "debug" {
-		confG := &pclog.Config{Level: cfg.Level}
-		slowQueryLogger, _, _ := pclog.InitLogger(confG)
-		slowQueryLogger = slowQueryLogger.With(zap.String("component", "slow query logger"))
-		logutil.SlowQueryLogger = slowQueryLogger
-	}
 	// init DM logger
 	logger, props, err := pclog.InitLogger(&pclog.Config{
 		Level:  cfg.Level,
@@ -131,6 +124,12 @@ func InitLogger(cfg *Config) error {
 	appLogger = Logger{logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))}
 	appLevel = props.Level
 	appProps = props
+	// init and set tidb slow query logger to stdout if log level is debug
+	if cfg.Level == "debug" {
+		slowQueryLogger := zap.NewExample()
+		slowQueryLogger = slowQueryLogger.With(zap.String("component", "slow query logger"))
+		logutil.SlowQueryLogger = slowQueryLogger
+	}
 	return nil
 }
 
