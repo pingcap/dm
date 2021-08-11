@@ -494,7 +494,119 @@ func (t *testOpenAPISuite) TestModelToSubTaskConfigList(c *check.C) {
 	testShardAndFilterTaskToSubTaskConfig(c)
 }
 
+func testNoShardSubTaskConfigMapToModelTask(c *check.C) {
+	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, check.IsNil)
+	sourceCfg1.SourceID = source1Name
+	task := genNoShardTask()
+	toDBCfg := &config.DBConfig{
+		Host:     task.TargetConfig.Host,
+		Port:     task.TargetConfig.Port,
+		User:     task.TargetConfig.User,
+		Password: task.TargetConfig.Password,
+	}
+	sourceCfgMap := make(map[string]*config.SourceConfig)
+	sourceCfgMap[source1Name] = sourceCfg1
+	subTaskConfigList, err := modelToSubTaskConfigList(toDBCfg, sourceCfgMap, task)
+	c.Assert(err, check.IsNil)
+	c.Assert(subTaskConfigList, check.HasLen, 1)
+
+	// prepare sub task config
+	subTaskConfigMap := make(map[string]map[string]config.SubTaskConfig)
+	subTaskConfigMap[taskName] = make(map[string]config.SubTaskConfig)
+	subTaskConfigMap[taskName][source1Name] = subTaskConfigList[0]
+
+	taskList := subTaskConfigMapToModelTask(subTaskConfigMap)
+	c.Assert(taskList, check.HasLen, 1)
+	newTask := taskList[0]
+
+	// check global config
+	c.Assert(newTask.Name, check.Equals, task.Name)
+	c.Assert(newTask.TaskMode, check.Equals, task.TaskMode)
+	// check no shard task
+	c.Assert(newTask.ShardMode, check.IsNil)
+	c.Assert(*newTask.MetaSchema, check.Equals, *task.MetaSchema)
+	c.Assert(newTask.OnDuplication, check.Equals, task.OnDuplication)
+	c.Assert(newTask.EnhanceOnlineSchemaChange, check.Equals, task.EnhanceOnlineSchemaChange)
+	// check event filter is nil
+	c.Assert(newTask.EventFilterRule, check.Equals, task.EventFilterRule)
+	// check target config
+	c.Assert(newTask.TargetConfig, check.Equals, task.TargetConfig)
+	// check source config
+	c.Assert(newTask.SourceConfig.SourceConf[0].SourceName, check.Equals, task.SourceConfig.SourceConf[0].SourceName)
+	// check table migrate rule
+	c.Assert(newTask.TableMigrateRule[0].Source, check.Equals, newTask.TableMigrateRule[0].Source)
+	c.Assert(newTask.TableMigrateRule[0].Target, check.Equals, newTask.TableMigrateRule[0].Target)
+	c.Assert(newTask.TableMigrateRule[0].EventFilterName, check.Equals, newTask.TableMigrateRule[0].EventFilterName)
+}
+
+func testShardAndFilterSubTaskConfigMapToModelTask(c *check.C) {
+	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, check.IsNil)
+	sourceCfg1.SourceID = source1Name
+	// sourceCfg1.From.m
+	sourceCfg2, err := config.LoadFromFile(sourceSampleFile)
+	c.Assert(err, check.IsNil)
+	sourceCfg2.SourceID = source2Name
+
+	task := genShardAndFilterTask()
+	toDBCfg := &config.DBConfig{
+		Host:     task.TargetConfig.Host,
+		Port:     task.TargetConfig.Port,
+		User:     task.TargetConfig.User,
+		Password: task.TargetConfig.Password,
+	}
+	sourceCfgMap := make(map[string]*config.SourceConfig)
+	sourceCfgMap[source1Name] = sourceCfg1
+	sourceCfgMap[source2Name] = sourceCfg2
+	subTaskConfigList, err := modelToSubTaskConfigList(toDBCfg, sourceCfgMap, task)
+	c.Assert(err, check.IsNil)
+	c.Assert(subTaskConfigList, check.HasLen, 2)
+
+	// prepare sub task config
+	subTaskConfigMap := make(map[string]map[string]config.SubTaskConfig)
+	subTaskConfigMap[taskName] = make(map[string]config.SubTaskConfig)
+	subTaskConfigMap[taskName][source1Name] = subTaskConfigList[0]
+
+	taskList := subTaskConfigMapToModelTask(subTaskConfigMap)
+	c.Assert(taskList, check.HasLen, 1)
+	newTask := taskList[0]
+	// check global config
+	c.Assert(newTask.Name, check.Equals, task.Name)
+	c.Assert(newTask.TaskMode, check.Equals, task.TaskMode)
+	// check shard task shard mode
+	c.Assert(*newTask.ShardMode, check.Equals, *task.ShardMode)
+	c.Assert(*newTask.MetaSchema, check.Equals, *task.MetaSchema)
+	c.Assert(newTask.OnDuplication, check.Equals, task.OnDuplication)
+	c.Assert(newTask.EnhanceOnlineSchemaChange, check.Equals, task.EnhanceOnlineSchemaChange)
+	// check event filter is not nil
+	newfilterRuleList := *newTask.EventFilterRule
+	oldfilterRuleList := *task.EventFilterRule
+	c.Assert(newfilterRuleList, check.HasLen, 1)
+	c.Assert(oldfilterRuleList, check.HasLen, 1)
+	newIgnoreEventList := *newfilterRuleList[0].IgnoreEvent
+	oldIgnoreEventList := *oldfilterRuleList[0].IgnoreEvent
+	c.Assert(newIgnoreEventList, check.HasLen, 1)
+	c.Assert(oldIgnoreEventList, check.HasLen, 1)
+	c.Assert(newIgnoreEventList[0], check.Equals, oldIgnoreEventList[0])
+	newIgnoreSQLList := *newfilterRuleList[0].IgnoreSql
+	oldIgnoreSQLList := *oldfilterRuleList[0].IgnoreSql
+	c.Assert(newIgnoreSQLList, check.HasLen, 1)
+	c.Assert(oldIgnoreSQLList, check.HasLen, 1)
+	c.Assert(newIgnoreSQLList[0], check.Equals, oldIgnoreSQLList[0])
+	// check target config
+	c.Assert(newTask.TargetConfig, check.Equals, task.TargetConfig)
+	// check source config
+	c.Assert(newTask.SourceConfig.SourceConf[0].SourceName, check.Equals, task.SourceConfig.SourceConf[0].SourceName)
+	// check table migrate rule
+	c.Assert(newTask.TableMigrateRule[0].Source, check.Equals, newTask.TableMigrateRule[0].Source)
+	c.Assert(newTask.TableMigrateRule[0].Target, check.Equals, newTask.TableMigrateRule[0].Target)
+	c.Assert(newTask.TableMigrateRule[0].EventFilterName, check.Equals, newTask.TableMigrateRule[0].EventFilterName)
+}
+
 func (t *testOpenAPISuite) TestSubTaskConfigMapToModelTask(c *check.C) {
+	testNoShardSubTaskConfigMapToModelTask(c)
+	testShardAndFilterSubTaskConfigMapToModelTask(c)
 }
 
 func (t *testOpenAPISuite) TestredirectRequestToLeader(c *check.C) {

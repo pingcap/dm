@@ -768,14 +768,12 @@ func subTaskConfigMapToModelTask(subTaskConfigMap map[string]map[string]config.S
 			}
 		}
 		// set basic global config
-		taskShardMode := strToModelTaskShardMode(oneSubtaskConfig.ShardMode)
 		task := openapi.Task{
 			Name:                      taskName,
 			TaskMode:                  strToModelTaskMode(oneSubtaskConfig.Mode),
 			EnhanceOnlineSchemaChange: oneSubtaskConfig.OnlineDDL,
 			MetaSchema:                &oneSubtaskConfig.MetaSchema,
 			OnDuplication:             openapi.TaskOnDuplicationError, // currently only support error
-			ShardMode:                 &taskShardMode,
 			SourceConfig:              taskSourceConfig,
 			TargetConfig: openapi.TaskTargetDataBase{
 				Host:     oneSubtaskConfig.To.Host,
@@ -784,7 +782,13 @@ func subTaskConfigMapToModelTask(subTaskConfigMap map[string]map[string]config.S
 				Password: oneSubtaskConfig.To.Password,
 			},
 		}
-		task.EventFilterRule = &filterRuleList
+		if oneSubtaskConfig.ShardMode != "" {
+			taskShardMode := strToModelTaskShardMode(oneSubtaskConfig.ShardMode)
+			task.ShardMode = &taskShardMode
+		}
+		if len(filterRuleList) > 0 {
+			task.EventFilterRule = &filterRuleList
+		}
 		task.TableMigrateRule = tableMigrateRuleList
 		taskList = append(taskList, task)
 	}
