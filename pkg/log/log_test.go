@@ -16,6 +16,7 @@ package log
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"strings"
@@ -125,6 +126,13 @@ func (s *testLogSuite) TestInitSlowQueryLoggerInDebugLevel(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(output[0], Matches, ".*this is test info.*component.*slow query logger.*")
 	c.Assert(output[1], Matches, ".*this is from applogger.*")
+	// test log is json formart
+	type jsonLog struct {
+		Component string `json:"component"`
+	}
+	oneLog := jsonLog{}
+	c.Assert(json.Unmarshal([]byte(output[0]), &oneLog), IsNil)
+	c.Assert(oneLog.Component, Equals, "slow query logger")
 }
 
 func (s *testLogSuite) TestInitSlowQueryLoggerNotInDebugLevel(c *C) {

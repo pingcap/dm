@@ -1034,7 +1034,6 @@ func (t *testConfig) TestTaskConfigForDowngrade(c *C) {
 }
 
 func (t *testConfig) TestTlsTaskConfig(c *C) {
-	cfg := NewTaskConfig()
 	taskRowStr := `---
 name: test
 task-mode: all
@@ -1054,25 +1053,25 @@ mysql-instances:
   - source-id: "mysql-replica-01-tls"
     block-allow-list: "instance"
 `
-
-	err := cfg.RawDecode(taskRowStr)
+	task1 := NewTaskConfig()
+	err := task1.RawDecode(taskRowStr)
 	c.Assert(err, IsNil)
-	c.Assert(cfg.TargetDB.Security.LoadTLSContent(), IsNil)
-	c.Assert(cfg.adjust(), IsNil)
+	c.Assert(task1.TargetDB.Security.LoadTLSContent(), IsNil)
 	// test load tls content
 	noContentBytes := []byte("test no content")
-	c.Assert(bytes.Contains(cfg.TargetDB.Security.SSLCABytes, noContentBytes), Equals, true)
-	c.Assert(bytes.Contains(cfg.TargetDB.Security.SSLKEYBytes, noContentBytes), Equals, true)
-	c.Assert(bytes.Contains(cfg.TargetDB.Security.SSLCertBytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(task1.TargetDB.Security.SSLCABytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(task1.TargetDB.Security.SSLKEYBytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(task1.TargetDB.Security.SSLCertBytes, noContentBytes), Equals, true)
 
 	// test after to string, taskStr can be `Decode` normally
-	taskStr := cfg.String()
+	taskStr := task1.String()
 	task2 := NewTaskConfig()
 	err = task2.Decode(taskStr)
 	c.Assert(err, IsNil)
 	c.Assert(bytes.Contains(task2.TargetDB.Security.SSLCABytes, noContentBytes), Equals, true)
 	c.Assert(bytes.Contains(task2.TargetDB.Security.SSLKEYBytes, noContentBytes), Equals, true)
 	c.Assert(bytes.Contains(task2.TargetDB.Security.SSLCertBytes, noContentBytes), Equals, true)
+	c.Assert(task2.adjust(), IsNil)
 }
 
 // Clone clones src to dest.
