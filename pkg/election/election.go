@@ -267,6 +267,15 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 			err2 := elec.Campaign(ctx2, e.infoStr)
 			if err2 != nil {
+				// because inner commit may return undetermined error, we try to delete the election key manually
+				deleted, err3 := e.ClearSessionIfNeeded(ctx, e.ID())
+				if err3 != nil {
+					e.l.Warn("failed to clean election key", zap.Error(err3))
+				} else if deleted {
+					e.l.Info("successful manually clean election key",
+						zap.String("campaign error", err2.Error()))
+				}
+
 				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
 				e.l.Info("fail to campaign", zap.Stringer("current member", e.info), zap.Error(err2))
 			}
