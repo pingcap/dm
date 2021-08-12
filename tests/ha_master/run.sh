@@ -58,14 +58,8 @@ function test_evict_leader() {
 		if [ $i = 4 ]; then
 			continue
 		fi
-		# Leader evict is not effective immediately, we need to wait for a proper period of time.
-		for _ in {0..30}; do
-			NEW_LEADER_NAME=$(get_leader "$WORK_DIR" 127.0.0.1:${MASTER_PORT1})
-			if [ "$NEW_LEADER_NAME" != "$LEADER_NAME" ]; then
-				break
-			fi
-			sleep 1
-		done
+		NEW_LEADER_NAME=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
+    echo "new leader is $NEW_LEADER_NAME"
 		if [ "$NEW_LEADER_NAME" = "$LEADER_NAME" ]; then
 			echo "leader evict failed"
 			exit 1
