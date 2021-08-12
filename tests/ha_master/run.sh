@@ -64,7 +64,6 @@ function test_evict_leader() {
 			echo "leader evict failed"
 			exit 1
 		fi
-		echo "new leader is $NEW_LEADER_NAME"
 	done
 
 	echo "cancel evict leader on master1, and master1 will be the leader"
