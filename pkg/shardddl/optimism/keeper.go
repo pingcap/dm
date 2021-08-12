@@ -51,15 +51,23 @@ func (lk *LockKeeper) RebuildLocksAndTables(
 		lock *Lock
 		ok   bool
 	)
-	for _, taskInfos := range ifm {
-		for _, sourceInfos := range taskInfos {
-			for _, schemaInfos := range sourceInfos {
-				for _, info := range schemaInfos {
+	for task, taskInfos := range ifm {
+		for source, sourceInfos := range taskInfos {
+			for schema, schemaInfos := range sourceInfos {
+				for table, info := range schemaInfos {
 					lockID := utils.GenDDLLockID(info.Task, info.DownSchema, info.DownTable)
 					if lock, ok = lk.locks[lockID]; !ok {
-						lk.locks[lockID] = NewLock(cli, lockID, info.Task, info.DownSchema, info.DownTable, lockJoined[lockID], lockTTS[lockID])
-						lock = lk.locks[lockID]
+						lock = NewLock(cli, lockID, info.Task, info.DownSchema, info.DownTable, lockJoined[lockID], lockTTS[lockID])
 					}
+					// filter info which doesn't have SourceTable
+					// SourceTable will be changed after user update block-allow-list
+					// But old infos still remain in etcd.
+					// TODO: add a mechanism to remove all outdated infos in etcd.
+					if !lock.TableExist(info.Source, info.UpSchema, info.UpTable) {
+						delete(ifm[task][source][schema], table)
+						continue
+					}
+					lk.locks[lockID] = lock
 					lock.tables[info.Source][info.UpSchema][info.UpTable] = schemacmp.Encode(info.TableInfoBefore)
 					if columns, ok := colm[lockID]; ok {
 						lock.columns = columns
@@ -74,6 +82,12 @@ func (lk *LockKeeper) RebuildLocksAndTables(
 		for source, sourceTable := range lockTable {
 			for schema, schemaTable := range sourceTable {
 				for table, tableinfo := range schemaTable {
+					if _, ok := lk.locks[lockID]; !ok {
+						continue
+					}
+					if !lk.locks[lockID].TableExist(source, schema, table) {
+						continue
+					}
 					lk.locks[lockID].tables[source][schema][table] = tableinfo
 				}
 			}
