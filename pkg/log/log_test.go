@@ -135,8 +135,10 @@ func (s *testLogSuite) TestInitSlowQueryLoggerNotInDebugLevel(c *C) {
 	output, err := captureStdout(func() {
 		c.Assert(InitLogger(cfg), IsNil)
 		logutil.SlowQueryLogger.Info("this is test info")
+		appLogger.Info("this is from applogger")
 	})
 	c.Assert(err, IsNil)
-	c.Assert(output, HasLen, 1)
-	c.Assert(output[0], Equals, "") // no output
+	c.Assert(output, HasLen, 2)
+	c.Assert(output[0], Matches, ".*this is from applogger.*")
+	c.Assert(output[1], Equals, "") // no output
 }
