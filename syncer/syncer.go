@@ -150,7 +150,7 @@ type Syncer struct {
 	jobsChanLock        sync.Mutex
 	queueBucketMapping  []string
 	waitXIDJob          atomic.Int64
-	isTransactionEnd    atomic.Bool
+	isTransactionEnd    bool
 	waitTransactionLock sync.Mutex
 
 	c *causality
@@ -239,7 +239,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.tctx = tcontext.Background().WithLogger(logger)
 	syncer.jobsClosed.Store(true) // not open yet
 	syncer.waitXIDJob.Store(int64(noWait))
-	syncer.isTransactionEnd.Store(true)
+	syncer.isTransactionEnd = true
 	syncer.closed.Store(false)
 	syncer.lastBinlogSizeCount.Store(0)
 	syncer.binlogSizeCount.Store(0)
@@ -561,7 +561,7 @@ func (s *Syncer) reset() {
 	s.setErrLocation(nil, nil, false)
 	s.isReplacingErr = false
 	s.waitXIDJob.Store(int64(noWait))
-	s.isTransactionEnd.Store(true)
+	s.isTransactionEnd = true
 
 	switch s.cfg.ShardMode {
 	case config.ShardPessimistic:
@@ -976,7 +976,7 @@ func (s *Syncer) addJob(job *job) error {
 	case xid:
 		s.waitXIDJob.CAS(int64(waiting), int64(waitComplete))
 		s.saveGlobalPoint(job.location)
-		s.isTransactionEnd.Store(true)
+		s.isTransactionEnd = true
 		return nil
 	case skip:
 		s.updateReplicationLag(job, skipLagKey)
@@ -1008,7 +1008,7 @@ func (s *Syncer) addJob(job *job) error {
 		startTime := time.Now()
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
-		s.isTransactionEnd.Store(false)
+		s.isTransactionEnd = false
 		failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
 			s.tctx.L().Info("receive dml job", zap.Any("dml job", job))
 			time.Sleep(100 * time.Millisecond)
@@ -1464,7 +1464,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			tctx.L().Info("received subtask's done")
 
 			s.waitTransactionLock.Lock()
-			if s.isTransactionEnd.Load() {
+			if s.isTransactionEnd {
 				s.jobWg.Wait()
 				tctx.L().Info("the last job is transaction end, done directly")
 				runCancel()
