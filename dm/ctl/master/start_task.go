@@ -56,7 +56,7 @@ func startTaskFunc(cmd *cobra.Command, _ []string) error {
 	if yamlErr != nil {
 		return yamlErr
 	}
-	if task.TargetDB.Security != nil {
+	if task.TargetDB != nil && task.TargetDB.Security != nil {
 		loadErr := task.TargetDB.Security.LoadTLSContent()
 		if loadErr != nil {
 			return loadErr

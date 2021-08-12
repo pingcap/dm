@@ -971,7 +971,7 @@ func (r *Relay) setSyncConfig() error {
 	var err error
 	if r.cfg.From.Security != nil {
 		tlsConfig, err = toolutils.ToTLSConfigWithVerifyByRawbytes(r.cfg.From.Security.SSLCABytes,
-			r.cfg.From.Security.SSLCertBytes, r.cfg.From.Security.SSLKEYBytes, []string{})
+			r.cfg.From.Security.SSLCertBytes, r.cfg.From.Security.SSLKEYBytes, r.cfg.From.Security.CertAllowedCN)
 		if err != nil {
 			return terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}

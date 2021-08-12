@@ -3332,7 +3332,7 @@ func (s *Syncer) setSyncCfg() error {
 	var err error
 	if s.cfg.From.Security != nil {
 		tlsConfig, err = toolutils.ToTLSConfigWithVerifyByRawbytes(s.cfg.From.Security.SSLCABytes,
-			s.cfg.From.Security.SSLCertBytes, s.cfg.From.Security.SSLKEYBytes, []string{})
+			s.cfg.From.Security.SSLCertBytes, s.cfg.From.Security.SSLKEYBytes, s.cfg.From.Security.CertAllowedCN)
 		if err != nil {
 			return terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}
