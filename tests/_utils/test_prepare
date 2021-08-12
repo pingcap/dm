@@ -284,9 +284,9 @@ function get_master_status() {
 }
 
 function check_master_port_offline() {
-    master_ports=(0 $MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3 $MASTER_PORT4 $MASTER_PORT5)
-    master_peer_ports=(0 $MASTER_PEER_PORT1 $MASTER_PEER_PORT2 $MASTER_PEER_PORT3 $MASTER_PEER_PORT4 $MASTER_PEER_PORT5)
+    master_ports_1_indexed=(0 $MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3 $MASTER_PORT4 $MASTER_PORT5)
+    master_peer_ports_1_indexed=(0 $MASTER_PEER_PORT1 $MASTER_PEER_PORT2 $MASTER_PEER_PORT3 $MASTER_PEER_PORT4 $MASTER_PEER_PORT5)
     idx=$1
-    check_port_offline ${master_ports[$idx]} 20
-    check_port_offline ${master_peer_ports[$idx]} 20
+    check_port_offline ${master_ports_1_indexed[$idx]} 20
+    check_port_offline ${master_peer_ports_1_indexed[$idx]} 20
 }
