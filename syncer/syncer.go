@@ -145,12 +145,13 @@ type Syncer struct {
 	ddlDB     *conn.BaseDB
 	ddlDBConn *dbconn.DBConn
 
-	jobs               []chan *job
-	jobsClosed         atomic.Bool
-	jobsChanLock       sync.Mutex
-	queueBucketMapping []string
-	waitXIDJob         atomic.Int64
-	isTransactionEnd   atomic.Bool
+	jobs                []chan *job
+	jobsClosed          atomic.Bool
+	jobsChanLock        sync.Mutex
+	queueBucketMapping  []string
+	waitXIDJob          atomic.Int64
+	isTransactionEnd    atomic.Bool
+	waitTransactionLock sync.Mutex
 
 	c *causality
 
@@ -925,6 +926,9 @@ var (
 )
 
 func (s *Syncer) addJob(job *job) error {
+	s.waitTransactionLock.Lock()
+	defer s.waitTransactionLock.Unlock()
+
 	failpoint.Inject("countJobFromOneEvent", func() {
 		if job.currentLocation.Position.Compare(lastLocation.Position) == 0 {
 			lastLocationNum++
@@ -1460,17 +1464,24 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		case <-runCtx.Done():
 		default:
 			tctx.L().Info("received subtask's done")
+
+			s.waitTransactionLock.Lock()
 			if s.isTransactionEnd.Load() {
+				s.jobWg.Wait()
 				tctx.L().Info("the last job is transaction end, done directly")
 				runCancel()
+				s.waitTransactionLock.Unlock()
 				return
 			}
+			s.waitTransactionLock.Unlock()
+
 			s.waitXIDJob.Store(int64(waiting))
 			select {
 			case <-runCtx.Done():
 				tctx.L().Info("received syncer's done")
 			case <-time.After(maxPauseOrStopWaitTime):
-				tctx.L().Info("subtask's done timeout")
+				tctx.L().Info("wait transaction end timeout")
+				s.jobWg.Wait()
 				runCancel()
 			}
 		}
