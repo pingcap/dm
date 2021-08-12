@@ -15,11 +15,64 @@ package config
 
 import (
 	"bytes"
+	"os"
 
 	. "github.com/pingcap/check"
 )
 
+const (
+	testdataPath = "./testdata"
+
+	caFile        = "./testdata/ca.pem"
+	caFileContent = `
+-----BEGIN CERTIFICATE-----
+test no content
+-----END CERTIFICATE-----
+`
+	certFile        = "./testdata/cert.pem"
+	certFileContent = `
+-----BEGIN CERTIFICATE-----
+test no content
+-----END CERTIFICATE-----
+`
+	keyFile        = "./testdata/key.pem"
+	keyFileContent = `
+-----BEGIN RSA PRIVATE KEY-----
+test no content
+-----END RSA PRIVATE KEY-----
+`
+)
+
+func createTestFixture(c *C) {
+	c.Assert(os.Mkdir(testdataPath, 0o744), IsNil)
+
+	f, err := os.Create(caFile)
+	c.Assert(err, IsNil)
+	_, err = f.WriteString(caFileContent)
+	c.Assert(err, IsNil)
+	f.Close()
+
+	f, err = os.Create(certFile)
+	c.Assert(err, IsNil)
+	_, err = f.WriteString(certFileContent)
+	c.Assert(err, IsNil)
+	f.Close()
+
+	f, err = os.Create(keyFile)
+	c.Assert(err, IsNil)
+	_, err = f.WriteString(keyFileContent)
+	c.Assert(err, IsNil)
+	f.Close()
+}
+
+func clearTestFixture(c *C) {
+	c.Assert(os.RemoveAll(testdataPath), IsNil)
+}
+
 func (t *testConfig) TestLoadAndClearContent(c *C) {
+	createTestFixture(c)
+	defer clearTestFixture(c)
+
 	s := &Security{
 		SSLCA:   "testdata/ca.pem",
 		SSLCert: "testdata/cert.pem",

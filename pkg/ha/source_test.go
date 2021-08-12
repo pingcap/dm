@@ -16,6 +16,7 @@ package ha
 import (
 	"bytes"
 	"context"
+	"os"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -26,8 +27,43 @@ import (
 )
 
 const (
-	// do not forget to update this path if the file removed/renamed.
-	sourceSampleFile = "./testdata/source.yaml"
+	testdataPath      = "./testdata"
+	sourceSampleFile  = "./testdata/source.yaml"
+	sourceFileContent = `---
+server-id: 101
+source-id: mysql-replica-01
+relay-dir: ./relay_log
+enable-gtid: true
+relay-binlog-gtid: "e68f6068-53ec-11eb-9c5f-0242ac110003:1-50"
+from:
+  host: 127.0.0.1
+  user: root
+  password: Up8156jArvIPymkVC+5LxkAT6rek
+  port: 3306
+  max-allowed-packet: 0
+  security:
+    ssl-ca: "./testdata/ca.pem"
+    ssl-cert: "./testdata/cert.pem"
+    ssl-key: "./testdata/key.pem"
+`
+	caFile        = "./testdata/ca.pem"
+	caFileContent = `
+-----BEGIN CERTIFICATE-----
+test no content
+-----END CERTIFICATE-----
+`
+	certFile        = "./testdata/cert.pem"
+	certFileContent = `
+-----BEGIN CERTIFICATE-----
+test no content
+-----END CERTIFICATE-----
+`
+	keyFile        = "./testdata/key.pem"
+	keyFileContent = `
+-----BEGIN RSA PRIVATE KEY-----
+test no content
+-----END RSA PRIVATE KEY-----
+`
 )
 
 var etcdTestCli *clientv3.Client
@@ -50,8 +86,43 @@ type testForEtcd struct{}
 
 var _ = Suite(&testForEtcd{})
 
+func createTestFixture(c *C) {
+	c.Assert(os.Mkdir(testdataPath, 0o744), IsNil)
+	// create a source yaml
+	f, err := os.Create(sourceSampleFile)
+	c.Assert(err, IsNil)
+	_, err = f.WriteString(sourceFileContent)
+	c.Assert(err, IsNil)
+	f.Close()
+
+	f, err = os.Create(caFile)
+	c.Assert(err, IsNil)
+	_, err = f.WriteString(caFileContent)
+	c.Assert(err, IsNil)
+	f.Close()
+
+	f, err = os.Create(certFile)
+	c.Assert(err, IsNil)
+	_, err = f.WriteString(certFileContent)
+	c.Assert(err, IsNil)
+	f.Close()
+
+	f, err = os.Create(keyFile)
+	c.Assert(err, IsNil)
+	_, err = f.WriteString(keyFileContent)
+	c.Assert(err, IsNil)
+	f.Close()
+}
+
+func clearTestFixture(c *C) {
+	c.Assert(os.RemoveAll(testdataPath), IsNil)
+}
+
 func (t *testForEtcd) TestSourceEtcd(c *C) {
 	defer clearTestInfoOperation(c)
+
+	createTestFixture(c)
+	defer clearTestFixture(c)
 
 	cfg, err := config.LoadFromFile(sourceSampleFile)
 	c.Assert(err, IsNil)

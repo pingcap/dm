@@ -1034,6 +1034,9 @@ func (t *testConfig) TestTaskConfigForDowngrade(c *C) {
 }
 
 func (t *testConfig) TestTlsTaskConfig(c *C) {
+	createTestFixture(c)
+	defer clearTestFixture(c)
+
 	taskRowStr := `---
 name: test
 task-mode: all
