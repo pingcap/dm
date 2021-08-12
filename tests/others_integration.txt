@@ -13,4 +13,5 @@ fake_rotate_event
 metrics
 case_sensitive
 sql_mode
+http_proxies
 checkpoint_transaction
