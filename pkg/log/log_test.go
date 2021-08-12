@@ -112,7 +112,8 @@ func captureStdout(f func()) ([]string, error) {
 	return strings.Split(<-output, "\n"), <-errs
 }
 
-func (s *testLogSuite) TestInitSlowQueryLogger(c *C) {
+func (s *testLogSuite) TestInitSlowQueryLoggerInDebugLevel(c *C) {
+	// test slow query logger can write debug log
 	logLevel := "debug"
 	cfg := &Config{Level: logLevel, Format: "json"}
 	cfg.Adjust()
@@ -124,4 +125,18 @@ func (s *testLogSuite) TestInitSlowQueryLogger(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(output[0], Matches, ".*this is test info.*component.*slow query logger.*")
 	c.Assert(output[1], Matches, ".*this is from applogger.*")
+}
+
+func (s *testLogSuite) TestInitSlowQueryLoggerNotInDebugLevel(c *C) {
+	// test slow query logger can not write log in other log level
+	logLevel := "info"
+	cfg := &Config{Level: logLevel, Format: "json"}
+	cfg.Adjust()
+	output, err := captureStdout(func() {
+		c.Assert(InitLogger(cfg), IsNil)
+		logutil.SlowQueryLogger.Info("this is test info")
+	})
+	c.Assert(err, IsNil)
+	c.Assert(output, HasLen, 1)
+	c.Assert(output[0], Equals, "") // no output
 }

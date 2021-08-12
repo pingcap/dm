@@ -14,6 +14,7 @@
 package config
 
 import (
+	"bytes"
 	"io/ioutil"
 	"path"
 	"reflect"
@@ -33,11 +34,11 @@ import (
 var correctTaskConfig = `---
 name: test
 task-mode: all
-shard-mode: "pessimistic"       
-meta-schema: "dm_meta"         
-case-sensitive: false        
+shard-mode: "pessimistic"
+meta-schema: "dm_meta"
+case-sensitive: false
 online-ddl: true
-clean-dump-file: true     
+clean-dump-file: true
 
 target-database:
   host: "127.0.0.1"
@@ -53,7 +54,7 @@ routes:
     schema-pattern: "test_*"
     target-schema: "test"
 
-filters: 
+filters:
   filter-rule-1:
     schema-pattern: "test_*"
     events: ["truncate table", "drop table"]
@@ -102,14 +103,14 @@ loaders:
 syncers:
   global1:
     worker-count: 16
-    batch: 100 
+    batch: 100
     enable-ansi-quotes: true
-    safe-mode: false  
+    safe-mode: false
   global2:
     worker-count: 32
-    batch: 100 
+    batch: 100
     enable-ansi-quotes: true
-    safe-mode: false  
+    safe-mode: false
 
 expression-filter:
   expr-1:
@@ -143,11 +144,11 @@ func (t *testConfig) TestUnusedTaskConfig(c *C) {
 	errorTaskConfig := `---
 name: test
 task-mode: all
-shard-mode: "pessimistic"       
-meta-schema: "dm_meta"         
-case-sensitive: false        
+shard-mode: "pessimistic"
+meta-schema: "dm_meta"
+case-sensitive: false
 online-ddl: true
-clean-dump-file: true     
+clean-dump-file: true
 
 target-database:
   host: "127.0.0.1"
@@ -163,7 +164,7 @@ routes:
     schema-pattern: "test_*"
     target-schema: "test"
 
-filters: 
+filters:
   filter-rule-1:
     schema-pattern: "test_*"
     table-pattern: "t_*"
@@ -213,14 +214,14 @@ loaders:
 syncers:
   global1:
     worker-count: 16
-    batch: 100 
+    batch: 100
     enable-ansi-quotes: true
-    safe-mode: false  
+    safe-mode: false
   global2:
     worker-count: 32
-    batch: 100 
+    batch: 100
     enable-ansi-quotes: true
-    safe-mode: false  
+    safe-mode: false
 
 expression-filter:
   expr-1:
@@ -269,7 +270,7 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    server-id: 101 
+    server-id: 101
     block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-1"]
@@ -461,7 +462,7 @@ block-allow-list:
   instance:
     do-dbs: ["test"]
 
-routes: 
+routes:
   route-rule-1:
   route-rule-2:
   route-rule-3:
@@ -1030,6 +1031,48 @@ func (t *testConfig) TestTaskConfigForDowngrade(c *C) {
 	cfgForClone := &TaskConfigForDowngrade{}
 	Clone(cfgForClone, cfg)
 	c.Assert(cfgForDowngrade, DeepEquals, cfgForClone)
+}
+
+func (t *testConfig) TestTlsTaskConfig(c *C) {
+	cfg := NewTaskConfig()
+	taskRowStr := `---
+name: test
+task-mode: all
+target-database:
+    host: "127.0.0.1"
+    port: 3307
+    user: "root"
+    password: "123456"
+    security:
+      ssl-ca: "testdata/ca.pem"
+      ssl-cert: "testdata/cert.pem"
+      ssl-key: "testdata/key.pem"
+block-allow-list:
+  instance:
+    do-dbs: ["dm_benchmark"]
+mysql-instances:
+  - source-id: "mysql-replica-01-tls"
+    block-allow-list: "instance"
+`
+
+	err := cfg.RawDecode(taskRowStr)
+	c.Assert(err, IsNil)
+	c.Assert(cfg.TargetDB.Security.LoadTLSContent(), IsNil)
+	c.Assert(cfg.adjust(), IsNil)
+	// test load tls content
+	noContentBytes := []byte("test no content")
+	c.Assert(bytes.Contains(cfg.TargetDB.Security.SSLCABytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(cfg.TargetDB.Security.SSLKEYBytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(cfg.TargetDB.Security.SSLCertBytes, noContentBytes), Equals, true)
+
+	// test after to string, taskStr can be `Decode` normally
+	taskStr := cfg.String()
+	task2 := NewTaskConfig()
+	err = task2.Decode(taskStr)
+	c.Assert(err, IsNil)
+	c.Assert(bytes.Contains(task2.TargetDB.Security.SSLCABytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(task2.TargetDB.Security.SSLKEYBytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(task2.TargetDB.Security.SSLCertBytes, noContentBytes), Equals, true)
 }
 
 // Clone clones src to dest.

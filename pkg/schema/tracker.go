@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	tidbConfig "github.com/pingcap/tidb/config"
@@ -29,6 +30,7 @@ import (
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/session"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/store/mockstore"
 	"go.uber.org/zap"
 
@@ -131,8 +133,7 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 		err = se.GetSessionVars().SetSystemVarWithRelaxedValidation(k, v)
 		if err != nil {
 			// when user set some unsupported variable, we just ignore it
-			// tidb error message: https://github.com/pingcap/tidb/blob/f570e8fb679df0686a4023333333e046547b7ff1/errors.toml#L1934
-			if strings.HasPrefix(err.Error(), "[variable:1193]Unknown system variable") {
+			if terror.ErrorEqual(err, variable.ErrUnknownSystemVar) {
 				log.L().Warn("can not set this variable", zap.Error(err))
 				continue
 			}

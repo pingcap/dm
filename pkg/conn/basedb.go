@@ -65,7 +65,7 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 	doFuncInClose := func() {}
 	if config.Security != nil && len(config.Security.SSLCA) != 0 {
 		tlsConfig, err := toolutils.ToTLSConfigWithVerifyByRawbytes(config.Security.SSLCABytes,
-			config.Security.SSLCertBytes, config.Security.SSLKEYBytes, []string{})
+			config.Security.SSLCertBytes, config.Security.SSLKEYBytes, config.Security.CertAllowedCN)
 		if err != nil {
 			return nil, terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}

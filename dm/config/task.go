@@ -395,11 +395,7 @@ func (c *TaskConfig) Decode(data string) error {
 
 // RawDecode loads config from file data.
 func (c *TaskConfig) RawDecode(data string) error {
-	err := yaml.UnmarshalStrict([]byte(data), c)
-	if err != nil {
-		return terror.ErrConfigYamlTransform.Delegate(err, "decode task config failed")
-	}
-	return nil
+	return terror.ErrConfigYamlTransform.Delegate(yaml.UnmarshalStrict([]byte(data), c), "decode task config failed")
 }
 
 // find unused items in config.

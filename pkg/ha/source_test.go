@@ -14,8 +14,8 @@
 package ha
 
 import (
+	"bytes"
 	"context"
-	"strings"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -80,10 +80,10 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(rev3, Equals, rev2)
 	cfg2 := scm2[source]
 	c.Assert(cfg2, DeepEquals, cfg)
-	c.Assert(strings.Contains(string(cfg2.From.Security.SSLCertBytes), "test no content"), Equals, true)
-	c.Assert(strings.Contains(string(cfg2.From.Security.SSLCABytes), "test no content"), Equals, true)
-	c.Assert(strings.Contains(string(cfg2.From.Security.SSLCertBytes), "test no content"), Equals, true)
-
+	noContentBytes := []byte("test no content")
+	c.Assert(bytes.Contains(cfg2.From.Security.SSLCABytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(cfg2.From.Security.SSLKEYBytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(cfg2.From.Security.SSLCertBytes, noContentBytes), Equals, true)
 	// put another source config.
 	rev2, err = PutSourceCfg(etcdTestCli, &cfgExtra)
 	c.Assert(err, IsNil)

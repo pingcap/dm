@@ -129,6 +129,8 @@ func InitLogger(cfg *Config) error {
 		slowQueryLogger := zap.NewExample()
 		slowQueryLogger = slowQueryLogger.With(zap.String("component", "slow query logger"))
 		logutil.SlowQueryLogger = slowQueryLogger
+	} else {
+		logutil.SlowQueryLogger = zap.NewNop()
 	}
 	return nil
 }
