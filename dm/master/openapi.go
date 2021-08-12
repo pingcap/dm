@@ -54,27 +54,26 @@ func (s *Server) StartOpenAPIServer(ctx context.Context) {
 	if err != nil {
 		exitServer(err)
 	}
-
 	swagger.AddServer(&openapi3.Server{URL: fmt.Sprintf("http://%s", s.cfg.OpenAPIAddr)})
 	swaggerJSON, err := swagger.MarshalJSON()
 	if err != nil {
 		exitServer(err)
 	}
 	docMW := openapi.NewSwaggerDocUI(openapi.NewSwaggerConfig(docBasePath, docJSONBasePath, ""), swaggerJSON)
-
-	// Clear out the servers array in the swagger spec, that skips validating
-	// that server names match. We don't know how this thing will be run.
-	swagger.Servers = nil
-
 	// Echo instance
 	e := echo.New()
 	// inject err handler
 	e.HTTPErrorHandler = terrorHTTPErrorHandler
 	// Middlewares
 	e.Use(docMW)
-	e.Use(echomiddleware.Logger())
-	// e.Logger.SetOutput()
+	// Set logger
+	logger := log.L().Logger
+	logger = logger.With(zap.String("component", "openapi"))
+	e.Use(openapi.ZapLogger(logger))
 	e.Use(echomiddleware.Recover())
+	// Clear out the servers array in the swagger spec, that skips validating
+	// that server names match. We don't know how this thing will be run.
+	swagger.Servers = nil
 	// Use our validation middleware to check all requests against the OpenAPI schema.
 	e.Use(middleware.OapiRequestValidator(swagger))
 	openapi.RegisterHandlers(e, s)
