@@ -90,11 +90,10 @@ generate_proto: tools_setup
 generate_mock: tools_setup
 	./tests/generate-mock.sh
 
-generate_openapi:
+generate_openapi: tools_setup
 	@echo "generate_openapi"
-	@go get github.com/deepmap/oapi-codegen/cmd/oapi-codegen
-	oapi-codegen --config=openapi/spec/server-gen-cfg.yaml openapi/spec/dm.yaml
-	oapi-codegen --config=openapi/spec/types-gen-cfg.yaml openapi/spec/dm.yaml
+	tools/bin/oapi-codegen --config=openapi/spec/server-gen-cfg.yaml openapi/spec/dm.yaml
+	tools/bin/oapi-codegen --config=openapi/spec/types-gen-cfg.yaml openapi/spec/dm.yaml
 
 test: unit_test integration_test
 

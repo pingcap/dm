@@ -30,4 +30,5 @@ import (
 	_ "github.com/rakyll/statik"
 	_ "github.com/zhouqiang-cl/gocovmerge"
 	_ "mvdan.cc/gofumpt/gofumports"
+	_ "github.com/deepmap/oapi-codegen"
 )
