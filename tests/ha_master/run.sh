@@ -59,7 +59,7 @@ function test_evict_leader() {
 			continue
 		fi
 		NEW_LEADER_NAME=$(get_leader $WORK_DIR 127.0.0.1:${MASTER_PORT1})
-    echo "new leader is $NEW_LEADER_NAME"
+		echo "new leader is $NEW_LEADER_NAME"
 		if [ "$NEW_LEADER_NAME" = "$LEADER_NAME" ]; then
 			echo "leader evict failed"
 			exit 1

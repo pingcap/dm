@@ -81,7 +81,6 @@ type Election struct {
 	// so do not close it in the methods of Election.
 	cli        *clientv3.Client
 	sessionTTL int
-	session    *concurrency.Session
 	key        string
 
 	info    *CampaignerInfo
