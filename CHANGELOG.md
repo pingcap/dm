@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 
 ### Bug fixes
 
-- Fix the issue that the inconsistency between ddl infos and upstream tables in the optimistic mode causes DM-master panic [#1971](https://github.com/pingcap/dm/pull/1971)
+- Fix the issue that the metadata inconsistency between ddl infos and upstream tables in the optimistic sharding DDL mode causes DM-master panic [#1971](https://github.com/pingcap/dm/pull/1971)
 
 ### Known issues
 
