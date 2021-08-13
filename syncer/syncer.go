@@ -971,6 +971,11 @@ func (s *Syncer) addJob(job *job) error {
 			s.tctx.L().Info("not receive xid job yet", zap.Any("next job", job))
 		}
 	})
+
+	if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
+		s.tctx.L().Info("All jobs is completed before syncer close, the coming job will be reject", zap.Any("job", job))
+		return nil
+	}
 	var queueBucket int
 	switch job.tp {
 	case xid:
@@ -1394,14 +1399,9 @@ func (s *Syncer) syncDML(
 		case sqlJob, ok := <-jobChan:
 			metrics.QueueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
 			if !ok {
-				tctx.L().Info("close job chan", zap.Any("rest job", jobs))
-				affect, err = executeSQLs()
-				if err != nil {
-					fatalF(affect, err)
-					return
+				if len(jobs) > 0 {
+					tctx.L().Warn("have unexecuted jobs when close job chan!", zap.Any("rest job", jobs))
 				}
-				successF()
-				clearF()
 				return
 			}
 			idx++
@@ -1465,6 +1465,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			s.waitTransactionLock.Lock()
 			if s.isTransactionEnd {
+				s.waitXIDJob.Store(int64(waitComplete))
 				s.jobWg.Wait()
 				tctx.L().Info("the last job is transaction end, done directly")
 				runCancel()
@@ -1749,11 +1750,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		startTime := time.Now()
 		e, err = s.getEvent(tctx, currentLocation)
-
-		if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
-			s.tctx.L().Info("All event is completed before syncer close, the coming event will be reject", zap.Any("event", e))
-			return nil
-		}
 
 		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
 			if intVal, ok := val.(int); ok && intVal == 1 {
