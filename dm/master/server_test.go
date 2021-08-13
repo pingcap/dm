@@ -180,10 +180,10 @@ func TestMaster(t *testing.T) {
 		s.testT = t
 	}
 
-	// inject *testing.T to testOpenAPISuite
-	ts, ok := ts.(*testOpenAPISuite)
+	// inject *testing.T to openAPISuite
+	os, ok := ts.(*openAPISuite)
 	if ok {
-		ts.testT = t
+		os.testT = t
 	}
 
 	check.TestingT(t)

@@ -19,16 +19,24 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/deepmap/oapi-codegen/pkg/testutil"
+	"github.com/golang/mock/gomock"
 	"github.com/pingcap/check"
 	filter "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/tikv/pd/pkg/tempurl"
+	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/workerrpc"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/pbmock"
 	"github.com/pingcap/dm/openapi"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -76,10 +84,24 @@ var (
 	shardSource1FilterSQL   = "^Drop"
 )
 
-var ts = check.Suite(&testOpenAPISuite{})
+var ts = check.Suite(&openAPISuite{})
 
-type testOpenAPISuite struct {
+type openAPISuite struct {
 	testT *testing.T
+
+	workerClients map[string]workerrpc.Client
+
+	testEtcdCluster *integration.ClusterV3
+	etcdTestCli     *clientv3.Client
+}
+
+func (t *openAPISuite) SetUpTest(c *check.C) {
+	c.Logf("Current running test=%s", c.TestName())
+	t.testEtcdCluster = integration.NewClusterV3(t.testT, &integration.ClusterConfig{Size: 1})
+	t.etcdTestCli = t.testEtcdCluster.RandClient()
+	t.workerClients = make(map[string]workerrpc.Client)
+
+	c.Assert(ha.ClearTestInfoOperation(t.etcdTestCli), check.IsNil)
 }
 
 func genNoShardTask() openapi.Task {
@@ -605,17 +627,101 @@ func testShardAndFilterSubTaskConfigMapToModelTask(c *check.C) {
 	c.Assert(newTask.TableMigrateRule[0].EventFilterName, check.Equals, newTask.TableMigrateRule[0].EventFilterName)
 }
 
-func (t *testOpenAPISuite) TestModelToSubTaskConfigList(c *check.C) {
+func setupServer(ctx context.Context, c *check.C) *Server {
+	// create a new cluster
+	cfg1 := NewConfig()
+	c.Assert(cfg1.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg1.Name = "dm-master-1"
+	cfg1.DataDir = c.MkDir()
+	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg1.PeerUrls = tempurl.Alloc()
+	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
+	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
+	cfg1.OpenAPIAddr = tempurl.Alloc()[len("http://"):]
+
+	s1 := NewServer(cfg1)
+	c.Assert(s1.Start(ctx), check.IsNil)
+	// wait the first one become the leader
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return s1.election.IsLeader()
+	}), check.IsTrue)
+
+	return s1
+}
+
+func mockWorkerClientForOpenAPI(
+	mockWorkerClient *pbmock.MockWorkerClient, taskName, sourceName, workerName string, masterReq interface{}) {
+	var expect pb.Stage
+	switch req := masterReq.(type) {
+	case *pb.StartTaskRequest, *pb.UpdateTaskRequest:
+		expect = pb.Stage_Running
+	case *pb.OperateTaskRequest:
+		switch req.Op {
+		case pb.TaskOp_Resume:
+			expect = pb.Stage_Running
+		case pb.TaskOp_Pause:
+			expect = pb.Stage_Paused
+		case pb.TaskOp_Stop:
+			expect = pb.Stage_Stopped
+		}
+	case *pb.OperateWorkerRelayRequest:
+		switch req.Op {
+		case pb.RelayOp_ResumeRelay:
+			expect = pb.Stage_Running
+		case pb.RelayOp_PauseRelay:
+			expect = pb.Stage_Paused
+		case pb.RelayOp_StopRelay:
+			expect = pb.Stage_Stopped
+		}
+	default:
+		expect = pb.Stage_Running
+	}
+	queryResp := &pb.QueryStatusResponse{
+		Result: true,
+		SourceStatus: &pb.SourceStatus{
+			Worker:      workerName,
+			Source:      sourceName,
+			RelayStatus: &pb.RelayStatus{Stage: expect},
+		},
+	}
+
+	switch masterReq.(type) {
+	case *pb.StartTaskRequest, *pb.UpdateTaskRequest, *pb.OperateTaskRequest:
+		queryResp.SubTaskStatus = []*pb.SubTaskStatus{{}}
+		if expect == pb.Stage_Stopped {
+			queryResp.SubTaskStatus[0].Status = &pb.SubTaskStatus_Msg{
+				Msg: fmt.Sprintf("no sub task with name %s has started", taskName),
+			}
+		} else {
+			queryResp.SubTaskStatus[0].Name = taskName
+			queryResp.SubTaskStatus[0].Stage = expect
+		}
+	case *pb.OperateWorkerRelayRequest:
+		queryResp.SourceStatus = &pb.SourceStatus{
+			RelayStatus: &pb.RelayStatus{Stage: expect},
+			Worker:      workerName,
+		}
+	}
+
+	mockWorkerClient.EXPECT().QueryStatus(
+		gomock.Any(),
+		&pb.QueryStatusRequest{
+			Name: taskName,
+		},
+	).Return(queryResp, nil).MaxTimes(maxRetryNum)
+}
+
+func (t *openAPISuite) TestModelToSubTaskConfigList(c *check.C) {
 	testNoShardTaskToSubTaskConfig(c)
 	testShardAndFilterTaskToSubTaskConfig(c)
 }
 
-func (t *testOpenAPISuite) TestSubTaskConfigMapToModelTask(c *check.C) {
+func (t *openAPISuite) TestSubTaskConfigMapToModelTask(c *check.C) {
 	testNoShardSubTaskConfigMapToModelTask(c)
 	testShardAndFilterSubTaskConfigMapToModelTask(c)
 }
 
-func (t *testOpenAPISuite) TestRedirectRequestToLeader(c *check.C) {
+func (t *openAPISuite) TestRedirectRequestToLeader(c *check.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -665,29 +771,7 @@ func (t *testOpenAPISuite) TestRedirectRequestToLeader(c *check.C) {
 	c.Assert(openAPIAddrFromS2, check.Equals, s1.cfg.OpenAPIAddr)
 }
 
-func setupServer(ctx context.Context, c *check.C) *Server {
-	// create a new cluster
-	cfg1 := NewConfig()
-	c.Assert(cfg1.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
-	cfg1.Name = "dm-master-1"
-	cfg1.DataDir = c.MkDir()
-	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
-	cfg1.PeerUrls = tempurl.Alloc()
-	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
-	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
-	cfg1.OpenAPIAddr = tempurl.Alloc()[len("http://"):]
-
-	s1 := NewServer(cfg1)
-	c.Assert(s1.Start(ctx), check.IsNil)
-	// wait the first one become the leader
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return s1.election.IsLeader()
-	}), check.IsTrue)
-
-	return s1
-}
-
-func (t *testOpenAPISuite) TestSourceAPI(c *check.C) {
+func (t *openAPISuite) TestSourceAPI(c *check.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	s := setupServer(ctx, c)
@@ -759,4 +843,97 @@ func (t *testOpenAPISuite) TestSourceAPI(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resultListSource2.Data, check.HasLen, 0)
 	c.Assert(resultListSource2.Total, check.Equals, 0)
+}
+
+func (t *openAPISuite) TestRelayAPI(c *check.C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+	s := setupServer(ctx, c)
+	defer s.Close()
+
+	baseURL := "/api/v1/sources"
+
+	source1 := openapi.Source{
+		SourceName: source1Name,
+		EnableGtid: false,
+		Host:       "127.0.0.1",
+		Password:   "123456",
+		Port:       3306,
+		User:       "root",
+	}
+	result := testutil.NewRequest().Post(baseURL).WithJsonBody(source1).Go(t.testT, s.echo)
+	// check http status code
+	c.Assert(result.Code(), check.Equals, http.StatusCreated)
+
+	source1URL := fmt.Sprintf("%s/%s", baseURL, source1.SourceName)
+
+	// get source status
+	source1StatusURL := fmt.Sprintf("%s/%s/status", baseURL, source1.SourceName)
+	result2 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
+	c.Assert(result2.Code(), check.Equals, http.StatusOK)
+	var resultSourceStatus openapi.SourceStatus
+	err := result2.UnmarshalBodyToObject(&resultSourceStatus)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultSourceStatus.SourceName, check.Equals, source1.SourceName)
+	c.Assert(resultSourceStatus.WorkerName, check.Equals, "") // no worker bound
+
+	// add mock worker
+	// start workers, the unbounded sources should be bounded
+	var wg sync.WaitGroup
+	ctx1, cancel1 := context.WithCancel(ctx)
+	defer cancel1()
+	workerName1 := "worker1"
+	c.Assert(s.scheduler.AddWorker(workerName1, "172.16.10.72:8262"), check.IsNil)
+	wg.Add(1)
+	go func(ctx context.Context, workerName string) {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx, s.etcdClient, workerName, keepAliveTTL), check.IsNil)
+	}(ctx1, workerName1)
+	// wait worker ready
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		w := s.scheduler.GetWorkerBySource(source1.SourceName)
+		return w != nil
+	}), check.IsTrue)
+	// mock worker rpc
+	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+	workerReq := &workerrpc.Request{
+		Type:        workerrpc.CmdQueryStatus,
+		QueryStatus: &pb.QueryStatusRequest{Name: ""},
+	}
+	mockWorkerClientForOpenAPI(mockWorkerClient, "", source1.SourceName, workerName1, workerReq)
+	s.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
+
+	// get source status again,source should be bounded by worker1
+	result3 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
+	c.Assert(result2.Code(), check.Equals, http.StatusOK)
+	var resultSourceStatus1 openapi.SourceStatus
+	err = result3.UnmarshalBodyToObject(&resultSourceStatus1)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultSourceStatus1.WorkerName, check.Equals, workerName1) // worker1 is bound
+	c.Assert(resultSourceStatus1.EnableRelay, check.Equals, false)
+
+	// mock start relay
+	startRelayReq := pb.OperateRelayRequest{}
+	mockWorkerClientForOpenAPI(mockWorkerClient, "", source1.SourceName, workerName1, startRelayReq)
+	startRelayURL := fmt.Sprintf("%s/start-relay", source1URL)
+	openAPIStartRelayReq := openapi.StartRelayRequest{WorkerName: workerName1}
+	result4 := testutil.NewRequest().Patch(startRelayURL).WithJsonBody(openAPIStartRelayReq).Go(t.testT, s.echo)
+	// check http status code
+	c.Assert(result4.Code(), check.Equals, http.StatusOK)
+
+	// get source status again, relay status should not be nil
+	result5 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
+	c.Assert(result5.Code(), check.Equals, http.StatusOK)
+	var resultSourceStatus2 openapi.SourceStatus
+	err = result5.UnmarshalBodyToObject(&resultSourceStatus2)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultSourceStatus2.RelayStatus.Stage, check.Equals, pb.Stage_Running.String())
+
+	// test stop relay
+	stopRelayURL := fmt.Sprintf("%s/stop-relay", source1URL)
+	workerNameReq := openapi.WorkerNameRequest{WorkerName: workerName1}
+	result6 := testutil.NewRequest().Patch(stopRelayURL).WithJsonBody(workerNameReq).Go(t.testT, s.echo)
+	c.Assert(result6.Code(), check.Equals, http.StatusOK)
 }

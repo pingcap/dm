@@ -237,31 +237,46 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
 	}
 
-	ret := s.getStatusFromWorkers(ctx.Request().Context(), []string{sourceName}, "", true)
-	if len(ret) != 1 {
-		// No response from worker and master means that the current query source has not been created.
+	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
+	if sourceCfg == nil {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
 	}
-	status := ret[0]
-	if !status.Result {
-		return terror.ErrOpenAPICommonError.New(status.Msg)
+	queryWorker := false
+	// only query worker if source is bound to a worker
+	for _, name := range s.scheduler.BoundSources() {
+		if name == sourceName {
+			queryWorker = true
+		}
 	}
-	sourceStatus := status.SourceStatus
-	relayStatus := sourceStatus.GetRelayStatus()
-	enableRelay := relayStatus != nil
+	enableRelay := sourceCfg.EnableRelay
 	resp := openapi.SourceStatus{
 		EnableRelay: enableRelay,
-		SourceName:  sourceStatus.Source,
-		WorkerName:  sourceStatus.Worker,
+		SourceName:  sourceCfg.SourceID,
 	}
-	if enableRelay {
-		resp.RelayStatus = &openapi.RelayStatus{
-			MasterBinlog:       relayStatus.MasterBinlog,
-			MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
-			RelayBinlogGtid:    relayStatus.RelayBinlogGtid,
-			RelayCatchUpMaster: relayStatus.RelayCatchUpMaster,
-			RelayDir:           relayStatus.RelaySubDir,
-			Stage:              relayStatus.Stage.String(),
+
+	if queryWorker {
+		enableRelay = sourceCfg.EnableRelay && queryWorker
+		ret := s.getStatusFromWorkers(ctx.Request().Context(), []string{sourceName}, "", enableRelay)
+		if len(ret) != 1 {
+			// No response from worker and master means that the current query source has not been created.
+			return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
+		}
+		status := ret[0]
+		if !status.Result {
+			return terror.ErrOpenAPICommonError.New(status.Msg)
+		}
+		sourceStatus := status.SourceStatus
+		relayStatus := sourceStatus.GetRelayStatus()
+		resp.WorkerName = sourceStatus.Worker
+		if relayStatus != nil {
+			resp.RelayStatus = &openapi.RelayStatus{
+				MasterBinlog:       relayStatus.MasterBinlog,
+				MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
+				RelayBinlogGtid:    relayStatus.RelayBinlogGtid,
+				RelayCatchUpMaster: relayStatus.RelayCatchUpMaster,
+				RelayDir:           relayStatus.RelaySubDir,
+				Stage:              relayStatus.Stage.String(),
+			}
 		}
 	}
 	return ctx.JSON(http.StatusOK, resp)
