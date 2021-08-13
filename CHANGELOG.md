@@ -1,6 +1,16 @@
 # DM Changelog
 
 All notable changes to this project will be documented in this file.
+## [2.0.6] 2021-08-13
+
+### Bug fixes
+
+- Fix the issue that the inconsistency between ddl infos and upstream tables in the optimistic mode causes DM-master panic [#1971](https://github.com/pingcap/dm/pull/1971)
+
+### Known issues
+
+[GitHub issues](https://github.com/pingcap/dm/issues?q=is%3Aissue+label%3Aaffected-v2.0.6)
+
 ## [2.0.5] 2021-07-30
 
 ### Improvements
