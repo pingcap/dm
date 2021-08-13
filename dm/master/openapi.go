@@ -318,7 +318,7 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 	// TODO(ehco): add security
 	adjustDBErr := adjustTargetDB(newCtx, toDBCfg)
 	if adjustDBErr != nil {
-		return terror.WithClass(err, terror.ClassDMMaster)
+		return terror.WithClass(adjustDBErr, terror.ClassDMMaster)
 	}
 	// generate sub task config list
 	subTaskConfigList, err := modelToSubTaskConfigList(toDBCfg, sourceCfgMap, task)
@@ -346,7 +346,6 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 	if err != nil {
 		return err
 	}
-
 	return ctx.JSON(http.StatusCreated, task)
 }
 
@@ -394,7 +393,6 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
 	if needRedirect {
 		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
 	}
-
 	// 1. get task source list from scheduler
 	sourceList := s.getTaskResources(taskName)
 	if len(sourceList) == 0 {
@@ -419,7 +417,7 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
 		}
 		if sts == nil {
 			// this may not happen
-			return terror.ErrOpenAPICommonError.Generatef("can not find task=%s status", taskName)
+			return terror.ErrOpenAPICommonError.Generatef("can not find subtask status task name=%s ", taskName)
 		}
 		subTaskStatus := openapi.SubTaskStatus{
 			Name:                taskName,

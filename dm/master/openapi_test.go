@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 	"testing"
 	"time"
 
@@ -683,6 +682,28 @@ func mockWorkerClientForOpenAPI(
 			Source:      sourceName,
 			RelayStatus: &pb.RelayStatus{Stage: expect},
 		},
+		SubTaskStatus: []*pb.SubTaskStatus{
+			{
+				Stage: expect,
+				Name:  taskName,
+				Status: &pb.SubTaskStatus_Sync{
+					Sync: &pb.SyncStatus{
+						TotalEvents:         0,
+						TotalTps:            0,
+						RecentTps:           0,
+						MasterBinlog:        "",
+						MasterBinlogGtid:    "",
+						SyncerBinlog:        "",
+						SyncerBinlogGtid:    "",
+						BlockingDDLs:        nil,
+						UnresolvedGroups:    nil,
+						Synced:              false,
+						BinlogType:          "",
+						SecondsBehindMaster: 0,
+					},
+				},
+			},
+		},
 	}
 
 	switch masterReq.(type) {
@@ -881,14 +902,11 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 
 	// add mock worker
 	// start workers, the unbounded sources should be bounded
-	var wg sync.WaitGroup
 	ctx1, cancel1 := context.WithCancel(ctx)
 	defer cancel1()
 	workerName1 := "worker1"
 	c.Assert(s.scheduler.AddWorker(workerName1, "172.16.10.72:8262"), check.IsNil)
-	wg.Add(1)
 	go func(ctx context.Context, workerName string) {
-		defer wg.Done()
 		c.Assert(ha.KeepAlive(ctx, s.etcdClient, workerName, keepAliveTTL), check.IsNil)
 	}(ctx1, workerName1)
 	// wait worker ready
@@ -907,7 +925,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 
 	// get source status again,source should be bounded by worker1
 	result3 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
-	c.Assert(result2.Code(), check.Equals, http.StatusOK)
+	c.Assert(result3.Code(), check.Equals, http.StatusOK)
 	var resultSourceStatus1 openapi.SourceStatus
 	err = result3.UnmarshalBodyToObject(&resultSourceStatus1)
 	c.Assert(err, check.IsNil)
@@ -936,4 +954,111 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	workerNameReq := openapi.WorkerNameRequest{WorkerName: workerName1}
 	result6 := testutil.NewRequest().Patch(stopRelayURL).WithJsonBody(workerNameReq).Go(t.testT, s.echo)
 	c.Assert(result6.Code(), check.Equals, http.StatusOK)
+}
+
+func (t *openAPISuite) TestTaskAPI(c *check.C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+	s := setupServer(ctx, c)
+	defer s.Close()
+
+	source1 := openapi.Source{
+		SourceName: source1Name,
+		EnableGtid: false,
+		Host:       "127.0.0.1",
+		Password:   "123456",
+		Port:       3306,
+		User:       "root",
+	}
+	// create source
+	sourceURL := "/api/v1/sources"
+	result := testutil.NewRequest().Post(sourceURL).WithJsonBody(source1).Go(t.testT, s.echo)
+	// check http status code
+	c.Assert(result.Code(), check.Equals, http.StatusCreated)
+
+	// add mock worker
+	// start workers, the unbounded sources should be bounded
+	ctx1, cancel1 := context.WithCancel(ctx)
+	defer cancel1()
+	workerName1 := "worker-1"
+	c.Assert(s.scheduler.AddWorker(workerName1, "172.16.10.72:8262"), check.IsNil)
+	go func(ctx context.Context, workerName string) {
+		c.Assert(ha.KeepAlive(ctx, s.etcdClient, workerName, keepAliveTTL), check.IsNil)
+	}(ctx1, workerName1)
+	// wait worker ready
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		w := s.scheduler.GetWorkerBySource(source1.SourceName)
+		return w != nil
+	}), check.IsTrue)
+	// mock worker rpc
+	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+	workerReq := &workerrpc.Request{
+		Type:        workerrpc.CmdQueryStatus,
+		QueryStatus: &pb.QueryStatusRequest{Name: ""},
+	}
+	mockWorkerClientForOpenAPI(mockWorkerClient, "", source1.SourceName, workerName1, workerReq)
+	s.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
+
+	// get source status,source should be bounded by worker1
+	result2 := testutil.NewRequest().Get(fmt.Sprintf("%s/%s/status", sourceURL, source1.SourceName)).Go(t.testT, s.echo)
+	c.Assert(result2.Code(), check.Equals, http.StatusOK)
+	var resultSourceStatus1 openapi.SourceStatus
+	err := result2.UnmarshalBodyToObject(&resultSourceStatus1)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultSourceStatus1.WorkerName, check.Equals, workerName1) // worker1 is bound
+	c.Assert(resultSourceStatus1.EnableRelay, check.Equals, false)
+
+	// create task
+	taskURL := "/api/v1/tasks"
+
+	task := genNoShardTask()
+	// use a valid target db
+	dbCFG := config.GetDBConfigFromEnv()
+	task.TargetConfig.Host = dbCFG.Host
+	task.TargetConfig.Port = dbCFG.Port
+	task.TargetConfig.User = dbCFG.User
+	task.TargetConfig.Password = dbCFG.Password
+	createTaskReq := openapi.CreateTaskRequest{RemoveMeta: true, Task: task}
+	result3 := testutil.NewRequest().Post(taskURL).WithJsonBody(createTaskReq).Go(t.testT, s.echo)
+	c.Assert(result3.Code(), check.Equals, http.StatusCreated)
+	var createTaskResp openapi.Task
+	err = result3.UnmarshalBodyToObject(&createTaskResp)
+	c.Assert(err, check.IsNil)
+	c.Assert(task.Name, check.Equals, createTaskResp.Name)
+
+	// list tasks
+	mockWorkerClientForOpenAPI(mockWorkerClient, task.Name, source1.SourceName, workerName1, workerReq)
+	result4 := testutil.NewRequest().Get(taskURL).Go(t.testT, s.echo)
+	c.Assert(result4.Code(), check.Equals, http.StatusOK)
+	var resultTaskList openapi.GetTaskListResponse
+	err = result4.UnmarshalBodyToObject(&resultTaskList)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultTaskList.Total, check.Equals, 1)
+	c.Assert(resultTaskList.Data[0].Name, check.Equals, task.Name)
+
+	// get task status
+	taskStatusURL := fmt.Sprintf("%s/%s/status", taskURL, task.Name)
+	result5 := testutil.NewRequest().Get(taskStatusURL).Go(t.testT, s.echo)
+	c.Assert(result5.Code(), check.Equals, http.StatusOK)
+	var resultTaskStatus openapi.GetTaskStatusResponse
+	err = result5.UnmarshalBodyToObject(&resultTaskStatus)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultTaskStatus.Total, check.Equals, 1) // only 1 subtask
+	c.Assert(resultTaskStatus.Data[0].Name, check.Equals, task.Name)
+	c.Assert(resultTaskStatus.Data[0].Stage, check.Equals, pb.Stage_Running.String())
+	c.Assert(resultTaskStatus.Data[0].WorkerName, check.Equals, workerName1)
+
+	// stop task
+	result6 := testutil.NewRequest().Delete(fmt.Sprintf("%s/%s", taskURL, task.Name)).Go(t.testT, s.echo)
+	c.Assert(result6.Code(), check.Equals, http.StatusNoContent)
+
+	// list tasks
+	result7 := testutil.NewRequest().Get(taskURL).Go(t.testT, s.echo)
+	c.Assert(result7.Code(), check.Equals, http.StatusOK)
+	var resultTaskList2 openapi.GetTaskListResponse
+	err = result7.UnmarshalBodyToObject(&resultTaskList2)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultTaskList2.Total, check.Equals, 0)
 }
