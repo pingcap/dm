@@ -38,10 +38,10 @@ type CreateTaskRequest struct {
 // operation error
 type ErrorWithMessage struct {
 	// error code
-	ErrorCode *int `json:"error_code,omitempty"`
+	ErrorCode int `json:"error_code"`
 
 	// error message
-	ErrorMsg *string `json:"error_msg,omitempty"`
+	ErrorMsg string `json:"error_msg"`
 }
 
 // GetSourceListResponse defines model for GetSourceListResponse.

@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -116,6 +117,8 @@ type Server struct {
 	bgFunWg sync.WaitGroup
 
 	closed atomic.Bool
+
+	echo *echo.Echo // inject when echo server is started
 }
 
 // NewServer creates a new Server.

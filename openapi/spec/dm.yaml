@@ -823,6 +823,9 @@ components:
         error_code:
           type: integer
           description: "error code"
+      required:
+        - "error_msg"
+        - "error_code"
     CreateTaskRequest:
       type: object
       properties:

@@ -71,8 +71,7 @@ func (s *Server) StartOpenAPIServer(ctx context.Context) {
 	logger = logger.With(zap.String("component", "openapi"))
 	e.Use(openapi.ZapLogger(logger))
 	e.Use(echomiddleware.Recover())
-	// Clear out the servers array in the swagger spec, that skips validating
-	// that server names match. We don't know how this thing will be run.
+	// Disables swagger server name validation. It seems to work poorly
 	swagger.Servers = nil
 	// Use our validation middleware to check all requests against the OpenAPI schema.
 	e.Use(middleware.OapiRequestValidator(swagger))
@@ -80,6 +79,7 @@ func (s *Server) StartOpenAPIServer(ctx context.Context) {
 
 	// Start server
 	go func() {
+		s.echo = e
 		if err := e.Start(s.cfg.OpenAPIAddr); err != nil && err != http.ErrServerClosed {
 			exitServer(err)
 		}
@@ -809,7 +809,7 @@ func terrorHTTPErrorHandler(err error, c echo.Context) {
 }
 
 func sendHTTPErrorResp(ctx echo.Context, code int, message string) error {
-	err := openapi.ErrorWithMessage{ErrorMsg: &message, ErrorCode: &code}
+	err := openapi.ErrorWithMessage{ErrorMsg: message, ErrorCode: code}
 	return ctx.JSON(http.StatusBadRequest, err)
 }
 

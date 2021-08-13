@@ -175,8 +175,16 @@ func TestMaster(t *testing.T) {
 		t.Fatal(err)
 	}
 	// inject *testing.T to testMaster
-	s := testSuite.(*testMaster)
-	s.testT = t
+	s, ok := testSuite.(*testMaster)
+	if ok {
+		s.testT = t
+	}
+
+	// inject *testing.T to testOpenAPISuite
+	ts, ok := ts.(*testOpenAPISuite)
+	if ok {
+		ts.testT = t
+	}
 
 	check.TestingT(t)
 }
