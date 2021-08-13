@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -140,6 +142,29 @@ func (db *DBConfig) Clone() (DBConfig, error) {
 		clone.RawDBCfg = &tmp
 	}
 	return clone, err
+}
+
+// GetDBConfigFromEnv is a helper function to read config from environment. It's commonly used in unit tests.
+func GetDBConfigFromEnv() DBConfig {
+	host := os.Getenv("MYSQL_HOST")
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
+	if port == 0 {
+		port = 3306
+	}
+	user := os.Getenv("MYSQL_USER")
+	if user == "" {
+		user = "root"
+	}
+	pswd := os.Getenv("MYSQL_PSWD")
+	return DBConfig{
+		Host:     host,
+		User:     user,
+		Password: pswd,
+		Port:     port,
+	}
 }
 
 // SubTaskConfig is the configuration for SubTask.
