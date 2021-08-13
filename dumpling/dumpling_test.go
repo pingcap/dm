@@ -63,7 +63,7 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	c.Assert(err, IsNil)
 	resultCh := make(chan pb.ProcessResult, 1)
 
-	dumpling.Process(ctx, resultCh)
+	dumpling.process(ctx, resultCh)
 	c.Assert(len(resultCh), Equals, 1)
 	result := <-resultCh
 	c.Assert(result.IsCanceled, IsFalse)
@@ -74,7 +74,7 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 
 	// return error
-	dumpling.Process(ctx, resultCh)
+	dumpling.process(ctx, resultCh)
 	c.Assert(len(resultCh), Equals, 1)
 	result = <-resultCh
 	c.Assert(result.IsCanceled, IsFalse)
@@ -91,7 +91,7 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	// cancel
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel2()
-	dumpling.Process(ctx2, resultCh)
+	dumpling.process(ctx2, resultCh)
 	c.Assert(len(resultCh), Equals, 1)
 	result = <-resultCh
 	c.Assert(result.IsCanceled, IsTrue)

@@ -85,9 +85,6 @@ type SubTask struct {
 	// ctx is used for the whole subtask. It will be created only when we new a subtask.
 	ctx    context.Context
 	cancel context.CancelFunc
-	// currCtx is used for one loop. It will be created each time we use st.run/st.Resume
-	currCtx    context.Context
-	currCancel context.CancelFunc
 
 	units    []unit.Unit // units do job one by one
 	currUnit unit.Unit
@@ -187,7 +184,7 @@ func (st *SubTask) Init() error {
 	return nil
 }
 
-// Run runs the sub task.
+// Run runs the subtask.
 func (st *SubTask) Run(expectStage pb.Stage) {
 	if st.Stage() == pb.Stage_Finished || st.Stage() == pb.Stage_Running {
 		st.l.Warn("prepare to run a subtask with invalid stage", zap.Stringer("current stage", st.Stage()))
@@ -210,15 +207,14 @@ func (st *SubTask) Run(expectStage pb.Stage) {
 
 func (st *SubTask) run() {
 	st.setStageAndResult(pb.Stage_Running, nil) // clear previous result
-	ctx, cancel := context.WithCancel(st.ctx)
-	st.setCurrCtx(ctx, cancel)
-	err := st.unitTransWaitCondition(ctx)
+	// TODO: this context is meaning less because the caller is holding a mutex, and cancel also acquire that mutex
+	err := st.unitTransWaitCondition(st.ctx)
 	if err != nil {
 		st.l.Error("wait condition", log.ShortError(err))
 		st.fail(err)
 		return
-	} else if ctx.Err() != nil {
-		st.l.Error("exit SubTask.run", log.ShortError(ctx.Err()))
+	} else if st.ctx.Err() != nil {
+		st.l.Error("exit SubTask.run", log.ShortError(st.ctx.Err()))
 		return
 	}
 
@@ -227,24 +223,7 @@ func (st *SubTask) run() {
 	pr := make(chan pb.ProcessResult, 1)
 	st.wg.Add(1)
 	go st.fetchResult(pr)
-	go cu.Process(ctx, pr)
-}
-
-func (st *SubTask) setCurrCtx(ctx context.Context, cancel context.CancelFunc) {
-	st.Lock()
-	// call previous cancel func for safety
-	if st.currCancel != nil {
-		st.currCancel()
-	}
-	st.currCtx = ctx
-	st.currCancel = cancel
-	st.Unlock()
-}
-
-func (st *SubTask) callCurrCancel() {
-	st.RLock()
-	st.currCancel()
-	st.RUnlock()
+	cu.Start(pr)
 }
 
 // fetchResult fetches units process result
@@ -266,8 +245,6 @@ func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 			}
 		}
 		result.Errors = errs
-
-		st.callCurrCancel() // dm-unit finished, canceled or error occurred, always cancel processing
 
 		if len(result.Errors) == 0 && st.Stage() == pb.Stage_Pausing {
 			st.setResult(&result) // save result
@@ -458,7 +435,7 @@ func (st *SubTask) Result() *pb.ProcessResult {
 	return st.result
 }
 
-// Close stops the sub task.
+// Close stops the subtask.
 func (st *SubTask) Close() {
 	st.l.Info("closing")
 	if st.Stage() == pb.Stage_Stopped {
@@ -473,7 +450,7 @@ func (st *SubTask) Close() {
 	updateTaskState(st.cfg.Name, st.cfg.SourceID, pb.Stage_Stopped)
 }
 
-// Pause pauses a running sub task or a sub task paused by error.
+// Pause pauses a running subtask or a subtask paused by error.
 func (st *SubTask) Pause() error {
 	if st.markResultCanceled() {
 		return nil
@@ -483,18 +460,17 @@ func (st *SubTask) Pause() error {
 		return terror.ErrWorkerNotRunningStage.Generate(st.Stage().String())
 	}
 
-	st.callCurrCancel()
-	st.wg.Wait() // wait fetchResult return
-
 	cu := st.CurrUnit()
 	cu.Pause()
+
+	st.wg.Wait() // wait fetchResult return
 
 	st.l.Info("paused", zap.Stringer("unit", cu.Type()))
 	st.setStage(pb.Stage_Paused)
 	return nil
 }
 
-// Resume resumes the paused sub task
+// Resume resumes the paused subtask
 // similar to Run.
 func (st *SubTask) Resume() error {
 	if !st.initialized.Load() {
@@ -506,15 +482,13 @@ func (st *SubTask) Resume() error {
 		return terror.ErrWorkerNotPausedStage.Generate(st.Stage().String())
 	}
 
-	ctx, cancel := context.WithCancel(st.ctx)
-	st.setCurrCtx(ctx, cancel)
 	// NOTE: this may block if user resume a task
-	err := st.unitTransWaitCondition(ctx)
+	err := st.unitTransWaitCondition(st.ctx)
 	if err != nil {
 		st.l.Error("wait condition", log.ShortError(err))
 		st.fail(err)
 		return err
-	} else if ctx.Err() != nil {
+	} else if st.ctx.Err() != nil {
 		// ctx.Err() != nil means this context is canceled in other go routine,
 		// that go routine will change the stage, so don't need to set stage to paused here.
 		// nolint:nilerr
@@ -527,7 +501,7 @@ func (st *SubTask) Resume() error {
 	pr := make(chan pb.ProcessResult, 1)
 	st.wg.Add(1)
 	go st.fetchResult(pr)
-	go cu.Resume(ctx, pr)
+	cu.Resume(pr)
 
 	st.setStageAndResult(pb.Stage_Running, nil) // clear previous result
 	return nil

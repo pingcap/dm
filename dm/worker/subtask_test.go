@@ -73,7 +73,11 @@ func (t *testSubTask) TestCreateUnits(c *C) {
 	c.Assert(ok, IsTrue)
 }
 
+var _ unit.Unit = &MockUnit{}
+
 type MockUnit struct {
+	base unit.Base
+
 	processErrorCh chan error
 	errInit        error
 	errUpdate      error
@@ -96,9 +100,13 @@ func (m *MockUnit) Init(_ context.Context) error {
 	return m.errInit
 }
 
-func (m *MockUnit) Process(ctx context.Context, pr chan pb.ProcessResult) {
+func (m *MockUnit) Start(pr chan pb.ProcessResult) {
+	go m.process(pr)
+}
+
+func (m *MockUnit) process(pr chan pb.ProcessResult) {
 	select {
-	case <-ctx.Done():
+	case <-m.base.UnitCtx.Done():
 		pr <- pb.ProcessResult{
 			IsCanceled: true,
 			Errors:     nil,
@@ -116,9 +124,11 @@ func (m *MockUnit) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 func (m *MockUnit) Close() {}
 
-func (m MockUnit) Pause() {}
+func (m *MockUnit) Pause() {}
 
-func (m *MockUnit) Resume(ctx context.Context, pr chan pb.ProcessResult) { m.Process(ctx, pr) }
+func (m *MockUnit) Resume(pr chan pb.ProcessResult) {
+	go m.process(pr)
+}
 
 func (m *MockUnit) Update(_ *config.SubTaskConfig) error {
 	return m.errUpdate

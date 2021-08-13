@@ -104,8 +104,12 @@ const (
 	ddlLagKey  = "ddl"
 )
 
+var _ unit.Unit = &Syncer{}
+
 // Syncer can sync your MySQL data to another MySQL database.
 type Syncer struct {
+	base unit.Base
+
 	sync.RWMutex
 
 	tctx *tcontext.Context
@@ -173,8 +177,6 @@ type Syncer struct {
 	filteredUpdate atomic.Int64
 	filteredDelete atomic.Int64
 
-	done chan struct{}
-
 	checkpoint CheckPoint
 	onlineDDL  onlineddl.OnlinePlugin
 
@@ -230,7 +232,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.lastCount.Store(0)
 	syncer.count.Store(0)
 	syncer.c = newCausality()
-	syncer.done = nil
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
 	syncer.enableRelay = cfg.UseRelay
@@ -345,6 +346,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return err
 	}
 
+	// TODO: move slow initialization (need network?) to Start
 	var schemaMap map[string]string
 	var tableMap map[string]map[string]string
 	if s.SourceTableNamesFlavor == utils.LCTableNamesSensitive {
@@ -592,22 +594,31 @@ func (s *Syncer) resetDBs(tctx *tcontext.Context) error {
 	return nil
 }
 
-// Process implements the dm.Unit interface.
-func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
+// Start implements Unit.Start.
+func (s *Syncer) Start(pr chan pb.ProcessResult) {
+	ok, oldStatus := s.base.ToProcessing()
+	if !ok {
+		s.tctx.L().Error("can't change status to processing", zap.Stringer("old status", oldStatus))
+		// this illegal status transition may have no receiver at pr, so don't send to it.
+		return
+	}
+	go s.process(pr)
+}
+
+// StartFromStandalone is called by dm-syncer the binary tool.
+func (s *Syncer) StartFromStandalone(ctx context.Context, cancel context.CancelFunc, pr chan pb.ProcessResult) {
+	s.base.UnitCtx, s.base.UnitCancel = ctx, cancel
+	s.process(pr)
+}
+
+// process implements the main load logic.
+func (s *Syncer) process(pr chan pb.ProcessResult) {
+	ctx := s.base.UnitCtx
+
 	metrics.SyncerExitWithErrorCounter.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Add(0)
 
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
-	// create new done chan
-	// use lock of Syncer to avoid Close while Process
-	s.Lock()
-	if s.isClosed() {
-		s.Unlock()
-		return
-	}
-	s.done = make(chan struct{})
-	s.Unlock()
 
 	runFatalChan := make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	s.runFatalChan = runFatalChan
@@ -639,7 +650,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		<-newCtx.Done() // ctx or newCtx
 	}()
 
-	err := s.Run(newCtx)
+	err := s.run(newCtx)
 	if err != nil {
 		// returned error rather than sent to runFatalChan
 		// cancel goroutines created in s.Run
@@ -668,17 +679,19 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	default:
 	}
 
-	if len(errs) != 0 {
-		// pause because of error occurred
-		s.Pause()
-	}
-
 	// try to rollback checkpoints, if they already flushed, no effect
 	prePos := s.checkpoint.GlobalPoint()
 	s.checkpoint.Rollback(s.schemaTracker)
 	currPos := s.checkpoint.GlobalPoint()
 	if binlog.CompareLocation(prePos, currPos, s.cfg.EnableGTID) != 0 {
 		s.tctx.L().Warn("something wrong with rollback global checkpoint", zap.Stringer("previous position", prePos), zap.Stringer("current position", currPos))
+	}
+
+	s.base.Processing.Done()
+
+	if len(errs) != 0 {
+		// pause because of error occurred
+		s.Pause()
 	}
 
 	pr <- pb.ProcessResult{
@@ -1402,15 +1415,9 @@ func (s *Syncer) syncDML(
 	}
 }
 
-// Run starts running for sync, we should guarantee it can rerun when paused.
-func (s *Syncer) Run(ctx context.Context) (err error) {
+// run starts running for sync, we should guarantee it can rerun when paused.
+func (s *Syncer) run(ctx context.Context) (err error) {
 	tctx := s.tctx.WithContext(ctx)
-
-	defer func() {
-		if s.done != nil {
-			close(s.done)
-		}
-	}()
 
 	// some initialization that can't be put in Syncer.Init
 	fresh, err := s.IsFreshTask(ctx)
@@ -3082,16 +3089,18 @@ func (s *Syncer) isClosed() bool {
 
 // Close closes syncer.
 func (s *Syncer) Close() {
-	s.Lock()
-	defer s.Unlock()
-
-	if s.isClosed() {
+	if !s.base.ToClosed() {
+		s.tctx.L().Info("already closed")
 		return
 	}
 
 	s.removeHeartbeat()
 
-	s.stopSync()
+	s.closeJobChans()
+	if s.streamerController != nil {
+		s.streamerController.Close(s.tctx)
+	}
+
 	s.closeDBs()
 
 	s.checkpoint.Close()
@@ -3114,23 +3123,6 @@ func (s *Syncer) Close() {
 	s.closed.Store(true)
 }
 
-// stopSync stops syncing, now it used by Close and Pause
-// maybe we can refine the workflow more clear.
-func (s *Syncer) stopSync() {
-	if s.done != nil {
-		<-s.done // wait Run to return
-	}
-	s.closeJobChans()
-	s.wg.Wait() // wait job workers to return
-
-	// before re-write workflow for s.syncer, simply close it
-	// when resuming, re-create s.syncer
-
-	if s.streamerController != nil {
-		s.streamerController.Close(s.tctx)
-	}
-}
-
 func (s *Syncer) closeOnlineDDL() {
 	if s.onlineDDL != nil {
 		s.onlineDDL.Close()
@@ -3147,39 +3139,47 @@ func (s *Syncer) removeHeartbeat() {
 	}
 }
 
-// Pause pauses the process, and it can be resumed later
-// should cancel context from external
-// TODO: it is not a true-meaning Pause because you can't stop it by calling Pause only.
+// Pause implements Unit.Pause.
 func (s *Syncer) Pause() {
-	if s.isClosed() {
-		s.tctx.L().Warn("try to pause, but already closed")
+	_, oldStatus := s.base.ToPaused()
+	if oldStatus == unit.Closed {
+		s.tctx.L().Warn("can't change status to paused from closed")
 		return
 	}
 
-	s.stopSync()
+	s.closeJobChans()
+	if s.streamerController != nil {
+		s.streamerController.Close(s.tctx)
+	}
 }
 
-// Resume resumes the paused process.
-func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
-	if s.isClosed() {
-		s.tctx.L().Warn("try to resume, but already closed")
+// Resume implements Unit.Resume.
+func (s *Syncer) Resume(pr chan pb.ProcessResult) {
+	ok, oldStatus := s.base.ToProcessing()
+	if !ok {
+		s.tctx.L().Error("can't change status to processing", zap.Stringer("old status", oldStatus))
+		// this illegal status transition may have no receiver at pr, so don't send to it.
 		return
 	}
 
-	// continue the processing
-	s.reset()
-	// reset database conns
-	err := s.resetDBs(s.tctx.WithContext(ctx))
-	if err != nil {
-		pr <- pb.ProcessResult{
-			IsCanceled: false,
-			Errors: []*pb.ProcessError{
-				unit.NewProcessError(err),
-			},
+	if oldStatus == unit.Paused {
+		// continue the processing
+		s.reset()
+		// reset database conns
+		err := s.resetDBs(s.tctx.WithContext(s.base.UnitCtx))
+		if err != nil {
+			s.base.Processing.Done()
+			pr <- pb.ProcessResult{
+				IsCanceled: false,
+				Errors: []*pb.ProcessError{
+					unit.NewProcessError(err),
+				},
+			}
+			return
 		}
-		return
 	}
-	s.Process(ctx, pr)
+
+	go s.process(pr)
 }
 
 // Update implements Unit.Update
@@ -3296,6 +3296,7 @@ func (s *Syncer) checkpointID() string {
 }
 
 // UpdateFromConfig updates config for `From`.
+// TODO: not used now, because we didn't implement Update
 func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	s.Lock()
 	defer s.Unlock()

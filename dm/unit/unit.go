@@ -16,6 +16,7 @@ package unit
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
@@ -28,24 +29,26 @@ const (
 	DefaultInitTimeout = time.Minute
 )
 
-// Unit defines interface for sub task process units, like syncer, loader, relay, etc.
+// Unit defines interface for subtask process units, like syncer, loader, relay, etc.
 type Unit interface {
-	// Init initializes the dm process unit
-	// every unit does base initialization in `Init`, and this must pass before start running the sub task
-	// other setups can be done in `Process`, but this should be treated carefully, let it's compatible with Pause / Resume
-	// if initialing successfully, the outer caller should call `Close` when the unit (or the task) finished, stopped or canceled (because other units Init fail).
-	// if initialing fail, Init itself should release resources it acquired before (rolling itself back).
+	// Init initializes the dm process unit.
+	// Init should be the first method to be called of this interface, and all unit is called Init before start running
+	// the subtask.
+	// It's recommended to let this method detect early stage errors, while only put lightweight initialization here to
+	// reduce blocking time.
+	// if initialing successfully, the outer caller must call Close to release the resources.
+	// if initialing fail, Init itself should release resources which acquired before failure happens.
 	Init(ctx context.Context) error
-	// Process processes sub task
-	// When ctx.Done, stops the process and returns
-	// When not in processing, call Process to continue or resume the process
-	Process(ctx context.Context, pr chan pb.ProcessResult)
-	// Close shuts down the process and closes the unit, after that can not call Process to resume
+	// Start does some initialization work and then runs the unit. The result is sent to given channel.
+	Start(pr chan pb.ProcessResult)
+	// Close shuts down the process and closes the unit.
 	Close()
-	// Pause pauses the process, it can be resumed later
+
+	// Pause pauses the process, some status can be kept to support Resume later.
 	Pause()
-	// Resume resumes the paused process
-	Resume(ctx context.Context, pr chan pb.ProcessResult)
+	// Resume runs the unit assuming the status of unit is initialized. The result is sent to given channel.
+	Resume(pr chan pb.ProcessResult)
+
 	// Update updates the configuration
 	Update(cfg *config.SubTaskConfig) error
 
@@ -56,6 +59,95 @@ type Unit interface {
 	// IsFreshTask return whether is a fresh task (not processed before)
 	// it will be used to decide where the task should become restoring
 	IsFreshTask(ctx context.Context) (bool, error)
+}
+
+// Base shares some common member of each implementation of Unit interface, such as context management, status, etc.
+type Base struct {
+	UnitCtx    context.Context
+	UnitCancel context.CancelFunc // unit should only rely on UnitCancel (instead of closing channel, etcd) to cancel
+	                              // its processing
+	Status     StatusType
+	StatusLock sync.Mutex
+	Processing sync.WaitGroup
+}
+
+type StatusType int64
+
+const (
+	NotStarted StatusType = iota
+	Processing
+	Paused
+	Closed
+)
+
+// String implements Stringer.
+func (t StatusType) String() string {
+	switch t {
+	case NotStarted:
+		return "not started"
+	case Processing:
+		return "processing"
+	case Paused:
+		return "paused"
+	case Closed:
+		return "closed"
+	}
+	return "invalid status"
+}
+
+// ToProcessing tries to convert current unit to Processing status and set a proper context and wait group.
+// Return true when conversion happened and false otherwise. Return old status as well.
+// b.Processing.Done must be called when processing ends for true ok.
+func (b *Base) ToProcessing() (ok bool, oldStatus StatusType) {
+	b.StatusLock.Lock()
+	defer b.StatusLock.Unlock()
+
+	oldStatus = b.Status
+	if b.Status == NotStarted || b.Status == Paused {
+		b.Status = Processing
+		b.UnitCtx, b.UnitCancel = context.WithCancel(context.Background())
+		b.Processing.Add(1)
+		ok = true
+	}
+	return
+}
+
+// ToClosed tries to convert current unit to Closed status.
+// Return true when conversion happened and false otherwise. The closing action should be called after return true.
+func (b *Base) ToClosed() (ok bool) {
+	b.StatusLock.Lock()
+	defer b.StatusLock.Unlock()
+
+	if b.Status == Closed {
+		return false
+	}
+	b.UnitCancel()
+	b.Processing.Wait()
+	b.Status = Closed
+	return true
+}
+
+// ToPaused tries to convert current unit to Paused status.
+// Return true when conversion happened and false otherwise. Return old status as well.
+// The pausing action should be called after old status is Processing.
+func (b *Base) ToPaused() (ok bool, oldStatus StatusType) {
+	b.StatusLock.Lock()
+	defer b.StatusLock.Unlock()
+
+	oldStatus = b.Status
+	switch b.Status {
+	case NotStarted:
+		b.Status = Paused
+		ok = true
+	case Processing:
+		b.UnitCancel()
+		b.Processing.Wait()
+		b.Status = Paused
+		ok = true
+	case Paused:
+	case Closed:
+	}
+	return
 }
 
 // NewProcessError creates a new ProcessError

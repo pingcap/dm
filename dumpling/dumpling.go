@@ -24,7 +24,6 @@ import (
 	"github.com/pingcap/failpoint"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -37,14 +36,17 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
+var _ unit.Unit = &Dumpling{}
+
 // Dumpling dumps full data from a MySQL-compatible database.
 type Dumpling struct {
+	base unit.Base
+
 	cfg *config.SubTaskConfig
 
 	logger log.Logger
 
 	dumpConfig *export.Config
-	closed     atomic.Bool
 }
 
 // NewDumpling creates a new Dumpling.
@@ -64,12 +66,28 @@ func (m *Dumpling) Init(ctx context.Context) error {
 	}
 	m.detectSQLMode(ctx)
 	m.dumpConfig.SessionParams["time_zone"] = "+00:00"
-	m.logger.Info("create dumpling", zap.Stringer("config", m.dumpConfig))
+	m.logger.Info("dumpling config is ready", zap.Stringer("config", m.dumpConfig))
+	m.base.Status = unit.NotStarted
 	return nil
 }
 
-// Process implements Unit.Process.
-func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
+// Start implements Unit.Start.
+func (m *Dumpling) Start(pr chan pb.ProcessResult) {
+	go m.process(pr)
+}
+
+// process implements the main dump logic.
+func (m *Dumpling) process(pr chan pb.ProcessResult) {
+	ok, oldStatus := m.base.ToProcessing()
+	if !ok {
+		m.logger.Error("can't change status to processing", zap.Stringer("old status", oldStatus))
+		// this illegal status transition may have no receiver at pr, so don't send to it.
+		return
+	}
+
+	ctx := m.base.UnitCtx
+	defer m.base.Processing.Done()
+
 	dumplingExitWithErrorCounter.WithLabelValues(m.cfg.Name, m.cfg.SourceID).Add(0)
 
 	failpoint.Inject("dumpUnitProcessWithError", func(val failpoint.Value) {
@@ -151,32 +169,25 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 // Close implements Unit.Close.
 func (m *Dumpling) Close() {
-	if m.closed.Load() {
+	if !m.base.ToClosed() {
+		m.logger.Info("already closed")
 		return
 	}
 
 	m.removeLabelValuesWithTaskInMetrics(m.cfg.Name, m.cfg.SourceID)
-	// do nothing, external will cancel the command (if running)
-	m.closed.Store(true)
 }
 
 // Pause implements Unit.Pause.
 func (m *Dumpling) Pause() {
-	if m.closed.Load() {
-		m.logger.Warn("try to pause, but already closed")
-		return
+	_, oldStatus := m.base.ToPaused()
+	if oldStatus == unit.Closed {
+		m.logger.Warn("can't change status to paused from closed")
 	}
-	// do nothing, external will cancel the command (if running)
 }
 
 // Resume implements Unit.Resume.
-func (m *Dumpling) Resume(ctx context.Context, pr chan pb.ProcessResult) {
-	if m.closed.Load() {
-		m.logger.Warn("try to resume, but already closed")
-		return
-	}
-	// just call Process
-	m.Process(ctx, pr)
+func (m *Dumpling) Resume(pr chan pb.ProcessResult) {
+	go m.process(pr)
 }
 
 // Update implements Unit.Update.
@@ -187,7 +198,7 @@ func (m *Dumpling) Update(cfg *config.SubTaskConfig) error {
 
 // Status implements Unit.Status.
 func (m *Dumpling) Status() interface{} {
-	// NOTE: try to add some status, like dumped file count
+	// TODO: try to add some status, like dumped file count
 	return &pb.DumpStatus{}
 }
 

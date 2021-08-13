@@ -401,8 +401,12 @@ type tableInfo struct {
 	insertHeadStmt string
 }
 
+var _ unit.Unit = &Loader{}
+
 // Loader can load your mydumper data into TiDB database.
 type Loader struct {
+	base unit.Base
+
 	sync.RWMutex
 
 	cfg        *config.SubTaskConfig
@@ -544,17 +548,12 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 		return err
 	}
 
+	l.base.Status = unit.NotStarted
 	return nil
 }
 
-// Process implements Unit.Process.
-func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Add(0)
-
-	newCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	l.newFileJobQueue()
+// Start implements Unit.Start.
+func (l *Loader) Start(pr chan pb.ProcessResult) {
 	if err := l.getMydumpMetadata(); err != nil {
 		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Inc()
 		pr <- pb.ProcessResult{
@@ -562,6 +561,26 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 		return
 	}
+
+	ok, oldStatus := l.base.ToProcessing()
+	if !ok {
+		l.logger.Error("can't change status to processing", zap.Stringer("old status", oldStatus))
+		// this illegal status transition may have no receiver at pr, so don't send to it.
+		return
+	}
+	go l.process(pr)
+}
+
+// process implements the main load logic.
+func (l *Loader) process(pr chan pb.ProcessResult) {
+	ctx := l.base.UnitCtx
+
+	loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Add(0)
+
+	loadCtx, loadCancel := context.WithCancel(ctx)
+	defer loadCancel()
+
+	l.newFileJobQueue()
 
 	l.runFatalChan = make(chan *pb.ProcessError, 2*l.cfg.PoolSize)
 	errs := make([]*pb.ProcessError, 0, 2)
@@ -571,14 +590,14 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	go func() {
 		defer wg.Done()
 		for err := range l.runFatalChan {
-			cancel() // cancel l.Restore
+			loadCancel() // cancel l.restore
 			errs = append(errs, err)
 		}
 	}()
 
-	err := l.Restore(newCtx)
-	close(l.runFatalChan) // Restore returned, all potential fatal sent to l.runFatalChan
-	cancel()              // cancel the goroutines created in `Restore`.
+	err := l.restore(loadCtx)
+	close(l.runFatalChan) // restore returned, all potential fatal sent to l.runFatalChan
+	loadCancel()          // cancel the goroutines created in `restore`.
 
 	failpoint.Inject("dontWaitWorkerExit", func(_ failpoint.Value) {
 		l.logger.Info("", zap.String("failpoint", "dontWaitWorkerExit"))
@@ -602,6 +621,8 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		isCanceled = true
 	default:
 	}
+
+	l.base.Processing.Done()
 
 	if len(errs) != 0 {
 		// pause because of error occurred
@@ -677,8 +698,8 @@ func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
 	return count == 0, err
 }
 
-// Restore begins the restore process.
-func (l *Loader) Restore(ctx context.Context) error {
+// restore begins the restore process.
+func (l *Loader) restore(ctx context.Context) error {
 	if err := l.putLoadTask(); err != nil {
 		return err
 	}
@@ -699,7 +720,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 		l.wg.Done()
 	})
 
-	// not update checkpoint in memory when restoring, so when re-Restore, we need to load checkpoint from DB
+	// not update checkpoint in memory when restoring, so when re-restore, we need to load checkpoint from DB
 	err := l.checkPoint.Load(tcontext.NewContext(ctx, l.logger))
 	if err != nil {
 		return err
@@ -763,13 +784,12 @@ func (l *Loader) loadFinishedSize() {
 
 // Close does graceful shutdown.
 func (l *Loader) Close() {
-	l.Lock()
-	defer l.Unlock()
-	if l.isClosed() {
+	if !l.base.ToClosed() {
+		l.logger.Info("already closed")
 		return
 	}
 
-	l.stopLoad()
+	l.closeFileJobQueue()
 
 	if err := l.toDB.Close(); err != nil {
 		l.logger.Error("close downstream DB error", log.ShortError(err))
@@ -779,50 +799,42 @@ func (l *Loader) Close() {
 	l.closed.Store(true)
 }
 
-// stopLoad stops loading, now it used by Close and Pause
-// maybe we can refine the workflow more clear.
-func (l *Loader) stopLoad() {
-	// before re-write workflow, simply close all job queue and job workers
-	// when resuming, re-create them
-	l.logger.Info("stop importing data process")
-
-	l.closeFileJobQueue()
-	l.workerWg.Wait()
-	l.logger.Debug("all workers have been closed")
-
-	l.wg.Wait()
-	l.logger.Debug("all loader's go-routines have been closed")
-}
-
-// Pause pauses the process, and it can be resumed later
-// should cancel context from external.
+// Pause implements Unit.Pause.
 func (l *Loader) Pause() {
-	if l.isClosed() {
-		l.logger.Warn("try to pause, but already closed")
+	_, oldStatus := l.base.ToPaused()
+	if oldStatus == unit.Closed {
+		l.logger.Warn("can't change status to paused from closed")
 		return
 	}
-
-	l.stopLoad()
+	if oldStatus == unit.Processing {
+		l.closeFileJobQueue()
+	}
 }
 
-// Resume resumes the paused process.
-func (l *Loader) Resume(ctx context.Context, pr chan pb.ProcessResult) {
-	if l.isClosed() {
-		l.logger.Warn("try to resume, but already closed")
+// Resume implements Unit.Resume.
+func (l *Loader) Resume(pr chan pb.ProcessResult) {
+	ok, oldStatus := l.base.ToProcessing()
+	if !ok {
+		l.logger.Error("can't change status to processing", zap.Stringer("old status", oldStatus))
+		// this illegal status transition may have no receiver at pr, so don't send to it.
 		return
 	}
 
-	if err := l.resetDBs(ctx); err != nil {
-		pr <- pb.ProcessResult{
-			IsCanceled: false,
-			Errors: []*pb.ProcessError{
-				unit.NewProcessError(err),
-			},
+	if oldStatus == unit.Paused {
+		if err := l.resetDBs(l.base.UnitCtx); err != nil {
+			l.base.Processing.Done()
+			pr <- pb.ProcessResult{
+				IsCanceled: false,
+				Errors: []*pb.ProcessError{
+					unit.NewProcessError(err),
+				},
+			}
+			return
 		}
-		return
 	}
+
 	// continue the processing
-	l.Process(ctx, pr)
+	go l.process(pr)
 }
 
 func (l *Loader) resetDBs(ctx context.Context) error {

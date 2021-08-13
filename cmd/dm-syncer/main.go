@@ -93,7 +93,7 @@ func main() {
 		os.Exit(2)
 	}
 	pr := make(chan pb.ProcessResult, 1)
-	sync.Process(ctx, pr)
+	sync.StartFromStandalone(ctx, cancel, pr)
 
 	pResult := <-pr
 	if len(pResult.Errors) > 0 {
