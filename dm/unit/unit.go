@@ -63,16 +63,23 @@ type Unit interface {
 
 // Base shares some common member of each implementation of Unit interface, such as context management, status, etc.
 type Base struct {
+	// unit should only rely on UnitCancel (instead of closing channel, etcd) to cancel its processing
+	// UnitCtx and UnitCancel is assigned when enter Processing status, and UnitCancel is called when leave Processing.
 	UnitCtx    context.Context
-	UnitCancel context.CancelFunc // unit should only rely on UnitCancel (instead of closing channel, etcd) to cancel
-	                              // its processing
+	UnitCancel context.CancelFunc
 	Status     StatusType
 	StatusLock sync.Mutex
 	Processing sync.WaitGroup
 }
 
+// StatusType is used by Base.Status
 type StatusType int64
 
+// Available status transition
+// NotStarted -> { NotStarted, Processing, Paused, Closed }
+// Processing -> { Paused, Closed }
+// Paused -> { Processing, Closed }
+// Closed -> {}
 const (
 	NotStarted StatusType = iota
 	Processing
@@ -118,11 +125,13 @@ func (b *Base) ToClosed() (ok bool) {
 	b.StatusLock.Lock()
 	defer b.StatusLock.Unlock()
 
-	if b.Status == Closed {
+	switch b.Status {
+	case Closed:
 		return false
+	case Processing:
+		b.UnitCancel()
+		b.Processing.Wait()
 	}
-	b.UnitCancel()
-	b.Processing.Wait()
 	b.Status = Closed
 	return true
 }
