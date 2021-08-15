@@ -1104,10 +1104,8 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	syncer.addJobFunc = syncer.addJobToMemory
 
-	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan pb.ProcessResult)
-
-	go syncer.Process(ctx, resultCh)
+	syncer.Start(resultCh)
 
 	expectJobs1 := []*expectJob{
 		// now every ddl job will start with a flush job
@@ -1215,7 +1213,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		},
 	}
 
-	cancel()
 	// when syncer exit Run(), will flush job
 	syncer.Pause()
 	c.Assert(syncer.Update(s.cfg), IsNil)
@@ -1225,9 +1222,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), "c"}}}},
 	}
 
-	ctx, cancel = context.WithCancel(context.Background())
 	resultCh = make(chan pb.ProcessResult)
 	// simulate `syncer.Resume` here, but doesn't reset database conns
+	syncer.base.ToProcessing()
 	syncer.reset()
 	mockStreamerProducer = &MockStreamProducer{s.generateEvents(events2, c)}
 	mockStreamer, err = mockStreamerProducer.generateStreamer(binlog.NewLocation(""))
@@ -1242,7 +1239,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	checkPointMock.ExpectExec(".*INSERT INTO .* VALUES.* ON DUPLICATE KEY UPDATE.*").WillReturnResult(sqlmock.NewResult(0, 1))
 	checkPointMock.ExpectCommit()
 	// Simulate resume from syncer, last time we exit successfully, so we shouldn't open safe mode here
-	go syncer.Process(ctx, resultCh)
+	go syncer.process(resultCh)
 
 	expectJobs2 := []*expectJob{
 		{
@@ -1265,7 +1262,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	checkJobs(c, testJobs.jobs, expectJobs2)
 	testJobs.RUnlock()
 
-	cancel()
 	syncer.Close()
 	c.Assert(syncer.isClosed(), IsTrue)
 
@@ -1353,7 +1349,6 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 
 	syncer.addJobFunc = syncer.addJobToMemory
 
-	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan pb.ProcessResult)
 
 	// When crossing safeModeExitPoint, will generate a flush sql
@@ -1362,7 +1357,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	checkPointMock.ExpectCommit()
 	// disable 1-minute safe mode
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds", "return(0)"), IsNil)
-	go syncer.Process(ctx, resultCh)
+	syncer.Start(resultCh)
 
 	expectJobs := []*expectJob{
 		// now every ddl job will start with a flush job
@@ -1423,7 +1418,6 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	testJobs.jobs = testJobs.jobs[:0]
 	testJobs.Unlock()
 
-	cancel()
 	syncer.Close()
 	c.Assert(syncer.isClosed(), IsTrue)
 

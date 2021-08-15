@@ -72,14 +72,14 @@ type Base struct {
 	Processing sync.WaitGroup
 }
 
-// StatusType is used by Base.Status
+// StatusType is used by Base.Status.
 type StatusType int64
 
-// Available status transition
+// Available status transition.
 // NotStarted -> { NotStarted, Processing, Paused, Closed }
 // Processing -> { Paused, Closed }
 // Paused -> { Processing, Closed }
-// Closed -> {}
+// Closed -> {}.
 const (
 	NotStarted StatusType = iota
 	Processing

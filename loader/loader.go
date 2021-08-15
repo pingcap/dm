@@ -401,7 +401,7 @@ type tableInfo struct {
 	insertHeadStmt string
 }
 
-var _ unit.Unit = &Loader{}
+var _ unit.Unit = (*Loader)(nil)
 
 // Loader can load your mydumper data into TiDB database.
 type Loader struct {
@@ -446,7 +446,6 @@ type Loader struct {
 
 	fileJobQueueClosed atomic.Bool
 	finish             atomic.Bool
-	closed             atomic.Bool
 }
 
 // NewLoader creates a new Loader.
@@ -688,10 +687,6 @@ func (l *Loader) skipSchemaAndTable(table *filter.Table) bool {
 	return len(tbs) == 0
 }
 
-func (l *Loader) isClosed() bool {
-	return l.closed.Load()
-}
-
 // IsFreshTask implements Unit.IsFreshTask.
 func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
 	count, err := l.checkPoint.Count(tcontext.NewContext(ctx, l.logger))
@@ -796,7 +791,6 @@ func (l *Loader) Close() {
 	}
 	l.checkPoint.Close()
 	l.removeLabelValuesWithTaskInMetrics(l.cfg.Name)
-	l.closed.Store(true)
 }
 
 // Pause implements Unit.Pause.

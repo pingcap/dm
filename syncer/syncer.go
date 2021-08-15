@@ -104,7 +104,7 @@ const (
 	ddlLagKey  = "ddl"
 )
 
-var _ unit.Unit = &Syncer{}
+var _ unit.Unit = (*Syncer)(nil)
 
 // Syncer can sync your MySQL data to another MySQL database.
 type Syncer struct {

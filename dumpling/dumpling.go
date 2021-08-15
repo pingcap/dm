@@ -36,7 +36,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var _ unit.Unit = &Dumpling{}
+var _ unit.Unit = (*Dumpling)(nil)
 
 // Dumpling dumps full data from a MySQL-compatible database.
 type Dumpling struct {

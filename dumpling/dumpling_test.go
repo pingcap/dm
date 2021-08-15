@@ -56,30 +56,41 @@ func (d *testDumplingSuite) SetUpSuite(c *C) {
 
 func (d *testDumplingSuite) TestDumpling(c *C) {
 	dumpling := NewDumpling(d.cfg)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	err := dumpling.Init(ctx)
+	err := dumpling.Init(context.Background())
 	c.Assert(err, IsNil)
 	resultCh := make(chan pb.ProcessResult, 1)
 
-	dumpling.process(ctx, resultCh)
-	c.Assert(len(resultCh), Equals, 1)
+	dumpling.Start(resultCh)
+
 	result := <-resultCh
+	c.Assert(len(resultCh), Equals, 0)
 	c.Assert(result.IsCanceled, IsFalse)
 	c.Assert(len(result.Errors), Equals, 0)
+
+	dumpling.Close()
+
+	// test process returned error
+
+	c.Assert(dumpling.Init(context.Background()), IsNil)
 
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError", `return("unknown error")`), IsNil)
 	// nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 
 	// return error
-	dumpling.process(ctx, resultCh)
-	c.Assert(len(resultCh), Equals, 1)
+	dumpling.Start(resultCh)
 	result = <-resultCh
+	c.Assert(len(resultCh), Equals, 0)
 	c.Assert(result.IsCanceled, IsFalse)
 	c.Assert(len(result.Errors), Equals, 1)
 	c.Assert(result.Errors[0].Message, Equals, "unknown error")
+
+	dumpling.Close()
+
+	// test process is blocked and can be canceled
+
+	c.Assert(dumpling.Init(context.Background()), IsNil)
 
 	// nolint:errcheck
 	failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
@@ -88,15 +99,18 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	// nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessCancel")
 
-	// cancel
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel2()
-	dumpling.process(ctx2, resultCh)
-	c.Assert(len(resultCh), Equals, 1)
+	dumpling.Start(resultCh)
+	select {
+	case result = <-resultCh:
+		c.Fatal("expected nothing send to channel")
+	case <- time.After(5*time.Second):
+		dumpling.Close()
+	}
+
 	result = <-resultCh
+	c.Assert(len(resultCh), Equals, 0)
 	c.Assert(result.IsCanceled, IsTrue)
-	c.Assert(len(result.Errors), Equals, 1)
-	c.Assert(result.Errors[0].String(), Matches, ".*context deadline exceeded.*")
+	c.Assert(len(result.Errors), Equals, 0)
 }
 
 func (d *testDumplingSuite) TestDefaultConfig(c *C) {
