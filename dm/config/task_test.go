@@ -33,11 +33,11 @@ import (
 var correctTaskConfig = `---
 name: test
 task-mode: all
-shard-mode: "pessimistic"       
-meta-schema: "dm_meta"         
-case-sensitive: false        
+shard-mode: "pessimistic"
+meta-schema: "dm_meta"
+case-sensitive: false
 online-ddl: true
-clean-dump-file: true     
+clean-dump-file: true
 
 target-database:
   host: "127.0.0.1"
@@ -53,7 +53,7 @@ routes:
     schema-pattern: "test_*"
     target-schema: "test"
 
-filters: 
+filters:
   filter-rule-1:
     schema-pattern: "test_*"
     events: ["truncate table", "drop table"]
@@ -102,14 +102,14 @@ loaders:
 syncers:
   global1:
     worker-count: 16
-    batch: 100 
+    batch: 100
     enable-ansi-quotes: true
-    safe-mode: false  
+    safe-mode: false
   global2:
     worker-count: 32
-    batch: 100 
+    batch: 100
     enable-ansi-quotes: true
-    safe-mode: false  
+    safe-mode: false
 
 expression-filter:
   expr-1:
@@ -143,11 +143,11 @@ func (t *testConfig) TestUnusedTaskConfig(c *C) {
 	errorTaskConfig := `---
 name: test
 task-mode: all
-shard-mode: "pessimistic"       
-meta-schema: "dm_meta"         
-case-sensitive: false        
+shard-mode: "pessimistic"
+meta-schema: "dm_meta"
+case-sensitive: false
 online-ddl: true
-clean-dump-file: true     
+clean-dump-file: true
 
 target-database:
   host: "127.0.0.1"
@@ -163,7 +163,7 @@ routes:
     schema-pattern: "test_*"
     target-schema: "test"
 
-filters: 
+filters:
   filter-rule-1:
     schema-pattern: "test_*"
     table-pattern: "t_*"
@@ -213,14 +213,14 @@ loaders:
 syncers:
   global1:
     worker-count: 16
-    batch: 100 
+    batch: 100
     enable-ansi-quotes: true
-    safe-mode: false  
+    safe-mode: false
   global2:
     worker-count: 32
-    batch: 100 
+    batch: 100
     enable-ansi-quotes: true
-    safe-mode: false  
+    safe-mode: false
 
 expression-filter:
   expr-1:
@@ -269,7 +269,7 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    server-id: 101 
+    server-id: 101
     block-allow-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-1"]
@@ -461,7 +461,7 @@ block-allow-list:
   instance:
     do-dbs: ["test"]
 
-routes: 
+routes:
   route-rule-1:
   route-rule-2:
   route-rule-3:

@@ -21,11 +21,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-
-	"github.com/spf13/cobra"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewOperateSourceCmd creates a OperateSource command.
@@ -112,6 +115,23 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) error {
 				continue
 			}
 			return err
+		}
+		// If source is configured with tls certificate related content
+		// the contents of the certificate need to be read and transferred to the dm-master
+		cfg, yamlErr := config.ParseYaml(string(content))
+		if yamlErr != nil {
+			return yamlErr
+		}
+		if cfg.From.Security != nil {
+			loadErr := cfg.From.Security.LoadTLSContent()
+			if loadErr != nil {
+				log.L().Warn("load tls content failed", zap.Error(terror.ErrCtlLoadTLSCfg.Generate(loadErr)))
+			}
+			yamlStr, yamlErr := cfg.Yaml()
+			if yamlErr != nil {
+				return yamlErr
+			}
+			content = []byte(yamlStr)
 		}
 		contents = append(contents, string(content))
 	}

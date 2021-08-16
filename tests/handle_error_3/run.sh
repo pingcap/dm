@@ -132,20 +132,16 @@ function DM_4193_CASE() {
 	run_sql_source2 "insert into ${db}.${tb1} values(2);"
 
 	run_sql_source1 "alter table ${db}.${tb1} modify id varchar(10);"
-	run_sql_source1 "alter table ${db}.${tb1} add column c int;"
 	run_sql_source1 "alter table ${db}.${tb1} modify id varchar(20);"
-	run_sql_source1 "alter table ${db}.${tb1} add column d int;"
 	run_sql_source1 "alter table ${db}.${tb1} modify id varchar(30);"
 
 	run_sql_source2 "alter table ${db}.${tb1} modify id varchar(10);"
-	run_sql_source2 "alter table ${db}.${tb1} add column c int;"
 	run_sql_source2 "alter table ${db}.${tb1} modify id varchar(20);"
-	run_sql_source2 "alter table ${db}.${tb1} add column d int;"
 	run_sql_source2 "alter table ${db}.${tb1} modify id varchar(30);"
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+		"Unsupported modify column: this column has primary key flag" 2
 
 	first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
 	first_pos2=$(get_start_pos 127.0.0.1:$MASTER_PORT $source2)
@@ -156,10 +152,6 @@ function DM_4193_CASE() {
 	temp_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $first_pos2)
 	second_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $temp_pos1)
 	second_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $temp_pos2)
-	temp_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $second_pos1)
-	temp_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $second_pos2)
-	third_pos1=$(get_next_query_pos $MYSQL_PORT1 $MYSQL_PASSWORD1 $temp_pos1)
-	third_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $temp_pos2)
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test skip -s $source1 -b $first_name1:$first_pos1" \
@@ -170,7 +162,7 @@ function DM_4193_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+		"Unsupported modify column: this column has primary key flag" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test revert -s $source1 -b $first_name1:$first_pos1" \
@@ -180,19 +172,19 @@ function DM_4193_CASE() {
 		"operator not exist" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -s $source1 -b $first_name1:$third_pos1" \
+		"handle-error test skip -s $source1 -b $first_name1:$second_pos1" \
 		"\"result\": true" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test revert -b $first_name1:$third_pos1" \
+		"handle-error test revert -b $first_name1:$second_pos1" \
 		"operator not exist" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -s $source1 -b $first_name1:$third_pos1" \
+		"handle-error test skip -s $source1 -b $first_name1:$second_pos1" \
 		"\"result\": true" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test revert -s $source2 -b $first_name2:$third_pos2" \
+		"handle-error test revert -s $source2 -b $first_name2:$second_pos2" \
 		"operator not exist" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -201,7 +193,7 @@ function DM_4193_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 1
+		"Unsupported modify column: this column has primary key flag" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test skip" \
@@ -211,8 +203,8 @@ function DM_4193_CASE() {
 		"query-status test" \
 		"\"result\": true" 3
 
-	run_sql_source1 "insert into ${db}.${tb1} values(3,3,3);"
-	run_sql_source2 "insert into ${db}.${tb1} values(4,4,4);"
+	run_sql_source1 "insert into ${db}.${tb1} values(3);"
+	run_sql_source2 "insert into ${db}.${tb1} values(4);"
 
 	run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 4"
 }

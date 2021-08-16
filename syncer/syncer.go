@@ -1796,8 +1796,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						s.isReplacingErr = true
 						// revert currentLocation to startLocation
 						currentLocation = startLocation
+					} else if op == pb.ErrorOp_Skip {
+						s.saveGlobalPoint(currentLocation)
+						err = s.flushJobs()
+						if err != nil {
+							tctx.L().Warn("failed to flush jobs when handle-error skip", zap.Error(err))
+						} else {
+							tctx.L().Info("flush jobs when handle-error skip")
+						}
 					}
-					// skip the event
+					// skip the current event
 					continue
 				}
 			}
@@ -3331,7 +3339,11 @@ func (s *Syncer) setSyncCfg() error {
 	var tlsConfig *tls.Config
 	var err error
 	if s.cfg.From.Security != nil {
-		tlsConfig, err = toolutils.ToTLSConfig(s.cfg.From.Security.SSLCA, s.cfg.From.Security.SSLCert, s.cfg.From.Security.SSLKey)
+		if loadErr := s.cfg.From.Security.LoadTLSContent(); loadErr != nil {
+			return terror.ErrCtlLoadTLSCfg.Delegate(loadErr)
+		}
+		tlsConfig, err = toolutils.ToTLSConfigWithVerifyByRawbytes(s.cfg.From.Security.SSLCABytes,
+			s.cfg.From.Security.SSLCertBytes, s.cfg.From.Security.SSLKEYBytes, s.cfg.From.Security.CertAllowedCN)
 		if err != nil {
 			return terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}
