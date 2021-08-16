@@ -1472,9 +1472,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				s.waitTransactionLock.Unlock()
 				return
 			}
+			s.waitXIDJob.Store(int64(waiting))
 			s.waitTransactionLock.Unlock()
 
-			s.waitXIDJob.Store(int64(waiting))
 			select {
 			case <-runCtx.Done():
 				tctx.L().Info("received syncer's done")
