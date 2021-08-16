@@ -171,7 +171,7 @@ function DM_4220_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+		"Unsupported modify column: this column has primary key flag" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test revert" \
@@ -196,7 +196,7 @@ function DM_4220_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+		"Unsupported modify column: this column has primary key flag" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test revert" \
@@ -211,7 +211,7 @@ function DM_4220_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+		"Unsupported modify column: this column has primary key flag" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test revert -s $source1 -b $first_name1:$third_pos1" \
@@ -222,7 +222,7 @@ function DM_4220_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+		"Unsupported modify column: this column has primary key flag" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test skip" \
@@ -230,7 +230,7 @@ function DM_4220_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+		"Unsupported modify column: this column has primary key flag" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test skip" \
@@ -280,7 +280,7 @@ function DM_4185_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+		"Unsupported modify column: this column has primary key flag" 2
 
 	first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
 	first_pos2=$(get_start_pos 127.0.0.1:$MASTER_PORT $source2)
@@ -302,7 +302,7 @@ function DM_4185_CASE() {
 
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"query-status test" \
-			"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+			"Unsupported modify column: this column has primary key flag" 2
 
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"handle-error test skip -b $first_name1:$second_pos2" \
@@ -311,7 +311,7 @@ function DM_4185_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+		"Unsupported modify column: this column has primary key flag" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test skip" \
@@ -344,7 +344,7 @@ function DM_4201_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 1
+		"Unsupported modify column: this column has primary key flag" 1
 
 	first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
 	first_name1=$(get_start_name 127.0.0.1:$MASTER_PORT $source1)
@@ -356,7 +356,7 @@ function DM_4201_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 1
+		"Unsupported modify column: this column has primary key flag" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"handle-error test skip" \

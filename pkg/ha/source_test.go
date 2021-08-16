@@ -14,7 +14,11 @@
 package ha
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io/ioutil"
+	"path"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -25,11 +29,52 @@ import (
 )
 
 const (
-	// do not forget to update this path if the file removed/renamed.
-	sourceSampleFile = "../../dm/worker/source.yaml"
+	sourceSampleFile  = "source.yaml"
+	sourceFileContent = `---
+server-id: 101
+source-id: mysql-replica-01
+relay-dir: ./relay_log
+enable-gtid: true
+relay-binlog-gtid: "e68f6068-53ec-11eb-9c5f-0242ac110003:1-50"
+from:
+  host: 127.0.0.1
+  user: root
+  password: Up8156jArvIPymkVC+5LxkAT6rek
+  port: 3306
+  max-allowed-packet: 0
+  security:
+    ssl-ca: "%s"
+    ssl-cert: "%s"
+    ssl-key: "%s"
+`
+	caFile        = "ca.pem"
+	caFileContent = `
+-----BEGIN CERTIFICATE-----
+test no content
+-----END CERTIFICATE-----
+`
+	certFile        = "cert.pem"
+	certFileContent = `
+-----BEGIN CERTIFICATE-----
+test no content
+-----END CERTIFICATE-----
+`
+	keyFile        = "key.pem"
+	keyFileContent = `
+-----BEGIN RSA PRIVATE KEY-----
+test no content
+-----END RSA PRIVATE KEY-----
+`
 )
 
-var etcdTestCli *clientv3.Client
+var (
+	sourceSampleFilePath string
+	caFilePath           string
+	certFilePath         string
+	keyFilePath          string
+
+	etcdTestCli *clientv3.Client
+)
 
 func TestHA(t *testing.T) {
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
@@ -49,10 +94,35 @@ type testForEtcd struct{}
 
 var _ = Suite(&testForEtcd{})
 
+func (t *testForEtcd) SetUpTest(c *C) {
+	createTestFixture(c)
+}
+
+func createTestFixture(c *C) {
+	dir := c.MkDir()
+
+	caFilePath = path.Join(dir, caFile)
+	err := ioutil.WriteFile(caFilePath, []byte(caFileContent), 0o644)
+	c.Assert(err, IsNil)
+
+	certFilePath = path.Join(dir, certFile)
+	err = ioutil.WriteFile(certFilePath, []byte(certFileContent), 0o644)
+	c.Assert(err, IsNil)
+
+	keyFilePath = path.Join(dir, keyFile)
+	err = ioutil.WriteFile(keyFilePath, []byte(keyFileContent), 0o644)
+	c.Assert(err, IsNil)
+
+	sourceSampleFilePath = path.Join(dir, sourceSampleFile)
+	sourceFileContent := fmt.Sprintf(sourceFileContent, caFilePath, certFilePath, keyFilePath)
+	err = ioutil.WriteFile(sourceSampleFilePath, []byte(sourceFileContent), 0o644)
+	c.Assert(err, IsNil)
+}
+
 func (t *testForEtcd) TestSourceEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
-	cfg, err := config.LoadFromFile(sourceSampleFile)
+	cfg, err := config.LoadFromFile(sourceSampleFilePath)
 	c.Assert(err, IsNil)
 	source := cfg.SourceID
 	cfgExtra := *cfg
@@ -68,6 +138,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(cfgM, HasLen, 0)
 
 	// put a source config.
+	c.Assert(cfg.From.Security.LoadTLSContent(), IsNil)
 	rev2, err := PutSourceCfg(etcdTestCli, cfg)
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
@@ -78,7 +149,10 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(rev3, Equals, rev2)
 	cfg2 := scm2[source]
 	c.Assert(cfg2, DeepEquals, cfg)
-
+	noContentBytes := []byte("test no content")
+	c.Assert(bytes.Contains(cfg2.From.Security.SSLCABytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(cfg2.From.Security.SSLKEYBytes, noContentBytes), Equals, true)
+	c.Assert(bytes.Contains(cfg2.From.Security.SSLCertBytes, noContentBytes), Equals, true)
 	// put another source config.
 	rev2, err = PutSourceCfg(etcdTestCli, &cfgExtra)
 	c.Assert(err, IsNil)
