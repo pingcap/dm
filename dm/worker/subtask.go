@@ -188,7 +188,7 @@ func (st *SubTask) initUnits() error {
 }
 
 // Run runs the sub task.
-// TODO: check concurrent problems
+// TODO: check concurrent problems.
 func (st *SubTask) Run(expectStage pb.Stage) {
 	if st.Stage() == pb.Stage_Finished || st.Stage() == pb.Stage_Running {
 		st.l.Warn("prepare to run a subtask with invalid stage",
@@ -434,12 +434,6 @@ func (st *SubTask) Stage() pb.Stage {
 	st.RLock()
 	defer st.RUnlock()
 	return st.stage
-}
-
-func (st *SubTask) setResult(result *pb.ProcessResult) {
-	st.Lock()
-	defer st.Unlock()
-	st.result = result
 }
 
 // markResultCanceled mark result as canceled if stage is Paused.
