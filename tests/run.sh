@@ -62,7 +62,10 @@ if [ "$test_case" == "*" ]; then
 elif [ "$test_case" == "compatibility" ]; then
 	should_run=1
 elif [ "$test_case" == "others" ]; then
-	test_case=$(cat $CUR/others_integration.txt)
+	test_case=$(cat $CUR/others_integration_1.txt)
+	should_run=1
+elif [ "$test_case" == "others_2" ]; then
+	test_case=$(cat $CUR/others_integration_2.txt)
 	should_run=1
 else
 	exist_case=""
