@@ -165,7 +165,7 @@ function isolate_master() {
 	fi
 	echo "kill dm-master$1"
 	ps aux | grep dm-master$1 | awk '{print $2}' | xargs kill || true
-	check_port_offline $port 20
+	check_master_port_offline $1
 	run_dm_master $WORK_DIR/master$1 $port $cur/conf/dm-master$1.toml
 	export GO_FAILPOINTS=''
 }
