@@ -92,7 +92,7 @@ type SubTask struct {
 	units    []unit.Unit // units do job one by one
 	currUnit unit.Unit
 	prevUnit unit.Unit
-	wg       sync.WaitGroup
+	resultWg sync.WaitGroup
 
 	stage  pb.Stage          // stage of current sub task
 	result *pb.ProcessResult // the process result, nil when is processing
@@ -123,12 +123,12 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 		etcdClient: etcdClient,
 		workerName: workerName,
 	}
-	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
+	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage)
 	return &st
 }
 
-// Init initializes the sub task processing units.
-func (st *SubTask) Init() error {
+// initUnits initializes the sub task processing units.
+func (st *SubTask) initUnits() error {
 	st.units = createUnits(st.cfg, st.etcdClient, st.workerName)
 	if len(st.units) < 1 {
 		return terror.ErrWorkerNoAvailUnits.Generate(st.cfg.Name, st.cfg.Mode)
@@ -188,13 +188,16 @@ func (st *SubTask) Init() error {
 }
 
 // Run runs the sub task.
+// TODO: check concurrent problems
 func (st *SubTask) Run(expectStage pb.Stage) {
 	if st.Stage() == pb.Stage_Finished || st.Stage() == pb.Stage_Running {
-		st.l.Warn("prepare to run a subtask with invalid stage", zap.Stringer("current stage", st.Stage()))
+		st.l.Warn("prepare to run a subtask with invalid stage",
+			zap.Stringer("current stage", st.Stage()),
+			zap.Stringer("expected stage", expectStage))
 		return
 	}
 
-	if err := st.Init(); err != nil {
+	if err := st.initUnits(); err != nil {
 		st.l.Error("fail to initial subtask", log.ShortError(err))
 		st.fail(err)
 		return
@@ -225,7 +228,7 @@ func (st *SubTask) run() {
 	cu := st.CurrUnit()
 	st.l.Info("start to run", zap.Stringer("unit", cu.Type()))
 	pr := make(chan pb.ProcessResult, 1)
-	st.wg.Add(1)
+	st.resultWg.Add(1)
 	go st.fetchResult(pr)
 	go cu.Process(ctx, pr)
 }
@@ -247,70 +250,70 @@ func (st *SubTask) callCurrCancel() {
 	st.RUnlock()
 }
 
-// fetchResult fetches units process result
-// when dm-unit report an error, we need to re-Process the sub task.
+// fetchResult fetches process result, call Pause of current unit if needed and updates the stage of subtask.
 func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
-	defer st.wg.Done()
+	defer st.resultWg.Done()
 
-	select {
-	case <-st.ctx.Done():
-		// should not use st.currCtx, because will do st.currCancel when Pause task,
-		// and this function will return, and the unit's Process maybe still running.
-		return
-	case result := <-pr:
-		// filter the context canceled error
-		errs := make([]*pb.ProcessError, 0, 2)
-		for _, err := range result.Errors {
-			if !unit.IsCtxCanceledProcessErr(err) {
-				errs = append(errs, err)
-			}
+	result := <-pr
+	// filter the context canceled error
+	errs := make([]*pb.ProcessError, 0, 2)
+	for _, err := range result.Errors {
+		if !unit.IsCtxCanceledProcessErr(err) {
+			errs = append(errs, err)
 		}
-		result.Errors = errs
+	}
+	result.Errors = errs
 
-		st.callCurrCancel() // dm-unit finished, canceled or error occurred, always cancel processing
+	st.callCurrCancel() // dm-unit finished, canceled or error occurred, always cancel processing
 
-		if len(result.Errors) == 0 && st.Stage() == pb.Stage_Pausing {
-			st.setResult(&result) // save result
-			return                // paused by external request
+	var (
+		cu    = st.CurrUnit()
+		stage pb.Stage
+	)
+
+	// update the stage according to result
+	if len(result.Errors) == 0 {
+		switch st.Stage() {
+		case pb.Stage_Pausing:
+			// paused by st.Pause
+			stage = pb.Stage_Paused
+		case pb.Stage_Stopping:
+			// stopped by st.Close
+			stage = pb.Stage_Stopped
+		default:
+			// process finished with no error
+			stage = pb.Stage_Finished
 		}
+	} else {
+		// error occurred, paused
+		stage = pb.Stage_Paused
+	}
+	st.setStageAndResult(stage, &result)
 
-		var (
-			cu    = st.CurrUnit()
-			stage pb.Stage
-		)
-		if len(result.Errors) == 0 {
-			if result.IsCanceled {
-				stage = pb.Stage_Stopped // canceled by user
-			} else {
-				stage = pb.Stage_Finished // process finished with no error
-			}
+	st.l.Info("unit process returned", zap.Stringer("unit", cu.Type()), zap.Stringer("stage", stage), zap.String("status", st.StatusJSON()))
+
+	switch stage {
+	case pb.Stage_Finished:
+		cu.Close()
+		nu := st.getNextUnit()
+		if nu == nil {
+			// Now, when finished, it only stops the process
+			// if needed, we can refine to Close it
+			st.l.Info("all process units finished")
 		} else {
-			stage = pb.Stage_Paused // error occurred, paused
+			st.l.Info("switching to next unit", zap.Stringer("unit", cu.Type()))
+			st.setCurrUnit(nu)
+			// NOTE: maybe need a Lock mechanism for sharding scenario
+			st.run() // re-run for next process unit
 		}
-		st.setStageAndResult(stage, &result)
-
-		st.l.Info("unit process returned", zap.Stringer("unit", cu.Type()), zap.Stringer("stage", stage), zap.String("status", st.StatusJSON()))
-
-		switch stage {
-		case pb.Stage_Finished:
-			cu.Close()
-			nu := st.getNextUnit()
-			if nu == nil {
-				// Now, when finished, it only stops the process
-				// if needed, we can refine to Close it
-				st.l.Info("all process units finished")
-			} else {
-				st.l.Info("switching to next unit", zap.Stringer("unit", cu.Type()))
-				st.setCurrUnit(nu)
-				// NOTE: maybe need a Lock mechanism for sharding scenario
-				st.run() // re-run for next process unit
-			}
-		case pb.Stage_Stopped:
-		case pb.Stage_Paused:
-			for _, err := range result.Errors {
-				st.l.Error("unit process error", zap.Stringer("unit", cu.Type()), zap.Reflect("error information", err))
-			}
+	case pb.Stage_Stopped:
+		// the caller will close current unit and more units after it, so we don't call cu.Close here.
+	case pb.Stage_Paused:
+		cu.Pause()
+		for _, err := range result.Errors {
+			st.l.Error("unit process error", zap.Stringer("unit", cu.Type()), zap.Any("error information", err))
 		}
+		st.l.Info("paused", zap.Stringer("unit", cu.Type()))
 	}
 }
 
@@ -339,8 +342,6 @@ func (st *SubTask) PrevUnit() unit.Unit {
 
 // closeUnits closes all un-closed units (current unit and all the subsequent units).
 func (st *SubTask) closeUnits() {
-	st.RLock()
-	defer st.RUnlock()
 	var (
 		cu  = st.currUnit
 		cui = -1
@@ -355,6 +356,10 @@ func (st *SubTask) closeUnits() {
 	if cui < 0 {
 		return
 	}
+
+	st.cancel()
+	st.resultWg.Wait()
+
 	for i := cui; i < len(st.units); i++ {
 		u := st.units[i]
 		st.l.Info("closing unit process", zap.Stringer("unit", cu.Type()))
@@ -386,14 +391,14 @@ func (st *SubTask) setStage(stage pb.Stage) {
 	st.Lock()
 	defer st.Unlock()
 	st.stage = stage
-	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
+	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage)
 }
 
 func (st *SubTask) setStageAndResult(stage pb.Stage, result *pb.ProcessResult) {
 	st.Lock()
 	defer st.Unlock()
 	st.stage = stage
-	updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
+	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage)
 	st.result = result
 }
 
@@ -404,22 +409,24 @@ func (st *SubTask) stageCAS(oldStage, newStage pb.Stage) bool {
 
 	if st.stage == oldStage {
 		st.stage = newStage
-		updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
+		updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage)
 		return true
 	}
 	return false
 }
 
-// setStageIfNot sets stage to newStage if its current value is not oldStage, similar to CAS.
-func (st *SubTask) setStageIfNot(oldStage, newStage pb.Stage) bool {
+// setStageIfNotIn sets stage to newStage if its current value is not in oldStages.
+func (st *SubTask) setStageIfNotIn(oldStages []pb.Stage, newStage pb.Stage) bool {
 	st.Lock()
 	defer st.Unlock()
-	if st.stage != oldStage {
-		st.stage = newStage
-		updateTaskState(st.cfg.Name, st.cfg.SourceID, st.stage)
-		return true
+	for _, s := range oldStages {
+		if st.stage == s {
+			return false
+		}
 	}
-	return false
+	st.stage = newStage
+	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage)
+	return true
 }
 
 // Stage returns the stage of the sub task.
@@ -461,16 +468,13 @@ func (st *SubTask) Result() *pb.ProcessResult {
 // Close stops the sub task.
 func (st *SubTask) Close() {
 	st.l.Info("closing")
-	if st.Stage() == pb.Stage_Stopped {
+	if !st.setStageIfNotIn([]pb.Stage{pb.Stage_Stopped, pb.Stage_Stopping}, pb.Stage_Stopping) {
 		st.l.Info("subTask is already closed, no need to close")
 		return
 	}
 
-	st.cancel()
 	st.closeUnits() // close all un-closed units
-	st.wg.Wait()
-	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Stopped)
-	updateTaskState(st.cfg.Name, st.cfg.SourceID, pb.Stage_Stopped)
+	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, pb.Stage_Stopped)
 }
 
 // Pause pauses a running sub task or a sub task paused by error.
@@ -484,18 +488,13 @@ func (st *SubTask) Pause() error {
 	}
 
 	st.callCurrCancel()
-	st.wg.Wait() // wait fetchResult return
+	st.resultWg.Wait() // wait fetchResult set Pause stage
 
-	cu := st.CurrUnit()
-	cu.Pause()
-
-	st.l.Info("paused", zap.Stringer("unit", cu.Type()))
-	st.setStage(pb.Stage_Paused)
 	return nil
 }
 
 // Resume resumes the paused sub task
-// similar to Run.
+// TODO: similar to Run, refactor later.
 func (st *SubTask) Resume() error {
 	if !st.initialized.Load() {
 		st.Run(pb.Stage_Running)
@@ -525,7 +524,7 @@ func (st *SubTask) Resume() error {
 	st.l.Info("resume with unit", zap.Stringer("unit", cu.Type()))
 
 	pr := make(chan pb.ProcessResult, 1)
-	st.wg.Add(1)
+	st.resultWg.Add(1)
 	go st.fetchResult(pr)
 	go cu.Resume(ctx, pr)
 
@@ -718,7 +717,7 @@ func (st *SubTask) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReq
 	return err
 }
 
-func updateTaskState(task, sourceID string, stage pb.Stage) {
+func updateTaskMetric(task, sourceID string, stage pb.Stage) {
 	if stage == pb.Stage_Stopped || stage == pb.Stage_Finished {
 		taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": sourceID})
 	} else {

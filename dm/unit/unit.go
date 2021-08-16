@@ -28,21 +28,27 @@ const (
 	DefaultInitTimeout = time.Minute
 )
 
-// Unit defines interface for sub task process units, like syncer, loader, relay, etc.
+// Unit defines interface for subtask process units, like syncer, loader, relay, etc.
+// The Unit is not responsible to maintain its status like "pausing"/"paused". The caller should maintain the status,
+// for example, know the Unit is "paused" and avoid call Pause again.
+// All method is Unit interface can expect no concurrent invocation, the caller should guarantee this.
 type Unit interface {
 	// Init initializes the dm process unit
-	// every unit does base initialization in `Init`, and this must pass before start running the sub task
-	// other setups can be done in `Process`, but this should be treated carefully, let it's compatible with Pause / Resume
+	// every unit does base initialization in `Init`, and this must pass before start running the subtask
+	// other setups can be done in the beginning of `Process`, but this should be treated carefully to make it
+	// compatible with Pause / Resume.
 	// if initialing successfully, the outer caller should call `Close` when the unit (or the task) finished, stopped or canceled (because other units Init fail).
 	// if initialing fail, Init itself should release resources it acquired before (rolling itself back).
 	Init(ctx context.Context) error
-	// Process processes sub task
+	// Process does the main logic and will be blocked until the result is sent to pr.
 	// When ctx.Done, stops the process and returns
 	// When not in processing, call Process to continue or resume the process
 	Process(ctx context.Context, pr chan pb.ProcessResult)
 	// Close shuts down the process and closes the unit, after that can not call Process to resume
+	// The implementation should not block for a long time.
 	Close()
-	// Pause pauses the process, it can be resumed later
+	// Pause does some cleanups and the unit can be resumed later. The caller will make sure Process has returned.
+	// The implementation should not block for a long time.
 	Pause()
 	// Resume resumes the paused process
 	Resume(ctx context.Context, pr chan pb.ProcessResult)
