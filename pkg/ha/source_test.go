@@ -16,8 +16,9 @@ package ha
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io/ioutil"
-	"os"
+	"path"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -28,8 +29,7 @@ import (
 )
 
 const (
-	testdataPath      = "./testdata"
-	sourceSampleFile  = "./testdata/source.yaml"
+	sourceSampleFile  = "source.yaml"
 	sourceFileContent = `---
 server-id: 101
 source-id: mysql-replica-01
@@ -43,23 +43,23 @@ from:
   port: 3306
   max-allowed-packet: 0
   security:
-    ssl-ca: "./testdata/ca.pem"
-    ssl-cert: "./testdata/cert.pem"
-    ssl-key: "./testdata/key.pem"
+    ssl-ca: "%s"
+    ssl-cert: "%s"
+    ssl-key: "%s"
 `
-	caFile        = "./testdata/ca.pem"
+	caFile        = "ca.pem"
 	caFileContent = `
 -----BEGIN CERTIFICATE-----
 test no content
 -----END CERTIFICATE-----
 `
-	certFile        = "./testdata/cert.pem"
+	certFile        = "cert.pem"
 	certFileContent = `
 -----BEGIN CERTIFICATE-----
 test no content
 -----END CERTIFICATE-----
 `
-	keyFile        = "./testdata/key.pem"
+	keyFile        = "key.pem"
 	keyFileContent = `
 -----BEGIN RSA PRIVATE KEY-----
 test no content
@@ -67,7 +67,14 @@ test no content
 `
 )
 
-var etcdTestCli *clientv3.Client
+var (
+	sourceSampleFilePath string
+	caFilePath           string
+	certFilePath         string
+	keyFilePath          string
+
+	etcdTestCli *clientv3.Client
+)
 
 func TestHA(t *testing.T) {
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
@@ -88,29 +95,32 @@ type testForEtcd struct{}
 var _ = Suite(&testForEtcd{})
 
 func createTestFixture(c *C) {
-	c.Assert(os.Mkdir(testdataPath, 0o744), IsNil)
+	dir := c.MkDir()
 
-	err := ioutil.WriteFile(sourceSampleFile, []byte(sourceFileContent), 0o644)
+	caFilePath = path.Join(dir, caFile)
+	err := ioutil.WriteFile(caFilePath, []byte(caFileContent), 0o644)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(caFile, []byte(caFileContent), 0o644)
-	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(certFile, []byte(certFileContent), 0o644)
-	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(keyFile, []byte(keyFileContent), 0o644)
-	c.Assert(err, IsNil)
-}
 
-func clearTestFixture(c *C) {
-	c.Assert(os.RemoveAll(testdataPath), IsNil)
+	certFilePath = path.Join(dir, certFile)
+	err = ioutil.WriteFile(certFilePath, []byte(certFileContent), 0o644)
+	c.Assert(err, IsNil)
+
+	keyFilePath = path.Join(dir, keyFile)
+	err = ioutil.WriteFile(keyFilePath, []byte(keyFileContent), 0o644)
+	c.Assert(err, IsNil)
+
+	sourceSampleFilePath = path.Join(dir, sourceSampleFile)
+	sourceFileContent := fmt.Sprintf(sourceFileContent, caFilePath, certFilePath, keyFilePath)
+	err = ioutil.WriteFile(sourceSampleFilePath, []byte(sourceFileContent), 0o644)
+	c.Assert(err, IsNil)
 }
 
 func (t *testForEtcd) TestSourceEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	createTestFixture(c)
-	defer clearTestFixture(c)
 
-	cfg, err := config.LoadFromFile(sourceSampleFile)
+	cfg, err := config.LoadFromFile(sourceSampleFilePath)
 	c.Assert(err, IsNil)
 	source := cfg.SourceID
 	cfgExtra := *cfg

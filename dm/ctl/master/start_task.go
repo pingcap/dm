@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewStartTaskCmd creates a StartTask command.
@@ -59,7 +60,7 @@ func startTaskFunc(cmd *cobra.Command, _ []string) error {
 	if task.TargetDB != nil && task.TargetDB.Security != nil {
 		loadErr := task.TargetDB.Security.LoadTLSContent()
 		if loadErr != nil {
-			return loadErr
+			return terror.ErrCtlLoadTLSCfg.Generate(loadErr)
 		}
 		content = []byte(task.String())
 	}

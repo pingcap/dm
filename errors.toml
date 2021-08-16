@@ -3088,6 +3088,12 @@ description = ""
 workaround = "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line."
 tags = ["internal", "medium"]
 
+[error.DM-dmctl-48003]
+message = "can not load tls config"
+description = ""
+workaround = "Please ensure that the tls certificate is accessible on the node currently running dmctl."
+tags = ["internal", "high"]
+
 [error.DM-not-set-50000]
 message = ""
 description = ""

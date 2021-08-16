@@ -17,27 +17,25 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"os"
+	"path"
 
 	. "github.com/pingcap/check"
 )
 
 const (
-	testdataPath = "./testdata"
-
-	caFile        = "./testdata/ca.pem"
+	caFile        = "ca.pem"
 	caFileContent = `
 -----BEGIN CERTIFICATE-----
 test no content
 -----END CERTIFICATE-----
 `
-	certFile        = "./testdata/cert.pem"
+	certFile        = "cert.pem"
 	certFileContent = `
 -----BEGIN CERTIFICATE-----
 test no content
 -----END CERTIFICATE-----
 `
-	keyFile        = "./testdata/key.pem"
+	keyFile        = "key.pem"
 	keyFileContent = `
 -----BEGIN RSA PRIVATE KEY-----
 test no content
@@ -45,19 +43,26 @@ test no content
 `
 )
 
+var (
+	caFilePath   string
+	certFilePath string
+	keyFilePath  string
+)
+
 func createTestFixture(c *C) {
-	c.Assert(os.Mkdir(testdataPath, 0o744), IsNil)
+	dir := c.MkDir()
 
-	err := ioutil.WriteFile(caFile, []byte(caFileContent), 0o644)
+	caFilePath = path.Join(dir, caFile)
+	err := ioutil.WriteFile(caFilePath, []byte(caFileContent), 0o644)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(certFile, []byte(certFileContent), 0o644)
-	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(keyFile, []byte(keyFileContent), 0o644)
-	c.Assert(err, IsNil)
-}
 
-func clearTestFixture(c *C) {
-	c.Assert(os.RemoveAll(testdataPath), IsNil)
+	certFilePath = path.Join(dir, certFile)
+	err = ioutil.WriteFile(certFilePath, []byte(certFileContent), 0o644)
+	c.Assert(err, IsNil)
+
+	keyFilePath = path.Join(dir, keyFile)
+	err = ioutil.WriteFile(keyFilePath, []byte(keyFileContent), 0o644)
+	c.Assert(err, IsNil)
 }
 
 type testTLSConfig struct{}
@@ -68,15 +73,11 @@ func (t *testTLSConfig) SetUpTest(c *C) {
 	createTestFixture(c)
 }
 
-func (t *testTLSConfig) TearDownTest(c *C) {
-	clearTestFixture(c)
-}
-
 func (t *testTLSConfig) TestLoadAndClearContent(c *C) {
 	s := &Security{
-		SSLCA:   caFile,
-		SSLCert: certFile,
-		SSLKey:  keyFile,
+		SSLCA:   caFilePath,
+		SSLCert: certFilePath,
+		SSLKey:  keyFilePath,
 	}
 	err := s.LoadTLSContent()
 	c.Assert(err, IsNil)
@@ -115,7 +116,7 @@ block-allow-list:
 mysql-instances:
   - source-id: "mysql-replica-01-tls"
     block-allow-list: "instance"
-`, caFile, certFile, keyFile)
+`, caFilePath, certFilePath, keyFilePath)
 	task1 := NewTaskConfig()
 	err := task1.RawDecode(taskRowStr)
 	c.Assert(err, IsNil)
