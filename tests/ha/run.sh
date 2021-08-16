@@ -165,10 +165,10 @@ function run() {
 
 	echo "kill dm-master1"
 	ps aux | grep dm-master1 | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT1 20
+	check_master_port_offline 1
 	echo "kill dm-master2"
 	ps aux | grep dm-master2 | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT2 20
+	check_master_port_offline 2
 
 	echo "initial cluster of dm-masters have been killed"
 	echo "now we will check whether joined masters can work normally"
