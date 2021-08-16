@@ -1862,8 +1862,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						s.isReplacingErr = true
 						// revert currentLocation to startLocation
 						currentLocation = startLocation
+					} else if op == pb.ErrorOp_Skip {
+						s.saveGlobalPoint(currentLocation)
+						err = s.flushJobs()
+						if err != nil {
+							tctx.L().Warn("failed to flush jobs when handle-error skip", zap.Error(err))
+						} else {
+							tctx.L().Info("flush jobs when handle-error skip")
+						}
 					}
-					// skip the event
+					// skip the current event
 					continue
 				}
 			}
