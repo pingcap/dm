@@ -54,7 +54,7 @@ func NewConfigCmd() *cobra.Command {
 		newExportCfgsCmd(),
 		newImportCfgsCmd(),
 	)
-	cmd.PersistentFlags().StringP("path", "d", "", "specify the file path to export`")
+	cmd.PersistentFlags().StringP("path", "p", "", "specify the file path to export/import`")
 	return cmd
 }
 
@@ -140,7 +140,7 @@ func newConfigMasterCmd() *cobra.Command {
 }
 
 func configMasterList(cmd *cobra.Command, args []string) error {
-	if len(args) == 0 || len(args) > 1 {
+	if len(args) != 1 {
 		return cmd.Help()
 	}
 	name := args[0]
@@ -179,7 +179,7 @@ func newExportCfgsCmd() *cobra.Command {
 		Short: "Export the configurations of sources and tasks",
 		RunE:  exportCfgsFunc,
 	}
-	cmd.Flags().String("dir", "", "specify the configs directory, default is `./configs`")
+	cmd.Flags().StringP("dir", "d", "", "specify the configs directory, default is `./configs`")
 	_ = cmd.Flags().MarkHidden("dir")
 	return cmd
 }
