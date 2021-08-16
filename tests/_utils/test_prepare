@@ -20,6 +20,21 @@ function cleanup_process() {
     wait_process_exit dm-syncer.test
 }
 
+function cleanup_process_slow() {
+    pkill -hup dm-worker.test 2>/dev/null || true
+    pkill -hup dm-master.test 2>/dev/null || true
+    pkill -hup dm-syncer.test 2>/dev/null || true
+
+    if [ $# -ge 1 ]; then
+        echo "a slow test case need to sleep $1 seconds before wait process exit"
+        sleep $1
+    fi
+
+    wait_process_exit dm-master.test
+    wait_process_exit dm-worker.test
+    wait_process_exit dm-syncer.test
+}
+
 function wait_pattern_exit() {
     pattern=$1
     while true

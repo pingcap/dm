@@ -669,6 +669,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 
 	// try to rollback checkpoints, if they already flushed, no effect
+	// TODO: very slow for 100 tables
 	prePos := s.checkpoint.GlobalPoint()
 	s.checkpoint.Rollback(s.schemaTracker)
 	currPos := s.checkpoint.GlobalPoint()
