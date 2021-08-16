@@ -16,6 +16,7 @@ package ha
 import (
 	"bytes"
 	"context"
+	"io/ioutil"
 	"os"
 	"testing"
 
@@ -88,30 +89,15 @@ var _ = Suite(&testForEtcd{})
 
 func createTestFixture(c *C) {
 	c.Assert(os.Mkdir(testdataPath, 0o744), IsNil)
-	// create a source yaml
-	f, err := os.Create(sourceSampleFile)
-	c.Assert(err, IsNil)
-	_, err = f.WriteString(sourceFileContent)
-	c.Assert(err, IsNil)
-	f.Close()
 
-	f, err = os.Create(caFile)
+	err := ioutil.WriteFile(sourceSampleFile, []byte(sourceFileContent), 0o644)
 	c.Assert(err, IsNil)
-	_, err = f.WriteString(caFileContent)
+	err = ioutil.WriteFile(caFile, []byte(caFileContent), 0o644)
 	c.Assert(err, IsNil)
-	f.Close()
-
-	f, err = os.Create(certFile)
+	err = ioutil.WriteFile(certFile, []byte(certFileContent), 0o644)
 	c.Assert(err, IsNil)
-	_, err = f.WriteString(certFileContent)
+	err = ioutil.WriteFile(keyFile, []byte(keyFileContent), 0o644)
 	c.Assert(err, IsNil)
-	f.Close()
-
-	f, err = os.Create(keyFile)
-	c.Assert(err, IsNil)
-	_, err = f.WriteString(keyFileContent)
-	c.Assert(err, IsNil)
-	f.Close()
 }
 
 func clearTestFixture(c *C) {
