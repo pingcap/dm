@@ -15,6 +15,7 @@ package config
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 
@@ -73,9 +74,9 @@ func (t *testTLSConfig) TearDownTest(c *C) {
 
 func (t *testTLSConfig) TestLoadAndClearContent(c *C) {
 	s := &Security{
-		SSLCA:   "testdata/ca.pem",
-		SSLCert: "testdata/cert.pem",
-		SSLKey:  "testdata/key.pem",
+		SSLCA:   caFile,
+		SSLCert: certFile,
+		SSLKey:  keyFile,
 	}
 	err := s.LoadTLSContent()
 	c.Assert(err, IsNil)
@@ -96,7 +97,7 @@ func (t *testTLSConfig) TestLoadAndClearContent(c *C) {
 }
 
 func (t *testTLSConfig) TestTLSTaskConfig(c *C) {
-	taskRowStr := `---
+	taskRowStr := fmt.Sprintf(`---
 name: test
 task-mode: all
 target-database:
@@ -105,16 +106,16 @@ target-database:
     user: "root"
     password: "123456"
     security:
-      ssl-ca: "testdata/ca.pem"
-      ssl-cert: "testdata/cert.pem"
-      ssl-key: "testdata/key.pem"
+      ssl-ca: %s
+      ssl-cert: %s
+      ssl-key: %s
 block-allow-list:
   instance:
     do-dbs: ["dm_benchmark"]
 mysql-instances:
   - source-id: "mysql-replica-01-tls"
     block-allow-list: "instance"
-`
+`, caFile, certFile, keyFile)
 	task1 := NewTaskConfig()
 	err := task1.RawDecode(taskRowStr)
 	c.Assert(err, IsNil)
