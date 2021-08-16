@@ -94,6 +94,10 @@ type testForEtcd struct{}
 
 var _ = Suite(&testForEtcd{})
 
+func (t *testForEtcd) SetUpTest(c *C) {
+	createTestFixture(c)
+}
+
 func createTestFixture(c *C) {
 	dir := c.MkDir()
 
@@ -117,8 +121,6 @@ func createTestFixture(c *C) {
 
 func (t *testForEtcd) TestSourceEtcd(c *C) {
 	defer clearTestInfoOperation(c)
-
-	createTestFixture(c)
 
 	cfg, err := config.LoadFromFile(sourceSampleFilePath)
 	c.Assert(err, IsNil)

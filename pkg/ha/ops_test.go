@@ -37,7 +37,7 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 		subtaskCfg1 config.SubTaskConfig
 	)
 
-	sourceCfg, err := config.LoadFromFile(sourceSampleFile)
+	sourceCfg, err := config.LoadFromFile(sourceSampleFilePath)
 	c.Assert(err, IsNil)
 	sourceCfg.SourceID = source
 	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile, true), IsNil)
