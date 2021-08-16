@@ -101,9 +101,9 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 
 	dumpling.Start(resultCh)
 	select {
-	case result = <-resultCh:
+	case <-resultCh:
 		c.Fatal("expected nothing send to channel")
-	case <- time.After(5*time.Second):
+	case <-time.After(5 * time.Second):
 		dumpling.Close()
 	}
 

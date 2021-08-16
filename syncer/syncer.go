@@ -598,6 +598,7 @@ func (s *Syncer) resetDBs(tctx *tcontext.Context) error {
 func (s *Syncer) Start(pr chan pb.ProcessResult) {
 	ok, oldStatus := s.base.ToProcessing()
 	if !ok {
+		// TODO: when returned from error, forget to change the status to paused
 		s.tctx.L().Error("can't change status to processing", zap.Stringer("old status", oldStatus))
 		// this illegal status transition may have no receiver at pr, so don't send to it.
 		return
@@ -3141,8 +3142,7 @@ func (s *Syncer) removeHeartbeat() {
 
 // Pause implements Unit.Pause.
 func (s *Syncer) Pause() {
-	_, oldStatus := s.base.ToPaused()
-	if oldStatus == unit.Closed {
+	if _, oldStatus := s.base.ToPaused(); oldStatus == unit.Closed {
 		s.tctx.L().Warn("can't change status to paused from closed")
 		return
 	}
@@ -3169,6 +3169,7 @@ func (s *Syncer) Resume(pr chan pb.ProcessResult) {
 		err := s.resetDBs(s.tctx.WithContext(s.base.UnitCtx))
 		if err != nil {
 			s.base.Processing.Done()
+			s.Pause()
 			pr <- pb.ProcessResult{
 				IsCanceled: false,
 				Errors: []*pb.ProcessError{
@@ -3296,7 +3297,7 @@ func (s *Syncer) checkpointID() string {
 }
 
 // UpdateFromConfig updates config for `From`.
-// TODO: not used now, because we didn't implement Update
+// TODO: not used now, because we didn't implement Update.
 func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	s.Lock()
 	defer s.Unlock()

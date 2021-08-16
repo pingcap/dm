@@ -179,8 +179,7 @@ func (m *Dumpling) Close() {
 
 // Pause implements Unit.Pause.
 func (m *Dumpling) Pause() {
-	_, oldStatus := m.base.ToPaused()
-	if oldStatus == unit.Closed {
+	if _, oldStatus := m.base.ToPaused(); oldStatus == unit.Closed {
 		m.logger.Warn("can't change status to paused from closed")
 	}
 }
