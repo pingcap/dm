@@ -42,6 +42,7 @@ function run() {
 	# check the point is the middle of checkpoint
 	num=$(grep "not receive xid job yet" $WORK_DIR/worker1/log/dm-worker.log | wc -l)
 	[[ $num -gt 0 ]]
+	sed -e '/not receive xid job yet/d'  $WORK_DIR/worker1/log/dm-worker.log > $WORK_DIR/worker1/log/dm-worker.log
 
 	echo "start check pause diff"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

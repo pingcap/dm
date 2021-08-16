@@ -1975,6 +1975,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err
 			}
 		}
+		if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
+			return nil
+		}
 	}
 }
 
