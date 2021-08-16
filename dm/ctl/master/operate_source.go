@@ -21,11 +21,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-
-	"github.com/spf13/cobra"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // NewOperateSourceCmd creates a OperateSource command.
@@ -122,7 +125,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) error {
 		if cfg.From.Security != nil {
 			loadErr := cfg.From.Security.LoadTLSContent()
 			if loadErr != nil {
-				return loadErr
+				log.L().Warn("load tls content failed", zap.Error(terror.ErrCtlLoadTLSCfg.Generate(loadErr)))
 			}
 			yamlStr, yamlErr := cfg.Yaml()
 			if yamlErr != nil {

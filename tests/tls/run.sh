@@ -9,6 +9,12 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 
 API_VERSION="v1alpha1"
 
+function get_mysql_ssl_data_path() {
+	run_sql 'SHOW VARIABLES WHERE Variable_Name = "datadir"' $MYSQL_PORT1 $MYSQL_PASSWORD1
+	mysql_data_path=$(cat "$TEST_DIR/sql_res.$TEST_NAME.txt" | grep Value | cut -d ':' -f 2 | xargs)
+	echo "$mysql_data_path"
+}
+
 function run_tidb_with_tls() {
 	echo "run a new tidb server with tls"
 	cat - >"$WORK_DIR/tidb-tls-config.toml" <<EOF
@@ -48,8 +54,7 @@ function prepare_data() {
 }
 
 function setup_mysql_tls() {
-	run_sql 'SHOW VARIABLES WHERE Variable_Name = "datadir"' $MYSQL_PORT1 $MYSQL_PASSWORD1
-	mysql_data_path=$(cat "$TEST_DIR/sql_res.$TEST_NAME.txt" | grep Value | cut -d ':' -f 2 | xargs)
+	mysql_data_path=$(get_mysql_ssl_data_path)
 	echo "mysql_ssl_setup at=$mysql_data_path"
 
 	# NOTE we can use ` mysql_ssl_rsa_setup --datadir "$mysql_data_path"` to create a new cert in datadir
@@ -125,6 +130,12 @@ function test_worker_ha_when_enable_source_tls() {
 	ps aux | grep dm-worker1 | awk '{print $2}' | xargs kill || true
 	check_port_offline $WORKER1_PORT 20
 
+	mysql_data_path=$(get_mysql_ssl_data_path)
+	echo "mysql_ssl_setup at=$mysql_data_path"
+
+	# change ca.pem name to make sure HA
+	mv "$mysql_data_path/ca.pem" "$mysql_data_path/ca.pem.bak"
+
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $WORK_DIR/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT "$cur/conf/ca.pem" "$cur/conf/dm.pem" "$cur/conf/dm.key"
 
@@ -147,6 +158,10 @@ function test_worker_ha_when_enable_source_tls() {
 	run_sql 'INSERT INTO tls.t VALUES (99,9999999);' $MYSQL_PORT1 $MYSQL_PASSWORD1
 
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	# resume ca.pem
+	mv "$mysql_data_path/ca.pem.bak" "$mysql_data_path/ca.pem"
+
 }
 
 function test_master_ha_when_enable_tidb_tls() {

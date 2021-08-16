@@ -19,11 +19,13 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -60,7 +62,7 @@ func startTaskFunc(cmd *cobra.Command, _ []string) error {
 	if task.TargetDB != nil && task.TargetDB.Security != nil {
 		loadErr := task.TargetDB.Security.LoadTLSContent()
 		if loadErr != nil {
-			return terror.ErrCtlLoadTLSCfg.Generate(loadErr)
+			log.L().Warn("load tls content failed", zap.Error(terror.ErrCtlLoadTLSCfg.Generate(loadErr)))
 		}
 		content = []byte(task.String())
 	}

@@ -3339,6 +3339,9 @@ func (s *Syncer) setSyncCfg() error {
 	var tlsConfig *tls.Config
 	var err error
 	if s.cfg.From.Security != nil {
+		if loadErr := s.cfg.From.Security.LoadTLSContent(); loadErr != nil {
+			return terror.ErrCtlLoadTLSCfg.Delegate(loadErr)
+		}
 		tlsConfig, err = toolutils.ToTLSConfigWithVerifyByRawbytes(s.cfg.From.Security.SSLCABytes,
 			s.cfg.From.Security.SSLCertBytes, s.cfg.From.Security.SSLKEYBytes, s.cfg.From.Security.CertAllowedCN)
 		if err != nil {
