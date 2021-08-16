@@ -191,7 +191,7 @@ func newImportCfgsCmd() *cobra.Command {
 		Short: "Import the configurations of sources and tasks",
 		RunE:  importCfgsFunc,
 	}
-	cmd.Flags().String("dir", "", "specify the configs directory, default is `./configs`")
+	cmd.Flags().StringP("dir", "d", "", "specify the configs directory, default is `./configs`")
 	_ = cmd.Flags().MarkHidden("dir")
 	return cmd
 }
