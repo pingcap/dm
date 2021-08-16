@@ -127,7 +127,7 @@ type Syncer struct {
 
 	schemaTracker *schema.Tracker
 
-	fromDB *UpStreamConn
+	fromDB *dbconn.UpStreamConn
 
 	toDB      *conn.BaseDB
 	toDBConns []*dbconn.DBConn
@@ -472,7 +472,7 @@ func buildLowerCaseTableNamesMap(tables map[string][]string) (map[string]string,
 // NOTE: now we don't support modify router rules after task has started.
 func (s *Syncer) initShardingGroups(ctx context.Context, needCheck bool) error {
 	// fetch tables from source and filter them
-	sourceTables, err := s.fromDB.fetchAllDoTables(ctx, s.baList)
+	sourceTables, err := s.fromDB.FetchAllDoTables(ctx, s.baList)
 	if err != nil {
 		return err
 	}
@@ -688,7 +688,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 }
 
 func (s *Syncer) getMasterStatus(ctx context.Context) (mysql.Position, gtid.Set, error) {
-	return s.fromDB.getMasterStatus(ctx, s.cfg.Flavor)
+	return s.fromDB.GetMasterStatus(ctx, s.cfg.Flavor)
 }
 
 func (s *Syncer) getTable(tctx *tcontext.Context, origSchema, origTable, renamedSchema, renamedTable string) (*model.TableInfo, error) {
@@ -1467,7 +1467,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	updateTSOffset := func() error {
 		t1 := time.Now()
-		ts, tsErr := s.fromDB.getServerUnixTS(ctx)
+		ts, tsErr := s.fromDB.GetServerUnixTS(ctx)
 		rtt := time.Since(t1).Seconds()
 		if tsErr == nil {
 			s.tsOffset.Store(time.Now().Unix() - ts - int64(rtt/2))
@@ -1796,8 +1796,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						s.isReplacingErr = true
 						// revert currentLocation to startLocation
 						currentLocation = startLocation
+					} else if op == pb.ErrorOp_Skip {
+						s.saveGlobalPoint(currentLocation)
+						err = s.flushJobs()
+						if err != nil {
+							tctx.L().Warn("failed to flush jobs when handle-error skip", zap.Error(err))
+						} else {
+							tctx.L().Info("flush jobs when handle-error skip")
+						}
 					}
-					// skip the event
+					// skip the current event
 					continue
 				}
 			}
@@ -2905,7 +2913,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				s.currentLocationMu.RUnlock()
 
 				ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
-				remainingSize, err2 := s.fromDB.countBinaryLogsSize(ctx2, currentLocation.Position)
+				remainingSize, err2 := s.fromDB.CountBinaryLogsSize(ctx2, currentLocation.Position)
 				cancel2()
 				if err2 != nil {
 					// log the error, but still handle the rest operation
@@ -2964,7 +2972,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 	var err error
 	dbCfg := s.cfg.From
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDMLConnectionTimeout)
-	s.fromDB, err = createUpStreamConn(dbCfg)
+	s.fromDB, err = dbconn.NewUpStreamConn(dbCfg)
 	if err != nil {
 		return err
 	}
@@ -3009,7 +3017,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 
 	s.toDB, s.toDBConns, err = dbconn.CreateConns(s.tctx, s.cfg, dbCfg, s.cfg.WorkerCount)
 	if err != nil {
-		closeUpstreamConn(s.tctx, s.fromDB) // release resources acquired before return with error
+		dbconn.CloseUpstreamConn(s.tctx, s.fromDB) // release resources acquired before return with error
 		return err
 	}
 	// baseConn for ddl
@@ -3019,7 +3027,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 	var ddlDBConns []*dbconn.DBConn
 	s.ddlDB, ddlDBConns, err = dbconn.CreateConns(s.tctx, s.cfg, dbCfg, 1)
 	if err != nil {
-		closeUpstreamConn(s.tctx, s.fromDB)
+		dbconn.CloseUpstreamConn(s.tctx, s.fromDB)
 		dbconn.CloseBaseDB(s.tctx, s.toDB)
 		return err
 	}
@@ -3032,7 +3040,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 
 // closeBaseDB closes all opened DBs, rollback for createConns.
 func (s *Syncer) closeDBs() {
-	closeUpstreamConn(s.tctx, s.fromDB)
+	dbconn.CloseUpstreamConn(s.tctx, s.fromDB)
 	dbconn.CloseBaseDB(s.tctx, s.toDB)
 	dbconn.CloseBaseDB(s.tctx, s.ddlDB)
 }
@@ -3305,7 +3313,7 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 
 	var err error
 	s.cfg.From.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDMLConnectionTimeout)
-	s.fromDB, err = createUpStreamConn(s.cfg.From)
+	s.fromDB, err = dbconn.NewUpStreamConn(s.cfg.From)
 	if err != nil {
 		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))
 		return err

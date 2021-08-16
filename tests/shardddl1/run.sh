@@ -503,10 +503,88 @@ function DM_DropAddColumn() {
 	done
 }
 
+function DM_UpdateBARule_CASE() {
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1);"
+	run_sql_source1 "insert into ${shardddl2}.${tb1} values(2);"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(3);"
+	run_sql_source2 "insert into ${shardddl2}.${tb1} values(4);"
+
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col1 int"
+	run_sql_source1 "alter table ${shardddl2}.${tb1} add column new_col1 int"
+	run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col1 int"
+	run_sql_source2 "alter table ${shardddl2}.${tb1} add column new_col1 int"
+
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(5,5);"
+	run_sql_source1 "insert into ${shardddl2}.${tb1} values(6,6);"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(7,7);"
+	run_sql_source2 "insert into ${shardddl2}.${tb1} values(8,8);"
+
+	# source1 db2.tb1 add column and then drop column
+	run_sql_source1 "alter table ${shardddl2}.${tb1} add column new_col2 int"
+	run_sql_source1 "insert into ${shardddl2}.${tb1} values(9,9,9);"
+	run_sql_source1 "alter table ${shardddl2}.${tb1} drop column new_col2"
+	run_sql_source1 "insert into ${shardddl2}.${tb1} values(10,10);"
+
+	# source1 db1.tb1 add column
+	run_sql_source1 "alter table ${shardddl1}.${tb1} add column new_col3 int"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(11,11,11);"
+
+	# source2 db1.tb1 drop column
+	run_sql_source2 "alter table ${shardddl1}.${tb1} drop column new_col1"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(12);"
+
+	# source2 db2.tb1 do a unsupported DDL
+	run_sql_source2 "alter table ${shardddl2}.${tb1} rename column id to new_id;"
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"because schema conflict detected" 1
+
+	# user found error and then change block-allow-list, restart task
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"stop-task test" \
+		"\"result\": true" 3
+
+	cp $cur/conf/double-source-optimistic.yaml $WORK_DIR/task.yaml
+	sed -i 's/do-dbs: \["shardddl1","shardddl2"\]/do-dbs: \["shardddl1"\]/g' $WORK_DIR/task.yaml
+	echo 'ignore-checking-items: ["schema_of_shard_tables"]' >>$WORK_DIR/task.yaml
+
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"start-task $WORK_DIR/task.yaml" \
+		"\"result\": true" 3
+
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(13,13,13);"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(14);"
+	run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb};" "count(1): 14"
+
+	restart_master
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"show-ddl-locks" \
+		"\"ID\": \"test-\`shardddl\`.\`tb\`\"" 1
+
+	run_sql_source1 "alter table ${shardddl1}.${tb1} drop column new_col1"
+	run_sql_source2 "alter table ${shardddl1}.${tb1} add column new_col3 int"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(15,15);"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(16,16);"
+	run_sql_tidb_with_retry "select count(1) from ${shardddl}.${tb};" "count(1): 16"
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"result\": true" 3
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"show-ddl-locks" \
+		"no DDL lock exists" 1
+}
+
+function DM_UpdateBARule() {
+	run_case UpdateBARule "double-source-optimistic" "init_table 111 121 211 221" "clean_table" "optimistic"
+}
+
 function run() {
 	init_cluster
 	init_database
 
+	DM_UpdateBARule
 	DM_DropAddColumn
 	DM_RENAME_TABLE
 	DM_RENAME_COLUMN_OPTIMISTIC
