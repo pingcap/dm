@@ -46,7 +46,6 @@ func (t *openAPISuite) TestRedirectRequestToLeader(c *check.C) {
 	cfg1.PeerUrls = tempurl.Alloc()
 	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
 	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
-	cfg1.OpenAPIAddr = tempurl.Alloc()[len("http://"):]
 
 	s1 := NewServer(cfg1)
 	c.Assert(s1.Start(ctx), check.IsNil)
@@ -66,7 +65,6 @@ func (t *openAPISuite) TestRedirectRequestToLeader(c *check.C) {
 	cfg2.PeerUrls = tempurl.Alloc()
 	cfg2.AdvertisePeerUrls = cfg2.PeerUrls
 	cfg2.Join = cfg1.MasterAddr // join to an existing cluster
-	cfg2.OpenAPIAddr = tempurl.Alloc()[len("http://"):]
 
 	s2 := NewServer(cfg2)
 	c.Assert(s2.Start(ctx), check.IsNil)
@@ -75,10 +73,10 @@ func (t *openAPISuite) TestRedirectRequestToLeader(c *check.C) {
 	needRedirect1, openAPIAddrFromS1, err := s1.redirectRequestToLeader(ctx)
 	c.Assert(err, check.IsNil)
 	c.Assert(needRedirect1, check.Equals, false)
-	c.Assert(openAPIAddrFromS1, check.Equals, s1.cfg.OpenAPIAddr)
+	c.Assert(openAPIAddrFromS1, check.Equals, s1.cfg.AdvertiseAddr)
 
 	needRedirect2, openAPIAddrFromS2, err := s2.redirectRequestToLeader(ctx)
 	c.Assert(err, check.IsNil)
 	c.Assert(needRedirect2, check.Equals, true)
-	c.Assert(openAPIAddrFromS2, check.Equals, s1.cfg.OpenAPIAddr)
+	c.Assert(openAPIAddrFromS2, check.Equals, s1.cfg.AdvertiseAddr)
 }
