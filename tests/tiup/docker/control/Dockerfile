@@ -1,10 +1,12 @@
-FROM golang:1.16
+FROM ubuntu:18.04
 
 RUN apt-get -y -q update && \
     apt-get -y -q install software-properties-common && \
     apt-get install -qqy \
         default-mysql-client \
-        psmisc
+        psmisc \
+        ssh \
+        curl
 
 ADD bashrc /root/.bashrc
 ADD init.sh /init.sh
