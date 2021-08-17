@@ -14,9 +14,15 @@
 package log
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
+	"os"
+	"strings"
 	"testing"
 
+	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
@@ -82,4 +88,65 @@ func (s *testLogSuite) TestLogLevel(c *C) {
 	c.Assert(Props().Level.String(), Equals, zap.InfoLevel.String())
 	c.Assert(L().Check(zap.WarnLevel, "This is a warn log"), NotNil)
 	c.Assert(L().Check(zap.DebugLevel, "This is a debug log"), IsNil)
+}
+
+func captureStdout(f func()) ([]string, error) {
+	r, w, _ := os.Pipe()
+	stdout := os.Stdout
+	os.Stdout = w
+
+	f()
+
+	var buf bytes.Buffer
+	output := make(chan string, 1)
+	errs := make(chan error, 1)
+
+	go func() {
+		_, err := io.Copy(&buf, r)
+		output <- buf.String()
+		errs <- err
+		r.Close()
+	}()
+
+	os.Stdout = stdout
+	w.Close()
+	return strings.Split(<-output, "\n"), <-errs
+}
+
+func (s *testLogSuite) TestInitSlowQueryLoggerInDebugLevel(c *C) {
+	// test slow query logger can write debug log
+	logLevel := "debug"
+	cfg := &Config{Level: logLevel, Format: "json"}
+	cfg.Adjust()
+	output, err := captureStdout(func() {
+		c.Assert(InitLogger(cfg), IsNil)
+		logutil.SlowQueryLogger.Debug("this is test info")
+		appLogger.Debug("this is from applogger")
+	})
+	c.Assert(err, IsNil)
+	c.Assert(output[0], Matches, ".*this is test info.*component.*slow query logger.*")
+	c.Assert(output[1], Matches, ".*this is from applogger.*")
+	// test log is json formart
+	type jsonLog struct {
+		Component string `json:"component"`
+	}
+	oneLog := jsonLog{}
+	c.Assert(json.Unmarshal([]byte(output[0]), &oneLog), IsNil)
+	c.Assert(oneLog.Component, Equals, "slow query logger")
+}
+
+func (s *testLogSuite) TestInitSlowQueryLoggerNotInDebugLevel(c *C) {
+	// test slow query logger can not write log in other log level
+	logLevel := "info"
+	cfg := &Config{Level: logLevel, Format: "json"}
+	cfg.Adjust()
+	output, err := captureStdout(func() {
+		c.Assert(InitLogger(cfg), IsNil)
+		logutil.SlowQueryLogger.Info("this is test info")
+		appLogger.Info("this is from applogger")
+	})
+	c.Assert(err, IsNil)
+	c.Assert(output, HasLen, 2)
+	c.Assert(output[0], Matches, ".*this is from applogger.*")
+	c.Assert(output[1], Equals, "") // no output
 }
