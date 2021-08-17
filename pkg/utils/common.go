@@ -265,10 +265,10 @@ func UnpackTableID(id string) (string, string) {
 
 type session struct {
 	sessionctx.Context
-	vars   *variable.SessionVars
-	values map[fmt.Stringer]interface{}
-
-	mu sync.RWMutex
+	vars                 *variable.SessionVars
+	values               map[fmt.Stringer]interface{}
+	builtinFunctionUsage map[string]uint32
+	mu                   sync.RWMutex
 }
 
 // GetSessionVars implements the sessionctx.Context interface.
@@ -291,6 +291,16 @@ func (se *session) Value(key fmt.Stringer) interface{} {
 	return value
 }
 
+// GetInfoSchema implements the sessionctx.Context interface.
+func (se *session) GetInfoSchema() sessionctx.InfoschemaMetaVersion {
+	return nil
+}
+
+// GetBuiltinFunctionUsage implements the sessionctx.Context interface.
+func (se *session) GetBuiltinFunctionUsage() map[string]uint32 {
+	return se.builtinFunctionUsage
+}
+
 // UTCSession can be used as a sessionctx.Context, with UTC timezone.
 var UTCSession *session
 
@@ -300,6 +310,7 @@ func init() {
 	vars.StmtCtx.TimeZone = time.UTC
 	UTCSession.vars = vars
 	UTCSession.values = make(map[fmt.Stringer]interface{}, 1)
+	UTCSession.builtinFunctionUsage = make(map[string]uint32)
 }
 
 // AdjustBinaryProtocolForDatum converts the data in binlog to TiDB datum.

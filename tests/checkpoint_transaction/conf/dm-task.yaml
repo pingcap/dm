@@ -3,35 +3,33 @@ name: test
 task-mode: all
 is-sharding: false
 meta-schema: "dm_meta"
-# enable-heartbeat: true
+enable-heartbeat: true
+heartbeat-update-interval: 1
+heartbeat-report-interval: 1
 
 target-database:
   host: "127.0.0.1"
-  port: 4400
+  port: 4000
   user: "root"
   password: ""
-  security:
-    ssl-ca: "dir-placeholer/ca.pem"
-    ssl-cert: "dir-placeholer/dm.pem"
-    ssl-key: "dir-placeholer/dm.key"
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    black-white-list:  "instance"
+    block-allow-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
-black-white-list:
+block-allow-list:
   instance:
-    do-dbs: ["tls"]
+    do-dbs: ["checkpoint_transaction"]
 
 mydumpers:
   global:
     threads: 4
-    chunk-filesize: 0
+    chunk-filesize: 64
     skip-tz-utc: true
-    extra-args: "--statement-size=100"
+    extra-args: ""
 
 loaders:
   global:
@@ -41,4 +39,5 @@ loaders:
 syncers:
   global:
     worker-count: 16
-    batch: 100
+    batch: 10000
+    checkpoint-flush-interval: 300
