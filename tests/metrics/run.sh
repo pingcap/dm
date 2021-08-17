@@ -119,7 +119,7 @@ function run() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	# check the dmctl query-status no new dml, lag should be set to 0
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
 		"\"secondsBehindMaster\": \"0\"" 2
 	echo "check zero job done!"

@@ -43,8 +43,8 @@ function run() {
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 	dmctl_start_task "$WORK_DIR/dm-task.yaml" "--remove-meta"
 	# check task has started
-	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\",worker=\"worker1\"}" 3 1 3
-	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\",worker=\"worker2\"}" 3 1 3
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\",worker=\"worker1\"}" 10 1 3
+	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\",worker=\"worker2\"}" 10 1 3
 
 	# use sync_diff_inspector to check full dump loader
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -71,8 +71,8 @@ function run() {
 	# wait for task running
 	check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
 	sleep 2 # still wait for subtask running on other dm-workers
-	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\",worker=\"worker1\"}" 3 1 3
-	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\",worker=\"worker2\"}" 3 1 3
+	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\",worker=\"worker1\"}" 10 1 3
+	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\",worker=\"worker2\"}" 10 1 3
 
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
