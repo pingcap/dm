@@ -184,10 +184,12 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// And curl or safari browser does trigger this problem.
 	// But I haven't figured it out.
 	// (maybe more requests are sent from chrome or its extensions).
+	s.InitOpenAPIHandles()
 	userHandles := map[string]http.Handler{
-		"/apis/":  apiHandler,
-		"/status": getStatusHandle(),
-		"/debug/": getDebugHandler(),
+		"/apis/":   apiHandler,
+		"/status":  getStatusHandle(),
+		"/debug/":  getDebugHandler(),
+		"/api/v1/": s.echo,
 	}
 
 	// gRPC API server
@@ -209,7 +211,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// start leader election
 	// TODO: s.cfg.Name -> address
 	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL,
-		electionKey, s.cfg.Name, s.cfg.AdvertiseAddr, s.cfg.OpenAPIAddr, getLeaderBlockTime)
+		electionKey, s.cfg.Name, s.cfg.AdvertiseAddr, getLeaderBlockTime)
 	if err != nil {
 		return
 	}
@@ -226,12 +228,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	go func() {
 		defer s.bgFunWg.Done()
 		s.electionNotify(ctx)
-	}()
-
-	s.bgFunWg.Add(1)
-	go func() {
-		defer s.bgFunWg.Done()
-		s.StartOpenAPIServer(ctx)
 	}()
 
 	runBackgroundOnce.Do(func() {
@@ -281,6 +277,9 @@ func (s *Server) Close() {
 	// close the etcd and other attached servers
 	if s.etcd != nil {
 		s.etcd.Close()
+	}
+	if s.echo != nil {
+		s.echo.Close()
 	}
 	s.closed.Store(true)
 }
@@ -1795,7 +1794,7 @@ func (s *Server) listMemberLeader(ctx context.Context, names []string) *pb.Membe
 		set[name] = true
 	}
 
-	_, name, addr, _, err := s.election.LeaderInfo(ctx)
+	_, name, addr, err := s.election.LeaderInfo(ctx)
 	if err != nil {
 		resp.Leader.Msg = err.Error()
 		return resp

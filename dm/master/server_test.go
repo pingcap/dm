@@ -1560,10 +1560,10 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(names, check.HasKey, cfg2.Name)
 
 	// s1 is still the leader
-	_, leaderID, _, openAPIADDR, err := s2.election.LeaderInfo(ctx)
+	_, leaderID, _, err := s2.election.LeaderInfo(ctx)
+
 	c.Assert(err, check.IsNil)
 	c.Assert(leaderID, check.Equals, cfg1.Name)
-	c.Assert(openAPIADDR, check.Equals, cfg1.OpenAPIAddr)
 
 	cfg3 := NewConfig()
 	c.Assert(cfg3.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
@@ -1842,7 +1842,7 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 
 	// make sure s3 is not the leader, otherwise it will take some time to campaign a new leader after close s3, and it may cause timeout
 	c.Assert(utils.WaitSomething(20, 500*time.Millisecond, func() bool {
-		_, leaderID, _, _, err = s1.election.LeaderInfo(ctx)
+		_, leaderID, _, err = s1.election.LeaderInfo(ctx)
 		if err != nil {
 			return false
 		}
@@ -1874,13 +1874,11 @@ func (t *testMaster) TestOfflineMember(c *check.C) {
 	c.Assert(listResp.Members[0].Name, check.Equals, cfg1.Name)
 	c.Assert(listResp.Members[1].Name, check.Equals, cfg2.Name)
 
-	// nolint:dogsled
-	_, leaderID2, _, _, err := s1.election.LeaderInfo(ctx)
+	_, leaderID2, _, err := s1.election.LeaderInfo(ctx)
 	c.Assert(err, check.IsNil)
 
 	if leaderID == cfg3.Name {
 		// s3 is leader before, leader should re-campaign
-		c.Assert(leaderID != leaderID2, check.IsTrue)
 		c.Assert(leaderID != leaderID2, check.IsTrue)
 	} else {
 		// s3 isn't leader before, leader should keep the same

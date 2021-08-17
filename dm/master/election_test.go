@@ -73,10 +73,9 @@ func (t *testElectionSuite) TestFailToStartLeader(c *check.C) {
 	defer client.Close()
 
 	// s1 is still the leader
-	_, leaderID, _, openAPIAddr, err := s2.election.LeaderInfo(ctx)
+	_, leaderID, _, err := s2.election.LeaderInfo(ctx)
 	c.Assert(err, check.IsNil)
 	c.Assert(leaderID, check.Equals, cfg1.Name)
-	c.Assert(openAPIAddr, check.Equals, cfg1.OpenAPIAddr)
 
 	// fail to start scheduler/pessimism/optimism
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/FailToStartLeader", `return("dm-master-2")`), check.IsNil)
@@ -87,10 +86,9 @@ func (t *testElectionSuite) TestFailToStartLeader(c *check.C) {
 	time.Sleep(1 * time.Second)
 
 	// s1 is still the leader
-	_, leaderID, _, openAPIAddr, err = s2.election.LeaderInfo(ctx)
+	_, leaderID, _, err = s2.election.LeaderInfo(ctx)
 	c.Assert(err, check.IsNil)
 	c.Assert(leaderID, check.Equals, cfg1.Name)
-	c.Assert(openAPIAddr, check.Equals, cfg1.OpenAPIAddr)
 
 	//nolint:errcheck
 	failpoint.Disable("github.com/pingcap/dm/dm/master/FailToStartLeader")
@@ -98,8 +96,7 @@ func (t *testElectionSuite) TestFailToStartLeader(c *check.C) {
 	time.Sleep(1 * time.Second)
 
 	// s2 now become leader
-	_, leaderID, _, openAPIAddr, err = s2.election.LeaderInfo(ctx)
+	_, leaderID, _, err = s2.election.LeaderInfo(ctx)
 	c.Assert(err, check.IsNil)
 	c.Assert(leaderID, check.Equals, cfg2.Name)
-	c.Assert(openAPIAddr, check.Equals, cfg2.OpenAPIAddr)
 }

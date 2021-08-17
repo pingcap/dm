@@ -37,16 +37,13 @@ const (
 	docJSONBasePath = "/api/v1/dm.json"
 )
 
-// StartOpenAPIServer start OpenAPI server.
-func (s *Server) StartOpenAPIServer(ctx context.Context) {
-	if s.cfg.OpenAPIAddr == "" {
-		return
-	}
+// InitOpenAPIHandles init openapi handlers.
+func (s *Server) InitOpenAPIHandles() {
 	swagger, err := openapi.GetSwagger()
 	if err != nil {
 		exitServer(err)
 	}
-	swagger.AddServer(&openapi3.Server{URL: fmt.Sprintf("http://%s", s.cfg.OpenAPIAddr)})
+	swagger.AddServer(&openapi3.Server{URL: fmt.Sprintf("http://%s", s.cfg.AdvertiseAddr)})
 	swaggerJSON, err := swagger.MarshalJSON()
 	if err != nil {
 		exitServer(err)
@@ -67,20 +64,7 @@ func (s *Server) StartOpenAPIServer(ctx context.Context) {
 	// use our validation middleware to check all requests against the OpenAPI schema.
 	e.Use(middleware.OapiRequestValidator(swagger))
 	openapi.RegisterHandlers(e, s)
-
-	// start server
-	go func() {
-		s.echo = e
-		if err := e.Start(s.cfg.OpenAPIAddr); err != nil && err != http.ErrServerClosed {
-			exitServer(err)
-		}
-	}()
-
-	// wait for ctx.Done()
-	<-ctx.Done()
-	if err := e.Shutdown(ctx); err != nil {
-		log.L().Warn("shutdown echo openapi server", zap.Error(err))
-	}
+	s.echo = e
 }
 
 // redirectRequestToLeader is used to redirect the request to leader.
@@ -88,10 +72,10 @@ func (s *Server) StartOpenAPIServer(ctx context.Context) {
 func (s *Server) redirectRequestToLeader(ctx context.Context) (needRedirect bool, host string, err error) {
 	isLeader, _ := s.isLeaderAndNeedForward(ctx)
 	if isLeader {
-		return false, s.cfg.OpenAPIAddr, nil
+		return false, s.cfg.AdvertiseAddr, nil
 	}
 	// nolint:dogsled
-	_, _, _, leaderOpenAPIAddr, err := s.election.LeaderInfo(ctx)
+	_, _, leaderOpenAPIAddr, err := s.election.LeaderInfo(ctx)
 	return true, leaderOpenAPIAddr, err
 }
 
