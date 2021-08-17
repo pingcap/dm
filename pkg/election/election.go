@@ -54,7 +54,7 @@ type CampaignerInfo struct {
 	ID string `json:"id"`
 	// addr is the campaigner's advertise address
 	Addr string `json:"addr"`
-	// openAddr is the campaigner's advertise address
+	// openAPIAddr is the campaigner's openapi server address
 	OpenAPIAddr string `json:"openAPIAddr,omitempty"`
 }
 
