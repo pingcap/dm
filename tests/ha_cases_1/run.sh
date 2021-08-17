@@ -44,7 +44,7 @@ function test_kill_master() {
 
 	echo "kill dm-master1"
 	ps aux | grep dm-master1 | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT1 20
+	check_master_port_offline 1
 	rm -rf $WORK_DIR/master1/default.master1
 
 	echo "waiting 5 seconds"
