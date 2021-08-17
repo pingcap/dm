@@ -118,7 +118,7 @@ type Server struct {
 
 	closed atomic.Bool
 
-	echo *echo.Echo // inject when echo server is started
+	echo *echo.Echo // injected in `InitOpenAPIHandles`
 }
 
 // NewServer creates a new Server.
@@ -210,8 +210,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// start leader election
 	// TODO: s.cfg.Name -> address
-	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL,
-		electionKey, s.cfg.Name, s.cfg.AdvertiseAddr, getLeaderBlockTime)
+	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name, s.cfg.AdvertiseAddr, getLeaderBlockTime)
 	if err != nil {
 		return
 	}
