@@ -1,4 +1,4 @@
-// Copyright 2019 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,24 +52,23 @@ func (s *Server) StartOpenAPIServer(ctx context.Context) {
 		exitServer(err)
 	}
 	docMW := openapi.NewSwaggerDocUI(openapi.NewSwaggerConfig(docBasePath, docJSONBasePath, ""), swaggerJSON)
-	// Echo instance
 	e := echo.New()
 	// inject err handler
 	e.HTTPErrorHandler = terrorHTTPErrorHandler
-	// Middlewares
+	// middlewares
 	e.Use(docMW)
 	// Set logger
 	logger := log.L().Logger
 	logger = logger.With(zap.String("component", "openapi"))
 	e.Use(openapi.ZapLogger(logger))
 	e.Use(echomiddleware.Recover())
-	// Disables swagger server name validation. It seems to work poorly
+	// disables swagger server name validation. it seems to work poorly
 	swagger.Servers = nil
-	// Use our validation middleware to check all requests against the OpenAPI schema.
+	// use our validation middleware to check all requests against the OpenAPI schema.
 	e.Use(middleware.OapiRequestValidator(swagger))
 	openapi.RegisterHandlers(e, s)
 
-	// Start server
+	// start server
 	go func() {
 		s.echo = e
 		if err := e.Start(s.cfg.OpenAPIAddr); err != nil && err != http.ErrServerClosed {
@@ -77,7 +76,7 @@ func (s *Server) StartOpenAPIServer(ctx context.Context) {
 		}
 	}()
 
-	// Wait for ctx.Done()
+	// wait for ctx.Done()
 	<-ctx.Done()
 	if err := e.Shutdown(ctx); err != nil {
 		log.L().Warn("shutdown echo openapi server", zap.Error(err))
