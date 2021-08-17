@@ -40,8 +40,8 @@ type Unit interface {
 	// if initialing successfully, the outer caller should call `Close` when the unit (or the task) finished, stopped or canceled (because other units Init fail).
 	// if initialing fail, Init itself should release resources it acquired before (rolling itself back).
 	Init(ctx context.Context) error
-	// Process does the main logic and will be blocked until the result is sent to pr.
-	// When ctx.Done, stops the process and returns
+	// Process does the main logic and its returning must send a result to pr channel.
+	// When ctx.Done, stops the process and returns, otherwise the DM-worker will be blocked forever
 	// When not in processing, call Process to continue or resume the process
 	Process(ctx context.Context, pr chan pb.ProcessResult)
 	// Close shuts down the process and closes the unit, after that can not call Process to resume
@@ -50,7 +50,7 @@ type Unit interface {
 	// Pause does some cleanups and the unit can be resumed later. The caller will make sure Process has returned.
 	// The implementation should not block for a long time.
 	Pause()
-	// Resume resumes the paused process
+	// Resume resumes the paused process and its returning must send a result to pr channel.
 	Resume(ctx context.Context, pr chan pb.ProcessResult)
 	// Update updates the configuration
 	Update(cfg *config.SubTaskConfig) error

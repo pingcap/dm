@@ -59,8 +59,7 @@ function lazy_init_tracker() {
 	check_log_not_contains $WORK_DIR/worker1/log/dm-worker.log 'lazy init table info.*t51'
 
 	cleanup_data start_task
-	# schema tracker rolling back 100 tables maybe slow
-	cleanup_process_slow 40
+	cleanup_process
 }
 
 function run() {

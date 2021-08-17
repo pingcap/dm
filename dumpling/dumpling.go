@@ -88,12 +88,6 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	begin := time.Now()
 	errs := make([]*pb.ProcessError, 0, 1)
 
-	failpoint.Inject("dumpUnitProcessForever", func() {
-		m.logger.Info("dump unit runs forever", zap.String("failpoint", "dumpUnitProcessForever"))
-		<-ctx.Done()
-		failpoint.Return()
-	})
-
 	// NOTE: remove output dir before start dumping
 	// every time re-dump, loader should re-prepare
 	err := os.RemoveAll(m.cfg.Dir)
