@@ -65,6 +65,10 @@ function run() {
 	# Column count doesn't match value count
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
+		"originSchema: ${db1}" 1 \
+		"originTable: ${tb1}" 1 \
+		"schema: ${db}" 1 \
+		"table: ${tb}" 1 \
 		"Column count doesn't match value count" 1
 
 	# operate-schema: flush checkpoint default
