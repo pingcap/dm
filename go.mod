@@ -6,8 +6,10 @@ require (
 	github.com/chaos-mesh/go-sqlsmith v0.0.0-20210730091118-5201af078b27
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/coreos/go-semver v0.3.0
+	github.com/deepmap/oapi-codegen v1.8.2
 	github.com/docker/go-units v0.4.0
 	github.com/dustin/go-humanize v1.0.0
+	github.com/getkin/kin-openapi v0.66.0
 	github.com/go-mysql-org/go-mysql v1.1.3-0.20210705101833-83965e516929
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gogo/gateway v1.1.0
@@ -17,6 +19,7 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/grpc-ecosystem/grpc-gateway v1.14.3
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
+	github.com/labstack/echo/v4 v4.4.0
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/dumpling v0.0.0-20210806043112-4e012e54ce89
 	github.com/pingcap/errors v0.11.5-0.20210513014640-40f9a1999b3b
@@ -41,10 +44,11 @@ require (
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200824191128-ae9734ed278b
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.18.1
+	golang.org/x/exp v0.0.0-20200513190911-00229845015e // indirect
 	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210510120138-977fb7262007
-	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
+	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
 	google.golang.org/genproto v0.0.0-20200224152610-e50cd9704f63
 	google.golang.org/grpc v1.27.1
 	gopkg.in/yaml.v2 v2.4.0

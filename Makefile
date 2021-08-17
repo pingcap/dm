@@ -90,6 +90,11 @@ generate_proto: tools_setup
 generate_mock: tools_setup
 	./tests/generate-mock.sh
 
+generate_openapi: tools_setup
+	@echo "generate_openapi"
+	tools/bin/oapi-codegen --config=openapi/spec/server-gen-cfg.yaml openapi/spec/dm.yaml
+	tools/bin/oapi-codegen --config=openapi/spec/types-gen-cfg.yaml openapi/spec/dm.yaml
+
 test: unit_test integration_test
 
 define run_unit_test
@@ -172,6 +177,15 @@ dm_integration_test_build: tools_setup
 	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-syncer.test github.com/pingcap/dm/cmd/dm-syncer \
+		|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(FAILPOINT_DISABLE)
+	tests/prepare_tools.sh
+
+dm_integration_test_build_master: tools_setup
+	$(FAILPOINT_ENABLE)
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 	tests/prepare_tools.sh

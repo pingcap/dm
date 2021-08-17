@@ -50,6 +50,7 @@ const (
 	ClassSchemaTracker
 	ClassScheduler
 	ClassDMCtl
+	ClassOpenAPI
 	ClassNotSet
 )
 
