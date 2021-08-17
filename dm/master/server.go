@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -116,6 +117,8 @@ type Server struct {
 	bgFunWg sync.WaitGroup
 
 	closed atomic.Bool
+
+	echo *echo.Echo // inject when echo server is started
 }
 
 // NewServer creates a new Server.
@@ -129,7 +132,6 @@ func NewServer(cfg *Config) *Server {
 	server.pessimist = shardddl.NewPessimist(&logger, server.getTaskResources)
 	server.optimist = shardddl.NewOptimist(&logger)
 	server.closed.Store(true)
-
 	setUseTLS(&cfg.Security)
 
 	return &server
@@ -206,7 +208,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// start leader election
 	// TODO: s.cfg.Name -> address
-	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name, s.cfg.AdvertiseAddr, getLeaderBlockTime)
+	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL,
+		electionKey, s.cfg.Name, s.cfg.AdvertiseAddr, s.cfg.OpenAPIAddr, getLeaderBlockTime)
 	if err != nil {
 		return
 	}
@@ -223,6 +226,12 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	go func() {
 		defer s.bgFunWg.Done()
 		s.electionNotify(ctx)
+	}()
+
+	s.bgFunWg.Add(1)
+	go func() {
+		defer s.bgFunWg.Done()
+		s.StartOpenAPIServer(ctx)
 	}()
 
 	runBackgroundOnce.Do(func() {
@@ -458,7 +467,12 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				s.removeMetaLock.Unlock()
 				return resp, nil
 			}
-			err = s.removeMetaData(ctx, cfg)
+			toDB := cfg.TargetDB
+			toDB.Adjust()
+			if len(toDB.Password) > 0 {
+				toDB.Password = utils.DecryptOrPlaintext(toDB.Password)
+			}
+			err = s.removeMetaData(ctx, cfg.Name, cfg.MetaSchema, *toDB)
 			if err != nil {
 				resp.Msg = terror.Annotate(err, "while removing metadata").Error()
 				s.removeMetaLock.Unlock()
@@ -1094,29 +1108,30 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 		if err != nil {
 			return cfgs, err
 		}
-		dbConfig := cfg.GenerateDBConfig()
-
-		fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
-		if err != nil {
+		if err := checkAndAdjustSourceConfig(ctx, cfg); err != nil {
 			return cfgs, err
 		}
-		if err = cfg.Adjust(ctx, fromDB.DB); err != nil {
-			fromDB.Close()
-			return cfgs, err
-		}
-		if _, err = cfg.Yaml(); err != nil {
-			fromDB.Close()
-			return cfgs, err
-		}
-
-		if err = cfg.Verify(); err != nil {
-			return cfgs, err
-		}
-
-		fromDB.Close()
 		cfgs[i] = cfg
 	}
 	return cfgs, nil
+}
+
+func checkAndAdjustSourceConfig(ctx context.Context, cfg *config.SourceConfig) error {
+	dbConfig := cfg.GenerateDBConfig()
+	fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
+	if err != nil {
+		return err
+	}
+	defer fromDB.Close()
+	if err = cfg.Adjust(ctx, fromDB.DB); err != nil {
+		fromDB.Close()
+		return err
+	}
+	if _, err = cfg.Yaml(); err != nil {
+		fromDB.Close()
+		return err
+	}
+	return cfg.Verify()
 }
 
 func parseSourceConfig(contents []string) ([]*config.SourceConfig, error) {
@@ -1395,29 +1410,23 @@ func withHost(addr string) string {
 	return addr
 }
 
-func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) error {
-	toDB := *cfg.TargetDB
-	toDB.Adjust()
-	if len(toDB.Password) > 0 {
-		toDB.Password = utils.DecryptOrPlaintext(toDB.Password)
-	}
-
+func (s *Server) removeMetaData(ctx context.Context, taskName, metaSchema string, toDBCfg config.DBConfig) error {
 	// clear shard meta data for pessimistic/optimist
-	err := s.pessimist.RemoveMetaData(cfg.Name)
+	err := s.pessimist.RemoveMetaData(taskName)
 	if err != nil {
 		return err
 	}
-	err = s.optimist.RemoveMetaData(cfg.Name)
+	err = s.optimist.RemoveMetaData(taskName)
 	if err != nil {
 		return err
 	}
-	err = s.scheduler.RemoveLoadTask(cfg.Name)
+	err = s.scheduler.RemoveLoadTask(taskName)
 	if err != nil {
 		return err
 	}
 
 	// set up db and clear meta data in downstream db
-	baseDB, err := conn.DefaultDBProvider.Apply(toDB)
+	baseDB, err := conn.DefaultDBProvider.Apply(toDBCfg)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -1438,17 +1447,17 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 	sqls := make([]string, 0, 4)
 	// clear loader and syncer checkpoints
 	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
-		dbutil.TableName(cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))))
+		dbutil.TableName(metaSchema, cputil.LoaderCheckpoint(taskName))))
 	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
-		dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))))
+		dbutil.TableName(metaSchema, cputil.SyncerCheckpoint(taskName))))
 	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
-		dbutil.TableName(cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name))))
+		dbutil.TableName(metaSchema, cputil.SyncerShardMeta(taskName))))
 	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
-		dbutil.TableName(cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name))))
+		dbutil.TableName(metaSchema, cputil.SyncerOnlineDDL(taskName))))
 
-	_, err = dbConn.ExecuteSQL(ctctx, nil, cfg.Name, sqls)
+	_, err = dbConn.ExecuteSQL(ctctx, nil, taskName, sqls)
 	if err == nil {
-		metrics.RemoveDDLPending(cfg.Name)
+		metrics.RemoveDDLPending(taskName)
 	}
 	return err
 }
@@ -1786,7 +1795,7 @@ func (s *Server) listMemberLeader(ctx context.Context, names []string) *pb.Membe
 		set[name] = true
 	}
 
-	_, name, addr, err := s.election.LeaderInfo(ctx)
+	_, name, addr, _, err := s.election.LeaderInfo(ctx)
 	if err != nil {
 		resp.Leader.Msg = err.Error()
 		return resp
