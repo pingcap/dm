@@ -5,8 +5,10 @@ set -eu
 cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
+db1="downstream_more_column1"
+tb1="t1"
 db="downstream_more_column"
-tb="t1"
+tb="t"
 
 function run() {
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -32,9 +34,13 @@ function run() {
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
+		"originSchema: ${db1}" 1 \
+		"originTable: ${tb1}" 1 \
+		"schema: ${db}" 1 \
+		"table: ${tb}" 1 \
 		"Column count doesn't match value count" 1
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"operate-schema set -s mysql-replica-01 test -d ${db} -t ${tb} $cur/data/schema.sql" \
+		"operate-schema set -s mysql-replica-01 test -d ${db1} -t ${tb1} $cur/data/schema.sql" \
 		"\"result\": true" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -63,7 +69,7 @@ function run() {
 
 	# operate-schema: flush checkpoint default
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"operate-schema set -s mysql-replica-01 test -d ${db} -t ${tb} $cur/data/schema.sql" \
+		"operate-schema set -s mysql-replica-01 test -d ${db1} -t ${tb1} $cur/data/schema.sql" \
 		"\"result\": true" 2
 	check_log_contain_with_retry 'flush table info' $WORK_DIR/worker1/log/dm-worker.log
 
