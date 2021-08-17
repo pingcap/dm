@@ -320,7 +320,7 @@ function DM_RemoveLock_CASE() {
 
 function DM_RemoveLock() {
 	ps aux | grep dm-master | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT1 20
+	check_master_port_offline 1
 	export GO_FAILPOINTS="github.com/pingcap/dm/dm/master/shardddl/SleepWhenRemoveLock=return(30)"
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
@@ -341,7 +341,7 @@ function DM_RemoveLock() {
 
 	export GO_FAILPOINTS=""
 	ps aux | grep dm-master | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT1 20
+	check_master_port_offline 1
 	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \

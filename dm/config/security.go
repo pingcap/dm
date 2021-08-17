@@ -13,7 +13,10 @@
 
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"io/ioutil"
+)
 
 // Security config.
 type Security struct {
@@ -21,6 +24,9 @@ type Security struct {
 	SSLCert       string   `toml:"ssl-cert" json:"ssl-cert" yaml:"ssl-cert"`
 	SSLKey        string   `toml:"ssl-key" json:"ssl-key" yaml:"ssl-key"`
 	CertAllowedCN strArray `toml:"cert-allowed-cn" json:"cert-allowed-cn" yaml:"cert-allowed-cn"`
+	SSLCABytes    []byte   `toml:"ssl-ca-bytes" json:"-" yaml:"ssl-ca-bytes"`
+	SSLKEYBytes   []byte   `toml:"ssl-key-bytes" json:"-" yaml:"ssl-key-bytes"`
+	SSLCertBytes  []byte   `toml:"ssl-cert-bytes" json:"-" yaml:"ssl-cert-bytes"`
 }
 
 // used for parse string slice in flag.
@@ -33,4 +39,42 @@ func (i *strArray) String() string {
 func (i *strArray) Set(value string) error {
 	*i = append(*i, value)
 	return nil
+}
+
+// LoadTLSContent load all tls config from file.
+func (s *Security) LoadTLSContent() error {
+	if len(s.SSLCABytes) > 0 {
+		// already loaded
+		return nil
+	}
+
+	if s.SSLCA != "" {
+		dat, err := ioutil.ReadFile(s.SSLCA)
+		if err != nil {
+			return err
+		}
+		s.SSLCABytes = dat
+	}
+	if s.SSLCert != "" {
+		dat, err := ioutil.ReadFile(s.SSLCert)
+		if err != nil {
+			return err
+		}
+		s.SSLCertBytes = dat
+	}
+	if s.SSLKey != "" {
+		dat, err := ioutil.ReadFile(s.SSLKey)
+		if err != nil {
+			return err
+		}
+		s.SSLKEYBytes = dat
+	}
+	return nil
+}
+
+// ClearSSLBytesData clear all tls config bytes data.
+func (s *Security) ClearSSLBytesData() {
+	s.SSLCABytes = s.SSLCABytes[:0]
+	s.SSLKEYBytes = s.SSLKEYBytes[:0]
+	s.SSLCertBytes = s.SSLCertBytes[:0]
 }
