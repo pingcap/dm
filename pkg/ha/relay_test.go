@@ -26,7 +26,7 @@ func (t *testForEtcd) TestGetRelayConfigEtcd(c *C) {
 		worker = "dm-worker-1"
 		source = "mysql-replica-1"
 	)
-	cfg, err := config.LoadFromFile(sourceSampleFile)
+	cfg, err := config.LoadFromFile(sourceSampleFilePath)
 	c.Assert(err, IsNil)
 	cfg.SourceID = source
 	// no relay source and config
