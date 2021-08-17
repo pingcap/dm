@@ -88,6 +88,8 @@ var (
 	maxDMLConnectionDuration, _ = time.ParseDuration(maxDMLConnectionTimeout)
 	maxDMLExecutionDuration     = 30 * time.Second
 
+	maxPauseOrStopWaitTime = 10 * time.Second
+
 	adminQueueName     = "admin queue"
 	defaultBucketCount = 8
 )
@@ -102,6 +104,15 @@ const (
 
 	skipLagKey = "skip"
 	ddlLagKey  = "ddl"
+)
+
+// waitXIDStatus represents the status for waiting XID event when pause/stop task.
+type waitXIDStatus int64
+
+const (
+	noWait waitXIDStatus = iota
+	waiting
+	waitComplete
 )
 
 // Syncer can sync your MySQL data to another MySQL database.
@@ -134,10 +145,13 @@ type Syncer struct {
 	ddlDB     *conn.BaseDB
 	ddlDBConn *dbconn.DBConn
 
-	jobs               []chan *job
-	jobsClosed         atomic.Bool
-	jobsChanLock       sync.Mutex
-	queueBucketMapping []string
+	jobs                []chan *job
+	jobsClosed          atomic.Bool
+	jobsChanLock        sync.Mutex
+	queueBucketMapping  []string
+	waitXIDJob          atomic.Int64
+	isTransactionEnd    bool
+	waitTransactionLock sync.Mutex
 
 	c *causality
 
@@ -224,6 +238,8 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.cfg = cfg
 	syncer.tctx = tcontext.Background().WithLogger(logger)
 	syncer.jobsClosed.Store(true) // not open yet
+	syncer.waitXIDJob.Store(int64(noWait))
+	syncer.isTransactionEnd = true
 	syncer.closed.Store(false)
 	syncer.lastBinlogSizeCount.Store(0)
 	syncer.binlogSizeCount.Store(0)
@@ -544,6 +560,8 @@ func (s *Syncer) reset() {
 	s.execError.Store(nil)
 	s.setErrLocation(nil, nil, false)
 	s.isReplacingErr = false
+	s.waitXIDJob.Store(int64(noWait))
+	s.isTransactionEnd = true
 
 	switch s.cfg.ShardMode {
 	case config.ShardPessimistic:
@@ -652,7 +670,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		if utils.IsContextCanceledError(err) {
-			s.tctx.L().Info("filter out error caused by user cancel")
+			s.tctx.L().Info("filter out error caused by user cancel", log.ShortError(err))
 		} else {
 			metrics.SyncerExitWithErrorCounter.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Inc()
 			errsMu.Lock()
@@ -908,6 +926,9 @@ var (
 )
 
 func (s *Syncer) addJob(job *job) error {
+	s.waitTransactionLock.Lock()
+	defer s.waitTransactionLock.Unlock()
+
 	failpoint.Inject("countJobFromOneEvent", func() {
 		if job.currentLocation.Position.Compare(lastLocation.Position) == 0 {
 			lastLocationNum++
@@ -944,10 +965,23 @@ func (s *Syncer) addJob(job *job) error {
 			s.tctx.L().Info("meet the second job of a GTID", zap.Any("binlog position", lastLocation))
 		}
 	})
+
+	failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
+		if waitXIDStatus(s.waitXIDJob.Load()) == waiting {
+			s.tctx.L().Info("not receive xid job yet", zap.Any("next job", job))
+		}
+	})
+
+	if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
+		s.tctx.L().Info("All jobs is completed before syncer close, the coming job will be reject", zap.Any("job", job))
+		return nil
+	}
 	var queueBucket int
 	switch job.tp {
 	case xid:
+		s.waitXIDJob.CAS(int64(waiting), int64(waitComplete))
 		s.saveGlobalPoint(job.location)
+		s.isTransactionEnd = true
 		return nil
 	case skip:
 		s.updateReplicationLag(job, skipLagKey)
@@ -979,6 +1013,11 @@ func (s *Syncer) addJob(job *job) error {
 		startTime := time.Now()
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
+		s.isTransactionEnd = false
+		failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
+			s.tctx.L().Info("receive dml job", zap.Any("dml job", job))
+			time.Sleep(100 * time.Millisecond)
+		})
 		metrics.AddJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	}
 
@@ -1316,7 +1355,7 @@ func (s *Syncer) syncDML(
 			time.Sleep(time.Duration(t) * time.Second)
 		})
 		// use background context to execute sqls as much as possible
-		ctctx, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLExecutionDuration)
+		ctctx, cancel := tctx.WithTimeout(maxDMLExecutionDuration)
 		defer cancel()
 		affect, err := db.ExecuteSQL(ctctx, queries, args...)
 		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
@@ -1360,6 +1399,9 @@ func (s *Syncer) syncDML(
 		case sqlJob, ok := <-jobChan:
 			metrics.QueueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
 			if !ok {
+				if len(jobs) > 0 {
+					tctx.L().Warn("have unexecuted jobs when close job chan!", zap.Any("rest job", jobs))
+				}
 				return
 			}
 			idx++
@@ -1404,7 +1446,9 @@ func (s *Syncer) syncDML(
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
-	tctx := s.tctx.WithContext(ctx)
+	runCtx, runCancel := context.WithCancel(context.Background())
+	defer runCancel()
+	tctx := s.tctx.WithContext(runCtx)
 
 	defer func() {
 		if s.done != nil {
@@ -1412,8 +1456,38 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}()
 
+	go func() {
+		<-ctx.Done()
+		select {
+		case <-runCtx.Done():
+		default:
+			tctx.L().Info("received subtask's done")
+
+			s.waitTransactionLock.Lock()
+			if s.isTransactionEnd {
+				s.waitXIDJob.Store(int64(waitComplete))
+				s.jobWg.Wait()
+				tctx.L().Info("the last job is transaction end, done directly")
+				runCancel()
+				s.waitTransactionLock.Unlock()
+				return
+			}
+			s.waitXIDJob.Store(int64(waiting))
+			s.waitTransactionLock.Unlock()
+
+			select {
+			case <-runCtx.Done():
+				tctx.L().Info("received syncer's done")
+			case <-time.After(maxPauseOrStopWaitTime):
+				tctx.L().Info("wait transaction end timeout")
+				s.jobWg.Wait()
+				runCancel()
+			}
+		}
+	}()
+
 	// some initialization that can't be put in Syncer.Init
-	fresh, err := s.IsFreshTask(ctx)
+	fresh, err := s.IsFreshTask(runCtx)
 	if err != nil {
 		return err
 	} else if fresh {
@@ -1467,7 +1541,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	updateTSOffset := func() error {
 		t1 := time.Now()
-		ts, tsErr := s.fromDB.GetServerUnixTS(ctx)
+		ts, tsErr := s.fromDB.GetServerUnixTS(runCtx)
 		rtt := time.Since(t1).Seconds()
 		if tsErr == nil {
 			s.tsOffset.Store(time.Now().Unix() - ts - int64(rtt/2))
@@ -1491,7 +1565,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if utErr := updateTSOffset(); utErr != nil {
 					s.tctx.L().Error("get server unix ts err", zap.Error(utErr))
 				}
-			case <-ctx.Done():
+			case <-runCtx.Done():
 				return
 			}
 		}
@@ -1530,27 +1604,19 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
 		workerLagKey := dmlWorkerLagKey(i)
 		go func(i int, name, workerLagKey string) {
-			ctx2, cancel := context.WithCancel(ctx)
-			ctctx := s.tctx.WithContext(ctx2)
-			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i], workerLagKey)
-			cancel()
+			s.syncDML(tctx, name, s.toDBConns[i], s.jobs[i], workerLagKey)
 		}(i, name, workerLagKey)
 	}
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
 	go func() {
-		ctx2, cancel := context.WithCancel(ctx)
-		ctctx := s.tctx.WithContext(ctx2)
-		s.syncDDL(ctctx, adminQueueName, s.ddlDBConn, s.jobs[s.cfg.WorkerCount])
-		cancel()
+		s.syncDDL(tctx, adminQueueName, s.ddlDBConn, s.jobs[s.cfg.WorkerCount])
 	}()
 
 	s.wg.Add(1)
 	go func() {
-		ctx2, cancel := context.WithCancel(ctx)
-		s.printStatus(ctx2)
-		cancel()
+		s.printStatus(runCtx)
 	}()
 
 	// syncing progress with sharding DDL group
@@ -1916,6 +1982,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err := s.handleEventError(err2, startLocation, currentLocation, e.Header.EventType == replication.QUERY_EVENT, originSQL); err != nil {
 				return err
 			}
+		}
+		if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
+			return nil
 		}
 	}
 }
@@ -3163,7 +3232,6 @@ func (s *Syncer) Pause() {
 		s.tctx.L().Warn("try to pause, but already closed")
 		return
 	}
-
 	s.stopSync()
 }
 
