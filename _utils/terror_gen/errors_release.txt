@@ -514,4 +514,6 @@ ErrSchedulerSourceOpRelayExist,[code=46023:class=scheduler:scope=internal:level=
 ErrCtlGRPCCreateConn,[code=48001:class=dmctl:scope=internal:level=high], "Message: can not create grpc connection, Workaround: Please check your network connection."
 ErrCtlInvalidTLSCfg,[code=48002:class=dmctl:scope=internal:level=medium], "Message: invalid TLS config, Workaround: Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line."
 ErrCtlLoadTLSCfg,[code=48003:class=dmctl:scope=internal:level=high], "Message: can not load tls config, Workaround: Please ensure that the tls certificate is accessible on the node currently running dmctl."
+ErrOpenAPICommonError,[code=49001:class=unknown "error class: 19:scope=internal:level=high], Message: some unforeseen errors have occurred, please check the detailed error message"
+ErrOpenAPITaskSourceNotFound,[code=49002:class=unknown "error class: 19:scope=internal:level=high], Message: data source configuration not found, Workaround: please check if the data source exists in the configuration file"
 ErrNotSet,[code=50000:class=not-set:scope=not-set:level=high]
