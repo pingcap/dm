@@ -250,7 +250,7 @@ function DM_125_CASE {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	# FIXME: dm-master should remove this lock after all shards are synced.
 	run_dm_ctl_with_rematch $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"show-ddl-locks" \
+		"shard-ddl-lock" \
 		"\"unsynced\": \[[\n ]*\]" 1
 }
 
@@ -286,7 +286,7 @@ function DM_126_CASE {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	# FIXME: dm-master should remove this lock after all shards are synced.
 	run_dm_ctl_with_rematch $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"show-ddl-locks" \
+		"shard-ddl-lock" \
 		"\"unsynced\": \[[\n ]*\]" 1
 }
 
@@ -322,7 +322,7 @@ function DM_127_CASE {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	# FIXME: dm-master should remove this lock after all shards are synced.
 	run_dm_ctl_with_rematch $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"show-ddl-locks" \
+		"shard-ddl-lock" \
 		"\"unsynced\": \[[\n ]*\]" 1
 }
 
