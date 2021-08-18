@@ -1303,6 +1303,8 @@ func (s *Syncer) syncDML(
 		}
 		idx = 0
 		jobs = jobs[0:0]
+		// clear tpCnt map
+		tpCnt = make(map[string]map[string]map[opType]int64)
 	}
 
 	// successF is used to calculate lag metric and q/tps.
@@ -1330,7 +1332,9 @@ func (s *Syncer) syncDML(
 			for dbTable, tpM := range tableM {
 				for tpName, cnt := range tpM {
 					tpCnt[dbSchema][dbTable][tpName] = 0
-					s.addCount(true, queueBucket, tpName, cnt, dbSchema, dbTable)
+					if count > 0 {
+						s.addCount(true, queueBucket, tpName, cnt, dbSchema, dbTable)
+					}
 				}
 			}
 		}

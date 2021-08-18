@@ -150,7 +150,7 @@ var (
 			Namespace: "dm",
 			Subsystem: "syncer",
 			Name:      "binlog_event_row",
-			Help:      "current bin log event row number",
+			Help:      "number of rows in a binlog event",
 		}, []string{"worker", "task", "source_id"})
 
 	SQLRetriesTotal = metricsproxy.NewCounterVec(
@@ -252,7 +252,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "replication_transaction_batch",
 			Help:      "number of sql's contained in a transaction that executed to downstream",
-			Buckets:   prometheus.ExponentialBuckets(1, 10, 5), // exponential from 1 to 10000
+			Buckets:   prometheus.LinearBuckets(1, 50, 21), // linear from 1 to 1001
 		}, []string{"worker", "task", "source_id", "queueNo"})
 
 	FlushCheckPointsTimeInterval = metricsproxy.NewGaugeVec(

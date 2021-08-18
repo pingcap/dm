@@ -16,7 +16,7 @@ function check_seconds_behind_master() {
 		query_msg=$(cat $WORK_DIR/query-status.log)
 		cnt=$(echo "${query_msg}" | jq -r --arg min_val $min_val '.sources[].subTaskStatus[].sync | select((.secondsBehindMaster|tonumber)>($min_val | tonumber)).secondsBehindMaster' | wc -l)
 		if [ $cnt != $need_cnt ]; then
-			echo "check check_seconds_behind_master faild, cnt: $need_cnt current retry cnt: $k"
+			echo "check check_seconds_behind_master failed, cnt: $need_cnt current retry cnt: $k"
 		else
 			all_matched=true
 			break
@@ -28,7 +28,7 @@ function check_seconds_behind_master() {
 		echo "check check_seconds_behind_master success"
 	else
 		exit 1
-		echo "check check_seconds_behind_master faild, cnt: $need_cnt after retry 10 times"
+		echo "check check_seconds_behind_master failed, cnt: $need_cnt after retry 10 times"
 	fi
 
 }

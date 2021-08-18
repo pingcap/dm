@@ -33,7 +33,7 @@ function check_row_count() {
 	[ "$estimate" == "$row_count" ]
 }
 
-function test_save_checkpoint_faild() {
+function test_save_checkpoint_failed() {
 	prepare_datafile
 	run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
@@ -59,13 +59,13 @@ function test_save_checkpoint_faild() {
 	# check dump files are generated before worker down
 	ls $WORK_DIR/worker1/dumped_data.test
 
-	echo "test_save_checkpoint_faild SUCCESS!"
+	echo "test_save_checkpoint_failed SUCCESS!"
 	cleanup_data load_interrupt
 	cleanup_process $*
 }
 
 function run() {
-	test_save_checkpoint_faild
+	test_save_checkpoint_failed
 
 	prepare_datafile
 	run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1

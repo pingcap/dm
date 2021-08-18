@@ -70,7 +70,7 @@ function run() {
 
 	# wait for task running
 	check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"stage": "Running"' 10
-	sleep 2 # still wait for subtask running on other dm-workers
+
 	check_metric $WORKER1_PORT "dm_worker_task_state{source_id=\"mysql-replica-01\",task=\"test\",worker=\"worker1\"}" 10 1 3
 	check_metric $WORKER2_PORT "dm_worker_task_state{source_id=\"mysql-replica-02\",task=\"test\",worker=\"worker2\"}" 10 1 3
 
@@ -111,7 +111,6 @@ trap "cleanup_data Upper_DB Upper_DB1 lower_db UPPER_DB_ROUTE sync_diff_inspecto
 cleanup_process $*
 cleanup_data Upper_DB Upper_DB1 lower_db UPPER_DB_ROUTE
 run
-cleanup_data Upper_DB Upper_DB1 lower_db UPPER_DB_ROUTE
 cleanup_process $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"

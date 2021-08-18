@@ -72,11 +72,10 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 				curFinished := size.Load()
 				speed := float64(curFinished-l.dbTableDataLastFinishedSize[db][table]) / printStatusInterval.Seconds()
 				l.dbTableDataLastFinishedSize[db][table] = curFinished
-				var remainingSeconds float64
 				if speed > 0 {
-					remainingSeconds = float64(l.dbTableDataTotalSize[db][table].Load()-curFinished) / speed
+					remainingSeconds := float64(l.dbTableDataTotalSize[db][table].Load()-curFinished) / speed
+					remainingTimeGauge.WithLabelValues(l.cfg.Name, l.cfg.WorkerName, l.cfg.SourceID, db, table).Set(remainingSeconds)
 				}
-				remainingTimeGauge.WithLabelValues(l.cfg.Name, l.cfg.WorkerName, l.cfg.SourceID, db, table).Set(remainingSeconds)
 			}
 		}
 

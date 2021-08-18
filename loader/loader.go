@@ -1056,7 +1056,7 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		if _, ok := l.dbTableDataTotalSize[db][table]; !ok {
 			l.dbTableDataTotalSize[db][table] = atomic.NewInt64(0)
 			l.dbTableDataFinishedSize[db][table] = atomic.NewInt64(0)
-			l.dbTableDataLastFinishedSize[db][table] = int64(0)
+			l.dbTableDataLastFinishedSize[db][table] = 0
 		}
 		l.dbTableDataTotalSize[db][table].Add(size)
 
