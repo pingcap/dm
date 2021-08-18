@@ -519,5 +519,5 @@ func (s *maxIntervalRetryStrategy) CanRetry(err error) bool {
 	lastErrTime := s.lastErrTime
 	s.lastErrTime = now
 	s.lastErr = err
-	return lastErrTime.Add(s.interval).After(now)
+	return lastErrTime.Add(s.interval).Before(now)
 }
