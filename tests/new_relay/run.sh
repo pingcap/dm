@@ -119,7 +119,7 @@ function run() {
 
 	# config export
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"config export -d /tmp/configs" \
+		"config export -p /tmp/configs" \
 		"export configs to directory .* succeed" 1
 
 	# check configs
@@ -145,7 +145,7 @@ function run() {
 
 	# import configs
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"config import -d /tmp/configs" \
+		"config import -p /tmp/configs" \
 		"creating sources" 1 \
 		"creating tasks" 1 \
 		"The original relay workers have been exported to" 1 \
