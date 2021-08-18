@@ -28,7 +28,7 @@ import (
 func NewStartRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start-relay <-s source-id> <worker-name> [...worker-name]",
-		Short: "Starts workers pulling relay log for a source.",
+		Short: "Starts workers pulling relay log for a source",
 		RunE:  startRelayFunc,
 	}
 	return cmd
@@ -38,7 +38,7 @@ func NewStartRelayCmd() *cobra.Command {
 func NewStopRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop-relay <-s source-id> <worker-name> [...worker-name]",
-		Short: "Stops workers pulling relay log for a source.",
+		Short: "Stops workers pulling relay log for a source",
 		RunE:  stopRelayFunc,
 	}
 	return cmd
