@@ -216,9 +216,6 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				continue
 			}
 			txnHistogram.WithLabelValues(w.cfg.Name, w.cfg.WorkerName, w.cfg.SourceID, job.schema, job.table).Observe(time.Since(startTime).Seconds())
-			w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
-			w.loader.dbTableDataFinishedSize[job.sourceSchema][job.sourceTable].Add(job.offset - job.lastOffset)
-
 			failpoint.Inject("loaderCPUpdateOffsetError", func(_ failpoint.Value) {
 				job.file = "notafile" + job.file
 			})
@@ -226,6 +223,13 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				runFatalChan <- unit.NewProcessError(err)
 				hasError = true
 				continue
+			}
+			// update finished offset after checkpoint updated
+			w.loader.finishedDataSize.Store(job.offset)
+			if _, ok := w.loader.dbTableDataFinishedSize[job.sourceSchema]; ok {
+				if _, ok := w.loader.dbTableDataFinishedSize[job.sourceSchema][job.sourceTable]; ok {
+					w.loader.dbTableDataFinishedSize[job.sourceSchema][job.sourceTable].Store(job.offset)
+				}
 			}
 		}
 	}
@@ -440,7 +444,7 @@ type Loader struct {
 	// to calculate remainingTimeGauge metric, map will be init in `l.prepare.prepareDataFiles`
 	dbTableDataTotalSize        map[string]map[string]*atomic.Int64
 	dbTableDataFinishedSize     map[string]map[string]*atomic.Int64
-	dbTableDataLastFinishedSize map[string]map[string]*atomic.Int64
+	dbTableDataLastFinishedSize map[string]map[string]*int64
 
 	metaBinlog     atomic.String
 	metaBinlogGTID atomic.String
@@ -1047,12 +1051,12 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		if _, ok := l.dbTableDataTotalSize[db]; !ok {
 			l.dbTableDataTotalSize[db] = make(map[string]*atomic.Int64)
 			l.dbTableDataFinishedSize[db] = make(map[string]*atomic.Int64)
-			l.dbTableDataLastFinishedSize[db] = make(map[string]*atomic.Int64)
+			l.dbTableDataLastFinishedSize[db] = make(map[string]*int64)
 		}
 		if _, ok := l.dbTableDataTotalSize[db][table]; !ok {
 			l.dbTableDataTotalSize[db][table] = atomic.NewInt64(0)
 			l.dbTableDataFinishedSize[db][table] = atomic.NewInt64(0)
-			l.dbTableDataLastFinishedSize[db][table] = atomic.NewInt64(0)
+			l.dbTableDataLastFinishedSize[db][table] = new(int64)
 		}
 		l.dbTableDataTotalSize[db][table].Add(size)
 
@@ -1077,7 +1081,7 @@ func (l *Loader) prepare() error {
 	l.finishedDataSize.Store(0) // reset before load from checkpoint
 	l.dbTableDataTotalSize = make(map[string]map[string]*atomic.Int64)
 	l.dbTableDataFinishedSize = make(map[string]map[string]*atomic.Int64)
-	l.dbTableDataLastFinishedSize = make(map[string]map[string]*atomic.Int64)
+	l.dbTableDataLastFinishedSize = make(map[string]map[string]*int64)
 
 	// check if mydumper dir data exists.
 	if !utils.IsDirExists(l.cfg.Dir) {
