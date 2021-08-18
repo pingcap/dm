@@ -70,8 +70,8 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 		for db, tables := range l.dbTableDataFinishedSize {
 			for table, size := range tables {
 				curFinished := size.Load()
-				speed := float64(curFinished-*l.dbTableDataLastFinishedSize[db][table]) / printStatusInterval.Seconds()
-				l.dbTableDataLastFinishedSize[db][table] = &curFinished
+				speed := float64(curFinished-l.dbTableDataLastFinishedSize[db][table]) / printStatusInterval.Seconds()
+				l.dbTableDataLastFinishedSize[db][table] = curFinished
 				var remainingSeconds float64
 				if speed > 0 {
 					remainingSeconds = float64(l.dbTableDataTotalSize[db][table].Load()-curFinished) / speed
