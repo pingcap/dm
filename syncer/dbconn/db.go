@@ -188,8 +188,8 @@ func (conn *DBConn) ExecuteSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 			if err == nil {
 				cost := time.Since(startTime)
 				metrics.TxnHistogram.WithLabelValues(conn.Cfg.Name, conn.Cfg.WorkerName, conn.Cfg.SourceID).Observe(cost.Seconds())
-				// calculate idealJobCount metric: connection count * 1/ (one sql cost time)
-				qps := float64(conn.Cfg.WorkerCount) * float64(1) / (cost.Seconds() / float64(len(queries)))
+				// calculate idealJobCount metric: connection count * 1 / (one sql cost time)
+				qps := float64(conn.Cfg.WorkerCount) / (cost.Seconds() / float64(len(queries)))
 				metrics.IdealQPS.WithLabelValues(conn.Cfg.Name, conn.Cfg.WorkerName, conn.Cfg.SourceID).Set(qps)
 				if cost.Seconds() > 1 {
 					ctx.L().Warn("execute transaction",

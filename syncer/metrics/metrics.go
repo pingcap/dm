@@ -118,7 +118,7 @@ var (
 			Namespace: "dm",
 			Subsystem: "syncer",
 			Name:      "ideal_qps",
-			Help:      "remain size of the DML queue",
+			Help:      "the highest QPS that can be achieved ideally",
 		}, []string{"task", "worker", "source_id"})
 
 	QueueSizeGauge = metricsproxy.NewGaugeVec(
@@ -203,7 +203,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "replication_lag",
 			Help:      "replication lag in second between mysql and syncer",
-			Buckets:   prometheus.ExponentialBuckets(0.0000005, 2, 25), // this should be very fast.
+			Buckets:   prometheus.ExponentialBuckets(0.5, 2, 600), // exponential from 0.5s to 10m
 		}, []string{"task", "source_id", "worker"})
 
 	RemainingTimeGauge = metricsproxy.NewGaugeVec(
@@ -246,12 +246,13 @@ var (
 			Help:      "total number of finished transaction",
 		}, []string{"task", "worker", "source_id"})
 
-	ReplicationTransactionBatch = metricsproxy.NewGaugeVec(
-		prometheus.GaugeOpts{
+	ReplicationTransactionBatch = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
 			Name:      "replication_transaction_batch",
 			Help:      "number of sql's contained in a transaction that executed to downstream",
+			Buckets:   prometheus.ExponentialBuckets(1, 10, 100), // exponential from 1 to 1000
 		}, []string{"worker", "task", "source_id", "queueNo"})
 
 	FlushCheckPointsTimeInterval = metricsproxy.NewGaugeVec(

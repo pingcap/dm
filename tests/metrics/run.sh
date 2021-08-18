@@ -97,7 +97,7 @@ function run() {
 	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 999
 	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 999
 
-	# new metric finished_transaction_total,dm_syncer_ideal_qps,dm_syncer_binlog_event_row exists
+	# new metric finished_transaction_total,dm_syncer_ideal_qps,dm_syncer_binlog_event_row  replication_transaction_batch exists
 	check_metric $WORKER1_PORT 'dm_syncer_finished_transaction_total{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 99999
 	check_metric $WORKER2_PORT 'dm_syncer_finished_transaction_total{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 99999
 
@@ -106,6 +106,9 @@ function run() {
 
 	check_metric $WORKER1_PORT 'dm_syncer_binlog_event_row{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 0 99999
 	check_metric $WORKER2_PORT 'dm_syncer_binlog_event_row{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 0 99999
+
+	check_metric $WORKER1_PORT 'dm_syncer_replication_transaction_batch_count' 5 0 99999
+	check_metric $WORKER2_PORT 'dm_syncer_replication_transaction_batch_count' 5 0 99999
 
 	check_seconds_behind_master 1 2
 	echo "check dml/skip done!"

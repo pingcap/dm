@@ -226,7 +226,7 @@ type Syncer struct {
 	tsOffset                  atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster       atomic.Int64             // current task delay second behind upstream
 	workerLagMap              map[string]*atomic.Int64 // worker's sync lag key:WorkerLagKey val: lag
-	lastCheckpointFlushedTime *time.Time
+	lastCheckpointFlushedTime time.Time
 }
 
 // NewSyncer creates a new Syncer.
@@ -265,6 +265,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	}
 	syncer.recordedActiveRelayLog = false
 	syncer.workerLagMap = make(map[string]*atomic.Int64, cfg.WorkerCount+2) // map size = WorkerCount + ddlkey + skipkey
+	syncer.lastCheckpointFlushedTime = time.Time{}
 	return syncer
 }
 
@@ -1154,11 +1155,11 @@ func (s *Syncer) flushCheckPoints() error {
 	}
 
 	now := time.Now()
-	if s.lastCheckpointFlushedTime != nil {
-		duration := now.Sub(*s.lastCheckpointFlushedTime).Seconds()
+	if !s.lastCheckpointFlushedTime.IsZero() {
+		duration := now.Sub(s.lastCheckpointFlushedTime).Seconds()
 		metrics.FlushCheckPointsTimeInterval.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Set(duration)
 	}
-	s.lastCheckpointFlushedTime = &now
+	s.lastCheckpointFlushedTime = now
 
 	s.tctx.L().Info("after last flushing checkpoint, DM has ignored row changes by expression filter",
 		zap.Int64("number of filtered insert", s.filteredInsert.Load()),
@@ -1333,7 +1334,7 @@ func (s *Syncer) syncDML(
 				}
 			}
 		}
-		metrics.ReplicationTransactionBatch.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID, queueBucket).Set(float64(len(jobs)))
+		metrics.ReplicationTransactionBatch.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID, queueBucket).Observe(float64(len(jobs)))
 	}
 
 	fatalF := func(affected int, err error) {
