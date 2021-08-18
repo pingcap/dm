@@ -270,8 +270,12 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 
 	event, err = streamer.GetEvent(ctx)
 	cancel()
-	failpoint.Inject("GetEventError", func() {
-		err = errors.New("go-mysql returned an error")
+	failpoint.Inject("GetEventError", func(val failpoint.Value) {
+		errStr, ok := val.(string)
+		if !ok || errStr == "" {
+			errStr = "go-mysql returned an error"
+		}
+		err = errors.New(errStr)
 	})
 	if err != nil {
 		if err != context.Canceled && err != context.DeadlineExceeded {
