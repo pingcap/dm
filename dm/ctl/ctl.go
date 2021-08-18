@@ -215,7 +215,7 @@ func MainStart(args []string) {
 		cfg := common.NewConfig(cmd.Flags())
 		err := cfg.Adjust()
 		if err != nil {
-			return errors.Annotatef(err, "the current command parameter: --config is invalid or used incorrectly")
+			return err
 		}
 
 		err = cfg.Validate()
