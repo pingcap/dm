@@ -804,6 +804,54 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 	sourceBound1.Source = ""
 	sourceBound1.IsDeleted = true
 	checkSourceBoundCh()
+
+	// case 4: scheduler is restarted, but worker also broke after scheduler is down, then start another worker
+	// step 6: add another worker -> stop scheduler -> stop worker keepalive -> restart scheduler
+	//		   scheduler should unbound the source and rebound it to the newly alive worker
+
+	// first let the source bound again
+	ctx4, cancel4 := context.WithCancel(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx4, etcdTestCli, workerName1, keepAliveTTL), IsNil)
+	}()
+	sourceBound1.Source = sourceID1
+	sourceBound1.IsDeleted = false
+	checkSourceBoundCh()
+
+	var (
+		workerName2 = "dm-worker-2"
+		workerAddr2 = "127.0.0.1:8263"
+		workerInfo2 = ha.NewWorkerInfo(workerName2, workerAddr2)
+	)
+
+	// add another worker
+	c.Assert(s.AddWorker(workerName2, workerAddr2), IsNil)
+	t.workerExist(c, s, workerInfo2)
+
+	// step 2.2: worker start keepAlive
+	go func() {
+		c.Assert(ha.KeepAlive(ctx, etcdTestCli, workerName2, keepAliveTTL), IsNil)
+	}()
+
+	s.Close() // stop scheduler
+	cancel4() // stop worker keepalive
+	wg.Wait()
+	// check whether keepalive lease is out of date
+	time.Sleep(time.Duration(keepAliveTTL) * time.Second)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
+		return err == nil && len(kam) == 1
+	}), IsTrue)
+	c.Assert(sourceBoundCh, HasLen, 0)
+	c.Assert(s.Start(ctx, etcdTestCli), IsNil) // restart scheduler
+	c.Assert(s.BoundSources(), HasLen, 1)
+	w := s.workers[workerName2]
+	c.Assert(w.stage, Equals, WorkerBound)
+	c.Assert(w.bound.Source, Equals, sourceID1)
+	unbounds = s.UnboundSources()
+	c.Assert(unbounds, HasLen, 0)
 }
 
 func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
