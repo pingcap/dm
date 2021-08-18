@@ -1751,6 +1751,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		startTime := time.Now()
 		e, err = s.getEvent(tctx, currentLocation)
 
+		failpoint.Inject("GetEventError", func() {
+			err = errors.New("get event failed: injected error")
+		})
+
 		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
 			if intVal, ok := val.(int); ok && intVal == 1 {
 				s.tctx.L().Warn("fail to get event", zap.String("failpoint", "SafeModeExit"))
@@ -1781,11 +1785,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err
 			}
 
-			if s.streamerController.CanRetry() {
+			if s.streamerController.CanRetry(err) {
 				err = s.streamerController.ResetReplicationSyncer(tctx, lastLocation)
 				if err != nil {
 					return err
 				}
+				log.L().Info("reset replication binlog puller")
 				continue
 			}
 
