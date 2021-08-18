@@ -27,7 +27,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var ts = check.Suite(&openAPISuite{})
+var openAPITestSuite = check.Suite(&openAPISuite{})
 
 type openAPISuite struct {
 	testT *testing.T
