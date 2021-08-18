@@ -203,7 +203,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "replication_lag",
 			Help:      "replication lag in second between mysql and syncer",
-			Buckets:   prometheus.ExponentialBuckets(0.5, 2, 600), // exponential from 0.5s to 10m
+			Buckets:   prometheus.ExponentialBuckets(0.5, 2, 12), // exponential from 0.5s to 1024s
 		}, []string{"task", "source_id", "worker"})
 
 	RemainingTimeGauge = metricsproxy.NewGaugeVec(
@@ -252,7 +252,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "replication_transaction_batch",
 			Help:      "number of sql's contained in a transaction that executed to downstream",
-			Buckets:   prometheus.ExponentialBuckets(1, 10, 100), // exponential from 1 to 1000
+			Buckets:   prometheus.ExponentialBuckets(1, 10, 5), // exponential from 1 to 10000
 		}, []string{"worker", "task", "source_id", "queueNo"})
 
 	FlushCheckPointsTimeInterval = metricsproxy.NewGaugeVec(
