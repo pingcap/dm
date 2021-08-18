@@ -1,10 +1,11 @@
 package syncer
 
 import (
+	"time"
+
 	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"time"
 )
 
 func (s *testSyncerSuite) TestIsConnectionRefusedError(c *C) {

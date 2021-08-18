@@ -36,10 +36,8 @@ import (
 	"github.com/pingcap/dm/syncer/dbconn"
 )
 
-var (
-	// the minimal interval to retry reset binlog streamer
-	minErrorRetryInterval = 1 * time.Minute
-)
+// the minimal interval to retry reset binlog streamer.
+var minErrorRetryInterval = 1 * time.Minute
 
 // StreamerProducer provides the ability to generate binlog streamer by StartSync()
 // but go-mysql StartSync() returns (struct, err) rather than (interface, err)

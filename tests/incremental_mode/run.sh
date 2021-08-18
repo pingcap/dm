@@ -169,7 +169,7 @@ function run() {
 	check_port_offline $WORKER1_PORT 20
 	check_port_offline $WORKER2_PORT 20
 
-  # only mock pull binlog failed once
+	# only mock pull binlog failed once
 	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/WaitUserCancel=return(8);github.com/pingcap/dm/syncer/GetEventError=1*return"
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
