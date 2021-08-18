@@ -4149,12 +4149,11 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(dm_syncer_replication_transaction_batch{task=~\"$task\",source_id=~\"$source\",instance=~\"$instance\"}) by (task,source_id,instance)",
-          "format": "time_series",
-          "interval": "$interval",
-          "intervalFactor": 2,
-          "legendFormat": "{{task}} - {{source_id}} - {{instance}} -  90",
-          "refId": "A"
+          "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_replication_transaction_batch_bucket{instance=~\"$instance\",task=~\"$task\"}[$interval])) by (le,instance,task,queueNo))",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{task}} - {{queueNo}}",
+          "refId": "B"
         }
       ],
       "thresholds": [],
