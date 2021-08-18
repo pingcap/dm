@@ -75,6 +75,9 @@ func NewRootCmd() *cobra.Command {
 		master.NewTransferSourceCmd(),
 		master.NewStartRelayCmd(),
 		master.NewStopRelayCmd(),
+		master.NewBinlogCmd(),
+		master.NewShardDDLLockCmd(),
+		master.NewSourceTableSchemaCmd(),
 		master.NewConfigCmd(),
 		newDecryptCmd(),
 		newEncryptCmd(),
@@ -82,7 +85,7 @@ func NewRootCmd() *cobra.Command {
 	// copied from (*cobra.Command).InitDefaultHelpCmd
 	helpCmd := &cobra.Command{
 		Use:   "help [command]",
-		Short: "Gets help about any command.",
+		Short: "Gets help about any command",
 		Long: `Help provides help for any command in the application.
 Simply type ` + cmd.Name() + ` help [path to command] for full details.`,
 
@@ -236,7 +239,7 @@ func MainStart(args []string) {
 func newEncryptCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "encrypt <plain-text>",
-		Short: "Encrypts plain text to cipher text.",
+		Short: "Encrypts plain text to cipher text",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return cmd.Help()

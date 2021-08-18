@@ -139,7 +139,7 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
 
 	# second, skip the unsupported ddl
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip" \
+		"binlog skip test" \
 		"\"result\": true" 3
 
 	# dmls fail
@@ -152,10 +152,10 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
 	# TODO: support set schema automatically base on upstream schema
 	echo 'CREATE TABLE `tb1` ( `c` int NOT NULL, `b` varchar(10) DEFAULT NULL, PRIMARY KEY (`c`)) ENGINE=InnoDB DEFAULT CHARSET=latin1' >${WORK_DIR}/schema1.sql
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"operate-schema set -s mysql-replica-01 test -d ${shardddl1} -t ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
+		"binlog-schema update -s mysql-replica-01 test ${shardddl1} ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
 		"\"result\": true" 2
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"operate-schema set -s mysql-replica-02 test -d ${shardddl1} -t ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
+		"binlog-schema update -s mysql-replica-02 test ${shardddl1} ${tb1} ${WORK_DIR}/schema1.sql --flush --sync" \
 		"\"result\": true" 2
 
 	# fourth, resume-task. don't check "result: true" here, because worker may run quickly and meet the error from tb2
@@ -174,7 +174,7 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
 	# This may only work for a "rename ddl"
 	echo 'CREATE TABLE `tb2` ( `c` int NOT NULL, `b` varchar(10) DEFAULT NULL, PRIMARY KEY (`c`)) ENGINE=InnoDB DEFAULT CHARSET=latin1' >${WORK_DIR}/schema2.sql
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"operate-schema set -s mysql-replica-02 test -d ${shardddl1} -t ${tb2} ${WORK_DIR}/schema2.sql --flush --sync" \
+		"binlog-schema update -s mysql-replica-02 test ${shardddl1} ${tb2} ${WORK_DIR}/schema2.sql --flush --sync" \
 		"\"result\": true" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -188,7 +188,7 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
 
 	# skip source2.table2's ddl
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -s mysql-replica-02" \
+		"binlog skip test -s mysql-replica-02" \
 		"\"result\": true" 2
 
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -217,7 +217,7 @@ function DM_RENAME_COLUMN_OPTIMISTIC_CASE() {
 		"query-status test" \
 		"\"result\": true" 3
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"show-ddl-locks" \
+		"shard-ddl-lock" \
 		"no DDL lock exists" 1
 }
 
@@ -280,7 +280,7 @@ function DM_RECOVER_LOCK_CASE() {
 
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"show-ddl-locks" \
+		"shard-ddl-lock" \
 		"no DDL lock exists" 1
 }
 
@@ -365,14 +365,14 @@ function DM_RestartMaster_CASE() {
 			'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` DOUBLE' 2 \
 			'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` TEXT' 2
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"show-ddl-locks" \
+			"shard-ddl-lock" \
 			'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c`' 1
 	else
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"query-status test" \
 			'because schema conflict detected' 1
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"show-ddl-locks" \
+			"shard-ddl-lock" \
 			'mysql-replica-01-`shardddl1`.`tb1`' 1 \
 			'mysql-replica-02-`shardddl1`.`tb1`' 1
 	fi
@@ -385,14 +385,14 @@ function DM_RestartMaster_CASE() {
 			'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` DOUBLE' 2 \
 			'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c` TEXT' 2
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"show-ddl-locks" \
+			"shard-ddl-lock" \
 			'ALTER TABLE `shardddl`.`tb` ADD COLUMN `c`' 1
 	else
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"query-status test" \
 			'because schema conflict detected' 1
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"show-ddl-locks" \
+			"shard-ddl-lock" \
 			'mysql-replica-01-`shardddl1`.`tb1`' 1 \
 			'mysql-replica-02-`shardddl1`.`tb1`' 1
 	fi
@@ -439,7 +439,7 @@ function DM_DropAddColumn_CASE() {
 	check_log_contain_with_retry 'finish to handle ddls in optimistic shard mode' $WORK_DIR/worker2/log/dm-worker.log
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"show-ddl-locks" \
+		"shard-ddl-lock" \
 		"no DDL lock exists" 1
 
 	run_sql_source1 "alter table ${shardddl1}.${tb1} drop column b;"
@@ -474,12 +474,12 @@ function DM_DropAddColumn_CASE() {
 	# try to fix data
 	echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' >${WORK_DIR}/schema.sql
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"operate-schema set test ${WORK_DIR}/schema.sql -s mysql-replica-01 -d ${shardddl1} -t ${tb1}" \
+		"binlog-schema update test ${shardddl1} ${tb1} ${WORK_DIR}/schema.sql -s mysql-replica-01" \
 		"\"result\": true" 2
 
 	# skip this error
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip" \
+		"binlog skip test" \
 		"\"result\": true" 2 \
 		"\"source 'mysql-replica-02' has no error\"" 1
 

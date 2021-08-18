@@ -16,13 +16,24 @@ target-database:
 mysql-instances:
   - source-id: "mysql-replica-01"
     black-white-list:  "instance" # compatible with deprecated config
+    route-rules: [ "downstream-table-rules","downstream-schema-rules" ]
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
 black-white-list: # compatible with deprecated config
   instance:
-    do-dbs: ["downstream_more_column"]
+    do-dbs: ["downstream_more_column*"]
+
+routes:
+  downstream-table-rules:
+    schema-pattern: "downstream_more_column*"
+    target-schema: "downstream_more_column"
+    table-pattern: "t*"
+    target-table: "t"
+  downstream-schema-rules:
+    schema-pattern: "downstream_more_column*"
+    target-schema: "downstream_more_column"
 
 mydumpers:
   global:
