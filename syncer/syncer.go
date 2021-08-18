@@ -1751,10 +1751,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		startTime := time.Now()
 		e, err = s.getEvent(tctx, currentLocation)
 
-		failpoint.Inject("GetEventError", func() {
-			err = errors.New("get event failed: injected error")
-		})
-
 		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
 			if intVal, ok := val.(int); ok && intVal == 1 {
 				s.tctx.L().Warn("fail to get event", zap.String("failpoint", "SafeModeExit"))
