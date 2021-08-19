@@ -40,14 +40,10 @@ const (
 // InitOpenAPIHandles init openapi handlers.
 func (s *Server) InitOpenAPIHandles() {
 	swagger, err := openapi.GetSwagger()
-	if err != nil {
-		exitServer(err)
-	}
+	checkServerErr(err)
 	swagger.AddServer(&openapi3.Server{URL: fmt.Sprintf("http://%s", s.cfg.AdvertiseAddr)})
 	swaggerJSON, err := swagger.MarshalJSON()
-	if err != nil {
-		exitServer(err)
-	}
+	checkServerErr(err)
 	docMW := openapi.NewSwaggerDocUI(openapi.NewSwaggerConfig(docBasePath, docJSONBasePath, ""), swaggerJSON)
 	e := echo.New()
 	// inject err handler
@@ -148,7 +144,9 @@ func sendHTTPErrorResp(ctx echo.Context, code int, message string) error {
 	return ctx.JSON(http.StatusBadRequest, err)
 }
 
-func exitServer(err error) {
-	log.L().Error("fail to start dm-master", zap.Error(err))
-	os.Exit(2)
+func checkServerErr(err error) {
+	if err != nil {
+		log.L().Error("fail to start dm-master", zap.Error(err))
+		os.Exit(2)
+	}
 }

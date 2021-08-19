@@ -1253,7 +1253,7 @@ var (
 
 	// openapi.
 	ErrOpenAPICommonError        = New(codeOpenAPICommon, ClassOpenAPI, ScopeInternal, LevelHigh, "some unforeseen errors have occurred, please check the detailed error message", "")
-	ErrOpenAPITaskSourceNotFound = New(codeOpenAPITaskSourceNotFound, ClassOpenAPI, ScopeInternal, LevelHigh, "data source configuration not found", "please check if the data source exists in the configuration file")
+	ErrOpenAPITaskSourceNotFound = New(codeOpenAPITaskSourceNotFound, ClassOpenAPI, ScopeInternal, LevelHigh, "data source configuration not found", "Please check if the data source exists in the configuration file.")
 
 	// default error.
 	ErrNotSet = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")
