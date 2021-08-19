@@ -46,6 +46,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/checker"
+	common2 "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/master/scheduler"
@@ -198,7 +199,6 @@ func (t *testMaster) TearDownSuite(c *check.C) {
 }
 
 func (t *testMaster) SetUpTest(c *check.C) {
-	c.Logf("Current running test=%s", c.TestName())
 	t.testEtcdCluster = integration.NewClusterV3(t.testT, &integration.ClusterConfig{Size: 1})
 	t.etcdTestCli = t.testEtcdCluster.RandClient()
 	t.clearEtcdEnv(c)
@@ -406,9 +406,16 @@ func (t *testMaster) testMockSchedulerForRelay(ctx context.Context, wg *sync.Wai
 		cancels = append(cancels, cancel1)
 		go func(ctx context.Context, workerName string) {
 			defer wg.Done()
-			// TODO: why this will get context cancel?
 			c.Assert(ha.KeepAlive(ctx, t.etcdTestCli, workerName, keepAliveTTL), check.IsNil)
 		}(ctx1, name)
+
+		// wait the mock worker has alive
+		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+			resp, err2 := t.etcdTestCli.Get(ctx, common2.WorkerKeepAliveKeyAdapter.Encode(name))
+			c.Assert(err2, check.IsNil)
+			return resp.Count == 1
+		}), check.IsTrue)
+
 		c.Assert(scheduler2.StartRelay(sources[i], []string{workers[i]}), check.IsNil)
 		idx := i
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
