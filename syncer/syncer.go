@@ -1925,6 +1925,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		var originSQL string // show origin sql when error, only ddl now
 		var err2 error
+
+		failpoint.Inject("IgnoreSomeTypeEvent", func(val failpoint.Value) {
+			if e.Header.EventType.String() == val.(string) {
+				tctx.L().Debug("IgnoreSomeTypeEvent", zap.Reflect("event", e))
+				failpoint.Continue()
+			}
+		})
+
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			err2 = s.handleRotateEvent(ev, ec)
