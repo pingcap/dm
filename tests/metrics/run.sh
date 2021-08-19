@@ -99,7 +99,7 @@ function run() {
 	inject_points=(
 		"github.com/pingcap/dm/syncer/changeTickerInterval=return(5)"
 		"github.com/pingcap/dm/syncer/noJobInQueueLog=return()"
-		"github.com/pingcap/dm/syncer/IgnoreSomeTypeEvent=return(\"HeartbeatEvent)"
+		"github.com/pingcap/dm/syncer/IgnoreSomeTypeEvent=return(\"HeartbeatEvent\")"
 	)
 	# Since the following test needs to ensure that the dml queue is empty for a long time,
 	# it needs to ignore upstream heartbeat events to ensure that flushjobs are not triggered
