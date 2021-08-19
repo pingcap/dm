@@ -103,6 +103,7 @@ function run() {
 	check_port_offline $WORKER2_PORT 20
 
 	# start a task in `incremental` mode
+
 	# using account with limited privileges
 	run_sql_file $cur/data/db1.prepare.user.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_count 'Query OK, 0 rows affected' 7
@@ -153,7 +154,7 @@ function run() {
 	sed -i "s/binlog-gtid-placeholder-2/$gtid2/g" $WORK_DIR/dm-task.yaml
 
 	# test graceful display error
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/GetEventError=return()"
+	export GO_FAILPOINTS='github.com/pingcap/dm/syncer/GetEventError=return'
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -168,7 +169,8 @@ function run() {
 	check_port_offline $WORKER1_PORT 20
 	check_port_offline $WORKER2_PORT 20
 
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/WaitUserCancel=return(8)"
+	# only mock pull binlog failed once
+	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/WaitUserCancel=return(8);github.com/pingcap/dm/syncer/GetEventError=1*return"
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -188,6 +190,9 @@ function run() {
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
 		"Running" 4
+	# check reset binlog puller success
+	grep -Fq "reset replication binlog puller" $WORK_DIR/worker1/log/dm-worker.log
+	grep -Fq "reset replication binlog puller" $WORK_DIR/worker2/log/dm-worker.log
 	# we use failpoint to let worker sleep 8 second when executeSQLs, to increase possibility of
 	# meeting an error of context cancel.
 	# when below check pass, it means we filter out that error, or that error doesn't happen.
