@@ -509,7 +509,7 @@ func (s alwaysRetryStrategy) CanRetry(error) bool {
 	return true
 }
 
-// maxIntervalRetryStrategy allows retry the duration since last retry is bigger than specified interval.
+// maxIntervalRetryStrategy allows retry when the retry interval is greater than the set interval.
 type maxIntervalRetryStrategy struct {
 	interval    time.Duration
 	lastErr     error
