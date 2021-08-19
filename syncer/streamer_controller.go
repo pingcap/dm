@@ -138,6 +138,12 @@ func NewStreamerController(
 			interval: minErrorRetryInterval,
 		}
 	}
+	// let local binlog also return error to avoid infinity loop
+	failpoint.Inject("GetEventError", func() {
+		strategy = &maxIntervalRetryStrategy{
+			interval: minErrorRetryInterval,
+		}
+	})
 	streamerController := &StreamerController{
 		initBinlogType:    binlogType,
 		currentBinlogType: binlogType,
@@ -270,12 +276,8 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 
 	event, err = streamer.GetEvent(ctx)
 	cancel()
-	failpoint.Inject("GetEventError", func(val failpoint.Value) {
-		errStr, ok := val.(string)
-		if !ok || errStr == "" {
-			errStr = "go-mysql returned an error"
-		}
-		err = errors.New(errStr)
+	failpoint.Inject("GetEventError", func() {
+		err = errors.New("go-mysql returned an error")
 	})
 	if err != nil {
 		if err != context.Canceled && err != context.DeadlineExceeded {
