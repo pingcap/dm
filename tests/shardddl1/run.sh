@@ -413,6 +413,11 @@ function DM_RestartMaster() {
 function restart_master_on_pos() {
 	if [ "$1" = "$2" ]; then
 		restart_master
+		# because we disabled auto-resume feature to satisfy other tests, we manually resume once to handle task was paused
+		# by errors of master restarting
+		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+			"resume-task test" \
+			"\"result\": true" 3
 	fi
 }
 
