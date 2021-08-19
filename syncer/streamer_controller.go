@@ -217,7 +217,7 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, loca
 		}
 	}
 
-	if c.initBinlogType == LocalBinlog && c.meetError {
+	if c.currentBinlogType == LocalBinlog && c.meetError {
 		// meetError is true means meets error when get binlog event, in this case use remote binlog as default
 		if !uuidSameWithUpstream {
 			// if the binlog position's uuid is different from the upstream, can not switch to remote binlog
