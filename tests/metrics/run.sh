@@ -101,6 +101,8 @@ function run() {
 		"github.com/pingcap/dm/syncer/noJobInQueueLog=return()"
 		"github.com/pingcap/dm/syncer/IgnoreSomeTypeEvent=return(\"HeartbeatEvent)"
 	)
+	# Since the following test needs to ensure that the dml queue is empty for a long time,
+	# it needs to ignore upstream heartbeat events to ensure that flushjobs are not triggered
 	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 	# First set the ticker interval to 5s -> expect the execSQL interval to be greater than 5s
 	# At 5s, the first no job log will appear in the log
