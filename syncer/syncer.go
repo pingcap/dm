@@ -2181,7 +2181,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		param.safeMode = ec.safeMode
 		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
+			return terror.Annotatef(err, "gen insert sqls failed, originSchema: %s, originTable: %s, schema: %s, table: %s", originSchema, originTable, schemaName, tableName)
 		}
 		metrics.BinlogEvent.WithLabelValues("write_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = insert
@@ -2195,7 +2195,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		param.safeMode = ec.safeMode
 		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
+			return terror.Annotatef(err, "gen update sqls failed, originSchema: %s, originTable: %s, schema: %s, table: %s", originSchema, originTable, schemaName, tableName)
 		}
 		metrics.BinlogEvent.WithLabelValues("update_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = update
@@ -2208,7 +2208,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
+			return terror.Annotatef(err, "gen delete sqls failed, originSchema: %s, originTable: %s, schema: %s, table: %s", originSchema, originTable, schemaName, tableName)
 		}
 		metrics.BinlogEvent.WithLabelValues("delete_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = del
