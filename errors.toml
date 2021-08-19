@@ -3094,16 +3094,16 @@ description = ""
 workaround = "Please ensure that the tls certificate is accessible on the node currently running dmctl."
 tags = ["internal", "high"]
 
-[error.DM-unknown error class: 19-49001]
+[error.DM-openapi-49001]
 message = "some unforeseen errors have occurred, please check the detailed error message"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
 
-[error.DM-unknown error class: 19-49002]
+[error.DM-openapi-49002]
 message = "data source configuration not found"
 description = ""
-workaround = "please check if the data source exists in the configuration file"
+workaround = "Please check if the data source exists in the configuration file."
 tags = ["internal", "high"]
 
 [error.DM-not-set-50000]

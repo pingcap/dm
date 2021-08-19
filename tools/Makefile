@@ -30,6 +30,5 @@ gofumports:
 shfmt:
 	go build -o bin/$@ mvdan.cc/sh/v3/cmd/shfmt
 
-
 oapi-codegen:
 	go build -o bin/$@ github.com/deepmap/oapi-codegen/cmd/oapi-codegen

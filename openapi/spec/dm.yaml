@@ -1,6 +1,6 @@
 openapi: "3.0.0"
 info:
-  title: DM OpenAPI 文档
+  title: DM OpenAPI DOC
   version: "2.0.6"
 externalDocs:
   description: "DM OpenAPI DOC"
