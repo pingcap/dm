@@ -8,11 +8,10 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run() {
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-	# syncer will auto retry pull binlog the first time it meets an error, so we should let it return
-	# error twice to let syncer actully fails.
+	# need to return error three times, first for switch to remote binlog, second for auto retry
 	inject_points=(
 		"github.com/pingcap/dm/syncer/SyncerGetEventError=return"
-		"github.com/pingcap/dm/syncer/GetEventError=2*return"
+		"github.com/pingcap/dm/syncer/GetEventError=3*return"
 	)
 	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 
