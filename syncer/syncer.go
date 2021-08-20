@@ -1781,11 +1781,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err
 			}
 
-			if s.streamerController.CanRetry() {
+			if s.streamerController.CanRetry(err) {
 				err = s.streamerController.ResetReplicationSyncer(tctx, lastLocation)
 				if err != nil {
 					return err
 				}
+				log.L().Info("reset replication binlog puller")
 				continue
 			}
 
