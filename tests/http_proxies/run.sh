@@ -33,7 +33,8 @@ function test_dm() {
 
 	# check dm ctl output
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"query-status test" "$env_name=$env_val" 1
+		"query-status test" "$env_name=$env_val" 1 \
+		'"result": false' 1
 
 	unset $env_name
 }
@@ -47,12 +48,15 @@ function run() {
 
 	echo "test dm grpc proxy env setting checking for no_proxy=localhost,127.0.0.1"
 	test_dm "no_proxy" "localhost,127.0.0.1"
+
+	kill_dm_master
+
 }
 
-cleanup_data http_proxies
+cleanup_process
 
-cleanup_process $*
 run
-cleanup_process $*
+
+cleanup_process
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
