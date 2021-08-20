@@ -49,14 +49,11 @@ function run() {
 	echo "test dm grpc proxy env setting checking for no_proxy=localhost,127.0.0.1"
 	test_dm "no_proxy" "localhost,127.0.0.1"
 
-	kill_dm_master
-
+	# kill_dm_master
 }
 
 cleanup_process
-
 run
-
 cleanup_process
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
