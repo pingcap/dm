@@ -2,7 +2,6 @@ package dbconn
 
 import (
 	"database/sql"
-	"fmt"
 	"strings"
 	"time"
 
@@ -111,10 +110,10 @@ func (conn *DBConn) QuerySQL(tctx *tcontext.Context, query string, args ...inter
 				ds := cost.Seconds()
 				metrics.QueryHistogram.WithLabelValues(conn.Cfg.Name).Observe(ds)
 				if ds > 1 {
-					ctx.L().Warn(fmt.Sprintf("query statement too slow for %vs", ds),
+					ctx.L().Warn("query statement too slow",
+						zap.Duration("cost time", cost),
 						zap.String("query", utils.TruncateString(query, -1)),
-						zap.String("argument", utils.TruncateInterface(args, -1)),
-						zap.Duration("cost time", cost))
+						zap.String("argument", utils.TruncateInterface(args, -1)))
 				}
 			}
 			return ret, err
@@ -194,10 +193,10 @@ func (conn *DBConn) ExecuteSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 				ds := cost.Seconds()
 				metrics.TxnHistogram.WithLabelValues(conn.Cfg.Name).Observe(ds)
 				if ds > 1 {
-					ctx.L().Warn(fmt.Sprintf("execute transaction too slow for %vs", ds),
+					ctx.L().Warn("execute transaction too slow",
+						zap.Duration("cost time", cost),
 						zap.String("query", utils.TruncateInterface(queries, -1)),
-						zap.String("argument", utils.TruncateInterface(args, -1)),
-						zap.Duration("cost time", cost))
+						zap.String("argument", utils.TruncateInterface(args, -1)))
 				}
 			}
 			return ret, err
