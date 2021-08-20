@@ -27,9 +27,10 @@ import (
 // NewOperateSchemaCmd creates a OperateSchema command.
 func NewOperateSchemaCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "operate-schema <operate-type> <-s source ...> <task-name | task-file> <-d database> <-t table> [schema-file] [--flush] [--sync]",
-		Short: "`get`/`set`/`remove` the schema for an upstream table.",
-		RunE:  operateSchemaCmd,
+		Use:    "operate-schema <operate-type> <-s source ...> <task-name | task-file> <-d database> <-t table> [schema-file] [--flush] [--sync]",
+		Short:  "`get`/`set`/`remove` the schema for an upstream table",
+		Hidden: true,
+		RunE:   operateSchemaCmd,
 	}
 	cmd.Flags().StringP("database", "d", "", "database name of the table")
 	cmd.Flags().StringP("table", "t", "", "table name")
@@ -117,12 +118,16 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) error {
 	if sync && op != pb.SchemaOp_SetSchema {
 		return errors.New("--sync flag is only used to set schema")
 	}
+	return sendOperateSchemaRequest(op, taskName, sources, database, table, string(schemaContent), flush, sync)
+}
 
+func sendOperateSchemaRequest(op pb.SchemaOp, taskName string, sources []string,
+	database, table, schemaContent string, flush, sync bool) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	resp := &pb.OperateSchemaResponse{}
-	err = common.SendRequest(
+	err := common.SendRequest(
 		ctx,
 		"OperateSchema",
 		&pb.OperateSchemaRequest{
@@ -131,13 +136,12 @@ func operateSchemaCmd(cmd *cobra.Command, _ []string) error {
 			Sources:  sources,
 			Database: database,
 			Table:    table,
-			Schema:   string(schemaContent),
+			Schema:   schemaContent,
 			Flush:    flush,
 			Sync:     sync,
 		},
 		&resp,
 	)
-
 	if err != nil {
 		return err
 	}

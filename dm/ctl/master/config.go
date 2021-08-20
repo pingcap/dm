@@ -1,4 +1,4 @@
-// Copyright 2020 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,10 +22,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 	"go.etcd.io/etcd/clientv3"
-
-	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -41,45 +40,177 @@ var (
 	yamlSuffix           = ".yaml"
 )
 
-// NewConfigCmd creates a exportCfg command.
+// NewConfigCmd creates a Config command.
 func NewConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "config",
-		Short: "Commands to import/export config",
+		Use:   "config <command>",
+		Short: "manage config operations",
 	}
-	cmd.AddCommand(newExportCfgsCmd())
-	cmd.AddCommand(newImportCfgsCmd())
+	cmd.AddCommand(
+		newConfigTaskCmd(),
+		newConfigSourceCmd(),
+		newConfigMasterCmd(),
+		newConfigWorkerCmd(),
+		newExportCfgsCmd(),
+		newImportCfgsCmd(),
+	)
+	cmd.PersistentFlags().StringP("path", "p", "", "specify the file path to export/import`")
 	return cmd
+}
+
+func newConfigTaskCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "task [task-name]",
+		Short: "manage or show task configs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 || len(args) > 1 {
+				return cmd.Help()
+			}
+			name := args[0]
+			output, err := cmd.Flags().GetString("path")
+			if err != nil {
+				return err
+			}
+			return sendGetConfigRequest(pb.CfgType_TaskType, name, output)
+		},
+	}
+	cmd.AddCommand(
+		newConfigTaskUpdateCmd(),
+	)
+	return cmd
+}
+
+// FIXME: implement this later.
+func newConfigTaskUpdateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:    "update <command>",
+		Short:  "update config task",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return errors.Errorf("this function will be supported later")
+		},
+	}
+	return cmd
+}
+
+func newConfigSourceCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "source [source-name]",
+		Short: "manage or show source config",
+		RunE:  configSourceList,
+	}
+	cmd.AddCommand(
+		newConfigSourceUpdateCmd(),
+	)
+	return cmd
+}
+
+func configSourceList(cmd *cobra.Command, args []string) error {
+	if len(args) != 1 {
+		return cmd.Help()
+	}
+	name := args[0]
+	output, err := cmd.Flags().GetString("path")
+	if err != nil {
+		return err
+	}
+	return sendGetConfigRequest(pb.CfgType_SourceType, name, output)
+}
+
+// FIXME: implement this later.
+func newConfigSourceUpdateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:    "update <command>",
+		Short:  "update config source",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return errors.Errorf("this function will be supported later")
+		},
+	}
+	return cmd
+}
+
+func newConfigMasterCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "master [master-name]",
+		Short: "manage or show master configs",
+		RunE:  configMasterList,
+	}
+	return cmd
+}
+
+func configMasterList(cmd *cobra.Command, args []string) error {
+	if len(args) != 1 {
+		return cmd.Help()
+	}
+	name := args[0]
+	output, err := cmd.Flags().GetString("path")
+	if err != nil {
+		return err
+	}
+	return sendGetConfigRequest(pb.CfgType_MasterType, name, output)
+}
+
+func newConfigWorkerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "worker [worker-name]",
+		Short: "manage or show worker configs",
+		RunE:  configWorkerList,
+	}
+	return cmd
+}
+
+func configWorkerList(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 || len(args) > 1 {
+		return cmd.Help()
+	}
+	name := args[0]
+	output, err := cmd.Flags().GetString("path")
+	if err != nil {
+		return err
+	}
+	return sendGetConfigRequest(pb.CfgType_WorkerType, name, output)
 }
 
 // newExportCfgsCmd creates a exportCfg command.
 func newExportCfgsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "export [--dir directory]",
-		Short: "Export the configurations of sources and tasks.",
+		Use:   "export",
+		Short: "Export the configurations of sources and tasks",
 		RunE:  exportCfgsFunc,
 	}
-	cmd.Flags().StringP("dir", "d", "configs", "specify the output directory, default is `./configs`")
+	cmd.Flags().StringP("dir", "d", "", "specify the configs directory, default is `./configs`")
+	_ = cmd.Flags().MarkHidden("dir")
 	return cmd
 }
 
 // newImportCfgsCmd creates a importCfg command.
 func newImportCfgsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "import [--dir directory]",
-		Short: "Import the configurations of sources and tasks.",
+		Use:   "import",
+		Short: "Import the configurations of sources and tasks",
 		RunE:  importCfgsFunc,
 	}
-	cmd.Flags().StringP("dir", "d", "configs", "specify the configs directory, default is `./configs`")
+	cmd.Flags().StringP("dir", "d", "", "specify the configs directory, default is `./configs`")
+	_ = cmd.Flags().MarkHidden("dir")
 	return cmd
 }
 
 // exportCfgsFunc exports configs.
 func exportCfgsFunc(cmd *cobra.Command, args []string) error {
-	dir, err := cmd.Flags().GetString("dir")
+	filePath, err := cmd.Flags().GetString("path")
 	if err != nil {
-		common.PrintLinesf("can not get directory")
+		common.PrintLinesf("can not get path")
 		return err
+	} else if filePath == "" {
+		filePath, err = cmd.Flags().GetString("dir")
+		if err != nil {
+			common.PrintLinesf("can not get directory")
+			return err
+		}
+	}
+	if filePath == "" {
+		filePath = "configs"
 	}
 
 	// get all configs
@@ -88,7 +219,7 @@ func exportCfgsFunc(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	// create directory
-	taskDir, sourceDir, err := createDirectory(dir)
+	taskDir, sourceDir, err := createDirectory(filePath)
 	if err != nil {
 		return err
 	}
@@ -101,23 +232,32 @@ func exportCfgsFunc(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	// write relayWorkers
-	if err = writeRelayWorkers(path.Join(dir, relayWorkersFilename), relayWorkersSet); err != nil {
+	if err = writeRelayWorkers(path.Join(filePath, relayWorkersFilename), relayWorkersSet); err != nil {
 		return err
 	}
 
-	common.PrintLinesf("export configs to directory `%s` succeed", dir)
+	common.PrintLinesf("export configs to directory `%s` succeed", filePath)
 	return nil
 }
 
 // importCfgsFunc imports configs.
 func importCfgsFunc(cmd *cobra.Command, args []string) error {
-	dir, err := cmd.Flags().GetString("dir")
+	filePath, err := cmd.Flags().GetString("path")
 	if err != nil {
-		common.PrintLinesf("can not get directory")
+		common.PrintLinesf("can not get path")
 		return err
+	} else if filePath == "" {
+		filePath, err = cmd.Flags().GetString("dir")
+		if err != nil {
+			common.PrintLinesf("can not get directory")
+			return err
+		}
+	}
+	if filePath == "" {
+		filePath = "configs"
 	}
 
-	sourceCfgs, taskCfgs, relayWorkers, err := collectCfgs(dir)
+	sourceCfgs, taskCfgs, relayWorkers, err := collectCfgs(filePath)
 	if err != nil {
 		return err
 	}
@@ -131,11 +271,11 @@ func importCfgsFunc(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if len(relayWorkers) > 0 {
-		common.PrintLinesf("The original relay workers have been exported to `%s`.", path.Join(dir, relayWorkersFilename))
+		common.PrintLinesf("The original relay workers have been exported to `%s`.", path.Join(filePath, relayWorkersFilename))
 		common.PrintLinesf("Currently DM doesn't support recover relay workers. You may need to execute `transfer-source` and `start-relay` command manually.")
 	}
 
-	common.PrintLinesf("import configs from directory `%s` succeed", dir)
+	common.PrintLinesf("import configs from directory `%s` succeed", filePath)
 	return nil
 }
 

@@ -28,9 +28,10 @@ import (
 // NewUnlockDDLLockCmd creates a UnlockDDLLock command.
 func NewUnlockDDLLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "unlock-ddl-lock <lock-ID>",
-		Short: "Unlocks DDL lock forcefully.",
-		RunE:  unlockDDLLockFunc,
+		Use:    "unlock-ddl-lock <lock-ID>",
+		Short:  "Unlocks DDL lock forcefully",
+		Hidden: true,
+		RunE:   unlockDDLLockFunc,
 	}
 	cmd.Flags().StringP("owner", "o", "", "source to replace the default owner")
 	cmd.Flags().BoolP("force-remove", "f", false, "force to remove DDL lock")
