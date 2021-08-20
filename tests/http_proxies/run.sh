@@ -37,23 +37,23 @@ function test_dm() {
 		'"result": false' 1
 
 	unset $env_name
+
+	kill_dm_master
+	kill_dm_worker
 }
 
 function run() {
-	cleanup_data $TEST_NAME
 	echo "test dm grpc proxy env setting checking for http_proxy=http://127.0.0.1:8080"
 	test_dm "http_proxy" "http://127.0.0.1:8080"
 
-	cleanup_data $TEST_NAME
 	echo "test dm grpc proxy env setting checking for https_proxy=https://127.0.0.1:8080"
 	test_dm "https_proxy" "https://127.0.0.1:8080"
 
-	cleanup_data $TEST_NAME
 	echo "test dm grpc proxy env setting checking for no_proxy=localhost,127.0.0.1"
 	test_dm "no_proxy" "localhost,127.0.0.1"
-
 }
 
+cleanup_data $TEST_NAME
 cleanup_process
 run
 cleanup_process

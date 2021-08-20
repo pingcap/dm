@@ -12,7 +12,16 @@ function cleanup_data() {
 
 function cleanup_process() {
     dm_master_num=$(ps aux >temp && grep "dm-master.test" temp | wc -l && rm temp)
-	echo "$dm_master_num dm-master alive"
+    echo "$dm_master_num dm-master alive"
+    pkill -hup dm-master.test 2>/dev/null || true
+
+    dm_worker_num=$(ps aux >temp && grep "dm-worker.test" temp | wc -l && rm temp)
+    echo "$dm_worker_num dm-worker alive"
+    pkill -hup dm-worker.test 2>/dev/null || true
+
+    dm_syncer_num=$(ps aux >temp && grep "dm-syncer.test" temp | wc -l && rm temp)
+    echo "$dm_syncer_num dm-syncer alive"
+    pkill -hup dm-syncer.test 2>/dev/null || true
 
     pkill -hup dm-master.test 2>/dev/null || true
     pkill -hup dm-worker.test 2>/dev/null || true
