@@ -467,10 +467,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			}
 			toDB := cfg.TargetDB
 			toDB.Adjust()
-			if len(toDB.Password) > 0 {
-				toDB.Password = utils.DecryptOrPlaintext(toDB.Password)
-			}
-			err = s.removeMetaData(ctx, cfg.Name, cfg.MetaSchema, *toDB)
+			err = s.removeMetaData(ctx, cfg.Name, cfg.MetaSchema, toDB)
 			if err != nil {
 				resp.Msg = terror.Annotate(err, "while removing metadata").Error()
 				s.removeMetaLock.Unlock()
@@ -1408,7 +1405,7 @@ func withHost(addr string) string {
 	return addr
 }
 
-func (s *Server) removeMetaData(ctx context.Context, taskName, metaSchema string, toDBCfg config.DBConfig) error {
+func (s *Server) removeMetaData(ctx context.Context, taskName, metaSchema string, toDBCfg *config.DBConfig) error {
 	// clear shard meta data for pessimistic/optimist
 	err := s.pessimist.RemoveMetaData(taskName)
 	if err != nil {
@@ -1424,7 +1421,7 @@ func (s *Server) removeMetaData(ctx context.Context, taskName, metaSchema string
 	}
 
 	// set up db and clear meta data in downstream db
-	baseDB, err := conn.DefaultDBProvider.Apply(toDBCfg)
+	baseDB, err := conn.DefaultDBProvider.Apply(*toDBCfg)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
