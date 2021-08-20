@@ -52,7 +52,7 @@ function run() {
 cleanup_data http_proxies
 
 cleanup_process $*
-run $*
+run
 cleanup_process $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"

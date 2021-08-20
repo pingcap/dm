@@ -11,8 +11,8 @@ function cleanup_data() {
 }
 
 function cleanup_process() {
-    pkill -hup dm-worker.test 2>/dev/null || true
     pkill -hup dm-master.test 2>/dev/null || true
+    pkill -hup dm-worker.test 2>/dev/null || true
     pkill -hup dm-syncer.test 2>/dev/null || true
 
     wait_process_exit dm-master.test
