@@ -515,7 +515,7 @@ function run() {
 	DM_DROP_COLUMN_EXEC_ERROR
 	DM_INIT_SCHEMA
 	DM_DROP_COLUMN_ALL_DONE
-	DM_RemoveLock
+	DM_RECOVER_LOCK
 	DM_DropAddColumn
 	start=36
 	end=45
