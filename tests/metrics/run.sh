@@ -95,7 +95,15 @@ function run() {
 	# restart dm-worker1
 	pkill -hup -f dm-worker1.toml 2>/dev/null || true
 	wait_pattern_exit dm-worker1.toml
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/changeTickerInterval=return(5);github.com/pingcap/dm/syncer/noJobInQueueLog=return()"
+
+	inject_points=(
+		"github.com/pingcap/dm/syncer/changeTickerInterval=return(5)"
+		"github.com/pingcap/dm/syncer/noJobInQueueLog=return()"
+		"github.com/pingcap/dm/syncer/IgnoreSomeTypeEvent=return(\"HeartbeatEvent\")"
+	)
+	# Since the following test needs to ensure that the dml queue is empty for a long time,
+	# it needs to ignore upstream heartbeat events to ensure that flushjobs are not triggered
+	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 	# First set the ticker interval to 5s -> expect the execSQL interval to be greater than 5s
 	# At 5s, the first no job log will appear in the log
 	# At 6s, the ticker has already waited 1s and the ticker goes to 1/5th of the way
