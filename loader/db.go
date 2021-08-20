@@ -15,7 +15,6 @@ package loader
 
 import (
 	"database/sql"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -92,10 +91,10 @@ func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interf
 				ds := cost.Seconds()
 				queryHistogram.WithLabelValues(conn.cfg.Name, conn.cfg.SourceID).Observe(ds)
 				if ds > 1 {
-					ctx.L().Warn(fmt.Sprintf("query statement too slow for %vs", ds),
+					ctx.L().Warn("query statement too slow",
+						zap.Duration("cost time", cost),
 						zap.String("query", utils.TruncateString(query, -1)),
-						zap.String("argument", utils.TruncateInterface(args, -1)),
-						zap.Duration("cost time", cost))
+						zap.String("argument", utils.TruncateInterface(args, -1)))
 				}
 			}
 			return ret, err
@@ -170,10 +169,10 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 				ds := cost.Seconds()
 				txnHistogram.WithLabelValues(conn.cfg.Name, conn.cfg.SourceID).Observe(ds)
 				if ds > 1 {
-					ctx.L().Warn(fmt.Sprintf("execute transaction too slow for %vs", ds),
+					ctx.L().Warn("execute transaction too slow",
+						zap.Duration("cost time", cost),
 						zap.String("query", utils.TruncateInterface(queries, -1)),
-						zap.String("argument", utils.TruncateInterface(args, -1)),
-						zap.Duration("cost time", cost))
+						zap.String("argument", utils.TruncateInterface(args, -1)))
 				}
 			}
 			return nil, err
