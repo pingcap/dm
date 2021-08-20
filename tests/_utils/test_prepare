@@ -11,6 +11,9 @@ function cleanup_data() {
 }
 
 function cleanup_process() {
+    dm_master_num=$(ps aux >temp && grep "dm-master.test" temp | wc -l && rm temp)
+	echo "$dm_master_num dm-master alive"
+
     pkill -hup dm-master.test 2>/dev/null || true
     pkill -hup dm-worker.test 2>/dev/null || true
     pkill -hup dm-syncer.test 2>/dev/null || true
