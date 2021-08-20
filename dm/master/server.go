@@ -277,9 +277,6 @@ func (s *Server) Close() {
 	if s.etcd != nil {
 		s.etcd.Close()
 	}
-	if s.echo != nil {
-		s.echo.Close()
-	}
 	s.closed.Store(true)
 }
 
