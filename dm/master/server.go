@@ -463,7 +463,6 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				return resp, nil
 			}
 			toDB := cfg.TargetDB
-			toDB.Adjust()
 			err = s.removeMetaData(ctx, cfg.Name, cfg.MetaSchema, toDB)
 			if err != nil {
 				resp.Msg = terror.Annotate(err, "while removing metadata").Error()
@@ -1116,11 +1115,9 @@ func checkAndAdjustSourceConfig(ctx context.Context, cfg *config.SourceConfig) e
 	}
 	defer fromDB.Close()
 	if err = cfg.Adjust(ctx, fromDB.DB); err != nil {
-		fromDB.Close()
 		return err
 	}
 	if _, err = cfg.Yaml(); err != nil {
-		fromDB.Close()
 		return err
 	}
 	return cfg.Verify()
@@ -1403,6 +1400,7 @@ func withHost(addr string) string {
 }
 
 func (s *Server) removeMetaData(ctx context.Context, taskName, metaSchema string, toDBCfg *config.DBConfig) error {
+	toDBCfg.Adjust()
 	// clear shard meta data for pessimistic/optimist
 	err := s.pessimist.RemoveMetaData(taskName)
 	if err != nil {

@@ -32,7 +32,7 @@ func (t *zapLoggerSuite) TestZapLogger(c *check.C) {
 	err := ZapLogger(logger)(h)(ctx)
 	c.Assert(err, check.IsNil)
 
-	logFields := logs.AllUntimed()[0].ContextMap()
+	logFields := logs.All()[0].ContextMap()
 
 	c.Assert(logFields["method"], check.Equals, "GET")
 	c.Assert(logFields["request"], check.Equals, "GET /something")
