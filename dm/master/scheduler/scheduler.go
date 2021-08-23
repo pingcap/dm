@@ -655,7 +655,8 @@ func (s *Scheduler) AcquireSubtaskLatch(name string) (ReleaseFunc, error) {
 
 // AddSubTasks adds the information of one or more subtasks for one task.
 // use s.mu.RLock() to protect s.bound, and s.subtaskLatch to protect subtask related members.
-func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
+// setting `latched` to true means caller has acquired latch.
+func (s *Scheduler) AddSubTasks(latched bool, cfgs ...config.SubTaskConfig) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -681,11 +682,13 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 		return terror.ErrSchedulerMultiTask.Generate(taskNames)
 	}
 
-	release, err := s.subtaskLatch.tryAcquire(taskNames[0])
-	if err != nil {
-		return terror.ErrSchedulerLatchInUse.Generate("AddSubTasks", taskNames[0])
+	if !latched {
+		release, err := s.subtaskLatch.tryAcquire(taskNames[0])
+		if err != nil {
+			return terror.ErrSchedulerLatchInUse.Generate("AddSubTasks", taskNames[0])
+		}
+		defer release()
 	}
-	defer release()
 
 	// 1. check whether exists.
 	for _, cfg := range cfgs {
@@ -732,7 +735,7 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 	}
 
 	// 4. put the configs and stages into etcd.
-	_, err = ha.PutSubTaskCfgStage(s.etcdCli, newCfgs, newStages)
+	_, err := ha.PutSubTaskCfgStage(s.etcdCli, newCfgs, newStages)
 	if err != nil {
 		return err
 	}
