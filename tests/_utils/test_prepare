@@ -265,7 +265,7 @@ function check_log_contain_with_retry() {
         sleep 2
     done
     if [[ $rc -eq 0 ]]; then
-        echo "log dosen't contain $text"
+        echo "log doesn't contain $text"
         exit 1
     fi
 }
