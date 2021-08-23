@@ -50,7 +50,7 @@ func (s *Server) InitOpenAPIHandles() {
 	// inject err handler
 	e.HTTPErrorHandler = terrorHTTPErrorHandler
 	// middlewares
-	e.Use(docMW)
+	e.Pre(docMW)
 	// set logger
 	logger := log.L().Logger
 	logger = logger.With(zap.String("component", "openapi"))
