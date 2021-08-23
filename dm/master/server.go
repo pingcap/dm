@@ -451,7 +451,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		var (
 			latched = false
 			release scheduler.ReleaseFunc
-			err3 error
+			err3    error
 		)
 
 		if req.RemoveMeta {
