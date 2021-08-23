@@ -70,8 +70,9 @@ type Scheduler struct {
 
 	etcdCli *clientv3.Client
 
-	// must acquire latch from subtaskLatch before accessing subTaskCfgs and expectSubTaskStages
-	// TODO: also sourceLatch, relayLatch?
+	// must acquire latch from subtaskLatch before accessing subTaskCfgs and expectSubTaskStages,
+	// the latch key is task name.
+	// TODO: also sourceLatch, relayLatch
 	subtaskLatch *latches
 
 	// all source configs, source ID -> source config.
@@ -772,15 +773,15 @@ func (s *Scheduler) RemoveSubTasks(task string, sources ...string) error {
 	defer release()
 
 	// 1. check the task exists.
-	v1, ok1 := s.expectSubTaskStages.Load(task)
-	v2, ok2 := s.subTaskCfgs.Load(task)
+	stagesMapV, ok1 := s.expectSubTaskStages.Load(task)
+	cfgsMapV, ok2 := s.subTaskCfgs.Load(task)
 	if !ok1 || !ok2 {
 		return terror.ErrSchedulerSubTaskOpTaskNotExist.Generate(task)
 	}
 
 	var (
-		stagesM          = v1.(map[string]ha.Stage)
-		cfgsM            = v2.(map[string]config.SubTaskConfig)
+		stagesM          = stagesMapV.(map[string]ha.Stage)
+		cfgsM            = cfgsMapV.(map[string]config.SubTaskConfig)
 		notExistSourcesM = make(map[string]struct{})
 		stages           = make([]ha.Stage, 0, len(sources))
 		cfgs             = make([]config.SubTaskConfig, 0, len(sources))
