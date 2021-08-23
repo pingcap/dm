@@ -229,7 +229,7 @@ func (st *SubTask) run() {
 	st.l.Info("start to run", zap.Stringer("unit", cu.Type()))
 	pr := make(chan pb.ProcessResult, 1)
 	st.resultWg.Add(1)
-	go st.fetchResult(pr)
+	go st.fetchResultAndUpdateStage(pr)
 	go cu.Process(ctx, pr)
 }
 
@@ -250,8 +250,8 @@ func (st *SubTask) callCurrCancel() {
 	st.RUnlock()
 }
 
-// fetchResult fetches process result, call Pause of current unit if needed and updates the stage of subtask.
-func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
+// fetchResultAndUpdateStage fetches process result, call Pause of current unit if needed and updates the stage of subtask.
+func (st *SubTask) fetchResultAndUpdateStage(pr chan pb.ProcessResult) {
 	defer st.resultWg.Done()
 
 	result := <-pr
@@ -482,7 +482,7 @@ func (st *SubTask) Pause() error {
 	}
 
 	st.callCurrCancel()
-	st.resultWg.Wait() // wait fetchResult set Pause stage
+	st.resultWg.Wait() // wait fetchResultAndUpdateStage set Pause stage
 
 	return nil
 }
@@ -519,7 +519,7 @@ func (st *SubTask) Resume() error {
 
 	pr := make(chan pb.ProcessResult, 1)
 	st.resultWg.Add(1)
-	go st.fetchResult(pr)
+	go st.fetchResultAndUpdateStage(pr)
 	go cu.Resume(ctx, pr)
 
 	st.setStageAndResult(pb.Stage_Running, nil) // clear previous result
