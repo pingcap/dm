@@ -633,6 +633,7 @@ const (
 const (
 	codeCtlGRPCCreateConn ErrCode = iota + 48001
 	codeCtlInvalidTLSCfg
+	codeCtlLoadTLSCfg
 )
 
 // default error code.
@@ -1244,6 +1245,7 @@ var (
 	// dmctl.
 	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")
 	ErrCtlInvalidTLSCfg  = New(codeCtlInvalidTLSCfg, ClassDMCtl, ScopeInternal, LevelMedium, "invalid TLS config", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in command line.")
+	ErrCtlLoadTLSCfg     = New(codeCtlLoadTLSCfg, ClassDMCtl, ScopeInternal, LevelHigh, "can not load tls config", "Please ensure that the tls certificate is accessible on the node currently running dmctl.")
 
 	// default error.
 	ErrNotSet = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")

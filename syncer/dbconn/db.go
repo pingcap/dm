@@ -106,12 +106,14 @@ func (conn *DBConn) QuerySQL(tctx *tcontext.Context, query string, args ...inter
 					return err, ret.Err()
 				}
 				cost := time.Since(startTime)
-				metrics.QueryHistogram.WithLabelValues(conn.Cfg.Name).Observe(cost.Seconds())
-				if cost.Seconds() > 1 {
-					ctx.L().Warn("query statement",
+				// duration seconds
+				ds := cost.Seconds()
+				metrics.QueryHistogram.WithLabelValues(conn.Cfg.Name).Observe(ds)
+				if ds > 1 {
+					ctx.L().Warn("query statement too slow",
+						zap.Duration("cost time", cost),
 						zap.String("query", utils.TruncateString(query, -1)),
-						zap.String("argument", utils.TruncateInterface(args, -1)),
-						zap.Duration("cost time", cost))
+						zap.String("argument", utils.TruncateInterface(args, -1)))
 				}
 			}
 			return ret, err
@@ -187,12 +189,14 @@ func (conn *DBConn) ExecuteSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 			ret, err := conn.BaseConn.ExecuteSQLWithIgnoreError(ctx, metrics.StmtHistogram, conn.Cfg.Name, ignoreError, queries, args...)
 			if err == nil {
 				cost := time.Since(startTime)
-				metrics.TxnHistogram.WithLabelValues(conn.Cfg.Name).Observe(cost.Seconds())
-				if cost.Seconds() > 1 {
-					ctx.L().Warn("execute transaction",
+				// duration seconds
+				ds := cost.Seconds()
+				metrics.TxnHistogram.WithLabelValues(conn.Cfg.Name).Observe(ds)
+				if ds > 1 {
+					ctx.L().Warn("execute transaction too slow",
+						zap.Duration("cost time", cost),
 						zap.String("query", utils.TruncateInterface(queries, -1)),
-						zap.String("argument", utils.TruncateInterface(args, -1)),
-						zap.Duration("cost time", cost))
+						zap.String("argument", utils.TruncateInterface(args, -1)))
 				}
 			}
 			return ret, err

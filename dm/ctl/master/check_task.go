@@ -29,7 +29,7 @@ import (
 func NewCheckTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check-task <config-file> [--error count] [--warn count]",
-		Short: "Checks the configuration file of the task.",
+		Short: "Checks the configuration file of the task",
 		RunE:  checkTaskFunc,
 	}
 	cmd.Flags().Int64P("error", "e", common.DefaultErrorCnt, "max count of errors to display")

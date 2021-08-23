@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eu
+set -eux
 
 cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
@@ -29,7 +29,7 @@ function DM_SKIP_ERROR_CASE() {
 	# begin to handle error
 	# skip all sources
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip" \
+		"binlog skip test" \
 		"\"result\": true" 3
 
 	# insert fail
@@ -39,7 +39,7 @@ function DM_SKIP_ERROR_CASE() {
 
 	# skip one source
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -s mysql-replica-01" \
+		"binlog skip test -s mysql-replica-01" \
 		"only support to handle ddl error currently" 1
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -48,7 +48,7 @@ function DM_SKIP_ERROR_CASE() {
 
 	# skip all sources
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip" \
+		"binlog skip test" \
 		"only support to handle ddl error currently" 2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -95,7 +95,7 @@ function DM_SKIP_ERROR_SHARDING_CASE() {
 
 	# skip 11/21 first ddl
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip" \
+		"binlog skip test" \
 		"\"result\": true" 3
 
 	if [[ "$1" = "pessimistic" ]]; then
@@ -113,7 +113,7 @@ function DM_SKIP_ERROR_SHARDING_CASE() {
 	fi
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -s mysql-replica-01,mysql-replica-02" \
+		"binlog skip test -s mysql-replica-01,mysql-replica-02" \
 		"\"result\": true" 3
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -144,7 +144,7 @@ function DM_REPLACE_ERROR_CASE() {
 
 	# replace sql
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test replace alter table ${db}.${tb1} add column new_col text, add column c int; alter table ${db}.${tb1} add unique(c);" \
+		"binlog replace test alter table ${db}.${tb1} add column new_col text, add column c int; alter table ${db}.${tb1} add unique(c);" \
 		"\"result\": true" 2
 
 	run_sql_source1 "insert into ${db}.${tb1} values(3,3,'hihi',3);"
@@ -197,7 +197,7 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
 	# begin to handle error
 	# split 11/21 first ddl into two ddls
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c)" \
+		"binlog replace test alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c)" \
 		"\"result\": true" 3
 
 	if [[ "$1" = "pessimistic" ]]; then
@@ -209,7 +209,7 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
 
 		# split 12,22 first ddl into two ddls
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test -s mysql-replica-01,mysql-replica-02 replace alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c);" \
+			"binlog replace test -s mysql-replica-01,mysql-replica-02 alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c);" \
 			"\"result\": true" 3
 
 		# 11/21 second ddl: unsupport error
@@ -219,7 +219,7 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
 
 		# split 11/21 second ddl into two ddls
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
+			"binlog replace test alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
 			"\"result\": true" 3
 
 		# 12/22 second ddl: detect conflict
@@ -229,10 +229,10 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
 
 		# split 11/21 second ddl into two ddls one by one
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test -s mysql-replica-01 replace alter table ${db}.${tb2} add column d int;alter table ${db}.${tb2} add unique(d);" \
+			"binlog replace test -s mysql-replica-01 alter table ${db}.${tb2} add column d int;alter table ${db}.${tb2} add unique(d);" \
 			"\"result\": true" 2
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test -s mysql-replica-02 replace alter table ${db}.${tb2} add column d int;alter table ${db}.${tb2} add unique(d);" \
+			"binlog replace test -s mysql-replica-02 alter table ${db}.${tb2} add column d int;alter table ${db}.${tb2} add unique(d);" \
 			"\"result\": true" 2
 	else
 		# 11 second ddl, 22 first ddl: unsupport error
@@ -242,12 +242,12 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
 
 		# replace 11 second ddl
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test -s mysql-replica-01 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
+			"binlog replace test -s mysql-replica-01 alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
 			"\"result\": true" 2
 
 		# replace 22 first ddl
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test -s mysql-replica-02 replace alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c);" \
+			"binlog replace test -s mysql-replica-02 alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c);" \
 			"\"result\": true" 2
 
 		# 12 first ddl, 21 second ddl: unsupport error
@@ -257,12 +257,12 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
 
 		# replace 12 first ddl
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test -s mysql-replica-01 replace alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c);" \
+			"binlog replace test -s mysql-replica-01 alter table ${db}.${tb2} add column c int;alter table ${db}.${tb2} add unique(c);" \
 			"\"result\": true" 2
 
 		# replace 21 second ddl
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test -s mysql-replica-02 replace alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
+			"binlog replace test -s mysql-replica-02 alter table ${db}.${tb1} add column d int;alter table ${db}.${tb1} add unique(d);" \
 			"\"result\": true" 2
 
 		# 12 first ddl, 22 second ddl: unspport error
@@ -272,7 +272,7 @@ function DM_REPLACE_ERROR_SHARDING_CASE() {
 
 		# replace 12/22 second ddl
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test replace alter table ${db}.${tb2} add column d int;alter table ${db}.${tb1} add unique(d);" \
+			"binlog replace test alter table ${db}.${tb2} add column d int;alter table ${db}.${tb1} add unique(d);" \
 			"\"result\": true" 3
 
 	fi
@@ -316,7 +316,7 @@ function DM_REPLACE_ERROR_MULTIPLE_CASE() {
 	# begin to handle error
 	# replace 11/21 ddl, wrong on second replace ddl
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test replace \"alter table ${db}.${tb1} add column a int; alter table ${db}.${tb1} add column b int unique;\"" \
+		"binlog replace test \"alter table ${db}.${tb1} add column a int; alter table ${db}.${tb1} add column b int unique;\"" \
 		"\"result\": true" 3
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -325,7 +325,7 @@ function DM_REPLACE_ERROR_MULTIPLE_CASE() {
 
 	# now we change the second replace ddl, but first replace ddl will error because it has been executed in TiDB ...
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test replace \"alter table ${db}.${tb1} add column a int; alter table ${db}.${tb1} add column b int;\"" \
+		"binlog replace test \"alter table ${db}.${tb1} add column a int; alter table ${db}.${tb1} add column b int;\"" \
 		"\"result\": true" 3
 
 	# 11, 21 first replace ddl error
@@ -335,7 +335,7 @@ function DM_REPLACE_ERROR_MULTIPLE_CASE() {
 
 	# test handle-error revert
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test revert" \
+		"binlog revert test" \
 		"\"result\": true" 3
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
@@ -343,7 +343,7 @@ function DM_REPLACE_ERROR_MULTIPLE_CASE() {
 
 	# now we only replace with ddl2
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test replace \"alter table ${db}.${tb1} add column b int;\"" \
+		"binlog replace test \"alter table ${db}.${tb1} add column b int;\"" \
 		"\"result\": true" 3
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -376,7 +376,7 @@ function DM_EXEC_ERROR_SKIP_CASE() {
 	run_sql_tidb "insert into ${db}.${tb} values(6,4,4);"
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip" \
+		"binlog skip test" \
 		"\"result\": true" 2
 
 	run_sql_tidb_with_retry "select count(1) from ${db}.${tb};" "count(1): 6"
@@ -408,7 +408,7 @@ function DM_SKIP_INCOMPATIBLE_DDL_CASE() {
 		"Please confirm your DDL statement is correct and needed." 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip" \
+		"binlog skip test" \
 		"\"result\": true" 2
 
 	run_sql_source1 "insert into ${db}.${tb1} values(2);"
@@ -446,7 +446,7 @@ function DM_REPLACE_DEFAULT_VALUE_CASE() {
 		"because schema conflict detected" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test -s mysql-replica-02 replace alter table ${db}.${tb1} add new_col1 int default 1;" \
+		"binlog replace test -s mysql-replica-02 alter table ${db}.${tb1} add new_col1 int default 1;" \
 		"\"result\": true" 2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -454,7 +454,7 @@ function DM_REPLACE_DEFAULT_VALUE_CASE() {
 		"because schema conflict detected" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test -s mysql-replica-02 replace alter table ${db}.${tb2} add new_col1 int default 1;" \
+		"binlog replace test -s mysql-replica-02 alter table ${db}.${tb2} add new_col1 int default 1;" \
 		"\"result\": true" 2
 
 	run_sql_source1 "alter table ${db}.${tb1} add new_col2 int;"
@@ -487,7 +487,7 @@ function DM_4202_CASE() {
 
 	start_location=$(get_start_location 127.0.0.1:$MASTER_PORT $source1)
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -b $start_location" \
+		"binlog skip test -b $start_location" \
 		"\"result\": true" 2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -511,7 +511,7 @@ function DM_4204_CASE() {
 		"Unsupported modify column" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip" \
+		"binlog skip test" \
 		"\"result\": true" 2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -537,7 +537,7 @@ function DM_4206_CASE() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+		"Unsupported modify column: this column has primary key flag" 2
 
 	first_pos1=$(get_start_pos 127.0.0.1:$MASTER_PORT $source1)
 	first_pos2=$(get_start_pos 127.0.0.1:$MASTER_PORT $source2)
@@ -548,33 +548,33 @@ function DM_4206_CASE() {
 	second_pos2=$(get_next_query_pos $MYSQL_PORT2 $MYSQL_PASSWORD2 $first_pos2)
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -b $first_name1:$second_pos1 -s $source1" \
+		"binlog skip test -b $first_name1:$second_pos1 -s $source1" \
 		"\"result\": true" 2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 2
+		"Unsupported modify column: this column has primary key flag" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -b $first_name1:$first_pos1 -s $source1" \
+		"binlog skip test -b $first_name1:$first_pos1 -s $source1" \
 		"\"result\": true" 2
 
 	run_sql_source1 "insert into ${db}.${tb1} values(3);"
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 1
+		"Unsupported modify column: this column has primary key flag" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -b $first_name2:$first_pos2 -s $source2" \
+		"binlog skip test -b $first_name2:$first_pos2 -s $source2" \
 		"\"result\": true" 2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"Unsupported modify column: tidb_enable_change_column_type is true and this column has primary key flag" 1
+		"Unsupported modify column: this column has primary key flag" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -b $first_name2:$second_pos2 -s $source2" \
+		"binlog skip test -b $first_name2:$second_pos2 -s $source2" \
 		"\"result\": true" 2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -606,13 +606,13 @@ function DM_4207_CASE() {
 
 	if [ "$start_location1" = "$start_location2" ]; then
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test skip -b $start_location1" \
+			"binlog skip test -b $start_location1" \
 			"\"result\": true" 3
 	else
 		# WARN: may skip unknown event like later insert, test will fail
 		# It hasn't happened yet.
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test skip -b $start_location1" \
+			"binlog skip test -b $start_location1" \
 			"\"result\": true" 3
 
 		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -620,7 +620,7 @@ function DM_4207_CASE() {
 			"Unsupported modify column" 1
 
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"handle-error test skip -b $start_location2" \
+			"binlog skip test -b $start_location2" \
 			"\"result\": true" 3
 	fi
 
@@ -654,7 +654,7 @@ function DM_4209_CASE() {
 		"Unsupported modify column" 2
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -s $source1" \
+		"binlog skip test -s $source1" \
 		"\"result\": true" 2
 
 	run_sql_source1 "insert into ${db}.${tb1} values(3);"
@@ -664,7 +664,7 @@ function DM_4209_CASE() {
 		"Unsupported modify column" 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test skip -s $source2" \
+		"binlog skip test -s $source2" \
 		"\"result\": true" 2
 
 	run_sql_source2 "insert into ${db}.${tb1} values(4);"
@@ -689,7 +689,7 @@ function DM_4211_CASE() {
 
 	start_location=$(get_start_location 127.0.0.1:$MASTER_PORT $source1)
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test --binlog-pos $start_location replace alter table ${db}.${tb1} add column c int;" \
+		"binlog replace test --binlog-pos $start_location alter table ${db}.${tb1} add column c int;" \
 		"\"result\": true" 2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -716,7 +716,7 @@ function DM_4213_CASE() {
 	run_sql_source1 "insert into ${db}.${tb1} values(2,2);"
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"handle-error test replace alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
+		"binlog replace test alter table ${db}.${tb1} add column c int;alter table ${db}.${tb1} add unique(c);" \
 		"\"result\": true" 2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -730,6 +730,90 @@ function DM_4213_CASE() {
 
 function DM_4213() {
 	run_case 4213 "single-source-no-sharding" "init_table 11" "clean_table" ""
+}
+
+function DM_SKIP_INCOMPATIBLE_DDL_CASE() {
+	run_sql_source1 "insert into ${db}.${tb1} values(1);"
+
+	run_sql_source1 "CREATE FUNCTION ${db}.hello (s CHAR(20)) RETURNS CHAR(50) DETERMINISTIC RETURN CONCAT('Hello, ',s,'!');"
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"stage\": \"Running\"" 1
+
+	run_sql_source1 "/*!50003 drop function ${db}.hello*/;"
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"drop function $(hello)" 2 \
+		"Please confirm your DDL statement is correct and needed." 1
+
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"binlog skip test" \
+		"\"result\": true" 2
+
+	run_sql_source1 "insert into ${db}.${tb1} values(2);"
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_SKIP_INCOMPATIBLE_DDL() {
+	run_case SKIP_INCOMPATIBLE_DDL "single-source-no-sharding" "init_table 11" "clean_table" ""
+}
+
+function DM_REPLACE_DEFAULT_VALUE_CASE() {
+	run_sql_source1 "insert into ${db}.${tb1} values(1);"
+	run_sql_source2 "insert into ${db}.${tb1} values(2);"
+	run_sql_source2 "insert into ${db}.${tb2} values(3);"
+
+	run_sql_source1 "alter table ${db}.${tb1} add new_col1 int default 1;"
+	run_sql_source1 "insert into ${db}.${tb1} values(4,4);"
+	run_sql_source2 "insert into ${db}.${tb1} values(5);"
+	run_sql_source2 "insert into ${db}.${tb2} values(6);"
+
+	# make sure order is source1.table1, source2.table1, source2.table2
+	run_sql_tidb_with_retry "select count(1) from ${db}.${tb}" "count(1): 6"
+
+	run_sql_source2 "alter table ${db}.${tb1} add new_col1 int default 2;"
+	run_sql_source1 "insert into ${db}.${tb1} values(7,7);"
+	run_sql_source2 "insert into ${db}.${tb1} values(8,8);"
+	run_sql_source2 "insert into ${db}.${tb2} values(9);"
+	run_sql_source2 "alter table ${db}.${tb2} add new_col1 int default 3;"
+	run_sql_source1 "insert into ${db}.${tb1} values(10,10);"
+	run_sql_source2 "insert into ${db}.${tb1} values(11,11);"
+	run_sql_source2 "insert into ${db}.${tb2} values(12,12);"
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"because schema conflict detected" 1
+
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"binlog replace test -s mysql-replica-02 alter table ${db}.${tb1} add new_col1 int default 1;" \
+		"\"result\": true" 2
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"because schema conflict detected" 1
+
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"binlog replace test -s mysql-replica-02 alter table ${db}.${tb2} add new_col1 int default 1;" \
+		"\"result\": true" 2
+
+	run_sql_source1 "alter table ${db}.${tb1} add new_col2 int;"
+	run_sql_source2 "alter table ${db}.${tb1} add new_col2 int;"
+	run_sql_source2 "alter table ${db}.${tb2} add new_col2 int;"
+	run_sql_source1 "insert into ${db}.${tb1} values(13,13,13);"
+	run_sql_source2 "insert into ${db}.${tb1} values(14,14,14);"
+	run_sql_source2 "insert into ${db}.${tb2} values(15,15,15);"
+
+	# WARN: some data different
+	# all the value before alter table in TiDB will be 1, while upstream table is 1, 2 or 3
+	run_sql_tidb_with_retry "select count(1) from ${db}.${tb}" "count(1): 15"
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"result\": true" 3
+}
+
+function DM_REPLACE_DEFAULT_VALUE() {
+	run_case REPLACE_DEFAULT_VALUE "double-source-optimistic" "init_table 11 21 22" "clean_table" ""
 }
 
 function run() {

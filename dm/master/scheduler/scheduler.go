@@ -218,6 +218,19 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) (err e
 		return err
 	}
 
+	// check if we can bound free source and workers
+	for _, w := range s.workers {
+		if w.stage == WorkerFree {
+			bound, err := s.tryBoundForWorker(w)
+			if err != nil {
+				return err
+			}
+			if !bound {
+				break
+			}
+		}
+	}
+
 	ctx, cancel := context.WithCancel(pCtx)
 
 	s.wg.Add(1)

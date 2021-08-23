@@ -104,7 +104,7 @@ function test_list_member() {
 	echo "[$(date)] <<<<<< start test_list_member_command >>>>>>"
 
 	master_ports=(0 $MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3 $MASTER_PORT4 $MASTER_PORT5)
-	master_peer_ports=(0 8291 8292 8293 8294 8295)
+	master_peer_ports=(0 $MASTER_PEER_PORT1 $MASTER_PEER_PORT2 $MASTER_PEER_PORT3 $MASTER_PEER_PORT4 $MASTER_PEER_PORT5)
 
 	alive=(1 2 3 4 5)
 	leaders=()
@@ -140,8 +140,7 @@ function test_list_member() {
 		# kill leader
 		echo "kill leader" $leader
 		ps aux | grep $leader | awk '{print $2}' | xargs kill || true
-		check_port_offline ${master_ports[$leader_idx]} 20
-		check_port_offline ${master_peer_ports[$leader_idx]} 20
+		check_master_port_offline $leader_idx
 	done
 
 	# join master which has been killed
@@ -181,7 +180,7 @@ function test_list_member() {
 		fi
 		echo "kill master$idx"
 		ps aux | grep dm-master$idx | awk '{print $2}' | xargs kill || true
-		check_port_offline ${master_ports[$idx]} 20
+		check_master_port_offline $idx
 		sleep 5
 		run_dm_master $WORK_DIR/master${idx} ${master_ports[$idx]} $cur/conf/dm-master${idx}.toml
 		check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:${master_ports[$idx]}
@@ -244,11 +243,11 @@ function test_list_member() {
 		"\"stage\": \"bound\"" 2
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"get-config master master1" \
+		"config master master1" \
 		'name = \\"master1\\"' 1
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"get-config master master2" \
+		"config master master2" \
 		'name = \\"master2\\"' 1
 
 	echo "[$(date)] <<<<<< finish test_list_member_command >>>>>>"
@@ -285,9 +284,9 @@ function run() {
 	# kill dm-master1 and dm-master2 to simulate the first two dm-master addr in join config are invalid
 	echo "kill dm-master1 and kill dm-master2"
 	ps aux | grep dm-master1 | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT1 20
+	check_master_port_offline 1
 	ps aux | grep dm-master2 | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT2 20
+	check_master_port_offline 2
 
 	# wait for master switch leader and re-setup
 	get_leader $WORK_DIR 127.0.0.1:$MASTER_PORT3
@@ -337,9 +336,9 @@ function run() {
 
 	echo "kill dm-master1 and kill dm-master2"
 	ps aux | grep dm-master1 | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT1 20
+	check_master_port_offline 1
 	ps aux | grep dm-master2 | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT2 20
+	check_master_port_offline 2
 
 	echo "wait and check task running"
 	check_http_alive 127.0.0.1:$MASTER_PORT3/apis/${API_VERSION}/status/test '"stage": "Running"' 10
@@ -363,7 +362,7 @@ function run() {
 
 	echo "kill dm-master3"
 	ps aux | grep dm-master3 | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT3 20
+	check_master_port_offline 3
 
 	sleep 2
 	# the last two masters should elect a new leader and serve service
