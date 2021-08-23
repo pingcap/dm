@@ -28,9 +28,10 @@ import (
 // NewHandleErrorCmd creates a HandleError command.
 func NewHandleErrorCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "handle-error <task-name | task-file> [-s source ...] [-b binlog-pos] <skip/replace/revert> [replace-sql1;replace-sql2;]",
-		Short: "`skip`/`replace`/`revert` the current error event or a specific binlog position (binlog-pos) event.",
-		RunE:  handleErrorFunc,
+		Use:    "handle-error <task-name | task-file> [-s source ...] [-b binlog-pos] <skip/replace/revert> [replace-sql1;replace-sql2;]",
+		Short:  "`skip`/`replace`/`revert` the current error event or a specific binlog position (binlog-pos) event",
+		Hidden: true,
+		RunE:   handleErrorFunc,
 	}
 	cmd.Flags().StringP("binlog-pos", "b", "", "position used to match binlog event if matched the handler-error operation will be applied. The format like \"mysql-bin|000001.000003:3270\"")
 	return cmd
@@ -83,7 +84,10 @@ func handleErrorFunc(cmd *cobra.Command, _ []string) error {
 		common.PrintLinesf("invalid operation '%s', please use `skip`, `replace` or `revert`", operation)
 		return errors.New("please check output to see error")
 	}
+	return sendHandleErrorRequest(cmd, op, taskName, sqls)
+}
 
+func sendHandleErrorRequest(cmd *cobra.Command, op pb.ErrorOp, taskName string, sqls []string) error {
 	binlogPos, err := cmd.Flags().GetString("binlog-pos")
 	if err != nil {
 		return err
