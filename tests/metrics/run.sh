@@ -141,10 +141,10 @@ function run() {
 	inject_points=(
 		"github.com/pingcap/dm/syncer/changeTickerInterval=return(5)"
 		"github.com/pingcap/dm/syncer/noJobInQueueLog=return()"
-		"github.com/pingcap/dm/syncer/IgnoreSomeTypeEvent=return(\"HeartbeatEvent\")"
+		"github.com/pingcap/dm/syncer/OnlySomeTypeEventCanPass=return(\"WriteRowsEventV2\")"
 	)
 	# Since the following test needs to ensure that the dml queue is empty for a long time,
-	# it needs to ignore upstream heartbeat events to ensure that flushjobs are not triggered
+	# It is necessary to ensure that only such events `WriteRowsEventV2` are currently processed
 	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 	# First set the ticker interval to 5s -> expect the execSQL interval to be greater than 5s
 	# At 5s, the first no job log will appear in the log
