@@ -1252,7 +1252,7 @@ var (
 	ErrCtlLoadTLSCfg     = New(codeCtlLoadTLSCfg, ClassDMCtl, ScopeInternal, LevelHigh, "can not load tls config", "Please ensure that the tls certificate is accessible on the node currently running dmctl.")
 
 	// openapi.
-	ErrOpenAPICommonError        = New(codeOpenAPICommon, ClassOpenAPI, ScopeInternal, LevelHigh, "some unforeseen errors have occurred, please check the detailed error message", "")
+	ErrOpenAPICommonError        = New(codeOpenAPICommon, ClassOpenAPI, ScopeInternal, LevelHigh, "some unexpected errors have occurred, please check the detailed error message", "")
 	ErrOpenAPITaskSourceNotFound = New(codeOpenAPITaskSourceNotFound, ClassOpenAPI, ScopeInternal, LevelHigh, "data source configuration not found", "Please check if the data source exists in the configuration file.")
 
 	// default error.

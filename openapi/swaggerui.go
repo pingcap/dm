@@ -91,11 +91,14 @@ func NewSwaggerConfig(docPath, specJSONPath, swaggerHost string) *SwaggerConfig 
 
 // NewSwaggerDocUI creates a echo middleware to serve a documentation site for a swagger spec.
 // This allows for altering the spec before starting the http listener.
-func NewSwaggerDocUI(config *SwaggerConfig, swaggerJSON []byte) echo.MiddlewareFunc {
+func NewSwaggerDocUI(config *SwaggerConfig, swaggerJSON []byte) (echo.MiddlewareFunc, error) {
 	// swagger html
 	tmpl := template.Must(template.New("swaggerdoc").Parse(swaggerUITemplate))
 	buf := bytes.NewBuffer(nil)
-	_ = tmpl.Execute(buf, config)
+	err := tmpl.Execute(buf, config)
+	if err != nil {
+		return nil, err
+	}
 	uiHTML := buf.Bytes()
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -108,5 +111,5 @@ func NewSwaggerDocUI(config *SwaggerConfig, swaggerJSON []byte) echo.MiddlewareF
 			}
 			return next(c)
 		}
-	}
+	}, nil
 }

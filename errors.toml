@@ -3095,7 +3095,7 @@ workaround = "Please ensure that the tls certificate is accessible on the node c
 tags = ["internal", "high"]
 
 [error.DM-openapi-49001]
-message = "some unforeseen errors have occurred, please check the detailed error message"
+message = "some unexpected errors have occurred, please check the detailed error message"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
