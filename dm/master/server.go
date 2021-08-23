@@ -462,8 +462,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				s.removeMetaLock.Unlock()
 				return resp, nil
 			}
-			toDB := cfg.TargetDB
-			err = s.removeMetaData(ctx, cfg.Name, cfg.MetaSchema, toDB)
+			err = s.removeMetaData(ctx, cfg.Name, cfg.MetaSchema, cfg.TargetDB)
 			if err != nil {
 				resp.Msg = terror.Annotate(err, "while removing metadata").Error()
 				s.removeMetaLock.Unlock()
