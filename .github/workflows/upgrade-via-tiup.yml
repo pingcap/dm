@@ -63,7 +63,9 @@ jobs:
         env:
           FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
           GIT_COMMITTER_NAME: ${{ github.event.pusher.name }}
-        run: go run tests/_utils/send_lark_notify.go
+        run: |
+          cd ${{ env.working-directory }}
+          go run tests/_utils/send_lark_notify.go
 
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
@@ -79,7 +81,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+<<<<<<< HEAD
         previous_v2: ["v2.0.0", "v2.0.1", "v2.0.3", "v2.0.4", "v2.0.5"]
+=======
+        previous_v2:
+          ["v2.0.0", "v2.0.1", "v2.0.3", "v2.0.4", "v2.0.5", "v2.0.6"]
+>>>>>>> 58e0672d1 (test: fix ci lark push (#2018))
 
     steps:
       - name: Set up Go 1.16
@@ -179,7 +186,9 @@ jobs:
         env:
           FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
           GIT_COMMITTER_NAME: ${{ github.event.pusher.name }}
-        run: go run tests/_utils/send_lark_notify.go
+        run: |
+          cd ${{ env.working-directory }}
+          go run tests/_utils/send_lark_notify.go
 
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
@@ -245,7 +254,9 @@ jobs:
         env:
           FEISHU_BOT_WEBHOOK_URL: ${{ secrets.FEISHU_BOT_WEBHOOK_URL }}
           GIT_COMMITTER_NAME: ${{ github.event.pusher.name }}
-        run: go run tests/_utils/send_lark_notify.go
+        run: |
+          cd ${{ env.working-directory }}
+          go run tests/_utils/send_lark_notify.go
       # Debug via SSH if previous steps failed
       - name: Set up tmate session
         if: ${{ failure() }}
