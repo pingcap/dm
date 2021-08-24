@@ -15,7 +15,10 @@ package main
 
 // Reference: https://dzone.com/articles/measuring-integration-test-coverage-rate-in-pouchc
 
+//nolint: gofumpt
 import (
+	"github.com/pingcap/dm/pkg/noimport"
+
 	"fmt"
 	"os"
 	"strings"
@@ -24,6 +27,7 @@ import (
 )
 
 func TestRunMain(_ *testing.T) {
+	fmt.Println("init at time", noimport.InitTime.String())
 	fmt.Println("dm-master startup", time.Now())
 	var args []string
 	for _, arg := range os.Args {
