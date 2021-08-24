@@ -1804,8 +1804,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return terror.ErrSyncerGetEvent.Generate(err)
 		}
 
-		failpoint.Inject("OnlySomeTypeEventCanPass", func(val failpoint.Value) {
-			if e.Header.EventType.String() != val.(string) {
+		failpoint.Inject("IgnoreSomeTypeEvent", func(val failpoint.Value) {
+			if e.Header.EventType.String() == val.(string) {
 				tctx.L().Debug("IgnoreSomeTypeEvent", zap.Reflect("event", e))
 				failpoint.Continue()
 			}
