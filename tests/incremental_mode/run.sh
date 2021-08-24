@@ -227,7 +227,7 @@ function run() {
 		"failpoint error for FlushCheckpointStage before flush old checkpoint" 1
 
 	# resume-task to next stage
-	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"resume-task test"
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -235,7 +235,7 @@ function run() {
 		"failpoint error for FlushCheckpointStage before track DDL" 1
 
 	# resume-task to next stage
-	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"resume-task test"
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -243,7 +243,7 @@ function run() {
 		"failpoint error for FlushCheckpointStage before execute DDL" 1
 
 	# resume-task to next stage
-	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"resume-task test"
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -251,7 +251,7 @@ function run() {
 		"failpoint error for FlushCheckpointStage before save checkpoint" 1
 
 	# resume-task to next stage
-	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"resume-task test"
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
