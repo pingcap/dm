@@ -14,6 +14,8 @@
 package main
 
 import (
+	"github.com/pingcap/dm/pkg/noimport"
+
 	"context"
 	"flag"
 	"fmt"
@@ -21,6 +23,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
@@ -33,6 +36,8 @@ import (
 )
 
 func main() {
+	fmt.Println("init at time", noimport.InitTime.String())
+	fmt.Println("enter main", time.Now().String())
 	// 1. parse config
 	cfg := master.NewConfig()
 	err := cfg.Parse(os.Args[1:])
