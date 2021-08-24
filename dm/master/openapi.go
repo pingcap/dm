@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/deepmap/oapi-codegen/pkg/middleware"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -38,14 +37,20 @@ const (
 )
 
 // InitOpenAPIHandles init openapi handlers.
-func (s *Server) InitOpenAPIHandles() {
+func (s *Server) InitOpenAPIHandles() error {
 	swagger, err := openapi.GetSwagger()
-	checkServerErr(err)
+	if err != nil {
+		return err
+	}
 	swagger.AddServer(&openapi3.Server{URL: fmt.Sprintf("http://%s", s.cfg.AdvertiseAddr)})
 	swaggerJSON, err := swagger.MarshalJSON()
-	checkServerErr(err)
+	if err != nil {
+		return err
+	}
 	docMW, err := openapi.NewSwaggerDocUI(openapi.NewSwaggerConfig(docBasePath, docJSONBasePath, ""), swaggerJSON)
-	checkServerErr(err)
+	if err != nil {
+		return err
+	}
 	e := echo.New()
 	// inject err handler
 	e.HTTPErrorHandler = terrorHTTPErrorHandler
@@ -62,6 +67,7 @@ func (s *Server) InitOpenAPIHandles() {
 	e.Use(middleware.OapiRequestValidator(swagger))
 	openapi.RegisterHandlers(e, s)
 	s.echo = e
+	return nil
 }
 
 // redirectRequestToLeader is used to redirect the request to leader.
@@ -143,11 +149,4 @@ func terrorHTTPErrorHandler(err error, c echo.Context) {
 func sendHTTPErrorResp(ctx echo.Context, code int, message string) error {
 	err := openapi.ErrorWithMessage{ErrorMsg: message, ErrorCode: code}
 	return ctx.JSON(http.StatusBadRequest, err)
-}
-
-func checkServerErr(err error) {
-	if err != nil {
-		log.L().Error("fail to start dm-master", zap.Error(err))
-		os.Exit(2)
-	}
 }
