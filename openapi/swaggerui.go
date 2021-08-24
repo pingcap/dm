@@ -99,13 +99,12 @@ func NewSwaggerDocUI(config *SwaggerConfig, swaggerJSON []byte) (echo.Middleware
 	if err != nil {
 		return nil, err
 	}
-	uiHTML := buf.Bytes()
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			path := c.Request().URL.Path
 			switch {
 			case path == config.DocPath:
-				return c.HTML(200, string(uiHTML))
+				return c.HTML(200, buf.String())
 			case path == config.SpecJSONPath:
 				return c.JSONBlob(200, swaggerJSON)
 			}

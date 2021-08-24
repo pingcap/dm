@@ -184,7 +184,10 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// And curl or safari browser does trigger this problem.
 	// But I haven't figured it out.
 	// (maybe more requests are sent from chrome or its extensions).
-	s.InitOpenAPIHandles()
+	initOpenAPIErr := s.InitOpenAPIHandles()
+	if initOpenAPIErr != nil {
+		return terror.ErrOpenAPICommonError.Delegate(initOpenAPIErr)
+	}
 	userHandles := map[string]http.Handler{
 		"/apis/":   apiHandler,
 		"/status":  getStatusHandle(),
