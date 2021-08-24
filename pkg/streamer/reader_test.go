@@ -289,8 +289,9 @@ func (t *testReaderSuite) TestParseFilerelayLogUpdatedOrNewCreated(c *C) {
 	}
 
 	// no valid update for relay sub dir, timeout, no error
-	ctx1, cancel1 := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
 	defer cancel1()
+	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
