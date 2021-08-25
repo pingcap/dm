@@ -14,6 +14,8 @@
 package config
 
 import (
+	"reflect"
+
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 )
@@ -170,7 +172,7 @@ func (t *testConfig) TestSubTaskBlockAllowList(c *C) {
 }
 
 func (t *testConfig) TestDBConfigClone(c *C) {
-	a := DBConfig{
+	a := &DBConfig{
 		Host:     "127.0.0.1",
 		Port:     4306,
 		User:     "root",
@@ -178,22 +180,23 @@ func (t *testConfig) TestDBConfigClone(c *C) {
 		Session:  map[string]string{"1": "1"},
 		RawDBCfg: DefaultRawDBConfig(),
 	}
-	b, err := a.Clone()
-	c.Assert(err, IsNil)
+
+	// When add new fields, also update this value
+	c.Assert(reflect.Indirect(reflect.ValueOf(a)).NumField(), Equals, 8)
+
+	b := a.Clone()
 	c.Assert(a, DeepEquals, b)
 
 	a.RawDBCfg.MaxIdleConns = 123
 	c.Assert(a, Not(DeepEquals), b)
 
-	b, err = a.Clone()
-	c.Assert(err, IsNil)
+	b = a.Clone()
 	c.Assert(a, DeepEquals, b)
 
 	a.Session["2"] = "2"
 	c.Assert(a, Not(DeepEquals), b)
 
 	a.RawDBCfg = nil
-	b, err = a.Clone()
-	c.Assert(err, IsNil)
+	b = a.Clone()
 	c.Assert(a, DeepEquals, b)
 }

@@ -125,23 +125,29 @@ func (db *DBConfig) Adjust() {
 }
 
 // Clone returns a deep copy of DBConfig. This function only fixes data race when adjusting Session.
-func (db *DBConfig) Clone() (DBConfig, error) {
-	clone := DBConfig{}
+func (db *DBConfig) Clone() *DBConfig {
+	clone := *db
 
-	s, err := db.Toml()
-	if err != nil {
-		return clone, err
+	if db.MaxAllowedPacket != nil {
+		packet := *(db.MaxAllowedPacket)
+		clone.MaxAllowedPacket = &packet
 	}
-	err = (&clone).Decode(s)
-	if err != nil {
-		return clone, err
+
+	if db.Session != nil {
+		clone.Session = make(map[string]string, len(db.Session))
+		for k, v := range db.Session {
+			clone.Session[k] = v
+		}
 	}
+
+	clone.Security = db.Security.Clone()
 
 	if db.RawDBCfg != nil {
-		tmp := *(db.RawDBCfg)
-		clone.RawDBCfg = &tmp
+		dbCfg := *(db.RawDBCfg)
+		clone.RawDBCfg = &dbCfg
 	}
-	return clone, err
+
+	return &clone
 }
 
 // GetDBConfigFromEnv is a helper function to read config from environment. It's commonly used in unit tests.
