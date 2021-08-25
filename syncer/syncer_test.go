@@ -979,7 +979,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 		{1, 2},
 		{3, 4},
 		{4, 1},
-		{1, 4},
+		{1, 4}, // this insert conflict with the first one
 	}
 	keys := make([][]string, len(insertValues))
 	for i := range insertValues {
@@ -1025,7 +1025,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	mock.ExpectCommit()
 	key4, err := syncer.resolveCasuality(keys[3])
 	c.Assert(err, IsNil)
-	c.Assert(key4, Equals, key1) // key4 conflict with key1
+	c.Assert(key4, Equals, keys[3][0])
 	if err := mock.ExpectationsWereMet(); err != nil {
 		c.Errorf("checkpoint db unfulfilled expectations: %s", err)
 	}
