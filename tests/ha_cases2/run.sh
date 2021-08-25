@@ -7,7 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
 # import helper functions
-source $cur/lib.sh
+source $cur/../_utils/ha_cases_lib.sh
 
 function print_debug_status() {
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
