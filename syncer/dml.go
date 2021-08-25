@@ -419,14 +419,14 @@ func genKeyList(table string, columns []*model.ColumnInfo, dataSeq []interface{}
 			log.L().Debug("ignore null value", zap.String("column", columns[i].Name.O), zap.String("table", table))
 			continue // ignore `null` value.
 		}
-		// for key, I think no need to add the `,` separator.
+		// one column key looks like:`column_val.column_name`
 		buf.WriteString(columnValue(data, &columns[i].FieldType))
+		buf.WriteString(fmt.Sprintf(".%s.", columns[i].Name.String()))
 	}
 	if buf.Len() == 0 {
 		log.L().Debug("all value are nil, no key generated", zap.String("table", table))
 		return "" // all values are `null`.
 	}
-
 	buf.WriteString(table)
 	return buf.String()
 }
