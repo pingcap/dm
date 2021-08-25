@@ -17,7 +17,7 @@ package main
 
 //nolint: gofumpt
 import (
-	"github.com/pingcap/dm/pkg/noimport"
+	_ "github.com/pingcap/dm/pkg/printinit"
 
 	"fmt"
 	"os"
@@ -27,7 +27,6 @@ import (
 )
 
 func TestRunMain(_ *testing.T) {
-	fmt.Println("init at time", noimport.InitTime.String())
 	fmt.Println("dm-master startup", time.Now())
 	var args []string
 	for _, arg := range os.Args {
