@@ -20,11 +20,12 @@ import (
 
 func (t *testConfig) TestSubTask(c *C) {
 	cfg := &SubTaskConfig{
-		Name:       "test-task",
-		IsSharding: true,
-		ShardMode:  "optimistic",
-		SourceID:   "mysql-instance-01",
-		OnlineDDL:  true,
+		Name:            "test-task",
+		IsSharding:      true,
+		ShardMode:       "optimistic",
+		SourceID:        "mysql-instance-01",
+		OnlineDDL:       false,
+		OnlineDDLScheme: PT,
 		From: DBConfig{
 			Host:     "127.0.0.1",
 			Port:     3306,
@@ -55,6 +56,7 @@ func (t *testConfig) TestSubTask(c *C) {
 	c.Assert(err, IsNil)
 	err = cfg.Adjust(true)
 	c.Assert(err, IsNil)
+	c.Assert(cfg.OnlineDDL, IsTrue)
 	err = cfg.Adjust(false)
 	c.Assert(err, IsNil)
 
