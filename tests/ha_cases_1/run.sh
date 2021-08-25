@@ -7,7 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
 # import helper functions
-source $cur/lib.sh
+source $cur/../_utils/ha_cases_lib.sh
 
 function test_running() {
 	echo "[$(date)] <<<<<< start test_running >>>>>>"
