@@ -420,7 +420,10 @@ func genKeyList(table string, columns []*model.ColumnInfo, dataSeq []interface{}
 			continue // ignore `null` value.
 		}
 		// one column key looks like:`column_val.column_name.`
-		buf.WriteString(columnValue(data, &columns[i].FieldType) + "." + columns[i].Name.String() + ".")
+		buf.WriteString(columnValue(data, &columns[i].FieldType))
+		buf.WriteString(".")
+		buf.WriteString(columns[i].Name.String())
+		buf.WriteString(".")
 	}
 	if buf.Len() == 0 {
 		log.L().Debug("all value are nil, no key generated", zap.String("table", table))
