@@ -214,10 +214,12 @@ function kill_2_worker_ensure_unbound() {
 
 	echo "kill dm-worker$1"
 	ps aux | grep dm-worker$1 | awk '{print $2}' | xargs kill || true
-	check_port_offline ${worker_ports_2[$1]} 20
 	echo "kill dm-worker$2"
 	ps aux | grep dm-worker$2 | awk '{print $2}' | xargs kill || true
+
+	check_port_offline ${worker_ports_2[$1]} 20
 	check_port_offline ${worker_ports_2[$2]} 20
+
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
 		"list-member --name worker$1 --name worker$2" \
 		"\"source\": \"\"" 2
