@@ -15,7 +15,10 @@ package main
 
 // Reference: https://dzone.com/articles/measuring-integration-test-coverage-rate-in-pouchc
 
+//nolint: gofumpt
 import (
+	_ "github.com/pingcap/dm/pkg/printinit"
+
 	"fmt"
 	"os"
 	"strings"
