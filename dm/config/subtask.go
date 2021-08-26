@@ -126,6 +126,10 @@ func (db *DBConfig) Adjust() {
 
 // Clone returns a deep copy of DBConfig. This function only fixes data race when adjusting Session.
 func (db *DBConfig) Clone() *DBConfig {
+	if db == nil {
+		return nil
+	}
+
 	clone := *db
 
 	if db.MaxAllowedPacket != nil {

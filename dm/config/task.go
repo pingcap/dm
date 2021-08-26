@@ -714,8 +714,16 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval
 		cfg.Meta = inst.Meta
 
-		cfg.From = *(dbCfg.Clone())
-		cfg.To = *(c.TargetDB.Clone())
+		fromClone := dbCfg.Clone()
+		if fromClone == nil {
+			return nil, terror.ErrConfigMySQLInstNotFound
+		}
+		cfg.From = *fromClone
+		toClone := c.TargetDB.Clone()
+		if toClone == nil {
+			return nil, terror.ErrConfigNeedTargetDB
+		}
+		cfg.To = *toClone
 
 		cfg.SourceID = inst.SourceID
 
