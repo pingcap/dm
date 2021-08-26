@@ -1763,6 +1763,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				err = errors.New("connect: connection refused")
 			}
 		})
+		failpoint.Inject("GetEventErrorInTxn", func(val failpoint.Value) {
+			if intVal, ok := val.(int); ok && intVal == eventIndex {
+				err = errors.New("fail point triggered")
+				s.tctx.L().Warn("failed to get event", zap.Int("event_index", eventIndex), log.ShortError(err))
+			}
+		})
 		switch {
 		case err == context.Canceled:
 			tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last location", lastLocation))
@@ -1807,6 +1813,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						if _, ok := e.Event.(*replication.RowsEvent); ok {
 							i++
 						}
+					}
+					if eventIndex > 0 {
+						log.L().Info("discard event already consumed", zap.Int("count", eventIndex))
 					}
 				}
 				continue
