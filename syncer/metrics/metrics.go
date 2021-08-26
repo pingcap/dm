@@ -198,12 +198,20 @@ var (
 			Help:      "counter for syncer exits with error",
 		}, []string{"task", "source_id"})
 
+	ReplicationLagGauge = metricsproxy.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "replication_lag_gauge",
+			Help:      "replication lag gauge in second between mysql and syncer",
+		}, []string{"task", "source_id", "worker"})
+
 	ReplicationLagHistogram = metricsproxy.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
 			Name:      "replication_lag",
-			Help:      "replication lag in second between mysql and syncer",
+			Help:      "replication lag histogram in second between mysql and syncer",
 			Buckets:   prometheus.ExponentialBuckets(0.5, 2, 12), // exponential from 0.5s to 1024s
 		}, []string{"task", "source_id", "worker"})
 
@@ -286,6 +294,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(StmtHistogram)
 	registry.MustRegister(QueryHistogram)
 	registry.MustRegister(SyncerExitWithErrorCounter)
+	registry.MustRegister(ReplicationLagGauge)
 	registry.MustRegister(ReplicationLagHistogram)
 	registry.MustRegister(RemainingTimeGauge)
 	registry.MustRegister(UnsyncedTableGauge)
@@ -318,6 +327,7 @@ func RemoveLabelValuesWithTaskInMetrics(task string) {
 	StmtHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	QueryHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	SyncerExitWithErrorCounter.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	ReplicationLagGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	ReplicationLagHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	RemainingTimeGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	UnsyncedTableGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
