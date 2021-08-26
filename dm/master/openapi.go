@@ -17,11 +17,9 @@ package master
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/deepmap/oapi-codegen/pkg/middleware"
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
@@ -41,14 +39,12 @@ func (s *Server) InitOpenAPIHandles() error {
 	if err != nil {
 		return err
 	}
-	swagger.AddServer(&openapi3.Server{URL: fmt.Sprintf("http://%s", s.cfg.AdvertiseAddr)})
 	e := echo.New()
 	// inject err handler
 	e.HTTPErrorHandler = terrorHTTPErrorHandler
 	// middlewares
+	logger := log.L().WithFields(zap.String("component", "openapi")).Logger
 	// set logger
-	logger := log.L().Logger
-	logger = logger.With(zap.String("component", "openapi"))
 	e.Use(openapi.ZapLogger(logger))
 	e.Use(echomiddleware.Recover())
 	// disables swagger server name validation. it seems to work poorly
