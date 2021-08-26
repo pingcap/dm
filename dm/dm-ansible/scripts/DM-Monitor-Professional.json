@@ -1656,8 +1656,9 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_replication_lag_bucket{instance=~\"$instance\",task=~\"$task\"}[$interval])) by (le,instance,task))",
+          "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_replication_lag_bucket{instance=~\"$instance\",task=~\"$task\"}[$interval])) by (le,source_id,task))",
           "format": "time_series",
+          "hide": false,
           "interval": "$interval",
           "intervalFactor": 2,
           "legendFormat": "{{task}} - {{source_id}} - 90",
@@ -1665,23 +1666,13 @@
         },
         {
           "exemplar": true,
-          "expr": "histogram_quantile(0.95, sum(rate(dm_syncer_replication_lag_bucket{instance=~\"$instance\",task=~\"$task\"}[$interval])) by (le,instance,task))",
+          "expr": "dm_syncer_replication_lag_gauge{instance=~\"$instance\",task=~\"$task\"}",
           "format": "time_series",
           "hide": false,
           "interval": "$interval",
           "intervalFactor": 2,
-          "legendFormat": "{{task}} - {{source_id}} - 95",
-          "refId": "B"
-        },
-        {
-          "exemplar": true,
-          "expr": "histogram_quantile(0.99, sum(rate(dm_syncer_replication_lag_bucket{instance=~\"$instance\",task=~\"$task\"}[$interval])) by (le,instance,task))",
-          "format": "time_series",
-          "hide": false,
-          "interval": "$interval",
-          "intervalFactor": 2,
-          "legendFormat": "{{task}} - {{source_id}} - 99",
-          "refId": "C"
+          "legendFormat": "{{task}} - {{source_id}} - gauge",
+          "refId": "D"
         }
       ],
       "thresholds": [],
