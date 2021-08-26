@@ -39,11 +39,9 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var (
-	// ErrorMaybeDuplicateEvent indicates that there may be duplicate event in next binlog file
-	// this is mainly happened when upstream master changed when relay log not finish reading a transaction.
-	ErrorMaybeDuplicateEvent = errors.New("truncate binlog file found, event may be duplicated")
-)
+// ErrorMaybeDuplicateEvent indicates that there may be duplicate event in next binlog file
+// this is mainly happened when upstream master changed when relay log not finish reading a transaction.
+var ErrorMaybeDuplicateEvent = errors.New("truncate binlog file found, event may be duplicated")
 
 // Meta represents binlog meta information in relay.meta.
 type Meta struct {
@@ -555,7 +553,6 @@ func (r *BinlogReader) parseFile(
 	if err != nil {
 		if possibleLast && isIgnorableParseError(err) {
 			r.tctx.L().Warn("fail to parse relay log file, meet some ignorable error", zap.String("file", fullPath), zap.Int64("offset", offset), zap.Error(err))
-
 		} else {
 			r.tctx.L().Error("parse relay log file", zap.String("file", fullPath), zap.Int64("offset", offset), zap.Error(err))
 			return false, false, 0, "", "", false, terror.ErrParserParseRelayLog.Delegate(err, fullPath)

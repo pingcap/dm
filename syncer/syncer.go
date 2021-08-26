@@ -1766,7 +1766,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		failpoint.Inject("GetEventErrorInTxn", func(val failpoint.Value) {
 			if intVal, ok := val.(int); ok && intVal == eventIndex {
 				err = errors.New("fail point triggered")
-				s.tctx.L().Warn("failed to get event", zap.Int("event_index", eventIndex), log.ShortError(err))
+				s.tctx.L().Warn("failed to get event", zap.Int("event_index", eventIndex),
+					zap.Any("cur_pos", currentLocation), zap.Any("las_pos", lastLocation),
+					zap.Any("pos", e.Header.LogPos), log.ShortError(err))
 			}
 		})
 		switch {
@@ -1799,11 +1801,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			if s.streamerController.CanRetry(err) {
-				err = s.streamerController.ResetReplicationSyncer(tctx, lastLocation)
+				// GlobalPoint is the last finished GTID
+				err = s.streamerController.ResetReplicationSyncer(tctx, s.checkpoint.GlobalPoint())
 				if err != nil {
 					return err
 				}
-				log.L().Info("reset replication binlog puller")
+				log.L().Info("reset replication binlog puller", zap.Any("pos", s.checkpoint.GlobalPoint()))
 				if s.cfg.EnableGTID {
 					for i := 0; i < eventIndex; {
 						e, err = s.getEvent(tctx, currentLocation)
@@ -1815,7 +1818,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						}
 					}
 					if eventIndex > 0 {
-						log.L().Info("discard event already consumed", zap.Int("count", eventIndex))
+						log.L().Info("discard event already consumed", zap.Int("count", eventIndex),
+							zap.Any("cur_loc", currentLocation))
 					}
 				}
 				continue

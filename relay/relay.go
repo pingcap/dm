@@ -303,7 +303,7 @@ func (r *Relay) process(ctx context.Context) error {
 	// it only do the retry for some binlog reader error now.
 	for {
 		eventInx, err := r.handleEvents(ctx, reader2, transformer2, writer2)
-	check_error:
+	checkError:
 		if err == nil {
 			return nil
 		} else if !readerRetry.Check(ctx, err) {
@@ -325,22 +325,25 @@ func (r *Relay) process(ctx context.Context) error {
 			isNew, err2 := isNewServer(ctx, r.meta.UUID(), r.db.DB, r.cfg.Flavor)
 			// should start from the transaction beginning when switch to a new server
 			if err2 != nil {
-				log.L().Warn("check new server failed, continue outer loop", log.ShortError(err2))
+				r.logger.Warn("check new server failed, continue outer loop", log.ShortError(err2))
 				err = err2
-				goto check_error
+				goto checkError
 			}
 			if !isNew {
 				for i := 0; i < eventInx; {
 					res, err2 := reader2.GetEvent(ctx)
 					if err2 != nil {
-						 err = err2
-						goto check_error
+						err = err2
+						goto checkError
 					}
 					tResult := transformer2.Transform(res.Event)
 					// do not count skip event
 					if !tResult.Ignore {
 						i++
 					}
+				}
+				if eventInx > 0 {
+					r.logger.Info("discard duplicate event", zap.Int("count", eventInx))
 				}
 			}
 		}
@@ -462,7 +465,7 @@ func (r *Relay) handleEvents(
 		_, lastPos  = r.meta.Pos()
 		_, lastGTID = r.meta.GTID()
 		err         error
-		eventIndex int
+		eventIndex  int
 	)
 	if lastGTID == nil {
 		if lastGTID, err = gtid.ParserGTID(r.cfg.Flavor, ""); err != nil {
@@ -474,6 +477,16 @@ func (r *Relay) handleEvents(
 		// 1. read events from upstream server
 		readTimer := time.Now()
 		rResult, err := reader2.GetEvent(ctx)
+		failpoint.Inject("RelayGetEventFailed", func(v failpoint.Value) {
+			if intVal, ok := v.(int); ok && intVal == eventIndex {
+				err = errors.New("fail point triggered")
+				_, gtid := r.meta.GTID()
+				r.logger.Warn("failed to get event", zap.Int("event_index", eventIndex),
+					zap.Any("gtid", gtid), log.ShortError(err))
+				// wait backoff retry interval
+				time.Sleep(1 * time.Second)
+			}
+		})
 		if err != nil {
 			switch errors.Cause(err) {
 			case context.Canceled:
