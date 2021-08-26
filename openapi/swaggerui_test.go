@@ -1,13 +1,9 @@
 package openapi
 
 import (
-	"context"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"github.com/pingcap/check"
 )
 
@@ -19,20 +15,13 @@ func TestNewSwaggerDocUI(t *testing.T) {
 	check.TestingT(t)
 }
 
-func (t *swaggerUISuite) TestNewSwaggerDocUI(c *check.C) {
-	req, _ := http.NewRequest("GET", "/api/v1/docs", nil)
-	req = req.WithContext(context.TODO()) // make lint happy
-
-	mw, err := NewSwaggerDocUI(NewSwaggerConfig("/api/v1/docs", "/api/v1/docs/dm.json", ""), []byte{})
+func (t *swaggerUISuite) TestGetSwaggerHTML(c *check.C) {
+	html, err := GetSwaggerHTML(NewSwaggerConfig("/api/v1/docs/dm.json", ""))
 	c.Assert(err, check.IsNil)
-	e := echo.New()
-	e.Pre(mw)
-	handler := e.Server.Handler
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, req)
+	c.Assert(strings.Contains(html, "<title>API documentation</title>"), check.Equals, true)
+}
 
-	c.Assert(recorder.Code, check.Equals, http.StatusOK)
-	c.Assert(recorder.Header().Get("Content-Type"), check.Equals, "text/html; charset=UTF-8")
-	respString := recorder.Body.String()
-	c.Assert(strings.Contains(respString, "<title>API documentation</title>"), check.Equals, true)
+func (t *swaggerUISuite) TestGetSwaggerJSON(c *check.C) {
+	_, err := GetSwaggerJSON()
+	c.Assert(err, check.IsNil)
 }

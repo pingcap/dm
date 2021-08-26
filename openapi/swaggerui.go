@@ -3,8 +3,6 @@ package openapi
 import (
 	"bytes"
 	"html/template"
-
-	"github.com/labstack/echo/v4"
 )
 
 const (
@@ -69,8 +67,6 @@ const (
 
 // SwaggerConfig configures the SwaggerDoc middlewares.
 type SwaggerConfig struct {
-	// DocPrefix the url to find the doc
-	DocPath string
 	// SpecJsonPath the url to find the spec
 	SpecJSONPath string
 	// SwaggerHost for the js that generates the swagger ui site, defaults to: http://petstore3.swagger.io/
@@ -78,37 +74,37 @@ type SwaggerConfig struct {
 }
 
 // NewSwaggerConfig return swaggerConfig.
-func NewSwaggerConfig(docPath, specJSONPath, swaggerHost string) *SwaggerConfig {
+func NewSwaggerConfig(specJSONPath, swaggerHost string) *SwaggerConfig {
 	if swaggerHost == "" {
 		swaggerHost = defaultSwaggerHost
 	}
 	return &SwaggerConfig{
-		DocPath:      docPath,
 		SpecJSONPath: specJSONPath,
 		SwaggerHost:  swaggerHost,
 	}
 }
 
-// NewSwaggerDocUI creates a echo middleware to serve a documentation site for a swagger spec.
-// This allows for altering the spec before starting the http listener.
-func NewSwaggerDocUI(config *SwaggerConfig, swaggerJSON []byte) (echo.MiddlewareFunc, error) {
+// GetSwaggerHTML returns the swagger ui html.
+func GetSwaggerHTML(config *SwaggerConfig) (string, error) {
 	// swagger html
 	tmpl := template.Must(template.New("swaggerdoc").Parse(swaggerUITemplate))
 	buf := bytes.NewBuffer(nil)
 	err := tmpl.Execute(buf, config)
 	if err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+// GetSwaggerJSON returns the swagger json.
+func GetSwaggerJSON() ([]byte, error) {
+	swagger, err := GetSwagger()
+	if err != nil {
 		return nil, err
 	}
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			path := c.Request().URL.Path
-			switch {
-			case path == config.DocPath:
-				return c.HTML(200, buf.String())
-			case path == config.SpecJSONPath:
-				return c.JSONBlob(200, swaggerJSON)
-			}
-			return next(c)
-		}
-	}, nil
+	swaggerJSON, err := swagger.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return swaggerJSON, nil
 }

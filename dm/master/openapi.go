@@ -32,7 +32,6 @@ import (
 )
 
 const (
-	docBasePath     = "/api/v1/docs"
 	docJSONBasePath = "/api/v1/dm.json"
 )
 
@@ -43,19 +42,10 @@ func (s *Server) InitOpenAPIHandles() error {
 		return err
 	}
 	swagger.AddServer(&openapi3.Server{URL: fmt.Sprintf("http://%s", s.cfg.AdvertiseAddr)})
-	swaggerJSON, err := swagger.MarshalJSON()
-	if err != nil {
-		return err
-	}
-	docMW, err := openapi.NewSwaggerDocUI(openapi.NewSwaggerConfig(docBasePath, docJSONBasePath, ""), swaggerJSON)
-	if err != nil {
-		return err
-	}
 	e := echo.New()
 	// inject err handler
 	e.HTTPErrorHandler = terrorHTTPErrorHandler
 	// middlewares
-	e.Pre(docMW)
 	// set logger
 	logger := log.L().Logger
 	logger = logger.With(zap.String("component", "openapi"))
@@ -80,6 +70,24 @@ func (s *Server) redirectRequestToLeader(ctx context.Context) (needRedirect bool
 	// nolint:dogsled
 	_, _, leaderOpenAPIAddr, err := s.election.LeaderInfo(ctx)
 	return true, leaderOpenAPIAddr, err
+}
+
+// GetDocJSON url is:(GET /api/v1/dm.json).
+func (s *Server) GetDocJSON(ctx echo.Context) error {
+	swaggerJSON, err := openapi.GetSwaggerJSON()
+	if err != nil {
+		return err
+	}
+	return ctx.JSONBlob(200, swaggerJSON)
+}
+
+// GetDocHTML url is:(GET /api/v1/docs).
+func (s *Server) GetDocHTML(ctx echo.Context) error {
+	html, err := openapi.GetSwaggerHTML(openapi.NewSwaggerConfig(docJSONBasePath, ""))
+	if err != nil {
+		return err
+	}
+	return ctx.HTML(http.StatusOK, html)
 }
 
 // DMAPICreateSource url is:(POST /api/v1/sources).

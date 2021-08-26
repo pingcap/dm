@@ -20,6 +20,24 @@ tags:
       url: "https://docs.pingcap.com/zh/tidb-data-migration/stable/quick-create-migration-task"
 
 paths:
+  /api/v1/docs:
+    get:
+      tags:
+        - doc
+      summary: "get doc html"
+      operationId: "GetDocHTML"
+      responses:
+        "200":
+          description: HTML content
+  /api/v1/dm.json:
+    get:
+      tags:
+        - doc
+      summary: "get doc json"
+      operationId: "GetDocJSON"
+      responses:
+        "200":
+          description: json content
   /api/v1/sources:
     post:
       tags:
