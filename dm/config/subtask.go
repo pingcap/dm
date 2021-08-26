@@ -221,8 +221,8 @@ type SubTaskConfig struct {
 	// still needed by Syncer / Loader bin
 	printVersion bool
 
-	// which DM worker is running the subtask, this will be injected when the real worker starts running the subtask.
-	WorkerName string
+	// which DM worker is running the subtask, this will be injected when the real worker starts running the subtask(StartSubTask).
+	WorkerName string `toml:"-" json:"-"`
 }
 
 // NewSubTaskConfig creates a new SubTaskConfig.

@@ -145,12 +145,13 @@ var (
 			Help:      "current binlog file index",
 		}, []string{"node", "task", "source_id"})
 
-	BinlogEventRowGauge = metricsproxy.NewGaugeVec(
-		prometheus.GaugeOpts{
+	BinlogEventRowHistogram = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
 			Name:      "binlog_event_row",
 			Help:      "number of rows in a binlog event",
+			Buckets:   prometheus.LinearBuckets(0, 100, 101), // linear from 0 to 10000, i think this is enough
 		}, []string{"worker", "task", "source_id"})
 
 	SQLRetriesTotal = metricsproxy.NewCounterVec(
@@ -255,12 +256,13 @@ var (
 			Buckets:   prometheus.LinearBuckets(1, 50, 21), // linear from 1 to 1001
 		}, []string{"worker", "task", "source_id", "queueNo"})
 
-	FlushCheckPointsTimeInterval = metricsproxy.NewGaugeVec(
-		prometheus.GaugeOpts{
+	FlushCheckPointsTimeInterval = metricsproxy.NewHistogramVec(
+		prometheus.HistogramOpts{
 			Namespace: "dm",
 			Subsystem: "syncer",
 			Name:      "flush_checkpoints_time_interval",
 			Help:      "checkpoint flushed time interval in seconds",
+			Buckets:   prometheus.LinearBuckets(1, 50, 21), // linear from 1 to 1001, i think this is enough
 		}, []string{"worker", "task", "source_id"})
 )
 
@@ -269,7 +271,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(BinlogReadDurationHistogram)
 	registry.MustRegister(BinlogEventSizeHistogram)
 	registry.MustRegister(BinlogEventCost)
-	registry.MustRegister(BinlogEventRowGauge)
+	registry.MustRegister(BinlogEventRowHistogram)
 	registry.MustRegister(ConflictDetectDurationHistogram)
 	registry.MustRegister(AddJobDurationHistogram)
 	registry.MustRegister(DispatchBinlogDurationHistogram)
@@ -301,7 +303,7 @@ func RemoveLabelValuesWithTaskInMetrics(task string) {
 	BinlogReadDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	BinlogEventSizeHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	BinlogEventCost.DeleteAllAboutLabels(prometheus.Labels{"task": task})
-	BinlogEventRowGauge.DeleteAllAboutLabels(prometheus.Labels{"task": task})
+	BinlogEventRowHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	ConflictDetectDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	AddJobDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})
 	DispatchBinlogDurationHistogram.DeleteAllAboutLabels(prometheus.Labels{"task": task})

@@ -1157,7 +1157,7 @@ func (s *Syncer) flushCheckPoints() error {
 	now := time.Now()
 	if !s.lastCheckpointFlushedTime.IsZero() {
 		duration := now.Sub(s.lastCheckpointFlushedTime).Seconds()
-		metrics.FlushCheckPointsTimeInterval.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Set(duration)
+		metrics.FlushCheckPointsTimeInterval.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Observe(duration)
 	}
 	s.lastCheckpointFlushedTime = now
 
@@ -1316,13 +1316,13 @@ func (s *Syncer) syncDML(
 			j := jobs[0]
 			s.updateReplicationLag(j, workerLagKey)
 
-			// metric only increases by 1 because dm batches sql jobs in a single transaction.
-			metrics.FinishedTransactionTotal.WithLabelValues(s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Inc()
 			switch j.tp {
 			case ddl:
 				metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageDDLExec, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(j.jobAddTime).Seconds())
 			case insert, update, del:
 				metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageDMLExec, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(j.jobAddTime).Seconds())
+				// metric only increases by 1 because dm batches sql jobs in a single transaction.
+				metrics.FinishedTransactionTotal.WithLabelValues(s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Inc()
 			}
 		} else {
 			s.updateReplicationLag(nil, workerLagKey)
@@ -1958,7 +1958,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		case *replication.RotateEvent:
 			err2 = s.handleRotateEvent(ev, ec)
 		case *replication.RowsEvent:
-			metrics.BinlogEventRowGauge.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Set(float64(len(ev.Rows)))
+			metrics.BinlogEventRowHistogram.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Observe(float64(len(ev.Rows)))
 			err2 = s.handleRowsEvent(ev, ec)
 		case *replication.QueryEvent:
 			originSQL = strings.TrimSpace(string(ev.Query))

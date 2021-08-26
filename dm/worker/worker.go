@@ -401,8 +401,6 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, n
 		return err
 	}
 
-	// inject worker name to this subtask config
-	cfg.WorkerName = w.name
 	// directly put cfg into subTaskHolder
 	// the unique of subtask should be assured by etcd
 	st := NewSubTask(cfg, w.etcdClient, w.name)
@@ -418,6 +416,8 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, n
 		return nil
 	}
 	st.cfg = cfg2
+	// inject worker name to this subtask config
+	st.cfg.WorkerName = w.name
 
 	if w.relayEnabled.Load() && w.relayPurger.Purging() {
 		// TODO: retry until purged finished
@@ -426,6 +426,9 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, n
 	}
 
 	w.l.Info("subtask created", zap.Stringer("config", cfg2))
+	println("----------------------")
+	println(st.cfg.WorkerName)
+	println("----------------------")
 	st.Run(expectStage)
 	return nil
 }
