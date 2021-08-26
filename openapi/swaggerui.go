@@ -85,13 +85,16 @@ func NewSwaggerConfig(specJSONPath, swaggerHost string) *SwaggerConfig {
 }
 
 // GetSwaggerHTML returns the swagger ui html.
-func GetSwaggerHTML(config *SwaggerConfig) (string, error) {
-	// swagger html
-	tmpl := template.Must(template.New("swaggerdoc").Parse(swaggerUITemplate))
-	buf := bytes.NewBuffer(nil)
-	err := tmpl.Execute(buf, config)
+func GetSwaggerHTML(config *SwaggerConfig) (html string, err error) {
+	tmpl, err := template.New("swaggerdoc").Parse(swaggerUITemplate)
 	if err != nil {
-		return "", err
+		return
+	}
+
+	buf := bytes.NewBuffer(nil)
+	err = tmpl.Execute(buf, config)
+	if err != nil {
+		return
 	}
 	return buf.String(), nil
 }
