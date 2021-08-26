@@ -122,6 +122,9 @@ func (db *DBConfig) Decode(data string) error {
 func (db *DBConfig) Adjust() {
 	// force set session time zone to UTC here.
 	AdjustTargetDBTimeZone(db)
+	if len(db.Password) > 0 {
+		db.Password = utils.DecryptOrPlaintext(db.Password)
+	}
 }
 
 // GetDBConfigFromEnv is a helper function to read config from environment. It's commonly used in unit tests.

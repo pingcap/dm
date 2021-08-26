@@ -51,6 +51,7 @@ const (
 	ClassScheduler
 	ClassDMCtl
 	ClassNotSet
+	ClassOpenAPI
 )
 
 var errClass2Str = map[ErrClass]string{
@@ -73,6 +74,7 @@ var errClass2Str = map[ErrClass]string{
 	ClassScheduler:     "scheduler",
 	ClassDMCtl:         "dmctl",
 	ClassNotSet:        "not-set",
+	ClassOpenAPI:       "openapi",
 }
 
 // String implements fmt.Stringer interface.
