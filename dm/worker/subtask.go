@@ -342,6 +342,9 @@ func (st *SubTask) PrevUnit() unit.Unit {
 
 // closeUnits closes all un-closed units (current unit and all the subsequent units).
 func (st *SubTask) closeUnits() {
+	st.cancel()
+	st.resultWg.Wait()
+
 	var (
 		cu  = st.currUnit
 		cui = -1
@@ -356,9 +359,6 @@ func (st *SubTask) closeUnits() {
 	if cui < 0 {
 		return
 	}
-
-	st.cancel()
-	st.resultWg.Wait()
 
 	for i := cui; i < len(st.units); i++ {
 		u := st.units[i]
@@ -462,7 +462,7 @@ func (st *SubTask) Result() *pb.ProcessResult {
 // Close stops the sub task.
 func (st *SubTask) Close() {
 	st.l.Info("closing")
-	if !st.setStageIfNotIn([]pb.Stage{pb.Stage_Stopped, pb.Stage_Stopping}, pb.Stage_Stopping) {
+	if !st.setStageIfNotIn([]pb.Stage{pb.Stage_Stopped, pb.Stage_Stopping, pb.Stage_Finished}, pb.Stage_Stopping) {
 		st.l.Info("subTask is already closed, no need to close")
 		return
 	}
