@@ -122,6 +122,9 @@ func (db *DBConfig) Decode(data string) error {
 func (db *DBConfig) Adjust() {
 	// force set session time zone to UTC here.
 	AdjustTargetDBTimeZone(db)
+	if len(db.Password) > 0 {
+		db.Password = utils.DecryptOrPlaintext(db.Password)
+	}
 }
 
 // GetDBConfigFromEnv is a helper function to read config from environment. It's commonly used in unit tests.
@@ -297,6 +300,9 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 
 	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
 		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)
+	} else if c.OnlineDDLScheme == PT || c.OnlineDDLScheme == GHOST {
+		c.OnlineDDL = true
+		log.L().Warn("'online-ddl-scheme' will be deprecated soon. Recommend that use online-ddl instead of online-ddl-scheme.")
 	}
 
 	if c.MetaSchema == "" {

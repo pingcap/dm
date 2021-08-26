@@ -95,7 +95,7 @@ function test_query_timeout() {
 		"context deadline exceeded" 2
 	duration=$(($(date +%s) - $start_time))
 	if [[ $duration -gt 10 ]]; then
-		echo "query-stauts takes too much time $duration"
+		echo "query-status takes too much time $duration"
 		exit 1
 	fi
 
