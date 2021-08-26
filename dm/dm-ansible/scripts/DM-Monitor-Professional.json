@@ -199,11 +199,12 @@
       "pluginVersion": "7.5.7",
       "targets": [
         {
-          "expr": "dm_worker_task_state{task=~\"$task\"}",
+          "exemplar": true,
+          "expr": "dm_worker_task_state{task=~\"$task\",source_id=~\"$source\"}",
           "format": "time_series",
           "interval": "$interval",
           "intervalFactor": 1,
-          "legendFormat": "{{task}}",
+          "legendFormat": "{{task}}-{{worker}}",
           "refId": "A"
         }
       ],
@@ -3168,13 +3169,12 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "dm_syncer_binlog_event_row{task=~\"$task\",source_id=~\"$source\",instance=~\"$instance\"}",
-          "format": "time_series",
+          "exemplar": true,
+          "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_binlog_event_row_bucket{task=~\"$task\",source_id=~\"$source\"}[$interval])) by (le,task,source))",
           "hide": false,
-          "interval": "$interval",
-          "intervalFactor": 2,
-          "legendFormat": "{{task}} - {{source}} -  {{instance}}",
-          "refId": "B"
+          "interval": "",
+          "legendFormat": "{{task}}-{{source}}",
+          "refId": "A"
         }
       ],
       "thresholds": [],
@@ -3828,12 +3828,11 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "dm_syncer_flush_checkpoints_time_interval{task=~\"$task\",source_id=~\"$source\",instance=~\"$instance\"}",
-          "format": "time_series",
-          "interval": "$interval",
-          "intervalFactor": 2,
-          "legendFormat": "{{task}} - {{source_id}} - {{instance}} -  90",
-          "refId": "A"
+          "expr": "histogram_quantile(0.90, sum(rate(dm_syncer_flush_checkpoints_time_interval_bucket{task=~\"$task\"}[$interval])) by (le,task,worker))",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{task}}-{{worker}}",
+          "refId": "B"
         }
       ],
       "thresholds": [],
