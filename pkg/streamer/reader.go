@@ -553,6 +553,9 @@ func (r *BinlogReader) parseFile(
 	if err != nil {
 		if possibleLast && isIgnorableParseError(err) {
 			r.tctx.L().Warn("fail to parse relay log file, meet some ignorable error", zap.String("file", fullPath), zap.Int64("offset", offset), zap.Error(err))
+			// the file is truncated, need to notify the caller
+			// TODO: should add a integration test for this
+			s.ech <- ErrorMaybeDuplicateEvent
 		} else {
 			r.tctx.L().Error("parse relay log file", zap.String("file", fullPath), zap.Int64("offset", offset), zap.Error(err))
 			return false, false, 0, "", "", false, terror.ErrParserParseRelayLog.Delegate(err, fullPath)
