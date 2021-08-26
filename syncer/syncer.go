@@ -1294,7 +1294,7 @@ func (s *Syncer) syncDML(
 	jobs := make([]*job, 0, count)
 	// db_schema->db_table->opType
 	tpCnt := make(map[string]map[string]map[opType]int64)
-	queueID := strings.Split(workerLagKey, "lag_")[0]
+	queueID := strings.TrimPrefix(workerLagKey, "lag_")
 
 	// clearF is used to reset job queue.
 	clearF := func() {

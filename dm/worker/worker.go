@@ -426,9 +426,6 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, n
 	}
 
 	w.l.Info("subtask created", zap.Stringer("config", cfg2))
-	println("----------------------")
-	println(st.cfg.WorkerName)
-	println("----------------------")
 	st.Run(expectStage)
 	return nil
 }

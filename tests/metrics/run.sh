@@ -64,6 +64,9 @@ function run() {
 		"query-status test" \
 		"\"result\": true" 3
 
+	check_metric $WORKER1_PORT 'dm_worker_task_state{source_id="mysql-replica-01",task="test",worker="worker1"}' 10 1 3
+	check_metric $WORKER2_PORT 'dm_worker_task_state{source_id="mysql-replica-02",task="test",worker="worker2"}' 10 1 3
+
 	# check ddl job lag
 	run_sql_source1 "alter table metrics.t1 add column new_col1 int;"
 	run_sql_source2 "alter table metrics.t2 add column new_col1 int;"
