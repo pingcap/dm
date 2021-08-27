@@ -6,3 +6,4 @@ metrics
 case_sensitive
 sql_mode
 http_proxies
+duplicate_event
