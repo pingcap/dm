@@ -123,7 +123,7 @@ function run() {
 		"export configs to directory .* succeed" 1
 
 	# check configs
-	sed '/password/d' /tmp/configs/tasks/test.yaml | diff $cur/configs/tasks/test.yaml - || exit 1
+	sed '/password/d' /tmp/configs/tasks/test.yaml | diff -I '^case-sensitive*' $cur/configs/tasks/test.yaml - || exit 1
 	sed '/password/d' /tmp/configs/sources/mysql-replica-01.yaml | diff $cur/configs/sources/mysql-replica-01.yaml - || exit 1
 	diff <(jq --sort-keys . /tmp/configs/relay_workers.json) <(jq --sort-keys . $cur/configs/relay_workers.json) || exit 1
 
