@@ -33,9 +33,13 @@ function test_dm() {
 
 	# check dm ctl output
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"query-status test" "$env_name=$env_val" 1
+		"query-status test" "$env_name=$env_val" 1 \
+		'"result": false' 1
 
 	unset $env_name
+
+	kill_dm_master
+	kill_dm_worker
 }
 
 function run() {
@@ -49,10 +53,9 @@ function run() {
 	test_dm "no_proxy" "localhost,127.0.0.1"
 }
 
-cleanup_data http_proxies
-
-cleanup_process $*
-run $*
-cleanup_process $*
+cleanup_data $TEST_NAME
+cleanup_process
+run
+cleanup_process
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
