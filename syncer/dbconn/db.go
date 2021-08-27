@@ -108,7 +108,7 @@ func (conn *DBConn) QuerySQL(tctx *tcontext.Context, query string, args ...inter
 				cost := time.Since(startTime)
 				// duration seconds
 				ds := cost.Seconds()
-				metrics.QueryHistogram.WithLabelValues(conn.Cfg.Name).Observe(ds)
+				metrics.QueryHistogram.WithLabelValues(conn.Cfg.Name, conn.Cfg.WorkerName, conn.Cfg.SourceID).Observe(ds)
 				if ds > 1 {
 					ctx.L().Warn("query statement too slow",
 						zap.Duration("cost time", cost),
@@ -191,7 +191,10 @@ func (conn *DBConn) ExecuteSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 				cost := time.Since(startTime)
 				// duration seconds
 				ds := cost.Seconds()
-				metrics.TxnHistogram.WithLabelValues(conn.Cfg.Name).Observe(ds)
+				metrics.TxnHistogram.WithLabelValues(conn.Cfg.Name, conn.Cfg.WorkerName, conn.Cfg.SourceID).Observe(ds)
+				// calculate idealJobCount metric: connection count * 1 / (one sql cost time)
+				qps := float64(conn.Cfg.WorkerCount) / (cost.Seconds() / float64(len(queries)))
+				metrics.IdealQPS.WithLabelValues(conn.Cfg.Name, conn.Cfg.WorkerName, conn.Cfg.SourceID).Set(qps)
 				if ds > 1 {
 					ctx.L().Warn("execute transaction too slow",
 						zap.Duration("cost time", cost),
