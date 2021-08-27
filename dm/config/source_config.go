@@ -271,7 +271,12 @@ func (c *SourceConfig) Adjust(ctx context.Context, db *sql.DB) (err error) {
 		log.L().Warn("using an absolute relay path, relay log can't work when starting multiple relay worker")
 	}
 
-	caseSensitive, err2 := utils.GetDBCaseSensitive(ctx2, db)
+	return c.AdjustCaseSensitive(ctx2, db)
+}
+
+// AdjustCaseSensitive adjust CaseSensitive from DB.
+func (c *SourceConfig) AdjustCaseSensitive(ctx context.Context, db *sql.DB) (err error) {
+	caseSensitive, err2 := utils.GetDBCaseSensitive(ctx, db)
 	if err2 != nil {
 		return err2
 	}

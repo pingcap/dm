@@ -27,6 +27,8 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // do not forget to update this path if the file removed/renamed.
@@ -311,4 +313,25 @@ func getMockServerIDs(ctx context.Context, db *sql.DB) (map[uint32]struct{}, err
 		1: {},
 		2: {},
 	}, nil
+}
+
+func (t *testConfig) TestAdjustCaseSensitive(c *C) {
+	cfg, err := LoadFromFile(sourceSampleFile)
+	c.Assert(err, IsNil)
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	mock.ExpectQuery("SELECT @@lower_case_table_names;").
+		WillReturnRows(sqlmock.NewRows([]string{"@@lower_case_table_names"}).AddRow(utils.LCTableNamesMixed))
+	mock.ExpectClose()
+	c.Assert(cfg.AdjustCaseSensitive(context.Background(), db), IsNil)
+	c.Assert(cfg.CaseSensitive, Equals, false)
+
+	db, mock, err = sqlmock.New()
+	c.Assert(err, IsNil)
+	mock.ExpectQuery("SELECT @@lower_case_table_names;").
+		WillReturnRows(sqlmock.NewRows([]string{"@@lower_case_table_names"}).AddRow(utils.LCTableNamesSensitive))
+	mock.ExpectClose()
+	c.Assert(cfg.AdjustCaseSensitive(context.Background(), db), IsNil)
+	c.Assert(cfg.CaseSensitive, Equals, true)
 }
