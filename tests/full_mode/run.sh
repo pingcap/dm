@@ -195,8 +195,8 @@ function run() {
 	ls $WORK_DIR/worker1/dumped_data.test && exit 1 || echo "worker1 auto removed dump files"
 	ls $WORK_DIR/worker2/dumped_data.test && exit 1 || echo "worker2 auto removed dump files"
 	# check task finished and metric cleaned
-	check_metric_not_contains $WORKER1_PORT 'dm_worker_task_state{source_id="mysql-replica-01",task="test"}' 3
-	check_metric_not_contains $WORKER2_PORT 'dm_worker_task_state{source_id="mysql-replica-02",task="test"}' 3
+	check_metric_not_contains $WORKER1_PORT 'dm_worker_task_state{source_id="mysql-replica-01",task="test",worker=\"worker1\"}' 3
+	check_metric_not_contains $WORKER2_PORT 'dm_worker_task_state{source_id="mysql-replica-02",task="test",worker=\"worker2\"}' 3
 	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
 	run_sql_both_source "SET @@GLOBAL.TIME_ZONE='SYSTEM';"
 }

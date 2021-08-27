@@ -167,7 +167,6 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 				cost := time.Since(startTime)
 				// duration seconds
 				ds := cost.Seconds()
-				txnHistogram.WithLabelValues(conn.cfg.Name, conn.cfg.SourceID).Observe(ds)
 				if ds > 1 {
 					ctx.L().Warn("execute transaction too slow",
 						zap.Duration("cost time", cost),
