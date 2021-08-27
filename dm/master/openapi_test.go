@@ -28,6 +28,7 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/pkg/ha"
@@ -135,13 +136,14 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 
 	baseURL := "/api/v1/sources"
 
+	dbCFG := config.GetDBConfigFromEnv()
 	source1 := openapi.Source{
 		SourceName: source1Name,
 		EnableGtid: false,
-		Host:       "127.0.0.1",
-		Password:   "123456",
-		Port:       3306,
-		User:       "root",
+		Host:       dbCFG.Host,
+		Password:   dbCFG.Password,
+		Port:       dbCFG.Port,
+		User:       dbCFG.User,
 	}
 	result := testutil.NewRequest().Post(baseURL).WithJsonBody(source1).Go(t.testT, s.echo)
 	// check http status code

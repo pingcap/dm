@@ -107,7 +107,7 @@ function run() {
 	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
 	cd $cur
-	for file in "check_list_1"/*; do
+	for file in "check_list"/*; do
 		source $file
 	done
 	cd -
