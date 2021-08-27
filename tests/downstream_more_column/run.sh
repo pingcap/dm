@@ -78,7 +78,10 @@ function run() {
 	check_log_contain_with_retry 'flush table info' $WORK_DIR/worker1/log/dm-worker.log
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"resume-task test" \
+		"resume-task test"
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
 		"\"result\": true" 2
 
 	# check incremental data
