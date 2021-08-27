@@ -37,7 +37,7 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285
-	github.com/tidwall/gjson v1.6.1
+	github.com/tidwall/gjson v1.6.5
 	github.com/tidwall/sjson v1.1.2
 	github.com/tikv/pd v1.1.0-beta.0.20210323121136-78679e5e209d
 	github.com/unrolled/render v1.0.1
