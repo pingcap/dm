@@ -50,6 +50,14 @@ type openAPISuite struct {
 	workerClients   map[string]workerrpc.Client
 }
 
+func (t *openAPISuite) SetUpTest(c *check.C) {
+	t.testEtcdCluster = integration.NewClusterV3(t.testT, &integration.ClusterConfig{Size: 1})
+	t.etcdTestCli = t.testEtcdCluster.RandClient()
+	t.workerClients = make(map[string]workerrpc.Client)
+
+	c.Assert(ha.ClearTestInfoOperation(t.etcdTestCli), check.IsNil)
+}
+
 func setupServer(ctx context.Context, c *check.C) *Server {
 	// create a new cluster
 	cfg1 := NewConfig()
@@ -69,15 +77,6 @@ func setupServer(ctx context.Context, c *check.C) *Server {
 	}), check.IsTrue)
 
 	return s1
-}
-
-func (t *openAPISuite) SetUpTest(c *check.C) {
-	c.Logf("Current running test=%s", c.TestName())
-	t.testEtcdCluster = integration.NewClusterV3(t.testT, &integration.ClusterConfig{Size: 1})
-	t.etcdTestCli = t.testEtcdCluster.RandClient()
-	t.workerClients = make(map[string]workerrpc.Client)
-
-	c.Assert(ha.ClearTestInfoOperation(t.etcdTestCli), check.IsNil)
 }
 
 func (t *openAPISuite) TestRedirectRequestToLeader(c *check.C) {
@@ -157,7 +156,7 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 	c.Assert(resultSource.EnableGtid, check.Equals, source1.EnableGtid)
 	c.Assert(resultSource.SourceName, check.Equals, source1.SourceName)
 
-	// created source with same name will failed
+	// create source with same name will failed
 	source2 := source1
 	result2 := testutil.NewRequest().Post(baseURL).WithJsonBody(source2).Go(t.testT, s.echo)
 	// check http status code
