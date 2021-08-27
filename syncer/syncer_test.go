@@ -1691,7 +1691,7 @@ func (s *Syncer) mockFinishJob(jobs []*expectJob) {
 	for _, job := range jobs {
 		switch job.tp {
 		case ddl, insert, update, del, flush:
-			s.addCount(true, "test", job.tp, 1)
+			s.addCount(true, "test", job.tp, 1, "", "")
 		}
 	}
 }
@@ -1701,7 +1701,7 @@ func (s *Syncer) addJobToMemory(job *job) error {
 
 	switch job.tp {
 	case ddl, insert, update, del, flush:
-		s.addCount(false, "test", job.tp, 1)
+		s.addCount(false, "test", job.tp, 1, "", "")
 		testJobs.Lock()
 		testJobs.jobs = append(testJobs.jobs, job)
 		testJobs.Unlock()

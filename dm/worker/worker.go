@@ -416,6 +416,8 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.Stage, n
 		return nil
 	}
 	st.cfg = cfg2
+	// inject worker name to this subtask config
+	st.cfg.WorkerName = w.name
 
 	if w.relayEnabled.Load() && w.relayPurger.Purging() {
 		// TODO: retry until purged finished
