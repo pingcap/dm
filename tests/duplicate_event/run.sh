@@ -76,7 +76,7 @@ function run() {
 
 	check_sync_diff $WORK_DIR $cur/conf/diff_relay_config.toml
 
-  # check relay log binlog file size is the same as master size
+	# check relay log binlog file size is the same as master size
 	run_sql_source2 "show master status;"
 	binlog_file=$(grep "File" $TEST_DIR/sql_res.$TEST_NAME.txt | awk -F: '{print $2}' | xargs)
 	binlog_pos=$(grep "Position" $TEST_DIR/sql_res.$TEST_NAME.txt | awk -F: '{print $2}' | xargs)
