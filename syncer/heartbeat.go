@@ -330,7 +330,7 @@ func (h *Heartbeat) calculateLag(ctx context.Context) error {
 }
 
 func reportLag(taskName string, lag float64) {
-	metrics.ReplicationLagGauge.WithLabelValues(taskName).Set(lag)
+	metrics.ReplicationLagHistogram.WithLabelValues(taskName).Observe(lag)
 }
 
 func (h *Heartbeat) getPrimaryTS() (float64, error) {
