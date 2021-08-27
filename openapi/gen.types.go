@@ -107,13 +107,13 @@ type RelayStatus struct {
 // data source ssl configuration, the field will be hidden when getting the data source configuration from the interface
 type Security struct {
 	// certificate file content
-	SslCaContent *string `json:"ssl_ca_content,omitempty"`
+	SslCaContent string `json:"ssl_ca_content"`
 
 	// File content of PEM format/X509 format certificates
-	SslCertContent *string `json:"ssl_cert_content,omitempty"`
+	SslCertContent string `json:"ssl_cert_content"`
 
 	// Content of the private key file in X509 format
-	SslKeyContent *string `json:"ssl_key_content,omitempty"`
+	SslKeyContent string `json:"ssl_key_content"`
 }
 
 // ShardingGroup defines model for ShardingGroup.

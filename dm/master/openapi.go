@@ -17,6 +17,7 @@ package master
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/deepmap/oapi-codegen/pkg/middleware"
@@ -24,6 +25,7 @@ import (
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -88,17 +90,64 @@ func (s *Server) GetDocHTML(ctx echo.Context) error {
 
 // DMAPICreateSource url is:(POST /api/v1/sources).
 func (s *Server) DMAPICreateSource(ctx echo.Context) error {
-	return nil
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+
+	var createSourceReq openapi.Source
+	if err := ctx.Bind(&createSourceReq); err != nil {
+		return err
+	}
+	cfg := modelToSourceCfg(createSourceReq)
+	if err := checkAndAdjustSourceConfig(ctx.Request().Context(), cfg); err != nil {
+		return err
+	}
+	if err := s.scheduler.AddSourceCfg(cfg); err != nil {
+		return err
+	}
+	return ctx.JSON(http.StatusCreated, createSourceReq)
 }
 
 // DMAPIGetSourceList url is:(GET /api/v1/sources).
 func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
-	return nil
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+
+	sourceIDS := s.scheduler.GetSourceCfgIDs()
+	sourceCfgList := make([]*config.SourceConfig, len(sourceIDS))
+	for idx, sourceID := range sourceIDS {
+		sourceCfgList[idx] = s.scheduler.GetSourceCfgByID(sourceID)
+	}
+	sourceList := make([]openapi.Source, len(sourceCfgList))
+	for idx, cfg := range sourceCfgList {
+		sourceList[idx] = sourceCfgToModel(*cfg)
+	}
+	resp := openapi.GetSourceListResponse{Total: len(sourceList), Data: sourceList}
+	return ctx.JSON(http.StatusOK, resp)
 }
 
 // DMAPIDeleteSource url is:(DELETE /api/v1/sources).
 func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string) error {
-	return nil
+	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
+	if err != nil {
+		return err
+	}
+	if needRedirect {
+		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
+	}
+	if err := s.scheduler.RemoveSourceCfg(sourceName); err != nil {
+		return err
+	}
+	return ctx.NoContent(http.StatusNoContent)
 }
 
 // DMAPIStartRelay url is:(POST /api/v1/sources/{source-id}/relay).
@@ -153,4 +202,37 @@ func terrorHTTPErrorHandler(err error, c echo.Context) {
 func sendHTTPErrorResp(ctx echo.Context, code int, message string) error {
 	err := openapi.ErrorWithMessage{ErrorMsg: message, ErrorCode: code}
 	return ctx.JSON(http.StatusBadRequest, err)
+}
+
+func sourceCfgToModel(cfg config.SourceConfig) openapi.Source {
+	// NOTE we don't return SSL cert here, because we don't want to expose it to the user.
+	return openapi.Source{
+		EnableGtid: cfg.EnableGTID,
+		Host:       cfg.From.Host,
+		Password:   cfg.From.Password,
+		Port:       cfg.From.Port,
+		SourceName: cfg.SourceID,
+		User:       cfg.From.User,
+	}
+}
+
+func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
+	cfg := config.NewSourceConfig()
+	from := config.DBConfig{
+		Host:     source.Host,
+		Port:     source.Port,
+		User:     source.User,
+		Password: source.Password,
+	}
+	if source.Security != nil {
+		from.Security = &config.Security{
+			SSLCABytes:   []byte(source.Security.SslCaContent),
+			SSLKEYBytes:  []byte(source.Security.SslKeyContent),
+			SSLCertBytes: []byte(source.Security.SslCertContent),
+		}
+	}
+	cfg.From = from
+	cfg.EnableGTID = source.EnableGtid
+	cfg.SourceID = source.SourceName
+	return cfg
 }

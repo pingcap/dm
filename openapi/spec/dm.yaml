@@ -297,6 +297,10 @@ components:
           type: string
           example: ""
           description: "Content of the private key file in X509 format"
+      required:
+        - "ssl_ca_content"
+        - "ssl_cert_content"
+        - "ssl_key_content"
     Purge:
       description: "relay log cleanup policy configuration"
       type: object
@@ -352,7 +356,7 @@ components:
         - "relay_dir"
         - "relay_binlog_gtid"
         - "relay_catch_up_master"
-        - stage
+        - "stage"
     StartRelayRequest:
       description: action to open a relay request
       type: object
