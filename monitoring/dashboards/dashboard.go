@@ -15,11 +15,15 @@ import (
 const (
 	datasourceName = "dm-cluster"
 	outputDir      = "./dashboards"
-	name           = "dm.json"
+
+	standardName     = "DM-Monitor-Standard.json"
+	professionalName = "DM-Monitor-Professional.json"
 )
 
+// dashboard file name -> title.
 var dashboards = map[string]string{
-	"dm.json": "Test-Cluster-DM",
+	standardName:     "Test-Cluster-DM",
+	professionalName: "Test-Cluster-DM",
 }
 
 func readDashboard(dir string, name string) (string, error) {
@@ -96,7 +100,11 @@ func filterDashboard(str string, title string) string {
 }
 
 func main() {
-	str, err := readDashboard(outputDir, name)
-	checkErr(err, "read dashboard file failed")
-	checkErr(writeDashboard(outputDir, name, str), "write dashboard file failed")
+	str, err := readDashboard(outputDir, standardName)
+	checkErr(err, "read standar dashboard file failed")
+	checkErr(writeDashboard(outputDir, standardName, str), "write standard dashboard file failed")
+
+	str, err = readDashboard(outputDir, professionalName)
+	checkErr(err, "read professional dashboard file failed")
+	checkErr(writeDashboard(outputDir, professionalName, str), "write professional dashboard file failed")
 }
