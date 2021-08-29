@@ -987,14 +987,13 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 
 	s.cfg.WorkerCount = 1
 	syncer := NewSyncer(s.cfg, nil)
-	syncer.jobs = []chan *job{make(chan *job, 1)}
-	syncer.queueBucketMapping = []string{"queue_0", adminQueueName}
+	syncer.dmlJobCh = make(chan *job, 1)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		job := <-syncer.jobs[0]
+		job := <-syncer.dmlJobCh
 		c.Assert(job.tp, Equals, flush)
 		syncer.jobWg.Done()
 	}()

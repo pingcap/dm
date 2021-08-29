@@ -20,6 +20,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.14.3
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/labstack/echo/v4 v4.4.0
+	github.com/pingcap/br v5.2.0-alpha.0.20210714104733-65ae7dd3a2f2+incompatible
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/dumpling v0.0.0-20210806043112-4e012e54ce89
 	github.com/pingcap/errors v0.11.5-0.20210513014640-40f9a1999b3b
