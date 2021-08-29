@@ -956,7 +956,7 @@ func (s *Syncer) addJob(job *job) error {
 		}
 	})
 
-	if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
+	if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete && job.tp != flush {
 		s.tctx.L().Info("All jobs is completed before syncer close, the coming job will be reject", zap.Any("job", job))
 		return nil
 	}
@@ -1425,7 +1425,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			s.waitTransactionLock.Lock()
 			if s.isTransactionEnd {
 				s.waitXIDJob.Store(int64(waitComplete))
-				s.jobWg.Wait()
 				tctx.L().Info("the last job is transaction end, done directly")
 				runCancel()
 				s.waitTransactionLock.Unlock()
@@ -1439,7 +1438,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				tctx.L().Info("received syncer's done")
 			case <-time.After(maxPauseOrStopWaitTime):
 				tctx.L().Info("wait transaction end timeout")
-				s.jobWg.Wait()
 				runCancel()
 			}
 		}
@@ -1598,7 +1596,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
 
-		s.jobWg.Wait()
 		var (
 			err2            error
 			exitSafeModeLoc binlog.Location
@@ -1609,15 +1606,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			exitSafeModeLoc = savedGlobalLastLocation.Clone()
 		}
 		s.checkpoint.SaveSafeModeExitPoint(&exitSafeModeLoc)
-		if err2 = s.execError.Load(); err2 != nil && (terror.ErrDBExecuteFailed.Equal(err2) || terror.ErrDBUnExpect.Equal(err2)) {
-			err2 = s.checkpoint.FlushSafeModeExitPoint(s.tctx)
-		} else {
-			err2 = s.flushCheckPoints()
+
+		// flush all jobs before exit
+		if err2 = s.flushJobs(); err2 != nil {
+			tctx.L().Warn("failed to flush jobs when exit task", zap.Error(err2))
 		}
-		if err2 != nil {
-			tctx.L().Warn("failed to flush checkpoints when exit task", zap.Error(err2))
-		} else {
-			tctx.L().Info("flush checkpoints when exit task")
+
+		// if any execute error, flush safemode exit point
+		if err2 = s.execError.Load(); err2 != nil && (terror.ErrDBExecuteFailed.Equal(err2) || terror.ErrDBUnExpect.Equal(err2)) {
+			if err2 = s.checkpoint.FlushSafeModeExitPoint(s.tctx); err2 != nil {
+				tctx.L().Warn("failed to flush safe mode checkpoints when exit task", zap.Error(err2))
+			}
 		}
 	}()
 
