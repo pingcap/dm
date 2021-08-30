@@ -1211,6 +1211,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			ddl,
 			"ALTER TABLE `test_1`.`t_3` ADD PRIMARY KEY(`id`, `name`)",
 			nil,
+		}, {
+			flush,
+			"",
+			nil,
 		},
 	}
 
@@ -1271,6 +1275,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			del,
 			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1",
 			[]interface{}{int32(3)},
+		}, {
+			flush,
+			"",
+			nil,
 		},
 	}
 
@@ -1429,6 +1437,10 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 			update,
 			"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1",
 			[]interface{}{int32(1), "b", int32(2)},
+		}, {
+			flush,
+			"",
+			nil,
 		},
 	}
 
