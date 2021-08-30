@@ -40,6 +40,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
+	brutils "github.com/pingcap/tidb/br/pkg/utils"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -71,7 +72,6 @@ import (
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/shardddl"
-	brutils "github.com/pingcap/tidb/br/pkg/utils"
 )
 
 var (
@@ -1377,6 +1377,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context) {
 	for {
 		select {
 		case sqlJob, ok := <-s.dmlJobCh:
+			metrics.QueueSizeGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Set(float64(len(s.dmlJobCh)))
 			if !ok {
 				if len(allJobs) > 0 {
 					tctx.L().Warn("have unexecuted jobs when close job chan!", zap.Any("rest job", allJobs))
