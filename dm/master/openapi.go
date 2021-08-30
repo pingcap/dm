@@ -205,7 +205,7 @@ func sendHTTPErrorResp(ctx echo.Context, code int, message string) error {
 }
 
 func sourceCfgToModel(cfg config.SourceConfig) openapi.Source {
-	// NOTE we don't return SSL cert here, because we don't want to expose it to the user.
+	// NOTE we don't return security content here, because we don't want to expose it to the user.
 	return openapi.Source{
 		EnableGtid: cfg.EnableGTID,
 		Host:       cfg.From.Host,
