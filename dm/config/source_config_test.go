@@ -321,17 +321,16 @@ func (t *testConfig) TestAdjustCaseSensitive(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
+
 	mock.ExpectQuery("SELECT @@lower_case_table_names;").
 		WillReturnRows(sqlmock.NewRows([]string{"@@lower_case_table_names"}).AddRow(utils.LCTableNamesMixed))
-	mock.ExpectClose()
 	c.Assert(cfg.AdjustCaseSensitive(context.Background(), db), IsNil)
 	c.Assert(cfg.CaseSensitive, Equals, false)
 
-	db, mock, err = sqlmock.New()
-	c.Assert(err, IsNil)
 	mock.ExpectQuery("SELECT @@lower_case_table_names;").
 		WillReturnRows(sqlmock.NewRows([]string{"@@lower_case_table_names"}).AddRow(utils.LCTableNamesSensitive))
-	mock.ExpectClose()
 	c.Assert(cfg.AdjustCaseSensitive(context.Background(), db), IsNil)
 	c.Assert(cfg.CaseSensitive, Equals, true)
+
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
