@@ -225,7 +225,7 @@ type Syncer struct {
 
 	tsOffset                  atomic.Int64    // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster       atomic.Int64    // current task delay second behind upstream
-	workerLagMap              []*atomic.Int64 // worker's sync lag map, note that idx=0 is ddl lag and idx=1 is skip lag,sql worker lag idx=(queue id + 2)
+	workerLagArray            []*atomic.Int64 // worker's sync lag array, note that idx=0 is ddl lag and idx=1 is skip lag,sql worker lag idx=(queue id + 2)
 	lastCheckpointFlushedTime time.Time
 }
 
@@ -264,12 +264,9 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
 	syncer.recordedActiveRelayLog = false
-	syncer.workerLagMap = make([]*atomic.Int64, cfg.WorkerCount+2) // size = ddl + skip + workerCount
-	// before starting syncDML, we should initialise the workerLagMap to prevent data races.
-	// for example, while thread 1 is setting the key of s.workerLagMap
-	// thread-2 might be calling s.updateReplicationLag( to get the key from s.workerLagMap)
-	for i := range syncer.workerLagMap {
-		syncer.workerLagMap[i] = atomic.NewInt64(0)
+	syncer.workerLagArray = make([]*atomic.Int64, cfg.WorkerCount+2) // size = ddl + skip + workerCount
+	for i := range syncer.workerLagArray {
+		syncer.workerLagArray[i] = atomic.NewInt64(0)
 	}
 	syncer.lastCheckpointFlushedTime = time.Time{}
 	return syncer
@@ -858,7 +855,7 @@ func (s *Syncer) updateReplicationLag(job *job, lagIdx int) {
 	var lag int64
 	// when job is nil mean no job in this bucket, need do reset this bucket lag to 0
 	if job == nil {
-		s.workerLagMap[lagIdx].Store(0)
+		s.workerLagArray[lagIdx].Store(0)
 	} else {
 		failpoint.Inject("BlockSyncerUpdateLag", func(v failpoint.Value) {
 			args := strings.Split(v.(string), ",")
@@ -870,15 +867,15 @@ func (s *Syncer) updateReplicationLag(job *job, lagIdx int) {
 			}
 		})
 		lag = s.calcReplicationLag(int64(job.eventHeader.Timestamp))
-		s.workerLagMap[lagIdx].Store(lag)
+		s.workerLagArray[lagIdx].Store(lag)
 	}
 }
 
 func (s *Syncer) updateReplicationLagMetric() {
 	var lag int64
 	// find all job queue lag choose the max one
-	for idx := range s.workerLagMap {
-		if wl := s.workerLagMap[idx].Load(); wl > lag {
+	for idx := range s.workerLagArray {
+		if wl := s.workerLagArray[idx].Load(); wl > lag {
 			lag = wl
 		}
 	}
@@ -899,11 +896,11 @@ func (s *Syncer) updateReplicationLagMetric() {
 	})
 
 	// reset ddl / skip lag in case of ddl / skip lag is never updated
-	if lag == s.workerLagMap[ddlLagIdx].Load() {
-		s.workerLagMap[ddlLagIdx].Store(0)
+	if lag == s.workerLagArray[ddlLagIdx].Load() {
+		s.workerLagArray[ddlLagIdx].Store(0)
 	}
-	if lag == s.workerLagMap[skipLagIdx].Load() {
-		s.workerLagMap[skipLagIdx].Store(0)
+	if lag == s.workerLagArray[skipLagIdx].Load() {
+		s.workerLagArray[skipLagIdx].Store(0)
 	}
 }
 
