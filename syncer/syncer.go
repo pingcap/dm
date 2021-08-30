@@ -45,7 +45,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	brutils "github.com/pingcap/br/pkg/utils"
+	brutils "github.com/pingcap/tidb/br/pkg/utils"
 
 	"github.com/pingcap/dm/dm/config"
 	common2 "github.com/pingcap/dm/dm/ctl/common"

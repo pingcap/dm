@@ -114,6 +114,13 @@ issues:
     - EXC0002 # golint
     - EXC0003
 
+  exclude-rules:
+    # TODO Remove it.
+    # Exclude some staticcheck messages
+    - linters:
+      - staticcheck
+      text: "SA1019:"
+
   # Fix found issues (if it's supported by the linter)
   fix: false
 
