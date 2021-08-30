@@ -1386,7 +1386,8 @@ func (s *Syncer) syncDML(tctx *tcontext.Context) {
 				continue
 			}
 
-			dmlWorkerPool.ApplyWithIDInErrorGroup(eg, s.executeDML(tctx, allJobs))
+			jobs := allJobs
+			dmlWorkerPool.ApplyWithIDInErrorGroup(eg, s.executeDML(tctx, jobs))
 			if sqlJob.tp == flush {
 				if err := eg.Wait(); err != nil {
 					tctx.L().Error("flush dml jobs", log.ShortError(err))
