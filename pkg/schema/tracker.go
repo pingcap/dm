@@ -66,13 +66,11 @@ type Tracker struct {
 func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, tidbConn *conn.BaseConn) (*Tracker, error) {
 	// NOTE: tidb uses a **global** config so can't isolate tracker's config from each other. If that isolation is needed,
 	// we might SetGlobalConfig before every call to tracker, or use some patch like https://github.com/bouk/monkey
-	toSet := tidbConfig.NewConfig()
-	// bypass wait time of https://github.com/pingcap/tidb/pull/20550
-	toSet.TiKVClient.AsyncCommit.SafeWindow = 0
-	toSet.TiKVClient.AsyncCommit.AllowedClockDrift = 0
-	// set a negative lease will disable the background statistic jobs.
-	toSet.Performance.StatsLease = "-1s"
-	tidbConfig.StoreGlobalConfig(toSet)
+	tidbConfig.UpdateGlobal(func(conf *tidbConfig.Config) {
+		// bypass wait time of https://github.com/pingcap/tidb/pull/20550
+		conf.TiKVClient.AsyncCommit.SafeWindow = 0
+		conf.TiKVClient.AsyncCommit.AllowedClockDrift = 0
+	})
 
 	if len(sessionCfg) == 0 {
 		sessionCfg = make(map[string]string)
@@ -112,6 +110,7 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 
 	// avoid data race and of course no use in DM
 	domain.RunAutoAnalyze = false
+	session.DisableStats4Test()
 
 	dom, err := session.BootstrapSession(store)
 	if err != nil {
