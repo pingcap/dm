@@ -530,6 +530,64 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	// TODO: test query with correct task name, this needs to add task first
 }
 
+func (t *testMaster) TestWaitOperationOkRightResult(c *check.C) {
+	cases := []struct{
+		req interface{}
+		resp *pb.QueryStatusResponse
+		expectedOK bool
+		expectedEmptyMsg bool
+	} {
+		{
+			&pb.OperateTaskRequest{
+				Op: pb.TaskOp_Pause,
+				Name: "task-unittest",
+			},
+			&pb.QueryStatusResponse{
+				SubTaskStatus: []*pb.SubTaskStatus{
+					{Stage: pb.Stage_Paused},
+				},
+			},
+			true,
+			true,
+		},
+		{
+			&pb.OperateTaskRequest{
+				Op: pb.TaskOp_Pause,
+				Name: "task-unittest",
+			},
+			&pb.QueryStatusResponse{
+				SubTaskStatus: []*pb.SubTaskStatus{
+					{
+						Stage: pb.Stage_Paused,
+						Result: &pb.ProcessResult{Errors: []*pb.ProcessError{{Message: "paused by previous error"}}},
+					},
+				},
+			},
+			true,
+			false,
+		},
+	}
+
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+	ctx := context.Background()
+	duration, _ := time.ParseDuration("1s")
+	s := &Server{cfg: &Config{RPCTimeout: duration}}
+	for _, ca := range cases {
+		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		mockWorkerClient.EXPECT().QueryStatus(
+			gomock.Any(),
+			gomock.Any(),
+		).Return(ca.resp, nil)
+		mockWorker := scheduler.NewMockWorker(newMockRPCClient(mockWorkerClient))
+
+		ok, msg, _, err := s.waitOperationOk(ctx, mockWorker, "", "", ca.req)
+		c.Assert(err, check.IsNil)
+		c.Assert(ok, check.Equals, ca.expectedOK)
+		c.Assert(msg == "", check.Equals, ca.expectedEmptyMsg)
+	}
+}
+
 func (t *testMaster) TestFillUnsyncedStatus(c *check.C) {
 	var (
 		logger  = log.L()
@@ -539,7 +597,7 @@ func (t *testMaster) TestFillUnsyncedStatus(c *check.C) {
 		source2 = "source2"
 		sources = []string{source1, source2}
 	)
-	cases := []struct {
+	cases := []struct{
 		infos    []pessimism.Info
 		input    []*pb.QueryStatusResponse
 		expected []*pb.QueryStatusResponse
