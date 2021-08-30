@@ -45,8 +45,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	brutils "github.com/pingcap/tidb/br/pkg/utils"
-
 	"github.com/pingcap/dm/dm/config"
 	common2 "github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
@@ -73,6 +71,7 @@ import (
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/shardddl"
+	brutils "github.com/pingcap/tidb/br/pkg/utils"
 )
 
 var (
