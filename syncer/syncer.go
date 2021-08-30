@@ -1369,6 +1369,12 @@ func (s *Syncer) syncDML(tctx *tcontext.Context) {
 	dmlWorkerPool := brutils.NewWorkerPool(uint(s.cfg.WorkerCount), "dml_worker")
 	eg := new(errgroup.Group)
 
+	failpoint.Inject("changeTickerInterval", func(val failpoint.Value) {
+		t := val.(int)
+		waitTime = time.Duration(t) * time.Second
+		tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
+	})
+
 	for {
 		select {
 		case sqlJob, ok := <-s.dmlJobCh:
@@ -1396,9 +1402,19 @@ func (s *Syncer) syncDML(tctx *tcontext.Context) {
 			}
 			allJobs = make([]*job, 0, s.cfg.Batch)
 		case <-time.After(waitTime):
-			if len(allJobs) > 0 && dmlWorkerPool.HasWorker() {
-				dmlWorkerPool.ApplyWithIDInErrorGroup(eg, s.executeDML(tctx, allJobs))
-				allJobs = allJobs[0:0]
+			if len(allJobs) > 0 {
+				if dmlWorkerPool.HasWorker() {
+					jobs := allJobs
+					dmlWorkerPool.ApplyWithIDInErrorGroup(eg, s.executeDML(tctx, jobs))
+					allJobs = make([]*job, 0, s.cfg.Batch)
+				}
+			} else {
+				// waiting #2060
+				failpoint.Inject("noJobInQueueLog", func() {
+					tctx.L().Debug("no job in queue, update lag to zero", zap.Int64("current ts", time.Now().Unix()))
+				})
+				// update lag metric even if there is no job in the queue
+				// s.updateReplicationLag(nil, workerLagKey)
 			}
 		}
 	}
