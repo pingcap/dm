@@ -215,7 +215,7 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 		return nil, nil, err
 	}
 
-	sqls, realSchema, realTable, err := s.onlineDDL.Apply(tctx, tableNames, sql, stmt)
+	sqls, err := s.onlineDDL.Apply(tctx, tableNames, sql, stmt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -235,10 +235,8 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 	}
 	sqls = sqls[:end]
 
-	// replace ghost table name by real table name
-	targetTables := []*filter.Table{
-		{Schema: realSchema, Name: realTable},
-	}
+	// tableNames[1:] is the real table name
+	targetTables := tableNames[1:]
 	for i := range sqls {
 		stmt, err := p.ParseOneStmt(sqls[i], "", "")
 		if err != nil {
