@@ -177,3 +177,7 @@ func queueBucketName(queueID int) string {
 func dmlWorkerLagIdx(queueID int) int {
 	return queueID + 2
 }
+
+func dmlWorkerLagIdxToQueueID(idx int) int {
+	return idx - 2
+}

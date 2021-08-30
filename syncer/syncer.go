@@ -885,6 +885,14 @@ func (s *Syncer) updateReplicationLagMetric() {
 	metrics.ReplicationLagHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Observe(float64(lag))
 	metrics.ReplicationLagGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Set(float64(lag))
 	s.secondsBehindMaster.Store(lag)
+
+	failpoint.Inject("ShowLagInLog", func(v failpoint.Value) {
+		minLag := v.(int)
+		if int(lag) >= minLag {
+			s.tctx.L().Info("ShowLagInLog", zap.Int64("lag", lag))
+		}
+	})
+
 	// reset ddl / skip lag in case of ddl / skip lag is never updated
 	if lag == s.workerLagMap[ddlLagIdx].Load() {
 		s.workerLagMap[ddlLagIdx].Store(0)
@@ -1301,12 +1309,12 @@ func (s *Syncer) syncDML(
 	tctx *tcontext.Context, queueBucket string, db *dbconn.DBConn, jobChan chan *job, workerLagIdx int) {
 	defer s.wg.Done()
 
-	queueID := fmt.Sprint(workerLagIdx)
 	idx := 0
 	count := s.cfg.Batch
 	jobs := make([]*job, 0, count)
 	// db_schema->db_table->opType
 	tpCnt := make(map[string]map[string]map[opType]int64)
+	queueID := fmt.Sprint(dmlWorkerLagIdxToQueueID(workerLagIdx))
 
 	// clearF is used to reset job queue.
 	clearF := func() {
