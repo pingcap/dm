@@ -71,7 +71,7 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 		var stStatus pb.SubTaskStatus
 		if !ok {
 			stStatus = pb.SubTaskStatus{
-				Name:   name,
+				Name: name,
 
 				Status: &pb.SubTaskStatus_Msg{Msg: common.NoSubTaskMsg(name)},
 			}

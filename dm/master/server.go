@@ -1477,7 +1477,7 @@ func extractWorkerError(result *pb.ProcessResult) error {
 //   OperateRelay:
 //     * pause: related relay status is paused
 //     * resume: related relay status is running
-// returns OK, error message of QueryStatusResponse, raw QueryStatusResponse, error that not from QueryStatusResponse
+// returns OK, error message of QueryStatusResponse, raw QueryStatusResponse, error that not from QueryStatusResponse.
 func (s *Server) waitOperationOk(
 	ctx context.Context,
 	cli *scheduler.Worker,
@@ -1624,7 +1624,7 @@ func (s *Server) waitOperationOk(
 					if ok || msg != "" {
 						return ok, msg, queryResp, nil
 					}
- 				} else {
+				} else {
 					return false, "", queryResp, terror.ErrMasterOperRespNotSuccess.Generate("relay is disabled for this source")
 				}
 			}
@@ -1653,7 +1653,7 @@ func (s *Server) handleOperationResult(ctx context.Context, cli *scheduler.Worke
 	} else {
 		response = &pb.CommonWorkerResponse{
 			Result: ok,
-			Msg: msg,
+			Msg:    msg,
 			Source: queryResp.SourceStatus.Source,
 			Worker: queryResp.SourceStatus.Worker,
 		}

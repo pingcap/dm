@@ -531,15 +531,15 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 }
 
 func (t *testMaster) TestWaitOperationOkRightResult(c *check.C) {
-	cases := []struct{
-		req interface{}
-		resp *pb.QueryStatusResponse
-		expectedOK bool
+	cases := []struct {
+		req              interface{}
+		resp             *pb.QueryStatusResponse
+		expectedOK       bool
 		expectedEmptyMsg bool
-	} {
+	}{
 		{
 			&pb.OperateTaskRequest{
-				Op: pb.TaskOp_Pause,
+				Op:   pb.TaskOp_Pause,
 				Name: "task-unittest",
 			},
 			&pb.QueryStatusResponse{
@@ -552,13 +552,13 @@ func (t *testMaster) TestWaitOperationOkRightResult(c *check.C) {
 		},
 		{
 			&pb.OperateTaskRequest{
-				Op: pb.TaskOp_Pause,
+				Op:   pb.TaskOp_Pause,
 				Name: "task-unittest",
 			},
 			&pb.QueryStatusResponse{
 				SubTaskStatus: []*pb.SubTaskStatus{
 					{
-						Stage: pb.Stage_Paused,
+						Stage:  pb.Stage_Paused,
 						Result: &pb.ProcessResult{Errors: []*pb.ProcessError{{Message: "paused by previous error"}}},
 					},
 				},
@@ -597,7 +597,7 @@ func (t *testMaster) TestFillUnsyncedStatus(c *check.C) {
 		source2 = "source2"
 		sources = []string{source1, source2}
 	)
-	cases := []struct{
+	cases := []struct {
 		infos    []pessimism.Info
 		input    []*pb.QueryStatusResponse
 		expected []*pb.QueryStatusResponse
