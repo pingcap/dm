@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eux
+set -eu
 
 cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
@@ -116,7 +116,7 @@ function safe_mode_recover() {
 		if [ $expected_paused -eq 1 ]; then
 			run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 				"pause-task test" \
-				"\"result\": true" 2
+				"\"result\": true" 3
 			echo 'create table t1 (id bigint auto_increment, uid int, name varchar(80), primary key (`id`), unique key(`uid`)) DEFAULT CHARSET=utf8mb4;' >${WORK_DIR}/schema.sql
 			run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 				"operate-schema set -s mysql-replica-01 test -d safe_mode_test -t t1 ${WORK_DIR}/schema.sql" \
