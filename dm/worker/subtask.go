@@ -123,7 +123,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 		etcdClient: etcdClient,
 		workerName: workerName,
 	}
-	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage)
+	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage, st.workerName)
 	return &st
 }
 
@@ -391,14 +391,14 @@ func (st *SubTask) setStage(stage pb.Stage) {
 	st.Lock()
 	defer st.Unlock()
 	st.stage = stage
-	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage)
+	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage, st.workerName)
 }
 
 func (st *SubTask) setStageAndResult(stage pb.Stage, result *pb.ProcessResult) {
 	st.Lock()
 	defer st.Unlock()
 	st.stage = stage
-	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage)
+	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage, st.workerName)
 	st.result = result
 }
 
@@ -409,7 +409,7 @@ func (st *SubTask) stageCAS(oldStage, newStage pb.Stage) bool {
 
 	if st.stage == oldStage {
 		st.stage = newStage
-		updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage)
+		updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage, st.workerName)
 		return true
 	}
 	return false
@@ -425,7 +425,7 @@ func (st *SubTask) setStageIfNotIn(oldStages []pb.Stage, newStage pb.Stage) bool
 		}
 	}
 	st.stage = newStage
-	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage)
+	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage, st.workerName)
 	return true
 }
 
@@ -468,7 +468,7 @@ func (st *SubTask) Close() {
 	}
 
 	st.closeUnits() // close all un-closed units
-	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, pb.Stage_Stopped)
+	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, pb.Stage_Stopped, st.workerName)
 }
 
 // Pause pauses a running sub task or a sub task paused by error.
@@ -711,10 +711,10 @@ func (st *SubTask) HandleError(ctx context.Context, req *pb.HandleWorkerErrorReq
 	return err
 }
 
-func updateTaskMetric(task, sourceID string, stage pb.Stage) {
+func updateTaskMetric(task, sourceID string, stage pb.Stage, workerName string) {
 	if stage == pb.Stage_Stopped || stage == pb.Stage_Finished {
 		taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": sourceID})
 	} else {
-		taskState.WithLabelValues(task, sourceID).Set(float64(stage))
+		taskState.WithLabelValues(task, sourceID, workerName).Set(float64(stage))
 	}
 }
