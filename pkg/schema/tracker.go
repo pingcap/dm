@@ -70,6 +70,8 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 	// bypass wait time of https://github.com/pingcap/tidb/pull/20550
 	toSet.TiKVClient.AsyncCommit.SafeWindow = 0
 	toSet.TiKVClient.AsyncCommit.AllowedClockDrift = 0
+	// set a negative lease will disable the background statistic jobs.
+	toSet.Performance.StatsLease = "-1s"
 	tidbConfig.StoreGlobalConfig(toSet)
 
 	if len(sessionCfg) == 0 {
