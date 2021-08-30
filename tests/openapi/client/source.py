@@ -51,7 +51,6 @@ def list_source_success(source_count):
     resp = requests.get(url=API_ENDPOINT)
     assert resp.status_code == 200
     data = resp.json()
-    # only create one source
     assert data["total"] == int(source_count)
     print("list_source_by_openapi_success resp=", data)
 

@@ -168,7 +168,7 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(errResp.ErrorCode, check.Equals, int(terror.ErrSchedulerSourceCfgExist.Code()))
 
-	// list sources
+	// list source
 	result3 := testutil.NewRequest().Get(baseURL).Go(t.testT, s.echo)
 	// check http status code
 	c.Assert(result3.Code(), check.Equals, http.StatusOK)
@@ -192,7 +192,7 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(errResp2.ErrorCode, check.Equals, int(terror.ErrSchedulerSourceCfgNotExist.Code()))
 
-	// list sources
+	// list source
 	result6 := testutil.NewRequest().Get(baseURL).Go(t.testT, s.echo)
 	// check http status code
 	c.Assert(result6.Code(), check.Equals, http.StatusOK)
