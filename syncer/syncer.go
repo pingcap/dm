@@ -1403,6 +1403,9 @@ func (s *Syncer) syncDML(tctx *tcontext.Context) {
 			allJobs = make([]*job, 0, s.cfg.Batch)
 		case <-time.After(waitTime):
 			if len(allJobs) > 0 {
+				failpoint.Inject("syncDMLTicker", func() {
+					tctx.L().Info("job queue not full, executeSQLs by ticker")
+				})
 				if dmlWorkerPool.HasWorker() {
 					jobs := allJobs
 					dmlWorkerPool.ApplyWithIDInErrorGroup(eg, s.executeDML(tctx, jobs))
