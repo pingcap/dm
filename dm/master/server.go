@@ -1542,19 +1542,17 @@ func (s *Server) waitOperationOk(
 
 		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
 		if err != nil {
-			// the RPCTimeout by default is 30s, it's better not to retry
 			log.L().Error("fail to query operation",
 				zap.Int("retryNum", num),
 				zap.String("task", taskName),
 				zap.String("source", sourceID),
 				zap.Stringer("expect", expect),
 				log.ShortError(err))
-			return false, "", nil, err
 		} else {
 			queryResp := resp.QueryStatus
 			if queryResp == nil {
 				// should not happen
-				return false, "", nil, errors.Errorf("expect a query-status response, got type %s", resp.Type)
+				return false, "", nil, errors.Errorf("expect a query-status response, got type %v", resp.Type)
 			}
 
 			switch masterReq.(type) {
@@ -1587,17 +1585,25 @@ func (s *Server) waitOperationOk(
 				}
 				if len(queryResp.SubTaskStatus) == 1 {
 					if subtaskStatus := queryResp.SubTaskStatus[0]; subtaskStatus != nil {
+						msg := ""
+						if err2 := extractWorkerError(subtaskStatus.Result); err2 != nil {
+							msg = err2.Error()
+						}
+						ok := false
 						// If expect stage is running, finished should also be okay
 						var finished pb.Stage = -1
 						if expect == pb.Stage_Running {
 							finished = pb.Stage_Finished
 						}
 						if expect == pb.Stage_Stopped {
-							if st, ok := subtaskStatus.Status.(*pb.SubTaskStatus_Msg); ok && st.Msg == common2.NoSubTaskMsg(taskName) {
-								return true, "", queryResp, nil
+							if st, ok2 := subtaskStatus.Status.(*pb.SubTaskStatus_Msg); ok2 && st.Msg == common2.NoSubTaskMsg(taskName) {
+								ok = true
 							}
 						} else if subtaskStatus.Name == taskName && (subtaskStatus.Stage == expect || subtaskStatus.Stage == finished) {
-							return true, "", queryResp, nil
+							ok = true
+						}
+						if ok || msg != "" {
+							return ok, msg, queryResp, nil
 						}
 					}
 				}

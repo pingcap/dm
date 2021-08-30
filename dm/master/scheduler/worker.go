@@ -155,3 +155,8 @@ func (w *Worker) reportMetrics() {
 	}
 	metrics.ReportWorkerStage(w.baseInfo.Name, s)
 }
+
+// NewMockWorker is used in tests.
+func NewMockWorker(cli workerrpc.Client) *Worker {
+	return &Worker{cli: cli}
+}
