@@ -1393,7 +1393,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context) {
 				}
 				s.jobWg.Done()
 			}
-			allJobs = allJobs[0:0]
+			allJobs = make([]*job, 0, s.cfg.Batch)
 		case <-time.After(waitTime):
 			if len(allJobs) > 0 && dmlWorkerPool.HasWorker() {
 				dmlWorkerPool.ApplyWithIDInErrorGroup(eg, s.executeDML(tctx, allJobs))
