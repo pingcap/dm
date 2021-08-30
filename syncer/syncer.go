@@ -225,7 +225,7 @@ type Syncer struct {
 
 	tsOffset                  atomic.Int64    // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster       atomic.Int64    // current task delay second behind upstream
-	workerLagMap              []*atomic.Int64 // worker's sync lag map, note that idx=0 is ddl lag and idx=1 is skip lag,sql workers' lag idx=(worker id + 2)
+	workerLagMap              []*atomic.Int64 // worker's sync lag map, note that idx=0 is ddl lag and idx=1 is skip lag,sql worker lag idx=(queue id + 2)
 	lastCheckpointFlushedTime time.Time
 }
 
@@ -885,6 +885,11 @@ func (s *Syncer) updateReplicationLagMetric() {
 	metrics.ReplicationLagHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Observe(float64(lag))
 	metrics.ReplicationLagGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Set(float64(lag))
 	s.secondsBehindMaster.Store(lag)
+
+	if lag > 1 {
+		s.tctx.L().Warn("current replication lag greater than 1(s)",
+			zap.Int64("lag in seconds", lag))
+	}
 
 	failpoint.Inject("ShowLagInLog", func(v failpoint.Value) {
 		minLag := v.(int)

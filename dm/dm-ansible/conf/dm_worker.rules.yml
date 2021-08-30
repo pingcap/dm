@@ -182,3 +182,14 @@ groups:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
       value: '{{ $value }}'
       summary: DDL error happens
+
+  - alert: DM_replication_lag_too_large
+    expr: dm_syncer_replication_lag_gauge > 1
+    labels:
+      env: ENV_LABELS_ENV
+      level: critical
+      expr: dm_syncer_replication_lag_gauge > 1
+    annotations:
+      description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
+      value: '{{ $value }}'
+      summary: REPLICATION LAG greater than 1(s)
