@@ -9,9 +9,9 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 function run() {
 	# add changeTickerInterval to keep metric from updating to zero too quickly when there is no work in the queue.
 	inject_points=(
-		"github.com/pingcap/dm/syncer/BlockSyncerUpdateLag=return(\"ddl,1\")"
+		"github.com/pingcap/dm/syncer/BlockDDLJob=return(1)"
 		"github.com/pingcap/dm/syncer/changeTickerInterval=return(10)"
-		"github.com/pingcap/dm/syncer/ShowLagInLog=return(1)" # test lag metric >= 1 beacuse we inject updateReplicationLag(ddl) to sleep(1)
+		"github.com/pingcap/dm/syncer/ShowLagInLog=return(1)" # test lag metric >= 1 beacuse we inject BlockDDLJob(ddl) to sleep(1)
 	)
 	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 
@@ -50,9 +50,6 @@ function run() {
 	run_sql_source1 "alter table metrics.t1 add column new_col1 int;"
 	run_sql_source2 "alter table metrics.t2 add column new_col1 int;"
 
-	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 0 999
-	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 0 999
-
 	# check new metric dm_syncer_flush_checkpoints_time_interval exists
 	check_metric $WORKER1_PORT 'dm_syncer_flush_checkpoints_time_interval_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 -1 99999
 	check_metric $WORKER2_PORT 'dm_syncer_flush_checkpoints_time_interval_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 -1 99999
@@ -60,6 +57,9 @@ function run() {
 	# check two worker's lag >= 1
 	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker1/log/dm-worker.log
 	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker2/log/dm-worker.log
+
+	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 0 999
+	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 0 999
 	echo "check ddl lag done!"
 
 	# restart dm worker
@@ -67,9 +67,9 @@ function run() {
 	rm -rf $WORK_DIR/worker1/log/dm-worker.log # clean up the old log
 	rm -rf $WORK_DIR/worker2/log/dm-worker.log # clean up the old log
 	inject_points=(
-		"github.com/pingcap/dm/syncer/BlockSyncerUpdateLag=return(\"insert,2\")"
+		"github.com/pingcap/dm/syncer/BlockExecuteSQLs=return(2)"
 		"github.com/pingcap/dm/syncer/changeTickerInterval=return(10)"
-		"github.com/pingcap/dm/syncer/ShowLagInLog=return(2)" # test lag metric >= 2 beacuse we inject updateReplicationLag(insert) to sleep(2) although skip lag is 0 (locally), but we use that lag of all dml/skip lag, so lag still >= 2
+		"github.com/pingcap/dm/syncer/ShowLagInLog=return(2)" # test lag metric >= 2 beacuse we inject BlockExecuteSQLs to sleep(2) although skip lag is 0 (locally), but we use that lag of all dml/skip lag, so lag still >= 2
 	)
 	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 
@@ -84,8 +84,8 @@ function run() {
 
 	# check new metric: dm_syncer_replication_lag_sum,dm_syncer_replication_lag_gauge,
 	# finished_transaction_total,dm_syncer_ideal_qps,dm_syncer_binlog_event_row,replication_transaction_batch exists
-	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 999
-	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 999
+	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 -1 999
+	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 -1 999
 
 	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_gauge{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 999
 	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_gauge{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 999
@@ -105,6 +105,8 @@ function run() {
 	# check two worker's lag >= 2
 	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker1/log/dm-worker.log
 	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker2/log/dm-worker.log
+	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 999
+	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 999
 	echo "check dml/skip lag done!"
 
 	# restart dm worker

@@ -174,10 +174,10 @@ func queueBucketName(queueID int) string {
 	return fmt.Sprintf("q_%d", queueID%defaultBucketCount)
 }
 
-func dmlWorkerLagIdx(queueID int) int {
+func dmlWorkerJobIdx(queueID int) int {
 	return queueID + 2
 }
 
-func dmlWorkerLagIdxToQueueID(idx int) int {
+func dmlWorkerJobIdxToQueueID(idx int) int {
 	return idx - 2
 }
