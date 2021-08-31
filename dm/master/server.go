@@ -37,9 +37,9 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/checker"
-	common2 "github.com/pingcap/dm/dm/common"
+	dmcommon "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/ctl/common"
+	ctlcommon "github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/master/shardddl"
@@ -336,7 +336,7 @@ func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest
 	}
 
 	switch req.Type {
-	case common.Worker:
+	case ctlcommon.Worker:
 		err := s.scheduler.RemoveWorker(req.Name)
 		if err != nil {
 			// nolint:nilerr
@@ -345,7 +345,7 @@ func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest
 				Msg:    err.Error(),
 			}, nil
 		}
-	case common.Master:
+	case ctlcommon.Master:
 		err := s.deleteMasterByName(ctx, req.Name)
 		if err != nil {
 			// nolint:nilerr
@@ -424,7 +424,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	}
 
 	resp := &pb.StartTaskResponse{}
-	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, common.DefaultErrorCnt, common.DefaultWarnCnt)
+	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, ctlcommon.DefaultErrorCnt, ctlcommon.DefaultWarnCnt)
 	if err != nil {
 		resp.Msg = err.Error()
 		// nolint:nilerr
@@ -596,7 +596,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		return resp2, err2
 	}
 
-	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, common.DefaultErrorCnt, common.DefaultWarnCnt)
+	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, ctlcommon.DefaultErrorCnt, ctlcommon.DefaultWarnCnt)
 	if err != nil {
 		// nolint:nilerr
 		return &pb.UpdateTaskResponse{
@@ -1596,7 +1596,7 @@ func (s *Server) waitOperationOk(
 							finished = pb.Stage_Finished
 						}
 						if expect == pb.Stage_Stopped {
-							if st, ok2 := subtaskStatus.Status.(*pb.SubTaskStatus_Msg); ok2 && st.Msg == common2.NoSubTaskMsg(taskName) {
+							if st, ok2 := subtaskStatus.Status.(*pb.SubTaskStatus_Msg); ok2 && st.Msg == dmcommon.NoSubTaskMsg(taskName) {
 								ok = true
 							}
 						} else if subtaskStatus.Name == taskName && (subtaskStatus.Stage == expect || subtaskStatus.Stage == finished) {
