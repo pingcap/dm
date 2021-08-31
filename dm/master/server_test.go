@@ -1655,6 +1655,11 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 }
 
 func (t *testMaster) TestOperateSource(c *check.C) {
+	checkAndAdjustSourceConfigFunc = checkAndAdjustSourceConfigMockFunc
+	defer func() {
+		checkAndAdjustSourceConfigFunc = checkAndAdjustSourceConfig
+	}()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ctrl := gomock.NewController(c)
