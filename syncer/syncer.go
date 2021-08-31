@@ -225,7 +225,7 @@ type Syncer struct {
 
 	tsOffset                  atomic.Int64    // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
 	secondsBehindMaster       atomic.Int64    // current task delay second behind upstream
-	workerJobTSArray          []*atomic.Int64 // worker's sync job array, note that idx=0 is skip idx and idx=1 is ddl idx,sql worker job idx=(queue id + 2)
+	workerJobTSArray          []*atomic.Int64 // worker's sync job TS array, note that idx=0 is skip idx and idx=1 is ddl idx,sql worker job idx=(queue id + 2)
 	lastCheckpointFlushedTime time.Time
 }
 
@@ -870,11 +870,9 @@ func (s *Syncer) updateReplicationLagMetric() {
 			}
 		}
 	}
-	// this means current no job in queue
 	if minTS != int64(0) {
 		lag = s.calcReplicationLag(minTS)
 	}
-
 	metrics.ReplicationLagHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Observe(float64(lag))
 	metrics.ReplicationLagGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Set(float64(lag))
 	s.secondsBehindMaster.Store(lag)
