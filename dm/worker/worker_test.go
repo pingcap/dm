@@ -207,6 +207,9 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 		rtsc.Close()
 	}()
 
+	mockDB := initMockDB(c)
+	mockShowMasterStatus(mockDB)
+
 	// check task will be auto resumed
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
 		sts, _, _ := s.getWorker(true).QueryStatus(context.Background(), taskName)
@@ -423,6 +426,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 		keepAliveTTL = int64(1)
 		startRev     = int64(1)
 	)
+
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
 	c.Assert(err, IsNil)
@@ -503,6 +507,8 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return w.subTaskHolder.findSubTask(subtaskCfg.Name) != nil
 	}), IsTrue)
+	mockDB := initMockDB(c)
+	mockShowMasterStatus(mockDB)
 	status, _, err := w.QueryStatus(ctx1, subtaskCfg.Name)
 	c.Assert(err, IsNil)
 	c.Assert(status, HasLen, 1)
@@ -522,6 +528,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return w.subTaskHolder.findSubTask(subtaskCfg.Name) != nil
 	}), IsTrue)
+	mockShowMasterStatus(mockDB)
 	status, _, err = w.QueryStatus(ctx2, subtaskCfg.Name)
 	c.Assert(err, IsNil)
 	c.Assert(status, HasLen, 1)

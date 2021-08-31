@@ -40,6 +40,11 @@ const (
 )
 
 func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
+	checkAndAdjustSourceConfigFunc = checkAndAdjustSourceConfigMockFunc
+	defer func() {
+		checkAndAdjustSourceConfigFunc = checkAndAdjustSourceConfig
+	}()
+
 	s := testDefaultMasterServer(c)
 	defer s.Close()
 	s.cfg.V1SourcesPath = c.MkDir()
@@ -346,4 +351,11 @@ func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
 	c.Assert(err, ErrorMatches, ".*fail to get subtask config and stage.*")
 	c.Assert(cfgs, HasLen, 0)
 	c.Assert(stages, HasLen, 0)
+}
+
+func checkAndAdjustSourceConfigMockFunc(ctx context.Context, cfg *config.SourceConfig) error {
+	if _, err := cfg.Yaml(); err != nil {
+		return err
+	}
+	return cfg.Verify()
 }
