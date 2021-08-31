@@ -703,9 +703,7 @@ func (s *Syncer) mergeDMLValues(compactedCh chan *job, nonConflictChs ...chan *j
 	}
 
 	wg.Add(len(nonConflictChs) + 1)
-
 	go mergeCompactedFunc(compactedCh, compactedMergedCh)
-
 	for i, nonConflictCh := range nonConflictChs {
 		go mergeNonConflictFunc(nonConflictCh, nonConflictMergedCh[i])
 	}
@@ -776,8 +774,8 @@ func (s *Syncer) dmlWorkers(compactedMergedCh chan *job, nonConflictMergedChs []
 		}
 	}
 
+	wg.Add(1 + len(nonConflictMergedChs))
 	go executeJobs(compactedMergedCh)
-
 	for _, nonConflictMergedCh := range nonConflictMergedChs {
 		go executeJobs(nonConflictMergedCh)
 	}
