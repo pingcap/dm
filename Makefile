@@ -90,6 +90,11 @@ generate_proto: tools_setup
 generate_mock: tools_setup
 	./tests/generate-mock.sh
 
+generate_openapi: tools_setup
+	@echo "generate_openapi"
+	tools/bin/oapi-codegen --config=openapi/spec/server-gen-cfg.yaml openapi/spec/dm.yaml
+	tools/bin/oapi-codegen --config=openapi/spec/types-gen-cfg.yaml openapi/spec/dm.yaml
+
 test: unit_test integration_test
 
 define run_unit_test

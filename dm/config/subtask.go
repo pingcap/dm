@@ -122,6 +122,9 @@ func (db *DBConfig) Decode(data string) error {
 func (db *DBConfig) Adjust() {
 	// force set session time zone to UTC here.
 	AdjustTargetDBTimeZone(db)
+	if len(db.Password) > 0 {
+		db.Password = utils.DecryptOrPlaintext(db.Password)
+	}
 }
 
 // Clone returns a deep copy of DBConfig. This function only fixes data race when adjusting Session.
@@ -250,6 +253,9 @@ type SubTaskConfig struct {
 
 	// still needed by Syncer / Loader bin
 	printVersion bool
+
+	// which DM worker is running the subtask, this will be injected when the real worker starts running the subtask(StartSubTask).
+	WorkerName string `toml:"-" json:"-"`
 }
 
 // NewSubTaskConfig creates a new SubTaskConfig.

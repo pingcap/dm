@@ -477,17 +477,26 @@ function DM_DropAddColumn_CASE() {
 	check_metric_not_contains $MASTER_PORT "dm_master_shard_ddl_error" 3
 	# 9223372036854775807 is 2**63 -1
 	check_metric $MASTER_PORT 'dm_master_ddl_state_number{task="test",type="Un-synced"}' 3 0 9223372036854775807
-	# try to fix data
-	echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' >${WORK_DIR}/schema.sql
-	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"binlog-schema update test ${shardddl1} ${tb1} ${WORK_DIR}/schema.sql -s mysql-replica-01" \
-		"\"result\": true" 2
 
 	# skip this error
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"binlog skip test" \
 		"\"result\": true" 2 \
 		"\"source 'mysql-replica-02' has no error\"" 1
+
+	# after we skip ADD COLUMN, we should fix the table structure
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"pause-task test" \
+		"\"result\": true" 3
+
+	echo 'CREATE TABLE `tb1` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin' >${WORK_DIR}/schema.sql
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"binlog-schema update test ${shardddl1} ${tb1} ${WORK_DIR}/schema.sql -s mysql-replica-01" \
+		"\"result\": true" 2
+
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"resume-task test" \
+		"\"result\": true" 3
 
 	run_sql_source1 "update ${shardddl1}.${tb1} set b=1 where a=1;"
 	run_sql_source1 "update ${shardddl1}.${tb1} set b=3 where a=3;"

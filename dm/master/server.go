@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -113,6 +114,8 @@ type Server struct {
 	bgFunWg sync.WaitGroup
 
 	closed atomic.Bool
+
+	echo *echo.Echo // injected in `InitOpenAPIHandles`
 }
 
 // NewServer creates a new Server.
@@ -126,7 +129,6 @@ func NewServer(cfg *Config) *Server {
 	server.pessimist = shardddl.NewPessimist(&logger, server.getTaskResources)
 	server.optimist = shardddl.NewOptimist(&logger)
 	server.closed.Store(true)
-
 	setUseTLS(&cfg.Security)
 
 	return &server
@@ -179,10 +181,15 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// And curl or safari browser does trigger this problem.
 	// But I haven't figured it out.
 	// (maybe more requests are sent from chrome or its extensions).
+	initOpenAPIErr := s.InitOpenAPIHandles()
+	if initOpenAPIErr != nil {
+		return terror.ErrOpenAPICommonError.Delegate(initOpenAPIErr)
+	}
 	userHandles := map[string]http.Handler{
-		"/apis/":  apiHandler,
-		"/status": getStatusHandle(),
-		"/debug/": getDebugHandler(),
+		"/apis/":   apiHandler,
+		"/status":  getStatusHandle(),
+		"/debug/":  getDebugHandler(),
+		"/api/v1/": s.echo,
 	}
 
 	// gRPC API server
@@ -470,7 +477,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 					"while remove-meta is true").Error()
 				return resp, nil
 			}
-			err = s.removeMetaData(ctx, cfg)
+			err = s.removeMetaData(ctx, cfg.Name, cfg.MetaSchema, cfg.TargetDB)
 			if err != nil {
 				resp.Msg = terror.Annotate(err, "while removing metadata").Error()
 				return resp, nil
@@ -1108,29 +1115,28 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 		if err != nil {
 			return cfgs, err
 		}
-		dbConfig := cfg.GenerateDBConfig()
-
-		fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
-		if err != nil {
+		if err := checkAndAdjustSourceConfig(ctx, cfg); err != nil {
 			return cfgs, err
 		}
-		if err = cfg.Adjust(ctx, fromDB.DB); err != nil {
-			fromDB.Close()
-			return cfgs, err
-		}
-		if _, err = cfg.Yaml(); err != nil {
-			fromDB.Close()
-			return cfgs, err
-		}
-
-		if err = cfg.Verify(); err != nil {
-			return cfgs, err
-		}
-
-		fromDB.Close()
 		cfgs[i] = cfg
 	}
 	return cfgs, nil
+}
+
+func checkAndAdjustSourceConfig(ctx context.Context, cfg *config.SourceConfig) error {
+	dbConfig := cfg.GenerateDBConfig()
+	fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
+	if err != nil {
+		return err
+	}
+	defer fromDB.Close()
+	if err = cfg.Adjust(ctx, fromDB.DB); err != nil {
+		return err
+	}
+	if _, err = cfg.Yaml(); err != nil {
+		return err
+	}
+	return cfg.Verify()
 }
 
 func parseSourceConfig(contents []string) ([]*config.SourceConfig, error) {
@@ -1409,29 +1415,24 @@ func withHost(addr string) string {
 	return addr
 }
 
-func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) error {
-	toDB := *cfg.TargetDB
-	toDB.Adjust()
-	if len(toDB.Password) > 0 {
-		toDB.Password = utils.DecryptOrPlaintext(toDB.Password)
-	}
-
+func (s *Server) removeMetaData(ctx context.Context, taskName, metaSchema string, toDBCfg *config.DBConfig) error {
+	toDBCfg.Adjust()
 	// clear shard meta data for pessimistic/optimist
-	err := s.pessimist.RemoveMetaData(cfg.Name)
+	err := s.pessimist.RemoveMetaData(taskName)
 	if err != nil {
 		return err
 	}
-	err = s.optimist.RemoveMetaData(cfg.Name)
+	err = s.optimist.RemoveMetaData(taskName)
 	if err != nil {
 		return err
 	}
-	err = s.scheduler.RemoveLoadTask(cfg.Name)
+	err = s.scheduler.RemoveLoadTask(taskName)
 	if err != nil {
 		return err
 	}
 
 	// set up db and clear meta data in downstream db
-	baseDB, err := conn.DefaultDBProvider.Apply(toDB)
+	baseDB, err := conn.DefaultDBProvider.Apply(*toDBCfg)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -1452,17 +1453,17 @@ func (s *Server) removeMetaData(ctx context.Context, cfg *config.TaskConfig) err
 	sqls := make([]string, 0, 4)
 	// clear loader and syncer checkpoints
 	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
-		dbutil.TableName(cfg.MetaSchema, cputil.LoaderCheckpoint(cfg.Name))))
+		dbutil.TableName(metaSchema, cputil.LoaderCheckpoint(taskName))))
 	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
-		dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name))))
+		dbutil.TableName(metaSchema, cputil.SyncerCheckpoint(taskName))))
 	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
-		dbutil.TableName(cfg.MetaSchema, cputil.SyncerShardMeta(cfg.Name))))
+		dbutil.TableName(metaSchema, cputil.SyncerShardMeta(taskName))))
 	sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS %s",
-		dbutil.TableName(cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name))))
+		dbutil.TableName(metaSchema, cputil.SyncerOnlineDDL(taskName))))
 
-	_, err = dbConn.ExecuteSQL(ctctx, nil, cfg.Name, sqls)
+	_, err = dbConn.ExecuteSQL(ctctx, nil, taskName, sqls)
 	if err == nil {
-		metrics.RemoveDDLPending(cfg.Name)
+		metrics.RemoveDDLPending(taskName)
 	}
 	return err
 }

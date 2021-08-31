@@ -14,7 +14,7 @@ relay_log/*
 vendor
 */*.DS_Store
 tidb-slow.log
-/monitoring/dashboards/dm.json
+/monitoring/dashboards/*.json
 /monitoring/rules/dm_worker.rules.yml
 mysql.*.log
 .python-version
