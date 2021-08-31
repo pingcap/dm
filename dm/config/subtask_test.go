@@ -186,17 +186,23 @@ func (t *testConfig) TestDBConfigClone(c *C) {
 
 	b := a.Clone()
 	c.Assert(a, DeepEquals, b)
+	c.Assert(a.RawDBCfg, Not(Equals), b.RawDBCfg)
 
 	a.RawDBCfg.MaxIdleConns = 123
 	c.Assert(a, Not(DeepEquals), b)
 
+	packet := 1
+	a.MaxAllowedPacket = &packet
 	b = a.Clone()
 	c.Assert(a, DeepEquals, b)
+	c.Assert(a.MaxAllowedPacket, Not(Equals), b.MaxAllowedPacket)
 
 	a.Session["2"] = "2"
 	c.Assert(a, Not(DeepEquals), b)
 
 	a.RawDBCfg = nil
+	a.Security = &Security{}
 	b = a.Clone()
 	c.Assert(a, DeepEquals, b)
+	c.Assert(a.Security, Not(Equals), b.Security)
 }
