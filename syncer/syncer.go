@@ -883,11 +883,6 @@ func (s *Syncer) updateReplicationLagMetric() {
 	metrics.ReplicationLagGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Set(float64(lag))
 	s.secondsBehindMaster.Store(lag)
 
-	if lag > 1 {
-		s.tctx.L().Warn("current replication lag greater than 1(s)",
-			zap.Int64("lag in seconds", lag))
-	}
-
 	failpoint.Inject("ShowLagInLog", func(v failpoint.Value) {
 		minLag := v.(int)
 		if int(lag) >= minLag {
