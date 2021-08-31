@@ -650,7 +650,7 @@ func (r *Relay) reSetupMeta(ctx context.Context) error {
 		}
 	}
 
-	r.logger.Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gs))
+	r.logger.Info("adjusted meta to start pos", zap.Any("start pos", pos), zap.Stringer("start pos's binlog gtid", gs))
 	r.updateMetricsRelaySubDirIndex()
 	r.logger.Info("resetup meta", zap.String("uuid", uuid))
 
@@ -970,7 +970,11 @@ func (r *Relay) setSyncConfig() error {
 	var tlsConfig *tls.Config
 	var err error
 	if r.cfg.From.Security != nil {
-		tlsConfig, err = toolutils.ToTLSConfig(r.cfg.From.Security.SSLCA, r.cfg.From.Security.SSLCert, r.cfg.From.Security.SSLKey)
+		if loadErr := r.cfg.From.Security.LoadTLSContent(); loadErr != nil {
+			return terror.ErrCtlLoadTLSCfg.Delegate(loadErr)
+		}
+		tlsConfig, err = toolutils.ToTLSConfigWithVerifyByRawbytes(r.cfg.From.Security.SSLCABytes,
+			r.cfg.From.Security.SSLCertBytes, r.cfg.From.Security.SSLKEYBytes, r.cfg.From.Security.CertAllowedCN)
 		if err != nil {
 			return terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}

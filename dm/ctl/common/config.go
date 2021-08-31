@@ -152,7 +152,7 @@ func (c *Config) Adjust() error {
 	if c.ConfigFile != "" {
 		err = c.configFromFile(c.ConfigFile)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.Annotatef(err, "the current command parameter: --config is invalid or used incorrectly")
 		}
 	}
 

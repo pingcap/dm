@@ -38,7 +38,7 @@ type trackedDDL struct {
 // initOptimisticShardDDL initializes the shard DDL support in the optimistic mode.
 func (s *Syncer) initOptimisticShardDDL(ctx context.Context) error {
 	// fetch tables from source and filter them
-	sourceTables, err := s.fromDB.fetchAllDoTables(ctx, s.baList)
+	sourceTables, err := s.fromDB.FetchAllDoTables(ctx, s.baList)
 	if err != nil {
 		return err
 	}

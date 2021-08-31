@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -120,6 +122,32 @@ func (db *DBConfig) Decode(data string) error {
 func (db *DBConfig) Adjust() {
 	// force set session time zone to UTC here.
 	AdjustTargetDBTimeZone(db)
+	if len(db.Password) > 0 {
+		db.Password = utils.DecryptOrPlaintext(db.Password)
+	}
+}
+
+// GetDBConfigFromEnv is a helper function to read config from environment. It's commonly used in unit tests.
+func GetDBConfigFromEnv() DBConfig {
+	host := os.Getenv("MYSQL_HOST")
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
+	if port == 0 {
+		port = 3306
+	}
+	user := os.Getenv("MYSQL_USER")
+	if user == "" {
+		user = "root"
+	}
+	pswd := os.Getenv("MYSQL_PSWD")
+	return DBConfig{
+		Host:     host,
+		User:     user,
+		Password: pswd,
+		Port:     port,
+	}
 }
 
 // SubTaskConfig is the configuration for SubTask.
@@ -195,6 +223,9 @@ type SubTaskConfig struct {
 
 	// still needed by Syncer / Loader bin
 	printVersion bool
+
+	// which DM worker is running the subtask, this will be injected when the real worker starts running the subtask(StartSubTask).
+	WorkerName string `toml:"-" json:"-"`
 }
 
 // NewSubTaskConfig creates a new SubTaskConfig.
@@ -272,6 +303,9 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 
 	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
 		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)
+	} else if c.OnlineDDLScheme == PT || c.OnlineDDLScheme == GHOST {
+		c.OnlineDDL = true
+		log.L().Warn("'online-ddl-scheme' will be deprecated soon. Recommend that use online-ddl instead of online-ddl-scheme.")
 	}
 
 	if c.MetaSchema == "" {

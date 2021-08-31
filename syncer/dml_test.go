@@ -138,13 +138,13 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 			// one primary key
 			schema: `create table t2(a int primary key, b double)`,
 			values: []interface{}{60, 70.5},
-			keys:   []string{"60table"},
+			keys:   []string{"60.a.table"},
 		},
 		{
 			// one unique key
 			schema: `create table t3(a int unique, b double)`,
 			values: []interface{}{60, 70.5},
-			keys:   []string{"60table"},
+			keys:   []string{"60.a.table"},
 		},
 		{
 			// one ordinary key
@@ -162,19 +162,19 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 			// multiple keys with primary key
 			schema: `create table t6(a int primary key, b varchar(16) unique)`,
 			values: []interface{}{16, "xyz"},
-			keys:   []string{"16table", "xyztable"},
+			keys:   []string{"16.a.table", "xyz.b.table"},
 		},
 		{
 			// non-integer primary key
 			schema: `create table t65(a int unique, b varchar(16) primary key)`,
 			values: []interface{}{16, "xyz"},
-			keys:   []string{"16table", "xyztable"},
+			keys:   []string{"16.a.table", "xyz.b.table"},
 		},
 		{
 			// primary key of multiple columns
 			schema: `create table t7(a int, b int, primary key(a, b))`,
 			values: []interface{}{59, 69},
-			keys:   []string{"5969table"},
+			keys:   []string{"59.a.69.b.table"},
 		},
 		{
 			// ordinary key of multiple columns
@@ -194,7 +194,7 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 				)
 			`,
 			values: []interface{}{27, 37, 47},
-			keys:   []string{"2737table", "3747table", "4727table"},
+			keys:   []string{"27.a.37.b.table", "37.b.47.c.table", "47.c.27.a.table"},
 		},
 		{
 			// `null` for unique key
@@ -206,7 +206,7 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 				)
 			`,
 			values: []interface{}{17, nil},
-			keys:   []string{"17table"},
+			keys:   []string{"17.a.table"},
 		},
 	}
 

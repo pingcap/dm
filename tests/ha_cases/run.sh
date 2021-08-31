@@ -7,7 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
 # import helper functions
-source $cur/lib.sh
+source $cur/../_utils/ha_cases_lib.sh
 
 function test_running() {
 	echo "[$(date)] <<<<<< start test_running >>>>>>"
@@ -73,7 +73,7 @@ function test_join_masters_and_worker {
 
 	echo "kill dm-master-join1"
 	ps aux | grep dm-master-join1 | awk '{print $2}' | xargs kill || true
-	check_port_offline $MASTER_PORT1 20
+	check_master_port_offline 1
 	rm -rf $WORK_DIR/master1/default.master1
 
 	run_dm_ctl_with_retry $WORK_DIR 127.0.0.1:$MASTER_PORT2 "list-member --worker --name=worker2" '"stage": "free",' 1

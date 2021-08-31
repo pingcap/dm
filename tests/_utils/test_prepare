@@ -11,8 +11,16 @@ function cleanup_data() {
 }
 
 function cleanup_process() {
-    pkill -hup dm-worker.test 2>/dev/null || true
+    dm_master_num=$(ps aux >temp && grep "dm-master.test" temp | wc -l && rm temp)
+    echo "$dm_master_num dm-master alive"
     pkill -hup dm-master.test 2>/dev/null || true
+
+    dm_worker_num=$(ps aux >temp && grep "dm-worker.test" temp | wc -l && rm temp)
+    echo "$dm_worker_num dm-worker alive"
+    pkill -hup dm-worker.test 2>/dev/null || true
+
+    dm_syncer_num=$(ps aux >temp && grep "dm-syncer.test" temp | wc -l && rm temp)
+    echo "$dm_syncer_num dm-syncer alive"
     pkill -hup dm-syncer.test 2>/dev/null || true
 
     wait_process_exit dm-master.test
@@ -257,7 +265,7 @@ function check_log_contain_with_retry() {
         sleep 2
     done
     if [[ $rc -eq 0 ]]; then
-        echo "log dosen't contain $text"
+        echo "log doesn't contain $text"
         exit 1
     fi
 }
@@ -281,4 +289,12 @@ function init_cluster(){
 function get_master_status() {
 	arr=$(echo "show master status;" | MYSQL_PWD=123456 mysql -uroot -h127.0.0.1 -P3306 | awk 'NR==2')
 	echo $arr
+}
+
+function check_master_port_offline() {
+    master_ports_1_indexed=(0 $MASTER_PORT1 $MASTER_PORT2 $MASTER_PORT3 $MASTER_PORT4 $MASTER_PORT5)
+    master_peer_ports_1_indexed=(0 $MASTER_PEER_PORT1 $MASTER_PEER_PORT2 $MASTER_PEER_PORT3 $MASTER_PEER_PORT4 $MASTER_PEER_PORT5)
+    idx=$1
+    check_port_offline ${master_ports_1_indexed[$idx]} 20
+    check_port_offline ${master_peer_ports_1_indexed[$idx]} 20
 }

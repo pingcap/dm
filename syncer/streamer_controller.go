@@ -33,7 +33,11 @@ import (
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
+
+// the minimal interval to retry reset binlog streamer.
+var minErrorRetryInterval = 1 * time.Minute
 
 // StreamerProducer provides the ability to generate binlog streamer by StartSync()
 // but go-mysql StartSync() returns (struct, err) rather than (interface, err)
@@ -95,6 +99,7 @@ type StreamerController struct {
 
 	// the current binlog type
 	currentBinlogType BinlogType
+	retryStrategy     retryStrategy
 
 	syncCfg        replication.BinlogSyncerConfig
 	enableGTID     bool
@@ -108,7 +113,7 @@ type StreamerController struct {
 	// if binlogType is local and meetError is true, then need to create remote binlog stream
 	meetError bool
 
-	fromDB *UpStreamConn
+	fromDB *dbconn.UpStreamConn
 
 	uuidSuffix string
 
@@ -119,10 +124,30 @@ type StreamerController struct {
 }
 
 // NewStreamerController creates a new streamer controller.
-func NewStreamerController(syncCfg replication.BinlogSyncerConfig, enableGTID bool, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location) *StreamerController {
+func NewStreamerController(
+	syncCfg replication.BinlogSyncerConfig,
+	enableGTID bool,
+	fromDB *dbconn.UpStreamConn,
+	binlogType BinlogType,
+	localBinlogDir string,
+	timezone *time.Location,
+) *StreamerController {
+	var strategy retryStrategy = alwaysRetryStrategy{}
+	if binlogType != LocalBinlog {
+		strategy = &maxIntervalRetryStrategy{
+			interval: minErrorRetryInterval,
+		}
+	}
+	// let local binlog also return error to avoid infinity loop
+	failpoint.Inject("GetEventError", func() {
+		strategy = &maxIntervalRetryStrategy{
+			interval: minErrorRetryInterval,
+		}
+	})
 	streamerController := &StreamerController{
 		initBinlogType:    binlogType,
 		currentBinlogType: binlogType,
+		retryStrategy:     strategy,
 		syncCfg:           syncCfg,
 		enableGTID:        enableGTID,
 		localBinlogDir:    localBinlogDir,
@@ -192,13 +217,14 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, loca
 		}
 	}
 
-	if c.initBinlogType == LocalBinlog && c.meetError {
+	if c.currentBinlogType == LocalBinlog && c.meetError {
 		// meetError is true means meets error when get binlog event, in this case use remote binlog as default
 		if !uuidSameWithUpstream {
 			// if the binlog position's uuid is different from the upstream, can not switch to remote binlog
 			tctx.L().Warn("may switch master in upstream, so can not switch local to remote")
 		} else {
 			c.currentBinlogType = RemoteBinlog
+			c.retryStrategy = &maxIntervalRetryStrategy{interval: minErrorRetryInterval}
 			tctx.L().Warn("meet error when read from local binlog, will switch to remote binlog")
 		}
 	}
@@ -321,7 +347,7 @@ func (c *StreamerController) closeBinlogSyncer(logtctx *tcontext.Context, binlog
 		// try to KILL the conn in default timeout, but it's not a big problem even failed.
 		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
 		defer cancel()
-		err := c.fromDB.killConn(ctx, lastSlaveConnectionID)
+		err := c.fromDB.KillConn(ctx, lastSlaveConnectionID)
 		if err != nil {
 			logtctx.L().Error("fail to kill last connection", zap.Uint32("connection ID", lastSlaveConnectionID), log.ShortError(err))
 			if !utils.IsNoSuchThreadError(err) {
@@ -382,7 +408,7 @@ func (c *StreamerController) setUUIDIfExists(filename string) bool {
 }
 
 // UpdateSyncCfg updates sync config and fromDB.
-func (c *StreamerController) UpdateSyncCfg(syncCfg replication.BinlogSyncerConfig, fromDB *UpStreamConn) {
+func (c *StreamerController) UpdateSyncCfg(syncCfg replication.BinlogSyncerConfig, fromDB *dbconn.UpStreamConn) {
 	c.Lock()
 	c.fromDB = fromDB
 	c.syncCfg = syncCfg
@@ -415,15 +441,11 @@ func (c *StreamerController) GetBinlogType() BinlogType {
 }
 
 // CanRetry returns true if can switch from local to remote and retry again.
-func (c *StreamerController) CanRetry() bool {
+func (c *StreamerController) CanRetry(err error) bool {
 	c.RLock()
 	defer c.RUnlock()
 
-	if c.initBinlogType == LocalBinlog && c.currentBinlogType == LocalBinlog {
-		return true
-	}
-
-	return false
+	return c.retryStrategy.CanRetry(err)
 }
 
 func (c *StreamerController) updateServerID(tctx *tcontext.Context) error {
@@ -474,4 +496,34 @@ func isConnectionRefusedError(err error) bool {
 	}
 
 	return strings.Contains(err.Error(), "connect: connection refused")
+}
+
+// retryStrategy.
+type retryStrategy interface {
+	CanRetry(error) bool
+}
+
+type alwaysRetryStrategy struct{}
+
+func (s alwaysRetryStrategy) CanRetry(error) bool {
+	return true
+}
+
+// maxIntervalRetryStrategy allows retry when the retry interval is greater than the set interval.
+type maxIntervalRetryStrategy struct {
+	interval    time.Duration
+	lastErr     error
+	lastErrTime time.Time
+}
+
+func (s *maxIntervalRetryStrategy) CanRetry(err error) bool {
+	if err == nil {
+		return true
+	}
+
+	now := time.Now()
+	lastErrTime := s.lastErrTime
+	s.lastErrTime = now
+	s.lastErr = err
+	return lastErrTime.Add(s.interval).Before(now)
 }

@@ -15,8 +15,6 @@ package dumpling
 
 import (
 	"context"
-	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -33,6 +31,11 @@ import (
 
 var _ = Suite(&testDumplingSuite{})
 
+const (
+	testDumplingSchemaName = "INFORMATION_SCHEMA"
+	testDumplingTableName  = "TABLES"
+)
+
 func TestSuite(t *testing.T) {
 	TestingT(t)
 }
@@ -41,38 +44,20 @@ type testDumplingSuite struct {
 	cfg *config.SubTaskConfig
 }
 
-func getDBConfigFromEnv() config.DBConfig {
-	host := os.Getenv("MYSQL_HOST")
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
-	if port == 0 {
-		port = 3306
-	}
-	user := os.Getenv("MYSQL_USER")
-	if user == "" {
-		user = "root"
-	}
-	pswd := os.Getenv("MYSQL_PSWD")
-	return config.DBConfig{
-		Host:     host,
-		User:     user,
-		Password: pswd,
-		Port:     port,
-	}
-}
-
 func (d *testDumplingSuite) SetUpSuite(c *C) {
 	dir := c.MkDir()
 	d.cfg = &config.SubTaskConfig{
 		Name: "dumpling_ut",
-		From: getDBConfigFromEnv(),
+		From: config.GetDBConfigFromEnv(),
 		LoaderConfig: config.LoaderConfig{
 			Dir: dir,
 		},
 		BAList: &filter.Rules{
-			DoDBs: []string{"information_schema"},
+			DoDBs: []string{testDumplingSchemaName},
+			DoTables: []*filter.Table{{
+				Schema: testDumplingSchemaName,
+				Name:   testDumplingTableName,
+			}},
 		},
 	}
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)

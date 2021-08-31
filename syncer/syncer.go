@@ -88,6 +88,8 @@ var (
 	maxDMLConnectionDuration, _ = time.ParseDuration(maxDMLConnectionTimeout)
 	maxDMLExecutionDuration     = 30 * time.Second
 
+	maxPauseOrStopWaitTime = 10 * time.Second
+
 	adminQueueName     = "admin queue"
 	defaultBucketCount = 8
 )
@@ -102,6 +104,15 @@ const (
 
 	skipLagKey = "skip"
 	ddlLagKey  = "ddl"
+)
+
+// waitXIDStatus represents the status for waiting XID event when pause/stop task.
+type waitXIDStatus int64
+
+const (
+	noWait waitXIDStatus = iota
+	waiting
+	waitComplete
 )
 
 // Syncer can sync your MySQL data to another MySQL database.
@@ -127,17 +138,20 @@ type Syncer struct {
 
 	schemaTracker *schema.Tracker
 
-	fromDB *UpStreamConn
+	fromDB *dbconn.UpStreamConn
 
 	toDB      *conn.BaseDB
 	toDBConns []*dbconn.DBConn
 	ddlDB     *conn.BaseDB
 	ddlDBConn *dbconn.DBConn
 
-	jobs               []chan *job
-	jobsClosed         atomic.Bool
-	jobsChanLock       sync.Mutex
-	queueBucketMapping []string
+	jobs                []chan *job
+	jobsClosed          atomic.Bool
+	jobsChanLock        sync.Mutex
+	queueBucketMapping  []string
+	waitXIDJob          atomic.Int64
+	isTransactionEnd    bool
+	waitTransactionLock sync.Mutex
 
 	c *causality
 
@@ -209,9 +223,10 @@ type Syncer struct {
 	// `lower_case_table_names` setting of upstream db
 	SourceTableNamesFlavor utils.LowerCaseTableNamesFlavor
 
-	tsOffset            atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
-	secondsBehindMaster atomic.Int64             // current task delay second behind upstream
-	workerLagMap        map[string]*atomic.Int64 // worker's sync lag key:WorkerLagKey val: lag
+	tsOffset                  atomic.Int64             // time offset between upstream and syncer, DM's timestamp - MySQL's timestamp
+	secondsBehindMaster       atomic.Int64             // current task delay second behind upstream
+	workerLagMap              map[string]*atomic.Int64 // worker's sync lag key:WorkerLagKey val: lag
+	lastCheckpointFlushedTime time.Time
 }
 
 // NewSyncer creates a new Syncer.
@@ -224,6 +239,8 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.cfg = cfg
 	syncer.tctx = tcontext.Background().WithLogger(logger)
 	syncer.jobsClosed.Store(true) // not open yet
+	syncer.waitXIDJob.Store(int64(noWait))
+	syncer.isTransactionEnd = true
 	syncer.closed.Store(false)
 	syncer.lastBinlogSizeCount.Store(0)
 	syncer.binlogSizeCount.Store(0)
@@ -248,6 +265,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	}
 	syncer.recordedActiveRelayLog = false
 	syncer.workerLagMap = make(map[string]*atomic.Int64, cfg.WorkerCount+2) // map size = WorkerCount + ddlkey + skipkey
+	syncer.lastCheckpointFlushedTime = time.Time{}
 	return syncer
 }
 
@@ -472,7 +490,7 @@ func buildLowerCaseTableNamesMap(tables map[string][]string) (map[string]string,
 // NOTE: now we don't support modify router rules after task has started.
 func (s *Syncer) initShardingGroups(ctx context.Context, needCheck bool) error {
 	// fetch tables from source and filter them
-	sourceTables, err := s.fromDB.fetchAllDoTables(ctx, s.baList)
+	sourceTables, err := s.fromDB.FetchAllDoTables(ctx, s.baList)
 	if err != nil {
 		return err
 	}
@@ -544,6 +562,8 @@ func (s *Syncer) reset() {
 	s.execError.Store(nil)
 	s.setErrLocation(nil, nil, false)
 	s.isReplacingErr = false
+	s.waitXIDJob.Store(int64(noWait))
+	s.isTransactionEnd = true
 
 	switch s.cfg.ShardMode {
 	case config.ShardPessimistic:
@@ -652,7 +672,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		if utils.IsContextCanceledError(err) {
-			s.tctx.L().Info("filter out error caused by user cancel")
+			s.tctx.L().Info("filter out error caused by user cancel", log.ShortError(err))
 		} else {
 			metrics.SyncerExitWithErrorCounter.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Inc()
 			errsMu.Lock()
@@ -688,7 +708,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 }
 
 func (s *Syncer) getMasterStatus(ctx context.Context) (mysql.Position, gtid.Set, error) {
-	return s.fromDB.getMasterStatus(ctx, s.cfg.Flavor)
+	return s.fromDB.GetMasterStatus(ctx, s.cfg.Flavor)
 }
 
 func (s *Syncer) getTable(tctx *tcontext.Context, origSchema, origTable, renamedSchema, renamedTable string) (*model.TableInfo, error) {
@@ -806,28 +826,17 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origSchema
 	return nil
 }
 
-func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
+func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64, targetSchema, targetTable string) {
 	m := metrics.AddedJobsTotal
 	if isFinished {
 		s.count.Add(n)
 		m = metrics.FinishedJobsTotal
 	}
-
 	switch tp {
-	case insert:
-		m.WithLabelValues("insert", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
-	case update:
-		m.WithLabelValues("update", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
-	case del:
-		m.WithLabelValues("del", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
-	case ddl:
-		m.WithLabelValues("ddl", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
-	case xid:
-		// ignore xid jobs
-	case flush:
-		m.WithLabelValues("flush", s.cfg.Name, queueBucket, s.cfg.SourceID).Add(float64(n))
-	case skip:
-		// ignore skip jobs
+	case insert, update, del, ddl, flush:
+		m.WithLabelValues(tp.String(), s.cfg.Name, queueBucket, s.cfg.SourceID, s.cfg.WorkerName, targetSchema, targetTable).Add(float64(n))
+	case skip, xid:
+		// ignore skip/xid jobs
 	default:
 		s.tctx.L().Warn("unknown job operation type", zap.Stringer("type", tp))
 	}
@@ -870,7 +879,8 @@ func (s *Syncer) updateReplicationLag(job *job, lagKey string) {
 			lag = wl
 		}
 	}
-	metrics.ReplicationLagGauge.WithLabelValues(s.cfg.Name).Set(float64(lag))
+	metrics.ReplicationLagHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Observe(float64(lag))
+	metrics.ReplicationLagGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Set(float64(lag))
 	s.secondsBehindMaster.Store(lag)
 }
 
@@ -908,6 +918,9 @@ var (
 )
 
 func (s *Syncer) addJob(job *job) error {
+	s.waitTransactionLock.Lock()
+	defer s.waitTransactionLock.Unlock()
+
 	failpoint.Inject("countJobFromOneEvent", func() {
 		if job.currentLocation.Position.Compare(lastLocation.Position) == 0 {
 			lastLocationNum++
@@ -944,15 +957,28 @@ func (s *Syncer) addJob(job *job) error {
 			s.tctx.L().Info("meet the second job of a GTID", zap.Any("binlog position", lastLocation))
 		}
 	})
+
+	failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
+		if waitXIDStatus(s.waitXIDJob.Load()) == waiting {
+			s.tctx.L().Info("not receive xid job yet", zap.Any("next job", job))
+		}
+	})
+
+	if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
+		s.tctx.L().Info("All jobs is completed before syncer close, the coming job will be reject", zap.Any("job", job))
+		return nil
+	}
 	var queueBucket int
 	switch job.tp {
 	case xid:
+		s.waitXIDJob.CAS(int64(waiting), int64(waitComplete))
 		s.saveGlobalPoint(job.location)
+		s.isTransactionEnd = true
 		return nil
 	case skip:
 		s.updateReplicationLag(job, skipLagKey)
 	case flush:
-		metrics.AddedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
+		s.addCount(false, adminQueueName, job.tp, 1, job.targetSchema, job.targetTable)
 		// ugly code addJob and sync, refine it later
 		s.jobWg.Add(s.cfg.WorkerCount)
 		for i := 0; i < s.cfg.WorkerCount; i++ {
@@ -962,11 +988,11 @@ func (s *Syncer) addJob(job *job) error {
 			metrics.AddJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		}
 		s.jobWg.Wait()
-		metrics.FinishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
+		s.addCount(true, adminQueueName, job.tp, 1, job.targetSchema, job.targetTable)
 		return s.flushCheckPoints()
 	case ddl:
 		s.jobWg.Wait()
-		metrics.AddedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Inc()
+		s.addCount(false, adminQueueName, job.tp, 1, job.targetSchema, job.targetTable)
 		s.jobWg.Add(1)
 		queueBucket = s.cfg.WorkerCount
 		startTime := time.Now()
@@ -975,10 +1001,15 @@ func (s *Syncer) addJob(job *job) error {
 	case insert, update, del:
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
-		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
+		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1, job.targetSchema, job.targetTable)
 		startTime := time.Now()
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
+		s.isTransactionEnd = false
+		failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
+			s.tctx.L().Info("receive dml job", zap.Any("dml job", job))
+			time.Sleep(100 * time.Millisecond)
+		})
 		metrics.AddJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	}
 
@@ -1124,6 +1155,13 @@ func (s *Syncer) flushCheckPoints() error {
 		return err
 	}
 
+	now := time.Now()
+	if !s.lastCheckpointFlushedTime.IsZero() {
+		duration := now.Sub(s.lastCheckpointFlushedTime).Seconds()
+		metrics.FlushCheckPointsTimeInterval.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Observe(duration)
+	}
+	s.lastCheckpointFlushedTime = now
+
 	s.tctx.L().Info("after last flushing checkpoint, DM has ignored row changes by expression filter",
 		zap.Int64("number of filtered insert", s.filteredInsert.Load()),
 		zap.Int64("number of filtered update", s.filteredUpdate.Load()),
@@ -1243,7 +1281,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *dbconn.
 		}
 		s.jobWg.Done()
 		s.updateReplicationLag(ddlJob, ddlLagKey)
-		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)))
+		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)), ddlJob.targetSchema, ddlJob.targetTable)
 	}
 }
 
@@ -1255,7 +1293,9 @@ func (s *Syncer) syncDML(
 	idx := 0
 	count := s.cfg.Batch
 	jobs := make([]*job, 0, count)
-	tpCnt := make(map[opType]int64)
+	// db_schema->db_table->opType
+	tpCnt := make(map[string]map[string]map[opType]int64)
+	queueID := strings.TrimPrefix(workerLagKey, "lag_")
 
 	// clearF is used to reset job queue.
 	clearF := func() {
@@ -1264,9 +1304,11 @@ func (s *Syncer) syncDML(
 		}
 		idx = 0
 		jobs = jobs[0:0]
+		// clear tpCnt map
+		tpCnt = make(map[string]map[string]map[opType]int64)
 	}
 
-	// successF is used to calculate lag metric and tps.
+	// successF is used to calculate lag metric and q/tps.
 	successF := func() {
 		if len(jobs) > 0 {
 			// NOTE: we can use the first job of job queue to calculate lag because when this job committed,
@@ -1274,14 +1316,27 @@ func (s *Syncer) syncDML(
 			// and we can use this job to maintain the oldest binlog event ts among all workers.
 			j := jobs[0]
 			s.updateReplicationLag(j, workerLagKey)
+
+			switch j.tp {
+			case ddl:
+				metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageDDLExec, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(j.jobAddTime).Seconds())
+			case insert, update, del:
+				metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageDMLExec, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(j.jobAddTime).Seconds())
+				// metric only increases by 1 because dm batches sql jobs in a single transaction.
+				metrics.FinishedTransactionTotal.WithLabelValues(s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Inc()
+			}
 		} else {
 			s.updateReplicationLag(nil, workerLagKey)
 		}
-		// calculate tps
-		for tpName, v := range tpCnt {
-			s.addCount(true, queueBucket, tpName, v)
-			tpCnt[tpName] = 0
+		// calculate qps
+		for dbSchema, tableM := range tpCnt {
+			for dbTable, tpM := range tableM {
+				for tpName, cnt := range tpM {
+					s.addCount(true, queueBucket, tpName, cnt, dbSchema, dbTable)
+				}
+			}
 		}
+		metrics.ReplicationTransactionBatch.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID, queueBucket).Observe(float64(len(jobs)))
 	}
 
 	fatalF := func(affected int, err error) {
@@ -1316,7 +1371,7 @@ func (s *Syncer) syncDML(
 			time.Sleep(time.Duration(t) * time.Second)
 		})
 		// use background context to execute sqls as much as possible
-		ctctx, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLExecutionDuration)
+		ctctx, cancel := tctx.WithTimeout(maxDMLExecutionDuration)
 		defer cancel()
 		affect, err := db.ExecuteSQL(ctctx, queries, args...)
 		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
@@ -1358,15 +1413,23 @@ func (s *Syncer) syncDML(
 
 		select {
 		case sqlJob, ok := <-jobChan:
-			metrics.QueueSizeGauge.WithLabelValues(s.cfg.Name, queueBucket, s.cfg.SourceID).Set(float64(len(jobChan)))
+			metrics.QueueSizeGauge.WithLabelValues(s.cfg.Name, queueID, s.cfg.SourceID).Set(float64(len(jobChan)))
 			if !ok {
+				if len(jobs) > 0 {
+					tctx.L().Warn("have unexecuted jobs when close job chan!", zap.Any("rest job", jobs))
+				}
 				return
 			}
 			idx++
-
 			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
 				jobs = append(jobs, sqlJob)
-				tpCnt[sqlJob.tp]++
+				if _, ok := tpCnt[sqlJob.targetSchema]; !ok {
+					tpCnt[sqlJob.targetSchema] = make(map[string]map[opType]int64)
+				}
+				if _, ok := tpCnt[sqlJob.targetSchema][sqlJob.targetTable]; !ok {
+					tpCnt[sqlJob.targetSchema][sqlJob.targetTable] = make(map[opType]int64)
+				}
+				tpCnt[sqlJob.targetSchema][sqlJob.targetTable][sqlJob.tp]++
 			}
 
 			if idx >= count || sqlJob.tp == flush {
@@ -1404,7 +1467,9 @@ func (s *Syncer) syncDML(
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
-	tctx := s.tctx.WithContext(ctx)
+	runCtx, runCancel := context.WithCancel(context.Background())
+	defer runCancel()
+	tctx := s.tctx.WithContext(runCtx)
 
 	defer func() {
 		if s.done != nil {
@@ -1412,8 +1477,38 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}()
 
+	go func() {
+		<-ctx.Done()
+		select {
+		case <-runCtx.Done():
+		default:
+			tctx.L().Info("received subtask's done")
+
+			s.waitTransactionLock.Lock()
+			if s.isTransactionEnd {
+				s.waitXIDJob.Store(int64(waitComplete))
+				s.jobWg.Wait()
+				tctx.L().Info("the last job is transaction end, done directly")
+				runCancel()
+				s.waitTransactionLock.Unlock()
+				return
+			}
+			s.waitXIDJob.Store(int64(waiting))
+			s.waitTransactionLock.Unlock()
+
+			select {
+			case <-runCtx.Done():
+				tctx.L().Info("received syncer's done")
+			case <-time.After(maxPauseOrStopWaitTime):
+				tctx.L().Info("wait transaction end timeout")
+				s.jobWg.Wait()
+				runCancel()
+			}
+		}
+	}()
+
 	// some initialization that can't be put in Syncer.Init
-	fresh, err := s.IsFreshTask(ctx)
+	fresh, err := s.IsFreshTask(runCtx)
 	if err != nil {
 		return err
 	} else if fresh {
@@ -1467,7 +1562,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	updateTSOffset := func() error {
 		t1 := time.Now()
-		ts, tsErr := s.fromDB.getServerUnixTS(ctx)
+		ts, tsErr := s.fromDB.GetServerUnixTS(runCtx)
 		rtt := time.Since(t1).Seconds()
 		if tsErr == nil {
 			s.tsOffset.Store(time.Now().Unix() - ts - int64(rtt/2))
@@ -1491,7 +1586,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if utErr := updateTSOffset(); utErr != nil {
 					s.tctx.L().Error("get server unix ts err", zap.Error(utErr))
 				}
-			case <-ctx.Done():
+			case <-runCtx.Done():
 				return
 			}
 		}
@@ -1530,27 +1625,19 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
 		workerLagKey := dmlWorkerLagKey(i)
 		go func(i int, name, workerLagKey string) {
-			ctx2, cancel := context.WithCancel(ctx)
-			ctctx := s.tctx.WithContext(ctx2)
-			s.syncDML(ctctx, name, s.toDBConns[i], s.jobs[i], workerLagKey)
-			cancel()
+			s.syncDML(tctx, name, s.toDBConns[i], s.jobs[i], workerLagKey)
 		}(i, name, workerLagKey)
 	}
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
 	go func() {
-		ctx2, cancel := context.WithCancel(ctx)
-		ctctx := s.tctx.WithContext(ctx2)
-		s.syncDDL(ctctx, adminQueueName, s.ddlDBConn, s.jobs[s.cfg.WorkerCount])
-		cancel()
+		s.syncDDL(tctx, adminQueueName, s.ddlDBConn, s.jobs[s.cfg.WorkerCount])
 	}()
 
 	s.wg.Add(1)
 	go func() {
-		ctx2, cancel := context.WithCancel(ctx)
-		s.printStatus(ctx2)
-		cancel()
+		s.printStatus(runCtx)
 	}()
 
 	// syncing progress with sharding DDL group
@@ -1715,11 +1802,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err
 			}
 
-			if s.streamerController.CanRetry() {
+			if s.streamerController.CanRetry(err) {
 				err = s.streamerController.ResetReplicationSyncer(tctx, lastLocation)
 				if err != nil {
 					return err
 				}
+				log.L().Info("reset replication binlog puller")
 				continue
 			}
 
@@ -1737,6 +1825,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return terror.ErrSyncerGetEvent.Generate(err)
 		}
 
+		failpoint.Inject("IgnoreSomeTypeEvent", func(val failpoint.Value) {
+			if e.Header.EventType.String() == val.(string) {
+				tctx.L().Debug("IgnoreSomeTypeEvent", zap.Reflect("event", e))
+				failpoint.Continue()
+			}
+		})
+
 		// time duration for reading an event from relay log or upstream master.
 		metrics.BinlogReadDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		startTime = time.Now() // reset start time for the next metric.
@@ -1751,7 +1846,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			metrics.BinlogFileGauge.WithLabelValues("syncer", s.cfg.Name, s.cfg.SourceID).Set(float64(index))
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
-		metrics.BinlogEventSizeHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(float64(e.Header.EventSize))
+		metrics.BinlogEventSizeHistogram.WithLabelValues(s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(float64(e.Header.EventSize))
 
 		failpoint.Inject("ProcessBinlogSlowDown", nil)
 
@@ -1796,8 +1891,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						s.isReplacingErr = true
 						// revert currentLocation to startLocation
 						currentLocation = startLocation
+					} else if op == pb.ErrorOp_Skip {
+						s.saveGlobalPoint(currentLocation)
+						err = s.flushJobs()
+						if err != nil {
+							tctx.L().Warn("failed to flush jobs when handle-error skip", zap.Error(err))
+						} else {
+							tctx.L().Info("flush jobs when handle-error skip")
+						}
 					}
-					// skip the event
+					// skip the current event
 					continue
 				}
 			}
@@ -1851,10 +1954,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		var originSQL string // show origin sql when error, only ddl now
 		var err2 error
+
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			err2 = s.handleRotateEvent(ev, ec)
 		case *replication.RowsEvent:
+			metrics.BinlogEventRowHistogram.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Observe(float64(len(ev.Rows)))
 			err2 = s.handleRowsEvent(ev, ec)
 		case *replication.QueryEvent:
 			originSQL = strings.TrimSpace(string(ev.Query))
@@ -1908,6 +2013,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err := s.handleEventError(err2, startLocation, currentLocation, e.Header.EventType == replication.QUERY_EVENT, originSQL); err != nil {
 				return err
 			}
+		}
+		if waitXIDStatus(s.waitXIDJob.Load()) == waitComplete {
+			return nil
 		}
 	}
 }
@@ -2103,9 +2211,9 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		param.safeMode = ec.safeMode
 		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
+			return terror.Annotatef(err, "gen insert sqls failed, originSchema: %s, originTable: %s, schema: %s, table: %s", originSchema, originTable, schemaName, tableName)
 		}
-		metrics.BinlogEvent.WithLabelValues("write_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenWriteRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
@@ -2117,9 +2225,9 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		param.safeMode = ec.safeMode
 		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
+			return terror.Annotatef(err, "gen update sqls failed, originSchema: %s, originTable: %s, schema: %s, table: %s", originSchema, originTable, schemaName, tableName)
 		}
-		metrics.BinlogEvent.WithLabelValues("update_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenUpdateRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
@@ -2130,9 +2238,9 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
+			return terror.Annotatef(err, "gen delete sqls failed, originSchema: %s, originTable: %s, schema: %s, table: %s", originSchema, originTable, schemaName, tableName)
 		}
-		metrics.BinlogEvent.WithLabelValues("delete_rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenDeleteRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = del
 
 	default:
@@ -2251,7 +2359,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		return terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(string(ev.Query))
 	}
 
-	metrics.BinlogEvent.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+	metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenQuery, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 
 	/*
 		we construct a application transaction for ddl. we save checkpoint after we execute all ddls
@@ -2905,7 +3013,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				s.currentLocationMu.RUnlock()
 
 				ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
-				remainingSize, err2 := s.fromDB.countBinaryLogsSize(ctx2, currentLocation.Position)
+				remainingSize, err2 := s.fromDB.CountBinaryLogsSize(ctx2, currentLocation.Position)
 				cancel2()
 				if err2 != nil {
 					// log the error, but still handle the rest operation
@@ -2921,7 +3029,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 							zap.Int64("bytes/Second", bytesPerSec),
 							zap.Int64("unsynced binlog size", remainingSize),
 							zap.Int64("estimate time to catch up", remainingSeconds))
-						metrics.RemainingTimeGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Set(float64(remainingSeconds))
+						metrics.RemainingTimeGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Set(float64(remainingSeconds))
 					}
 				}
 			}
@@ -2964,7 +3072,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 	var err error
 	dbCfg := s.cfg.From
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDMLConnectionTimeout)
-	s.fromDB, err = createUpStreamConn(dbCfg)
+	s.fromDB, err = dbconn.NewUpStreamConn(dbCfg)
 	if err != nil {
 		return err
 	}
@@ -3009,7 +3117,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 
 	s.toDB, s.toDBConns, err = dbconn.CreateConns(s.tctx, s.cfg, dbCfg, s.cfg.WorkerCount)
 	if err != nil {
-		closeUpstreamConn(s.tctx, s.fromDB) // release resources acquired before return with error
+		dbconn.CloseUpstreamConn(s.tctx, s.fromDB) // release resources acquired before return with error
 		return err
 	}
 	// baseConn for ddl
@@ -3019,7 +3127,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 	var ddlDBConns []*dbconn.DBConn
 	s.ddlDB, ddlDBConns, err = dbconn.CreateConns(s.tctx, s.cfg, dbCfg, 1)
 	if err != nil {
-		closeUpstreamConn(s.tctx, s.fromDB)
+		dbconn.CloseUpstreamConn(s.tctx, s.fromDB)
 		dbconn.CloseBaseDB(s.tctx, s.toDB)
 		return err
 	}
@@ -3032,7 +3140,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 
 // closeBaseDB closes all opened DBs, rollback for createConns.
 func (s *Syncer) closeDBs() {
-	closeUpstreamConn(s.tctx, s.fromDB)
+	dbconn.CloseUpstreamConn(s.tctx, s.fromDB)
 	dbconn.CloseBaseDB(s.tctx, s.toDB)
 	dbconn.CloseBaseDB(s.tctx, s.ddlDB)
 }
@@ -3155,7 +3263,6 @@ func (s *Syncer) Pause() {
 		s.tctx.L().Warn("try to pause, but already closed")
 		return
 	}
-
 	s.stopSync()
 }
 
@@ -3305,7 +3412,7 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 
 	var err error
 	s.cfg.From.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDMLConnectionTimeout)
-	s.fromDB, err = createUpStreamConn(s.cfg.From)
+	s.fromDB, err = dbconn.NewUpStreamConn(s.cfg.From)
 	if err != nil {
 		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))
 		return err
@@ -3331,7 +3438,11 @@ func (s *Syncer) setSyncCfg() error {
 	var tlsConfig *tls.Config
 	var err error
 	if s.cfg.From.Security != nil {
-		tlsConfig, err = toolutils.ToTLSConfig(s.cfg.From.Security.SSLCA, s.cfg.From.Security.SSLCert, s.cfg.From.Security.SSLKey)
+		if loadErr := s.cfg.From.Security.LoadTLSContent(); loadErr != nil {
+			return terror.ErrCtlLoadTLSCfg.Delegate(loadErr)
+		}
+		tlsConfig, err = toolutils.ToTLSConfigWithVerifyByRawbytes(s.cfg.From.Security.SSLCABytes,
+			s.cfg.From.Security.SSLCertBytes, s.cfg.From.Security.SSLKEYBytes, s.cfg.From.Security.CertAllowedCN)
 		if err != nil {
 			return terror.ErrConnInvalidTLSConfig.Delegate(err)
 		}

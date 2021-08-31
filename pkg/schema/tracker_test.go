@@ -487,3 +487,25 @@ func (s *trackerSuite) TestAllSchemas(c *C) {
 	_, err = tracker.GetTable("testdb2", "a")
 	c.Assert(err, ErrorMatches, `.*Table 'testdb2\.a' doesn't exist`)
 }
+
+func (s *trackerSuite) TestNotSupportedVariable(c *C) {
+	log.SetLevel(zapcore.ErrorLevel)
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	defer db.Close()
+	con, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+	baseConn := conn.NewBaseConn(con, nil)
+
+	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
+		sqlmock.NewRows([]string{"Variable_name", "Value"}).
+			AddRow("sql_mode", ""))
+
+	oldSessionVar := map[string]string{
+		"tidb_enable_change_column_type": "ON",
+	}
+
+	_, err = NewTracker(context.Background(), "test-tracker", oldSessionVar, baseConn)
+	c.Assert(err, IsNil)
+}

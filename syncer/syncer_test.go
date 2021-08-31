@@ -29,6 +29,8 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb/infoschema"
+	"github.com/pingcap/tidb/util/mock"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -91,8 +93,11 @@ const (
 )
 
 type testSyncerSuite struct {
+	db              *sql.DB
 	cfg             *config.SubTaskConfig
 	eventsGenerator *event.Generator
+	syncer          *replication.BinlogSyncer
+	streamer        *replication.BinlogStreamer
 }
 
 type MockStreamer struct {
@@ -136,8 +141,8 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		Dir: loaderDir,
 	}
 	s.cfg = &config.SubTaskConfig{
-		From:         getDBConfigFromEnv(),
-		To:           getDBConfigFromEnv(),
+		From:         config.GetDBConfigFromEnv(),
+		To:           config.GetDBConfigFromEnv(),
 		ServerID:     101,
 		MetaSchema:   "test",
 		Name:         "syncer_ut",
@@ -150,7 +155,13 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 
 	s.cfg.UseRelay = false
 
+	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
+	s.db, err = sql.Open("mysql", dbAddr)
+	c.Assert(err, IsNil)
+
 	s.resetEventsGenerator(c)
+	_, err = s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
+	c.Assert(err, IsNil)
 
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)
 }
@@ -725,20 +736,14 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 
 func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	// TODO Currently mock eventGenerator don't support generate json,varchar field event, so use real mysql binlog event here
-	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
-	db, err := sql.Open("mysql", dbAddr)
-	if err != nil {
-		c.Fatal(err)
-	}
-
-	_, err = db.Exec("SET GLOBAL binlog_format = 'ROW';")
+	_, err := s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
 	c.Assert(err, IsNil)
 
-	pos, gset, err := utils.GetMasterStatus(context.Background(), db, "mysql")
+	pos, gset, err := utils.GetMasterStatus(context.Background(), s.db, "mysql")
 	c.Assert(err, IsNil)
 
 	//nolint:errcheck
-	defer db.Exec("drop database if exists gctest_1")
+	defer s.db.Exec("drop database if exists gctest_1")
 
 	s.cfg.BAList = &filter.Rules{
 		DoDBs: []string{"~^gctest_.*"},
@@ -869,16 +874,17 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	}
 
 	for _, sql := range createSQLs {
-		_, err = db.Exec(sql)
+		_, err = s.db.Exec(sql)
 		c.Assert(err, IsNil)
 	}
 
 	syncer := NewSyncer(s.cfg, nil)
 	// use upstream dbConn as mock downstream
-	dbConn, err := db.Conn(context.Background())
+	dbConn, err := s.db.Conn(context.Background())
 	c.Assert(err, IsNil)
-	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
-	syncer.ddlDB = syncer.fromDB.BaseDB
+	baseDB := conn.NewBaseDB(s.db, func() {})
+	syncer.fromDB = &dbconn.UpStreamConn{BaseDB: baseDB}
+	syncer.ddlDB = baseDB
 	syncer.ddlDBConn = &dbconn.DBConn{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 	syncer.toDBConns = []*dbconn.DBConn{{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	c.Assert(syncer.setSyncCfg(), IsNil)
@@ -892,7 +898,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 
 	for _, testCase := range testCases {
 		for _, sql := range testCase.sqls {
-			_, err = db.Exec(sql)
+			_, err = s.db.Exec(sql)
 			c.Assert(err, IsNil, Commentf("sql: %s", sql))
 		}
 		idx := 0
@@ -951,7 +957,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	}
 
 	for _, sql := range dropSQLs {
-		_, err = db.Exec(sql)
+		_, err = s.db.Exec(sql)
 		c.Assert(err, IsNil)
 	}
 }
@@ -963,12 +969,28 @@ func (s *testSyncerSuite) TestcheckpointID(c *C) {
 }
 
 func (s *testSyncerSuite) TestCasuality(c *C) {
-	var wg sync.WaitGroup
+	p := parser.New()
+	se := mock.NewContext()
+	schema := "create table tb(a int primary key, b int unique);"
+	ti, err := createTableInfo(p, se, int64(0), schema)
+	c.Assert(err, IsNil)
+	insertValues := [][]interface{}{
+		{1, 2},
+		{3, 4},
+		{4, 1},
+		{1, 4}, // this insert conflict with the first one
+	}
+	keys := make([][]string, len(insertValues))
+	for i := range insertValues {
+		keys[i] = genMultipleKeys(ti, insertValues[i], "tb")
+	}
+
 	s.cfg.WorkerCount = 1
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.jobs = []chan *job{make(chan *job, 1)}
 	syncer.queueBucketMapping = []string{"queue_0", adminQueueName}
 
+	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -977,13 +999,18 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 		syncer.jobWg.Done()
 	}()
 
-	key, err := syncer.resolveCasuality([]string{"a"})
+	// no conflict
+	key1, err := syncer.resolveCasuality(keys[0])
 	c.Assert(err, IsNil)
-	c.Assert(key, Equals, "a")
+	c.Assert(key1, Equals, keys[0][0])
 
-	key, err = syncer.resolveCasuality([]string{"b"})
+	key2, err := syncer.resolveCasuality(keys[1])
 	c.Assert(err, IsNil)
-	c.Assert(key, Equals, "b")
+	c.Assert(key2, Equals, keys[1][0])
+
+	key3, err := syncer.resolveCasuality(keys[2])
+	c.Assert(err, IsNil)
+	c.Assert(key3, Equals, keys[2][0])
 
 	// will detect casuality and add a flush job
 	db, mock, err := sqlmock.New()
@@ -992,18 +1019,15 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer.setupMockCheckpoint(c, dbConn, mock)
-
 	mock.ExpectBegin()
 	mock.ExpectExec(".*INSERT INTO .* VALUES.* ON DUPLICATE KEY UPDATE.*").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
-	key, err = syncer.resolveCasuality([]string{"a", "b"})
+	key4, err := syncer.resolveCasuality(keys[3])
 	c.Assert(err, IsNil)
-	c.Assert(key, Equals, "a")
-
+	c.Assert(key4, Equals, keys[3][0])
 	if err := mock.ExpectationsWereMet(); err != nil {
 		c.Errorf("checkpoint db unfulfilled expectations: %s", err)
 	}
-
 	wg.Wait()
 }
 
@@ -1054,7 +1078,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.cfg.CheckpointFlushInterval = 30
-	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
+	syncer.fromDB = &dbconn.UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
 	syncer.toDBConns = []*dbconn.DBConn{
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
@@ -1295,7 +1319,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	}
 
 	syncer := NewSyncer(s.cfg, nil)
-	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
+	syncer.fromDB = &dbconn.UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
 	syncer.toDBConns = []*dbconn.DBConn{
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
@@ -1665,7 +1689,7 @@ func (s *Syncer) mockFinishJob(jobs []*expectJob) {
 	for _, job := range jobs {
 		switch job.tp {
 		case ddl, insert, update, del, flush:
-			s.addCount(true, "test", job.tp, 1)
+			s.addCount(true, "test", job.tp, 1, "", "")
 		}
 	}
 }
@@ -1675,7 +1699,7 @@ func (s *Syncer) addJobToMemory(job *job) error {
 
 	switch job.tp {
 	case ddl, insert, update, del, flush:
-		s.addCount(false, "test", job.tp, 1)
+		s.addCount(false, "test", job.tp, 1, "", "")
 		testJobs.Lock()
 		testJobs.jobs = append(testJobs.jobs, job)
 		testJobs.Unlock()
@@ -1838,4 +1862,177 @@ func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 	ti.UpdateTS = ti2.UpdateTS
 
 	c.Assert(ti, DeepEquals, ti2)
+}
+
+func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+	conn := &dbconn.DBConn{
+		BaseConn: &conn.BaseConn{
+			DBConn:        dbConn,
+			RetryStrategy: &retry.FiniteRetryStrategy{},
+		},
+		Cfg: &config.SubTaskConfig{
+			Name: "test",
+		},
+	}
+
+	sqls := []string{"alter table t1 add column a int", "alter table t1 add column b int"}
+
+	// will ignore the first error, and continue execute the second sql
+	mock.ExpectBegin()
+	mock.ExpectExec(sqls[0]).WillReturnError(newMysqlErr(uint16(infoschema.ErrColumnExists.Code()), "column a already exists"))
+	mock.ExpectExec(sqls[1]).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestExecuteSQLSWithIgnore")))
+	n, err := conn.ExecuteSQLWithIgnore(tctx, ignoreDDLError, sqls)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, 2)
+
+	// will return error when execute the first sql
+	mock.ExpectBegin()
+	mock.ExpectExec(sqls[0]).WillReturnError(newMysqlErr(uint16(infoschema.ErrColumnExists.Code()), "column a already exists"))
+	mock.ExpectRollback()
+
+	n, err = conn.ExecuteSQL(tctx, sqls)
+	c.Assert(err, ErrorMatches, ".*column a already exists.*")
+	c.Assert(n, Equals, 0)
+
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
+
+func (s *testSyncerSuite) TestTimezone(c *C) {
+	s.cfg.BAList = &filter.Rules{
+		DoDBs:     []string{"~^tztest_.*"},
+		IgnoreDBs: []string{"stest", "~^foo.*"},
+	}
+
+	createSQLs := []string{
+		"create database if not exists tztest_1",
+		"create table if not exists tztest_1.t_1(id int, a timestamp)",
+	}
+
+	testCases := []struct {
+		sqls     []string
+		timezone string
+	}{
+		{
+			[]string{
+				"insert into tztest_1.t_1(id, a) values (1, '1990-04-15 01:30:12')",
+				"insert into tztest_1.t_1(id, a) values (2, '1990-04-15 02:30:12')",
+				"insert into tztest_1.t_1(id, a) values (3, '1990-04-15 03:30:12')",
+			},
+			"Asia/Shanghai",
+		},
+		{
+			[]string{
+				"insert into tztest_1.t_1(id, a) values (4, '1990-04-15 01:30:12')",
+				"insert into tztest_1.t_1(id, a) values (5, '1990-04-15 02:30:12')",
+				"insert into tztest_1.t_1(id, a) values (6, '1990-04-15 03:30:12')",
+			},
+			"America/Phoenix",
+		},
+	}
+	queryTS := "select unix_timestamp(a) from `tztest_1`.`t_1` where id = ?"
+
+	dropSQLs := []string{
+		"drop table tztest_1.t_1",
+		"drop database tztest_1",
+	}
+
+	defer func() {
+		for _, sql := range dropSQLs {
+			_, err := s.db.Exec(sql)
+			c.Assert(err, IsNil)
+		}
+	}()
+
+	for _, sql := range createSQLs {
+		_, err := s.db.Exec(sql)
+		c.Assert(err, IsNil)
+	}
+
+	for _, testCase := range testCases {
+		syncer := NewSyncer(s.cfg, nil)
+		c.Assert(syncer.genRouter(), IsNil)
+		s.resetBinlogSyncer(c)
+
+		// we should not use `sql.DB.Exec` to do query which depends on session variables
+		// because `sql.DB.Exec` will choose a underlying DBConn for every query from the connection pool
+		// and different Conn using different session
+		// ref: `sql.DB.Conn`
+		// and `set @@global` is also not reasonable, because it can not affect sessions already exist
+		// if we must ensure multi queries use the same session, we should use a transaction
+		txn, err := s.db.Begin()
+		c.Assert(err, IsNil)
+		_, err = txn.Exec("set @@session.time_zone = ?", testCase.timezone)
+		c.Assert(err, IsNil)
+		_, err = txn.Exec("set @@session.sql_mode = ''")
+		c.Assert(err, IsNil)
+		for _, sql := range testCase.sqls {
+			_, err = txn.Exec(sql)
+			c.Assert(err, IsNil)
+		}
+		err = txn.Commit()
+		c.Assert(err, IsNil)
+
+		idx := 0
+		for {
+			if idx >= len(testCase.sqls) {
+				break
+			}
+			e, err := s.streamer.GetEvent(context.Background())
+			c.Assert(err, IsNil)
+			switch ev := e.Event.(type) {
+			case *replication.RowsEvent:
+				skip, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+				c.Assert(err, IsNil)
+				if skip {
+					continue
+				}
+
+				rowid := ev.Rows[0][0].(int32)
+				var ts sql.NullInt64
+				err2 := s.db.QueryRow(queryTS, rowid).Scan(&ts)
+				c.Assert(err2, IsNil)
+				c.Assert(ts.Valid, IsTrue)
+
+				raw := ev.Rows[0][1].(string)
+				data, err := time.ParseInLocation("2006-01-02 15:04:05", raw, time.UTC)
+				c.Assert(err, IsNil)
+				c.Assert(data.Unix(), DeepEquals, ts.Int64)
+				idx++
+			default:
+				continue
+			}
+		}
+	}
+}
+
+func (s *testSyncerSuite) resetBinlogSyncer(c *C) {
+	cfg := replication.BinlogSyncerConfig{
+		ServerID:       s.cfg.ServerID,
+		Flavor:         "mysql",
+		Host:           s.cfg.From.Host,
+		Port:           uint16(s.cfg.From.Port),
+		User:           s.cfg.From.User,
+		Password:       s.cfg.From.Password,
+		UseDecimal:     false,
+		VerifyChecksum: true,
+	}
+	cfg.TimestampStringLocation = time.UTC
+
+	if s.syncer != nil {
+		s.syncer.Close()
+	}
+
+	pos, _, err := utils.GetMasterStatus(context.Background(), s.db, "mysql")
+	c.Assert(err, IsNil)
+
+	s.syncer = replication.NewBinlogSyncer(cfg)
+	s.streamer, err = s.syncer.StartSync(pos)
+	c.Assert(err, IsNil)
 }

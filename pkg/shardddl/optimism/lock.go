@@ -685,6 +685,20 @@ func (l *Lock) DeleteColumnsByOp(op Operation) error {
 	return nil
 }
 
+// TableExist check whether table exists.
+func (l *Lock) TableExist(source, schema, table string) bool {
+	if _, ok := l.tables[source]; !ok {
+		return false
+	}
+	if _, ok := l.tables[source][schema]; !ok {
+		return false
+	}
+	if _, ok := l.tables[source][schema][table]; !ok {
+		return false
+	}
+	return true
+}
+
 // AddDifferentFieldLenColumns checks whether dm adds columns with different field lengths.
 func AddDifferentFieldLenColumns(lockID, ddl string, oldJoined, newJoined schemacmp.Table) (string, error) {
 	col, err := GetColumnName(lockID, ddl, ast.AlterTableAddColumns)
