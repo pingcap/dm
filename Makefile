@@ -99,7 +99,6 @@ test: unit_test integration_test
 
 define run_unit_test
 	@echo "running unit test for packages:" $(1)
-	bash -x ./tests/wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
 	$(FAILPOINT_ENABLE)
 	@export log_level=error; \
