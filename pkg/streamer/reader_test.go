@@ -256,7 +256,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	t.verifyNoEventsInStreamer(c, s)
 }
 
-func (t *testReaderSuite) TestParseFilerelayLogUpdatedOrNewCreated(c *C) {
+func (t *testReaderSuite) TestParseFileRelayLogUpdatedOrNewCreated(c *C) {
 	var (
 		filename                      = "test-mysql-bin.000001"
 		nextFilename                  = "test-mysql-bin.000002"
@@ -287,9 +287,10 @@ func (t *testReaderSuite) TestParseFilerelayLogUpdatedOrNewCreated(c *C) {
 		_, err = f.Write(ev.RawData)
 		c.Assert(err, IsNil)
 	}
+	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
 
 	// no valid update for relay sub dir, timeout, no error
-	ctx1, cancel1 := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
 	defer cancel1()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
@@ -384,13 +385,13 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 		_, err = f.Write(ev.RawData)
 		c.Assert(err, IsNil)
 	}
+	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
 
 	// invalid UUID in UUID list, error
 	r.uuids = []string{currentUUID, "invalid.uuid"}
 	t.writeUUIDs(c, baseDir, r.uuids)
 	ctx1, cancel1 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel1()
-	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, ErrorMatches, ".*not valid.*")
@@ -452,11 +453,11 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0o600)
 	c.Assert(err, IsNil)
 	defer f.Close()
+	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
 
 	// file has no data, meet io.EOF error (when reading file header) and ignore it.
 	ctx1, cancel1 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel1()
-	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
