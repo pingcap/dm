@@ -70,6 +70,7 @@ type job struct {
 	sql             string
 	args            []interface{}
 	key             string
+	keys            []string
 	retry           bool
 	location        binlog.Location // location of last received (ROTATE / QUERY / XID) event, for global/table checkpoint
 	startLocation   binlog.Location // start location of the sql in binlog, for handle_error
@@ -87,7 +88,7 @@ func (j *job) String() string {
 }
 
 func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{},
-	key string, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader) *job {
+	keys []string, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader) *job {
 	return &job{
 		tp:           tp,
 		sourceTbl:    map[string][]string{sourceSchema: {sourceTable}},
@@ -95,7 +96,7 @@ func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, 
 		targetTable:  targetTable,
 		sql:          sql,
 		args:         args,
-		key:          key,
+		keys:         keys,
 		retry:        true,
 
 		location:        location,
