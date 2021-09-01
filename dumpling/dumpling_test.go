@@ -72,11 +72,17 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	c.Assert(err, IsNil)
 	resultCh := make(chan pb.ProcessResult, 1)
 
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessNoError", `return(true)`), IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessNoError")
+
 	dumpling.Process(ctx, resultCh)
 	c.Assert(len(resultCh), Equals, 1)
 	result := <-resultCh
 	c.Assert(result.IsCanceled, IsFalse)
 	c.Assert(len(result.Errors), Equals, 0)
+	//nolint:errcheck
+	failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessNoError")
 
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError", `return("unknown error")`), IsNil)
 	// nolint:errcheck
@@ -89,16 +95,18 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	c.Assert(result.IsCanceled, IsFalse)
 	c.Assert(len(result.Errors), Equals, 1)
 	c.Assert(result.Errors[0].Message, Equals, "unknown error")
-
 	// nolint:errcheck
 	failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 
+	// cancel
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessCancel", `return("unknown error")`), IsNil)
 	// nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessCancel")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever", `return(true)`), IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever")
 
-	// cancel
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel2()
 	dumpling.Process(ctx2, resultCh)
 	c.Assert(len(resultCh), Equals, 1)
@@ -106,6 +114,7 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	c.Assert(result.IsCanceled, IsTrue)
 	c.Assert(len(result.Errors), Equals, 1)
 	c.Assert(result.Errors[0].String(), Matches, ".*context deadline exceeded.*")
+	println("===================after inint=================")
 }
 
 func (d *testDumplingSuite) TestDefaultConfig(c *C) {
