@@ -16,7 +16,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -35,6 +34,27 @@ const (
 	docJSONBasePath = "/api/v1/dm.json"
 )
 
+// redirectRequestToLeaderMW a middleware auto redirect request to leader.
+// because the leader has some data in memory, only the leader can process the request.
+func (s *Server) redirectRequestToLeaderMW() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(ctx echo.Context) error {
+			ctx2 := ctx.Request().Context()
+
+			isLeader, _ := s.isLeaderAndNeedForward(ctx2)
+			if isLeader {
+				return next(ctx)
+			}
+			// nolint:dogsled
+			_, _, leaderOpenAPIAddr, err := s.election.LeaderInfo(ctx2)
+			if err != nil {
+				return err
+			}
+			return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", leaderOpenAPIAddr, ctx.Request().RequestURI))
+		}
+	}
+}
+
 // InitOpenAPIHandles init openapi handlers.
 func (s *Server) InitOpenAPIHandles() error {
 	swagger, err := openapi.GetSwagger()
@@ -49,6 +69,7 @@ func (s *Server) InitOpenAPIHandles() error {
 	// set logger
 	e.Use(openapi.ZapLogger(logger))
 	e.Use(echomiddleware.Recover())
+	e.Use(s.redirectRequestToLeaderMW())
 	// disables swagger server name validation. it seems to work poorly
 	swagger.Servers = nil
 	// use our validation middleware to check all requests against the OpenAPI schema.
@@ -56,18 +77,6 @@ func (s *Server) InitOpenAPIHandles() error {
 	openapi.RegisterHandlers(e, s)
 	s.echo = e
 	return nil
-}
-
-// redirectRequestToLeader is used to redirect the request to leader.
-// because the leader has some data in memory, only the leader can process the request.
-func (s *Server) redirectRequestToLeader(ctx context.Context) (needRedirect bool, host string, err error) {
-	isLeader, _ := s.isLeaderAndNeedForward(ctx)
-	if isLeader {
-		return false, s.cfg.AdvertiseAddr, nil
-	}
-	// nolint:dogsled
-	_, _, leaderOpenAPIAddr, err := s.election.LeaderInfo(ctx)
-	return true, leaderOpenAPIAddr, err
 }
 
 // GetDocJSON url is:(GET /api/v1/dm.json).
@@ -90,14 +99,6 @@ func (s *Server) GetDocHTML(ctx echo.Context) error {
 
 // DMAPICreateSource url is:(POST /api/v1/sources).
 func (s *Server) DMAPICreateSource(ctx echo.Context) error {
-	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
-	if err != nil {
-		return err
-	}
-	if needRedirect {
-		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
-	}
-
 	var createSourceReq openapi.Source
 	if err := ctx.Bind(&createSourceReq); err != nil {
 		return err
@@ -114,22 +115,10 @@ func (s *Server) DMAPICreateSource(ctx echo.Context) error {
 
 // DMAPIGetSourceList url is:(GET /api/v1/sources).
 func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
-	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
-	if err != nil {
-		return err
-	}
-	if needRedirect {
-		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
-	}
-
-	sourceIDS := s.scheduler.GetSourceCfgIDs()
-	sourceCfgList := make([]*config.SourceConfig, len(sourceIDS))
-	for idx, sourceID := range sourceIDS {
-		sourceCfgList[idx] = s.scheduler.GetSourceCfgByID(sourceID)
-	}
-	sourceList := make([]openapi.Source, len(sourceCfgList))
-	for idx, cfg := range sourceCfgList {
-		sourceList[idx] = sourceCfgToModel(*cfg)
+	sourceMap := s.scheduler.GetSourceCfgs()
+	sourceList := []openapi.Source{}
+	for key := range sourceMap {
+		sourceList = append(sourceList, sourceCfgToModel(*sourceMap[key]))
 	}
 	resp := openapi.GetSourceListResponse{Total: len(sourceList), Data: sourceList}
 	return ctx.JSON(http.StatusOK, resp)
@@ -137,13 +126,6 @@ func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
 
 // DMAPIDeleteSource url is:(DELETE /api/v1/sources).
 func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string) error {
-	needRedirect, host, err := s.redirectRequestToLeader(ctx.Request().Context())
-	if err != nil {
-		return err
-	}
-	if needRedirect {
-		return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", host, ctx.Request().RequestURI))
-	}
 	if err := s.scheduler.RemoveSourceCfg(sourceName); err != nil {
 		return err
 	}

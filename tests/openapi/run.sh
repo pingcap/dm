@@ -19,25 +19,25 @@ function test_source() {
 	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>START TEST OPENAPI: SOURCE"
 	prepare_database
 	# create source succesfully
-	python $cur/client/source.py "create_source1_success"
+	$cur/client/source.py "create_source1_success"
 
 	# recreate source will failed
-	python $cur/client/source.py "create_source_failed"
+	$cur/client/source.py "create_source_failed"
 
 	# get source list success
-	python $cur/client/source.py "list_source_success" 1
+	$cur/client/source.py "list_source_success" 1
 
 	# delete source success
-	python $cur/client/source.py "delete_source_success" "mysql-01"
+	$cur/client/source.py "delete_source_success" "mysql-01"
 
 	# after delete source, source list should be empty
-	python $cur/client/source.py "list_source_success" 0
+	$cur/client/source.py "list_source_success" 0
 
 	# re delete source failed
-	python $cur/client/source.py "delete_source_failed" "mysql-01"
+	$cur/client/source.py "delete_source_failed" "mysql-01"
 
 	# send request to not leader node
-	python $cur/client/source.py "list_source_with_redirect" 0
+	$cur/client/source.py "list_source_with_redirect" 0
 
 	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: SOURCE SUCCESS"
 }
