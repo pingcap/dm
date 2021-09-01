@@ -40,7 +40,6 @@ func (s *Server) redirectRequestToLeaderMW() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
 			ctx2 := ctx.Request().Context()
-
 			isLeader, _ := s.isLeaderAndNeedForward(ctx2)
 			if isLeader {
 				return next(ctx)
