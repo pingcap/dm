@@ -614,7 +614,7 @@ func (k *ShardingGroupKeeper) ResolveShardingDDL(targetTable *schemapkg.Table) (
 	if group != nil {
 		return group.ResolveShardingDDL(), nil
 	}
-	return false, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetTable)
+	return false, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetTable.String())
 }
 
 // ActiveDDLFirstLocation returns the binlog position of active DDL.
@@ -626,7 +626,7 @@ func (k *ShardingGroupKeeper) ActiveDDLFirstLocation(targetTable *schemapkg.Tabl
 		location, err := group.ActiveDDLFirstLocation()
 		return location, err
 	}
-	return binlog.Location{}, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetTable)
+	return binlog.Location{}, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetTable.String())
 }
 
 // PrepareFlushSQLs returns all sharding meta flushed SQLs except for given table IDs.
@@ -753,5 +753,5 @@ type ShardingReSync struct {
 
 // String implements stringer.String.
 func (s *ShardingReSync) String() string {
-	return fmt.Sprintf("{schema: %s, table: %s, current location: %v, latest location: %v, all resolved: %v}", s.targetTable.Schema, s.targetTable.Name, s.currLocation, s.latestLocation, s.allResolved)
+	return fmt.Sprintf("{Table: %s, current location: %v, latest location: %v, all resolved: %v}", s.targetTable.String(), s.currLocation, s.latestLocation, s.allResolved)
 }
