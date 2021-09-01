@@ -42,6 +42,49 @@ function test_source() {
 	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: SOURCE SUCCESS"
 }
 
+function test_relay() {
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>START TEST OPENAPI: RELAY"
+	prepare_database
+	# create source succesfully
+	openapi_source_check "create_source1_success"
+
+	# start relay failed
+	openapi_source_check "start_relay_failed" "mysql-01" "no-worker"
+
+	# start relay success
+	openapi_source_check "start_relay_success" "mysql-01" "worker1"
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s mysql-01" \
+		"\"result\": true" 2 \
+		"\"worker\": \"worker1\"" 1 \
+		"\"relayCatchUpMaster\": true" 1
+
+	# get source status failed
+	openapi_source_check "get_source_status_failed" "no-mysql"
+
+	# get source status success
+	openapi_source_check "get_source_status_success" "mysql-01"
+
+	# stop relay failed: not pass worker name
+	openapi_source_check "stop_relay_failed" "mysql-01" "no-worker"
+
+	# stop relay success
+	openapi_source_check "stop_relay_success" "mysql-01" "worker1"
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s mysql-01" \
+		"\"result\": true" 2 \
+		"\"worker\": \"worker1\"" 1 \
+		"\"relayStatus\": null" 1
+
+	# delete source success
+	openapi_source_check "delete_source_success" "mysql-01"
+
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: RELAY SUCCESS"
+
+}
+
 function run() {
 	make install_test_python_dep
 
@@ -59,6 +102,7 @@ function run() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
 	test_source
+	test_relay
 }
 
 cleanup_data openapi

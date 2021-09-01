@@ -76,6 +76,59 @@ def delete_source_failed(source_name):
     print("delete_source_failed msg=", resp.json())
 
 
+def start_relay_failed(source_name, worker_name):
+    url = API_ENDPOINT + "/" + source_name + "/start-relay"
+    req = {
+        "worker_name": worker_name,
+    }
+    resp = requests.patch(url=url, json=req)
+    assert resp.status_code == 400
+    print("start_relay_failed resp=", resp.json())
+
+
+def start_relay_success(source_name, worker_name):
+    url = API_ENDPOINT + "/" + source_name + "/start-relay"
+    req = {
+        "worker_name": worker_name,
+        "purge": {"interval": 3600, "expires": 0, "remain_space": 15},
+    }
+    resp = requests.patch(url=url, json=req)
+    assert resp.status_code == 200
+
+
+def get_source_status_failed(source_name):
+    url = API_ENDPOINT + "/" + source_name + "/status"
+    resp = requests.get(url=url)
+    assert resp.status_code == 400
+    print("get_source_status_failed resp=", resp.json())
+
+
+def get_source_status_success(source_name):
+    url = API_ENDPOINT + "/" + source_name + "/status"
+    resp = requests.get(url=url)
+    assert resp.status_code == 200
+    print("get_source_status_success resp=", resp.json())
+
+
+def stop_relay_failed(source_name, worker_name):
+    url = API_ENDPOINT + "/" + source_name + "/stop-relay"
+    req = {
+        "worker_name": worker_name,
+    }
+    resp = requests.patch(url=url, json=req)
+    assert resp.status_code == 400
+    print("stop_relay_failed resp=", resp.json())
+
+
+def stop_relay_success(source_name, worker_name):
+    url = API_ENDPOINT + "/" + source_name + "/stop-relay"
+    req = {
+        "worker_name": worker_name,
+    }
+    resp = requests.patch(url=url, json=req)
+    assert resp.status_code == 200
+
+
 if __name__ == "__main__":
     FUNC_MAP = {
         "create_source_failed": create_source_failed,
@@ -85,6 +138,12 @@ if __name__ == "__main__":
         "list_source_with_redirect": list_source_with_redirect,
         "delete_source_failed": delete_source_failed,
         "delete_source_success": delete_source_success,
+        "start_relay_failed": start_relay_failed,
+        "start_relay_success": start_relay_success,
+        "get_source_status_failed": get_source_status_failed,
+        "get_source_status_success": get_source_status_success,
+        "stop_relay_failed": stop_relay_failed,
+        "stop_relay_success": stop_relay_success,
     }
 
     func = FUNC_MAP[sys.argv[1]]
