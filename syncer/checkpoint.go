@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
+	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/dbconn"
@@ -211,7 +212,7 @@ type CheckPoint interface {
 	// by extraSQLs and extraArgs. Currently extraSQLs contain shard meta only.
 	// @exceptTables: [[schema, table]... ]
 	// corresponding to Meta.Flush
-	FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error
+	FlushPointsExcept(tctx *tcontext.Context, exceptTables []*schemapkg.Table, extraSQLs []string, extraArgs [][]interface{}) error
 
 	// FlushPointWithTableInfo flushed the table point with given table info
 	FlushPointWithTableInfo(tctx *tcontext.Context, sourceSchema, sourceTable string, ti *model.TableInfo) error
@@ -495,14 +496,14 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(location binlog.Location) {
 }
 
 // FlushPointsExcept implements CheckPoint.FlushPointsExcept.
-func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error {
+func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTables []*schemapkg.Table, extraSQLs []string, extraArgs [][]interface{}) error {
 	cp.RLock()
 	defer cp.RUnlock()
 
 	// convert slice to map
 	excepts := make(map[string]map[string]struct{})
 	for _, schemaTable := range exceptTables {
-		schema, table := schemaTable[0], schemaTable[1]
+		schema, table := schemaTable.Schema, schemaTable.Name
 		m, ok := excepts[schema]
 		if !ok {
 			m = make(map[string]struct{})

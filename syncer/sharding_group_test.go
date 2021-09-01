@@ -30,6 +30,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/retry"
+	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/dbconn"
@@ -38,28 +39,46 @@ import (
 var _ = Suite(&testShardingGroupSuite{})
 
 var (
-	targetDB  = "target_db"
-	targetTbl = "tbl"
-	target    = dbutil.TableName(targetDB, targetTbl)
-	db1       = "db1"
-	tbl1      = "tbl1"
-	tbl2      = "tbl2"
-	source1   = "`db1`.`tbl1`"
-	source2   = "`db1`.`tbl2`"
-	source3   = "`db1`.`tbl3`"
-	source4   = "`db1`.`tbl4`"
-	pos11     = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000002", Pos: 123}}
-	endPos11  = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000002", Pos: 456}}
-	pos12     = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000002", Pos: 789}}
-	endPos12  = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000002", Pos: 999}}
-	pos21     = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000001", Pos: 123}}
-	endPos21  = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000001", Pos: 456}}
-	pos22     = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000001", Pos: 789}}
-	endPos22  = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000001", Pos: 999}}
-	pos3      = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000003", Pos: 123}}
-	endPos3   = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000003", Pos: 456}}
-	ddls1     = []string{"DUMMY DDL"}
-	ddls2     = []string{"ANOTHER DUMMY DDL"}
+	targetTbl = &schemapkg.Table{
+		Schema: "target_db",
+		Name:   "tbl",
+	}
+	target     = targetTbl.String()
+	db1        = "db1"
+	tbl1       = "tbl1"
+	tbl2       = "tbl2"
+	sourceTbl1 = &schemapkg.Table{
+		Schema: "db1",
+		Name:   "tbl1",
+	}
+	sourceTbl2 = &schemapkg.Table{
+		Schema: "db1",
+		Name:   "tbl2",
+	}
+	sourceTbl3 = &schemapkg.Table{
+		Schema: "db1",
+		Name:   "tbl3",
+	}
+	sourceTbl4 = &schemapkg.Table{
+		Schema: "db1",
+		Name:   "tbl4",
+	}
+	source1  = sourceTbl1.String()
+	source2  = sourceTbl2.String()
+	source3  = sourceTbl3.String()
+	source4  = sourceTbl4.String()
+	pos11    = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000002", Pos: 123}}
+	endPos11 = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000002", Pos: 456}}
+	pos12    = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000002", Pos: 789}}
+	endPos12 = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000002", Pos: 999}}
+	pos21    = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000001", Pos: 123}}
+	endPos21 = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000001", Pos: 456}}
+	pos22    = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000001", Pos: 789}}
+	endPos22 = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000001", Pos: 999}}
+	pos3     = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000003", Pos: 123}}
+	endPos3  = binlog.Location{Position: mysql.Position{Name: "mysql-bin.000003", Pos: 456}}
+	ddls1    = []string{"DUMMY DDL"}
+	ddls2    = []string{"ANOTHER DUMMY DDL"}
 )
 
 type testShardingGroupSuite struct {
@@ -172,7 +191,7 @@ func (t *testShardingGroupSuite) TestSync(c *C) {
 	// simple sort for [][]string{[]string{"db1", "tbl2"}, []string{"db1", "tbl1"}}
 	tbls1 := g1.Tables()
 	tbls2 := g1.UnresolvedTables()
-	if tbls1[0][1] != tbls2[0][1] {
+	if tbls1[0].Name != tbls2[0].Name {
 		tbls1[0], tbls1[1] = tbls1[1], tbls1[0]
 	}
 	c.Assert(tbls1, DeepEquals, tbls2)
@@ -267,14 +286,14 @@ func (t *testShardingGroupSuite) TestKeeper(c *C) {
 
 	// test AddGroup and LeaveGroup
 
-	needShardingHandle, group, synced, remain, err := k.AddGroup(targetDB, targetTbl, []string{source1}, nil, true)
+	needShardingHandle, group, synced, remain, err := k.AddGroup(targetTbl, []string{source1}, nil, true)
 	c.Assert(err, IsNil)
 	c.Assert(needShardingHandle, IsFalse)
 	c.Assert(group, NotNil)
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 0) // first time doesn't return `remain`
 
-	needShardingHandle, group, synced, remain, err = k.AddGroup(targetDB, targetTbl, []string{source2}, nil, true)
+	needShardingHandle, group, synced, remain, err = k.AddGroup(targetTbl, []string{source2}, nil, true)
 	c.Assert(err, IsNil)
 	c.Assert(needShardingHandle, IsFalse)
 	c.Assert(group, NotNil)
@@ -283,18 +302,18 @@ func (t *testShardingGroupSuite) TestKeeper(c *C) {
 
 	// test LeaveGroup
 	// nolint:dogsled
-	_, _, _, remain, err = k.AddGroup(targetDB, targetTbl, []string{source3}, nil, true)
+	_, _, _, remain, err = k.AddGroup(targetTbl, []string{source3}, nil, true)
 	c.Assert(err, IsNil)
 	c.Assert(remain, Equals, 3)
 	// nolint:dogsled
-	_, _, _, remain, err = k.AddGroup(targetDB, targetTbl, []string{source4}, nil, true)
+	_, _, _, remain, err = k.AddGroup(targetTbl, []string{source4}, nil, true)
 	c.Assert(err, IsNil)
 	c.Assert(remain, Equals, 4)
-	c.Assert(k.LeaveGroup(targetDB, targetTbl, []string{source3, source4}), IsNil)
+	c.Assert(k.LeaveGroup(targetTbl, []string{source3, source4}), IsNil)
 
 	// test TrySync and InSyncing
 
-	needShardingHandle, group, synced, active, remain, err := k.TrySync(targetDB, targetTbl, source1, pos12, endPos12, ddls1)
+	needShardingHandle, group, synced, active, remain, err := k.TrySync(sourceTbl1, targetTbl, pos12, endPos12, ddls1)
 	c.Assert(err, IsNil)
 	c.Assert(needShardingHandle, IsTrue)
 	c.Assert(group.sources, DeepEquals, map[string]bool{source1: true, source2: false})
@@ -302,19 +321,19 @@ func (t *testShardingGroupSuite) TestKeeper(c *C) {
 	c.Assert(active, IsTrue)
 	c.Assert(remain, Equals, 1)
 
-	c.Assert(k.InSyncing(targetDB, "wrong table", source1, pos11), IsFalse)
-	loc, err := k.ActiveDDLFirstLocation(targetDB, targetTbl)
+	c.Assert(k.InSyncing(sourceTbl1, &schemapkg.Table{targetTbl.Schema, "wrong table"}, pos11), IsFalse)
+	loc, err := k.ActiveDDLFirstLocation(targetTbl)
 	c.Assert(err, IsNil)
 	// position before active DDL, not in syncing
 	c.Assert(binlog.CompareLocation(endPos11, loc, false), Equals, -1)
-	c.Assert(k.InSyncing(targetDB, targetTbl, source1, endPos11), IsFalse)
+	c.Assert(k.InSyncing(sourceTbl1, targetTbl, endPos11), IsFalse)
 	// position at/after active DDL, in syncing
 	c.Assert(binlog.CompareLocation(pos12, loc, false), Equals, 0)
-	c.Assert(k.InSyncing(targetDB, targetTbl, source1, pos12), IsTrue)
+	c.Assert(k.InSyncing(sourceTbl1, targetTbl, pos12), IsTrue)
 	c.Assert(binlog.CompareLocation(endPos12, loc, false), Equals, 1)
-	c.Assert(k.InSyncing(targetDB, targetTbl, source1, endPos12), IsTrue)
+	c.Assert(k.InSyncing(sourceTbl1, targetTbl, endPos12), IsTrue)
 
-	needShardingHandle, group, synced, active, remain, err = k.TrySync(targetDB, targetTbl, source2, pos21, endPos21, ddls1)
+	needShardingHandle, group, synced, active, remain, err = k.TrySync(sourceTbl2, targetTbl, pos21, endPos21, ddls1)
 	c.Assert(err, IsNil)
 	c.Assert(needShardingHandle, IsTrue)
 	c.Assert(group.sources, DeepEquals, map[string]bool{source1: true, source2: true})
@@ -325,7 +344,7 @@ func (t *testShardingGroupSuite) TestKeeper(c *C) {
 	unresolvedTarget, unresolvedTables := k.UnresolvedTables()
 	c.Assert(unresolvedTarget, DeepEquals, map[string]bool{target: true})
 	// simple re-order
-	if unresolvedTables[0][1] > unresolvedTables[1][1] {
+	if unresolvedTables[0].Name > unresolvedTables[1].Name {
 		unresolvedTables[0], unresolvedTables[1] = unresolvedTables[1], unresolvedTables[0]
 	}
 	c.Assert(unresolvedTables, DeepEquals, [][]string{{db1, tbl1}, {db1, tbl2}})
@@ -341,7 +360,7 @@ func (t *testShardingGroupSuite) TestKeeper(c *C) {
 	c.Assert(sqls, HasLen, 0)
 	c.Assert(args, HasLen, 0)
 
-	reset, err := k.ResolveShardingDDL(targetDB, targetTbl)
+	reset, err := k.ResolveShardingDDL(targetTbl)
 	c.Assert(err, IsNil)
 	c.Assert(reset, IsTrue)
 

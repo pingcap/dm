@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/schema"
+	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -450,7 +451,7 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	s.mock.ExpectBegin()
 	s.mock.ExpectExec("(320)?"+flushCheckPointSQL).WithArgs(cpid, "", "", pos2.Name, pos2.Pos, "", "", 0, "", "null", true).WillReturnResult(sqlmock.NewResult(0, 1))
 	s.mock.ExpectCommit()
-	err = cp.FlushPointsExcept(tctx, [][]string{{schema, table}}, nil, nil)
+	err = cp.FlushPointsExcept(tctx, []*schemapkg.Table{{schema, table}}, nil, nil)
 	c.Assert(err, IsNil)
 	cp.Rollback(s.tracker)
 	older = cp.IsOlderThanTablePoint(schema, table, binlog.Location{Position: pos1}, false)

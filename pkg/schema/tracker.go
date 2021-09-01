@@ -53,6 +53,9 @@ var (
 	}
 )
 
+// Table is a alias for filter.Table
+type Table = filter.Table
+
 // Tracker is used to track schema locally.
 type Tracker struct {
 	store kv.Storage
