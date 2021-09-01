@@ -1825,6 +1825,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return terror.ErrSyncerGetEvent.Generate(err)
 		}
 
+		failpoint.Inject("IgnoreSomeTypeEvent", func(val failpoint.Value) {
+			if e.Header.EventType.String() == val.(string) {
+				tctx.L().Debug("IgnoreSomeTypeEvent", zap.Reflect("event", e))
+				failpoint.Continue()
+			}
+		})
+
 		// time duration for reading an event from relay log or upstream master.
 		metrics.BinlogReadDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		startTime = time.Now() // reset start time for the next metric.
@@ -1947,13 +1954,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		var originSQL string // show origin sql when error, only ddl now
 		var err2 error
-
-		failpoint.Inject("IgnoreSomeTypeEvent", func(val failpoint.Value) {
-			if e.Header.EventType.String() == val.(string) {
-				tctx.L().Debug("IgnoreSomeTypeEvent", zap.Reflect("event", e))
-				failpoint.Continue()
-			}
-		})
 
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
