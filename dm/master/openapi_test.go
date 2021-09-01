@@ -117,15 +117,20 @@ func (t *openAPISuite) TestRedirectRequestToLeader(c *check.C) {
 	c.Assert(s2.Start(ctx), check.IsNil)
 	defer s2.Close()
 
-	needRedirect1, openAPIAddrFromS1, err := s1.redirectRequestToLeader(ctx)
+	baseURL := "/api/v1/sources"
+	// list source from leader
+	result := testutil.NewRequest().Get(baseURL).Go(t.testT, s1.echo)
+	// check http status code
+	c.Assert(result.Code(), check.Equals, http.StatusOK)
+	var resultListSource openapi.GetSourceListResponse
+	err := result.UnmarshalBodyToObject(&resultListSource)
 	c.Assert(err, check.IsNil)
-	c.Assert(needRedirect1, check.Equals, false)
-	c.Assert(openAPIAddrFromS1, check.Equals, s1.cfg.AdvertiseAddr)
+	c.Assert(resultListSource.Data, check.HasLen, 0)
+	c.Assert(resultListSource.Total, check.Equals, 0)
 
-	needRedirect2, openAPIAddrFromS2, err := s2.redirectRequestToLeader(ctx)
-	c.Assert(err, check.IsNil)
-	c.Assert(needRedirect2, check.Equals, true)
-	c.Assert(openAPIAddrFromS2, check.Equals, s1.cfg.AdvertiseAddr)
+	// list source not from leader will get a redirect
+	result2 := testutil.NewRequest().Get(baseURL).Go(t.testT, s2.echo)
+	c.Assert(result2.Code(), check.Equals, http.StatusTemporaryRedirect)
 }
 
 func (t *openAPISuite) TestSourceAPI(c *check.C) {
