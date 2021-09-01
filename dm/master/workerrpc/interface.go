@@ -85,7 +85,7 @@ type Client interface {
 	// SendRequest sends Request
 	SendRequest(ctx context.Context, req *Request, timeout time.Duration) (*Response, error)
 
-	// Cloase close client and releases all data
+	// Close closes client and releases all data
 	Close() error
 }
 
