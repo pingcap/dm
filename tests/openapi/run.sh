@@ -43,11 +43,7 @@ function test_source() {
 }
 
 function run() {
-	if [[ $(pip list) == *"requests"* ]]; then
-		echo "requests already installed"
-	else
-		sudo pip install requests # in ci need sudo to install requests
-	fi
+	make install_test_python_dep
 
 	# run dm-master1
 	run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml

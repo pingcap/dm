@@ -186,9 +186,8 @@ func sendHTTPErrorResp(ctx echo.Context, code int, message string) error {
 }
 
 func sourceCfgToModel(cfg *config.SourceConfig) openapi.Source {
-	// NOTE we don't return security content here, because we don't want to expose it to the user.
 	// PM's requirement, we always return obfuscated password to user
-	return openapi.Source{
+	source := openapi.Source{
 		EnableGtid: cfg.EnableGTID,
 		Host:       cfg.From.Host,
 		Password:   "******",
@@ -196,6 +195,15 @@ func sourceCfgToModel(cfg *config.SourceConfig) openapi.Source {
 		SourceName: cfg.SourceID,
 		User:       cfg.From.User,
 	}
+	if cfg.From.Security != nil {
+		// NOTE we don't return security content here, because we don't want to expose it to the user.
+		certAllowedCn := []string{}
+		for _, cn := range cfg.From.Security.CertAllowedCN {
+			certAllowedCn = append(certAllowedCn, cn)
+		}
+		source.Security = &openapi.Security{CertAllowedCn: &certAllowedCn}
+	}
+	return source
 }
 
 func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
@@ -211,6 +219,9 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 			SSLCABytes:   []byte(source.Security.SslCaContent),
 			SSLKEYBytes:  []byte(source.Security.SslKeyContent),
 			SSLCertBytes: []byte(source.Security.SslCertContent),
+		}
+		if source.Security.CertAllowedCn != nil {
+			from.Security.CertAllowedCN = *source.Security.CertAllowedCn
 		}
 	}
 	cfg.From = from

@@ -106,6 +106,9 @@ type RelayStatus struct {
 
 // data source ssl configuration, the field will be hidden when getting the data source configuration from the interface
 type Security struct {
+	// Common Name of ssl certs
+	CertAllowedCn *[]string `json:"cert_allowed_cn,omitempty"`
+
 	// certificate file content
 	SslCaContent string `json:"ssl_ca_content"`
 
