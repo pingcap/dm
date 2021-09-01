@@ -50,10 +50,6 @@ function run() {
 	run_sql_source1 "alter table metrics.t1 add column new_col1 int;"
 	run_sql_source2 "alter table metrics.t2 add column new_col1 int;"
 
-	# check new metric dm_syncer_flush_checkpoints_time_interval exists
-	check_metric $WORKER1_PORT 'dm_syncer_flush_checkpoints_time_interval_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 -1 99999
-	check_metric $WORKER2_PORT 'dm_syncer_flush_checkpoints_time_interval_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 -1 99999
-
 	# check two worker's lag >= 1
 	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker1/log/dm-worker.log
 	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker2/log/dm-worker.log
@@ -61,6 +57,10 @@ function run() {
 	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 0 999
 	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 0 999
 	echo "check ddl lag done!"
+
+	# check new metric dm_syncer_flush_checkpoints_time_interval exists
+	check_metric $WORKER1_PORT 'dm_syncer_flush_checkpoints_time_interval_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 -1 99999
+	check_metric $WORKER2_PORT 'dm_syncer_flush_checkpoints_time_interval_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 -1 99999
 
 	# restart dm worker
 	kill_dm_worker
@@ -82,6 +82,13 @@ function run() {
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 # make dml job
 	run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 # make dml job
 
+	# check two worker's lag >= 2
+	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker1/log/dm-worker.log
+	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker2/log/dm-worker.log
+	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 999
+	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 999
+	echo "check dml/skip lag done!"
+
 	# check new metric: dm_syncer_replication_lag_sum,dm_syncer_replication_lag_gauge,
 	# finished_transaction_total,dm_syncer_ideal_qps,dm_syncer_binlog_event_row,replication_transaction_batch exists
 	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 -1 999
@@ -101,13 +108,6 @@ function run() {
 
 	check_metric $WORKER1_PORT 'dm_syncer_replication_transaction_batch_count' 5 0 99999
 	check_metric $WORKER2_PORT 'dm_syncer_replication_transaction_batch_count' 5 0 99999
-
-	# check two worker's lag >= 2
-	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker1/log/dm-worker.log
-	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker2/log/dm-worker.log
-	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 999
-	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 999
-	echo "check dml/skip lag done!"
 
 	# restart dm worker
 	kill_dm_worker
