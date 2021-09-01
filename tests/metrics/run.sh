@@ -152,11 +152,12 @@ function run() {
 	# At 6s, a dml job is added to job chan and the ticker is reset
 	# At 11s the ticker write the log of the second no job
 	# Check that the interval between the two ticker logs is > 5s
+
+	rm -rf $WORK_DIR/worker1/log/dm-worker.log # clean up the old log
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
-	echo "sleep 6s"
-	sleep 6
+	check_log_contain_with_retry 'no job in queue, update lag to zero' $WORK_DIR/worker1/log/dm-worker.log
 	echo "make a dml job"
 	run_sql_source1 "insert into metrics.t1 (id, name, ts) values (1004, 'zmj4', '2022-05-11 12:01:05')"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
