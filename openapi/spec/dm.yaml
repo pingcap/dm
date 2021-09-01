@@ -299,7 +299,7 @@ components:
           description: "Content of the private key file in X509 format"
         cert_allowed_cn:
           type: array
-          description: "Common Name of ssl certs"
+          description: "Common Name of SSL certificates"
           items:
             type: string
       required:
