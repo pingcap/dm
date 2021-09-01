@@ -133,17 +133,95 @@ func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string) error {
 
 // DMAPIStartRelay url is:(POST /api/v1/sources/{source-id}/relay).
 func (s *Server) DMAPIStartRelay(ctx echo.Context, sourceName string) error {
-	return nil
+	var req openapi.StartRelayRequest
+	if err := ctx.Bind(&req); err != nil {
+		return err
+	}
+	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
+	if sourceCfg == nil {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
+	}
+	if req.RelayBinlogName != nil {
+		sourceCfg.RelayBinLogName = *req.RelayBinlogName
+	}
+	if req.RelayBinlogGtid != nil {
+		sourceCfg.RelayBinlogGTID = *req.RelayBinlogGtid
+	}
+	if req.RelayDir != nil {
+		sourceCfg.RelayDir = *req.RelayDir
+	}
+	if purge := req.Purge; purge != nil {
+		if purge.Expires != nil {
+			sourceCfg.Purge.Expires = *purge.Expires
+		}
+		if purge.Interval != nil {
+			sourceCfg.Purge.Interval = *purge.Interval
+		}
+		if purge.RemainSpace != nil {
+			sourceCfg.Purge.RemainSpace = *purge.RemainSpace
+		}
+	}
+	// update current source relay config before start relay
+	if err := s.scheduler.UpdateSourceCfg(sourceCfg); err != nil {
+		return err
+	}
+	return s.scheduler.StartRelay(sourceName, []string{req.WorkerName})
 }
 
 // DMAPIStopRelay url is:(DELETE /api/v1/sources/{source-id}/relay).
 func (s *Server) DMAPIStopRelay(ctx echo.Context, sourceName string) error {
-	return nil
+	var req openapi.WorkerNameRequest
+	if err := ctx.Bind(&req); err != nil {
+		return err
+	}
+	return s.scheduler.StopRelay(sourceName, []string{req.WorkerName})
 }
 
 // DMAPIGetSourceStatus url is:(GET /api/v1/sources/{source-id}/status).
 func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error {
-	return nil
+	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
+	if sourceCfg == nil {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
+	}
+	queryWorker := false
+	// only query worker if source is bound to a worker
+	for _, name := range s.scheduler.BoundSources() {
+		if name == sourceName {
+			queryWorker = true
+		}
+	}
+	enableRelay := sourceCfg.EnableRelay
+	resp := openapi.SourceStatus{
+		EnableRelay: enableRelay,
+		SourceName:  sourceCfg.SourceID,
+	}
+
+	if queryWorker {
+		enableRelay = sourceCfg.EnableRelay && queryWorker
+		ret := s.getStatusFromWorkers(ctx.Request().Context(), []string{sourceName}, "", enableRelay)
+		if len(ret) != 1 {
+			// No response from worker and master means that the current query source has not been created.
+			return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
+		}
+		status := ret[0]
+		if !status.Result {
+			return terror.ErrOpenAPICommonError.New(status.Msg)
+		}
+		sourceStatus := status.SourceStatus
+		relayStatus := sourceStatus.GetRelayStatus()
+		resp.WorkerName = sourceStatus.Worker
+		if relayStatus != nil {
+			resp.RelayStatus = &openapi.RelayStatus{
+				MasterBinlog:       relayStatus.MasterBinlog,
+				MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
+				RelayBinlogGtid:    relayStatus.RelayBinlogGtid,
+				RelayCatchUpMaster: relayStatus.RelayCatchUpMaster,
+				RelayDir:           relayStatus.RelaySubDir,
+				Stage:              relayStatus.Stage.String(),
+			}
+		}
+	}
+	return ctx.JSON(http.StatusOK, resp)
 }
 
 // DMAPIStartTask url is:(POST /api/v1/tasks).
