@@ -46,7 +46,7 @@ func (st *SubTask) StatusJSON() string {
 
 // Status returns the status of the worker (and sub tasks)
 // if stName is empty, all sub task's status will be returned.
-func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
+func (w *SourceWorker) Status(stName string) []*pb.SubTaskStatus {
 	sts := w.subTaskHolder.getAllSubTasks()
 
 	if len(sts) == 0 {
@@ -115,7 +115,7 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 }
 
 // StatusJSON returns the status of the worker as json string.
-func (w *Worker) StatusJSON(stName string) string {
+func (w *SourceWorker) StatusJSON(stName string) string {
 	sl := &pb.SubTaskStatusList{Status: w.Status(stName)}
 	mar := jsonpb.Marshaler{EmitDefaults: true, Indent: "    "}
 	s, err := mar.MarshalToString(sl)

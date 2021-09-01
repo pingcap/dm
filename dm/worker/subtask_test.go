@@ -481,7 +481,7 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	w := &Worker{
+	w := &SourceWorker{
 		ctx: ctx,
 		// loadStatus relay MetaBinlog must be greater
 		relayHolder: NewDummyRelayHolderWithRelayBinlog(config.NewSourceConfig(), relayHolderBinlog),

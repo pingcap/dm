@@ -145,12 +145,12 @@ type realTaskStatusChecker struct {
 
 	cfg config.CheckerConfig
 	l   log.Logger
-	w   *Worker
+	w   *SourceWorker
 	bc  *backoffController
 }
 
 // NewRealTaskStatusChecker creates a new realTaskStatusChecker instance.
-func NewRealTaskStatusChecker(cfg config.CheckerConfig, w *Worker) TaskStatusChecker {
+func NewRealTaskStatusChecker(cfg config.CheckerConfig, w *SourceWorker) TaskStatusChecker {
 	tsc := &realTaskStatusChecker{
 		cfg: cfg,
 		l:   log.With(zap.String("component", "task checker")),
