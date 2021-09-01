@@ -1364,9 +1364,6 @@ func (s *Syncer) syncDML(
 		if len(jobs) == 0 {
 			return 0, nil
 		}
-		// set this batch of job TS when this batch is started.
-		s.updateReplicationJobTS(jobs[0], workerJobIdx)
-
 		failpoint.Inject("BlockExecuteSQLs", func(v failpoint.Value) {
 			t := v.(int) // sleep time
 			s.tctx.L().Info("BlockExecuteSQLs", zap.Any("job", jobs[0]), zap.Int("sleep time", t))
@@ -1442,6 +1439,10 @@ func (s *Syncer) syncDML(
 			}
 			idx++
 			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
+				if len(jobs) == 0 {
+					// set job TS when received first job of this batch.
+					s.updateReplicationJobTS(sqlJob, workerJobIdx)
+				}
 				jobs = append(jobs, sqlJob)
 				if _, ok := tpCnt[sqlJob.targetSchema]; !ok {
 					tpCnt[sqlJob.targetSchema] = make(map[string]map[opType]int64)
