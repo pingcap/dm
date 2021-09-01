@@ -117,7 +117,7 @@ func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
 	sourceMap := s.scheduler.GetSourceCfgs()
 	sourceList := []openapi.Source{}
 	for key := range sourceMap {
-		sourceList = append(sourceList, sourceCfgToModel(*sourceMap[key]))
+		sourceList = append(sourceList, sourceCfgToModel(sourceMap[key]))
 	}
 	resp := openapi.GetSourceListResponse{Total: len(sourceList), Data: sourceList}
 	return ctx.JSON(http.StatusOK, resp)
@@ -185,12 +185,13 @@ func sendHTTPErrorResp(ctx echo.Context, code int, message string) error {
 	return ctx.JSON(http.StatusBadRequest, err)
 }
 
-func sourceCfgToModel(cfg config.SourceConfig) openapi.Source {
+func sourceCfgToModel(cfg *config.SourceConfig) openapi.Source {
 	// NOTE we don't return security content here, because we don't want to expose it to the user.
+	// PM's requirement, we always return obfuscated password to user
 	return openapi.Source{
 		EnableGtid: cfg.EnableGTID,
 		Host:       cfg.From.Host,
-		Password:   cfg.From.Password,
+		Password:   "******",
 		Port:       cfg.From.Port,
 		SourceName: cfg.SourceID,
 		User:       cfg.From.User,
