@@ -175,9 +175,9 @@ func queueBucketName(queueID int) string {
 }
 
 func dmlWorkerJobIdx(queueID int) int {
-	return queueID + 2
+	return queueID + workerJobTSArrayInitSize
 }
 
 func dmlWorkerJobIdxToQueueID(idx int) int {
-	return idx - 2
+	return idx - workerJobTSArrayInitSize
 }

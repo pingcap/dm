@@ -102,8 +102,9 @@ const (
 	RemoteBinlog BinlogType = iota + 1
 	LocalBinlog
 
-	skipJobIdx = 0
-	ddlJobIdx  = 1
+	skipJobIdx               = 0
+	ddlJobIdx                = 1
+	workerJobTSArrayInitSize = 2 // size = skip + ddl
 )
 
 // waitXIDStatus represents the status for waiting XID event when pause/stop task.
@@ -264,7 +265,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
 	syncer.recordedActiveRelayLog = false
-	syncer.workerJobTSArray = make([]*atomic.Int64, cfg.WorkerCount+2) // size = skip + ddl + workerCount
+	syncer.workerJobTSArray = make([]*atomic.Int64, cfg.WorkerCount+workerJobTSArrayInitSize)
 	for i := range syncer.workerJobTSArray {
 		syncer.workerJobTSArray[i] = atomic.NewInt64(0)
 	}
