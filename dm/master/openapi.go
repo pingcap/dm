@@ -16,7 +16,7 @@
 package master
 
 import (
-	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/deepmap/oapi-codegen/pkg/middleware"
@@ -24,6 +24,7 @@ import (
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -32,6 +33,26 @@ import (
 const (
 	docJSONBasePath = "/api/v1/dm.json"
 )
+
+// redirectRequestToLeaderMW a middleware auto redirect request to leader.
+// because the leader has some data in memory, only the leader can process the request.
+func (s *Server) redirectRequestToLeaderMW() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(ctx echo.Context) error {
+			ctx2 := ctx.Request().Context()
+			isLeader, _ := s.isLeaderAndNeedForward(ctx2)
+			if isLeader {
+				return next(ctx)
+			}
+			// nolint:dogsled
+			_, _, leaderOpenAPIAddr, err := s.election.LeaderInfo(ctx2)
+			if err != nil {
+				return err
+			}
+			return ctx.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://%s%s", leaderOpenAPIAddr, ctx.Request().RequestURI))
+		}
+	}
+}
 
 // InitOpenAPIHandles init openapi handlers.
 func (s *Server) InitOpenAPIHandles() error {
@@ -47,6 +68,7 @@ func (s *Server) InitOpenAPIHandles() error {
 	// set logger
 	e.Use(openapi.ZapLogger(logger))
 	e.Use(echomiddleware.Recover())
+	e.Use(s.redirectRequestToLeaderMW())
 	// disables swagger server name validation. it seems to work poorly
 	swagger.Servers = nil
 	// use our validation middleware to check all requests against the OpenAPI schema.
@@ -54,18 +76,6 @@ func (s *Server) InitOpenAPIHandles() error {
 	openapi.RegisterHandlers(e, s)
 	s.echo = e
 	return nil
-}
-
-// redirectRequestToLeader is used to redirect the request to leader.
-// because the leader has some data in memory, only the leader can process the request.
-func (s *Server) redirectRequestToLeader(ctx context.Context) (needRedirect bool, host string, err error) {
-	isLeader, _ := s.isLeaderAndNeedForward(ctx)
-	if isLeader {
-		return false, s.cfg.AdvertiseAddr, nil
-	}
-	// nolint:dogsled
-	_, _, leaderOpenAPIAddr, err := s.election.LeaderInfo(ctx)
-	return true, leaderOpenAPIAddr, err
 }
 
 // GetDocJSON url is:(GET /api/v1/dm.json).
@@ -88,17 +98,37 @@ func (s *Server) GetDocHTML(ctx echo.Context) error {
 
 // DMAPICreateSource url is:(POST /api/v1/sources).
 func (s *Server) DMAPICreateSource(ctx echo.Context) error {
-	return nil
+	var createSourceReq openapi.Source
+	if err := ctx.Bind(&createSourceReq); err != nil {
+		return err
+	}
+	cfg := modelToSourceCfg(createSourceReq)
+	if err := checkAndAdjustSourceConfig(ctx.Request().Context(), cfg); err != nil {
+		return err
+	}
+	if err := s.scheduler.AddSourceCfg(cfg); err != nil {
+		return err
+	}
+	return ctx.JSON(http.StatusCreated, createSourceReq)
 }
 
 // DMAPIGetSourceList url is:(GET /api/v1/sources).
 func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
-	return nil
+	sourceMap := s.scheduler.GetSourceCfgs()
+	sourceList := []openapi.Source{}
+	for key := range sourceMap {
+		sourceList = append(sourceList, sourceCfgToModel(sourceMap[key]))
+	}
+	resp := openapi.GetSourceListResponse{Total: len(sourceList), Data: sourceList}
+	return ctx.JSON(http.StatusOK, resp)
 }
 
 // DMAPIDeleteSource url is:(DELETE /api/v1/sources).
 func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string) error {
-	return nil
+	if err := s.scheduler.RemoveSourceCfg(sourceName); err != nil {
+		return err
+	}
+	return ctx.NoContent(http.StatusNoContent)
 }
 
 // DMAPIStartRelay url is:(POST /api/v1/sources/{source-id}/relay).
@@ -153,4 +183,49 @@ func terrorHTTPErrorHandler(err error, c echo.Context) {
 func sendHTTPErrorResp(ctx echo.Context, code int, message string) error {
 	err := openapi.ErrorWithMessage{ErrorMsg: message, ErrorCode: code}
 	return ctx.JSON(http.StatusBadRequest, err)
+}
+
+func sourceCfgToModel(cfg *config.SourceConfig) openapi.Source {
+	// PM's requirement, we always return obfuscated password to user
+	source := openapi.Source{
+		EnableGtid: cfg.EnableGTID,
+		Host:       cfg.From.Host,
+		Password:   "******",
+		Port:       cfg.From.Port,
+		SourceName: cfg.SourceID,
+		User:       cfg.From.User,
+	}
+	if cfg.From.Security != nil {
+		// NOTE we don't return security content here, because we don't want to expose it to the user.
+		var certAllowedCn []string
+		for _, cn := range cfg.From.Security.CertAllowedCN {
+			certAllowedCn = append(certAllowedCn, cn)
+		}
+		source.Security = &openapi.Security{CertAllowedCn: &certAllowedCn}
+	}
+	return source
+}
+
+func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
+	cfg := config.NewSourceConfig()
+	from := config.DBConfig{
+		Host:     source.Host,
+		Port:     source.Port,
+		User:     source.User,
+		Password: source.Password,
+	}
+	if source.Security != nil {
+		from.Security = &config.Security{
+			SSLCABytes:   []byte(source.Security.SslCaContent),
+			SSLKEYBytes:  []byte(source.Security.SslKeyContent),
+			SSLCertBytes: []byte(source.Security.SslCertContent),
+		}
+		if source.Security.CertAllowedCn != nil {
+			from.Security.CertAllowedCN = *source.Security.CertAllowedCn
+		}
+	}
+	cfg.From = from
+	cfg.EnableGTID = source.EnableGtid
+	cfg.SourceID = source.SourceName
+	return cfg
 }

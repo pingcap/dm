@@ -84,6 +84,10 @@ tools_setup:
 	@echo "setup tools"
 	@cd tools && make
 
+install_test_python_dep:
+	@echo "install python requirments for test"
+	sudo pip install -r tests/requirements.txt
+
 generate_proto: tools_setup
 	./generate-dm.sh
 
