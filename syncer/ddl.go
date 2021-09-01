@@ -236,7 +236,7 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 	sqls = sqls[:end]
 
 	// tableNames[1:] is the real table name
-	targetTables := tableNames[1:]
+	targetTables := tableNames[1:2]
 	for i := range sqls {
 		stmt, err := p.ParseOneStmt(sqls[i], "", "")
 		if err != nil {
