@@ -76,12 +76,12 @@ function diff_get_config() {
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"config source mysql-replica-01 --path $WORK_DIR/get_source1.yaml" \
 		"\"result\": true" 1
-	diff $WORK_DIR/get_source1.yaml $cur/conf/get_source1.yaml || exit 1
+	diff -I '^case-sensitive*' $WORK_DIR/get_source1.yaml $cur/conf/get_source1.yaml || exit 1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"config source mysql-replica-02 --path $WORK_DIR/get_source2.yaml" \
 		"\"result\": true" 1
-	diff $WORK_DIR/get_source2.yaml $cur/conf/get_source2.yaml || exit 1
+	diff -I '^case-sensitive*' $WORK_DIR/get_source2.yaml $cur/conf/get_source2.yaml || exit 1
 }
 
 function config_to_file() {
