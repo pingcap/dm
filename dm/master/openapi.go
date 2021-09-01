@@ -197,7 +197,7 @@ func sourceCfgToModel(cfg *config.SourceConfig) openapi.Source {
 	}
 	if cfg.From.Security != nil {
 		// NOTE we don't return security content here, because we don't want to expose it to the user.
-		certAllowedCn := []string{}
+		var certAllowedCn []string
 		for _, cn := range cfg.From.Security.CertAllowedCN {
 			certAllowedCn = append(certAllowedCn, cn)
 		}
