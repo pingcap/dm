@@ -4,7 +4,7 @@ set -eu
 
 cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
-
+export PATH=$PATH:$cur/client/
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function prepare_database() {
@@ -19,25 +19,25 @@ function test_source() {
 	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>START TEST OPENAPI: SOURCE"
 	prepare_database
 	# create source succesfully
-	$cur/client/source.py "create_source1_success"
+	openapi_source_check "create_source1_success"
 
 	# recreate source will failed
-	$cur/client/source.py "create_source_failed"
+	openapi_source_check "create_source_failed"
 
 	# get source list success
-	$cur/client/source.py "list_source_success" 1
+	openapi_source_check "list_source_success" 1
 
 	# delete source success
-	$cur/client/source.py "delete_source_success" "mysql-01"
+	openapi_source_check "delete_source_success" "mysql-01"
 
 	# after delete source, source list should be empty
-	$cur/client/source.py "list_source_success" 0
+	openapi_source_check "list_source_success" 0
 
 	# re delete source failed
-	$cur/client/source.py "delete_source_failed" "mysql-01"
+	openapi_source_check "delete_source_failed" "mysql-01"
 
 	# send request to not leader node
-	$cur/client/source.py "list_source_with_redirect" 0
+	openapi_source_check "list_source_with_redirect" 0
 
 	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: SOURCE SUCCESS"
 }
