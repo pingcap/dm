@@ -134,8 +134,9 @@ type Syncer struct {
 	streamerController *StreamerController
 	enableRelay        bool
 
-	wg    sync.WaitGroup
-	jobWg sync.WaitGroup
+	wg            sync.WaitGroup
+	jobWg         sync.WaitGroup
+	conflictJobWg sync.WaitGroup
 
 	schemaTracker *schema.Tracker
 
@@ -1274,7 +1275,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *dbconn.
 	}
 }
 
-func (s *Syncer) executeDML(jobs []*job) func(uint64) error {
+func (s *Syncer) executeDML(jobs []*job, clearF func()) func(uint64) {
 	// successF is used to calculate lag metric and q/tps.
 	successF := func(queueID int, jobs []*job) {
 		queueBucket := queueBucketName(queueID)
@@ -1312,11 +1313,12 @@ func (s *Syncer) executeDML(jobs []*job) func(uint64) error {
 		}
 	}
 
-	executeSQLs := func(workerID uint64) (err error) {
+	executeSQLs := func(workerID uint64) {
 		var (
 			queueID = int(workerID - 1)
 			affect  int
 			db      = s.toDBConns[queueID]
+			err     error
 		)
 
 		defer func() {
@@ -1325,15 +1327,17 @@ func (s *Syncer) executeDML(jobs []*job) func(uint64) error {
 			} else {
 				fatalF(jobs[affect], err)
 			}
+			clearF()
 		}()
 
 		if len(jobs) == 0 {
-			return nil
+			return
 		}
 		failpoint.Inject("failSecondJob", func() {
 			if failExecuteSQL && failOnce.CAS(false, true) {
 				s.tctx.L().Info("trigger failSecondJob")
-				failpoint.Return(terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJob"), "mock"))
+				err = terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJob"), "mock")
+				failpoint.Return()
 			}
 		})
 
@@ -1357,25 +1361,33 @@ func (s *Syncer) executeDML(jobs []*job) func(uint64) error {
 				affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
 			}
 		})
-		return err
 	}
 	return executeSQLs
 }
 
 // DML synced in batch by one worker.
-func (s *Syncer) syncDML(tctx *tcontext.Context) {
+func (s *Syncer) syncDML() {
 	defer s.wg.Done()
 
 	failpoint.Inject("changeTickerInterval", func(val failpoint.Value) {
 		t := val.(int)
 		waitTime = time.Duration(t) * time.Second
-		tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
+		s.tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
 	})
 
 	compactedCh, nonCompactedCh := s.compact(s.dmlJobCh)
 	nonConflictChs := s.resolveConflict(nonCompactedCh)
 	compactedMergedCh, nonConflictMergedCh := s.mergeDMLValues(compactedCh, nonConflictChs...)
-	s.dmlWorkers(compactedMergedCh, nonConflictMergedCh)
+	flushNum, flushCh := s.dmlWorkers(compactedMergedCh, nonConflictMergedCh)
+
+	num := 0
+	for range flushCh {
+		num++
+		if num == flushNum {
+			s.jobWg.Done()
+			num = 0
+		}
+	}
 }
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
@@ -1531,7 +1543,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 	s.wg.Add(1)
 	go func() {
-		s.syncDML(tctx)
+		s.syncDML()
 	}()
 
 	s.wg.Add(1)

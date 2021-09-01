@@ -34,6 +34,7 @@ const (
 	flush
 	skip // used by Syncer.recordSkipSQLsLocation to record global location, but not execute SQL
 	rotate
+	conflict
 )
 
 func (t opType) String() string {
@@ -54,6 +55,8 @@ func (t opType) String() string {
 		return "skip"
 	case rotate:
 		return "rotate"
+	case conflict:
+		return "conflict"
 	}
 
 	return ""
@@ -166,6 +169,13 @@ func newXIDJob(location, startLocation, currentLocation binlog.Location) *job {
 func newFlushJob() *job {
 	return &job{
 		tp:         flush,
+		jobAddTime: time.Now(),
+	}
+}
+
+func newConflictJob() *job {
+	return &job{
+		tp:         conflict,
 		jobAddTime: time.Now(),
 	}
 }

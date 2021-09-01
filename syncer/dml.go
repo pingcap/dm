@@ -28,7 +28,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/expression"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -637,6 +636,9 @@ func (s *Syncer) compact(jobCh chan *job) (chan *job, chan *job) {
 
 		for j := range jobCh {
 			// TODO: add compact logic
+			if j.tp == flush {
+				compactedCh <- j
+			}
 			nonCompactedCh <- j
 		}
 	}()
@@ -657,11 +659,14 @@ func (s *Syncer) resolveConflict(nonCompactedCh <-chan *job) []chan *job {
 
 		for j := range nonCompactedCh {
 			startTime := time.Now()
-			queueBucket := int(utils.GenHashKey(j.key)) % s.cfg.WorkerCount
 			if !s.cfg.DisableCausality && j.tp != flush {
 				if s.c.detectConflict(j.keys) {
 					s.tctx.L().Debug("meet causality key, will generate a flush job and wait all sqls executed", zap.Strings("keys", j.keys))
-					nonConflictChs[queueBucket] <- newFlushJob()
+					s.conflictJobWg.Add(s.cfg.WorkerCount)
+					// TODO: only flush for conflict channel
+					for _, nonConflictCh := range nonConflictChs {
+						nonConflictCh <- newConflictJob()
+					}
 					s.c.reset()
 				}
 				// no error because we have called detectConfilict
@@ -671,7 +676,15 @@ func (s *Syncer) resolveConflict(nonCompactedCh <-chan *job) []chan *job {
 				s.tctx.L().Debug("key for keys", zap.String("key", j.key), zap.Strings("keys", j.keys))
 			}
 			metrics.ConflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
-			nonConflictChs[queueBucket] <- j
+
+			if j.tp == flush {
+				for _, nonConflictCh := range nonConflictChs {
+					nonConflictCh <- j
+				}
+			} else {
+				queueBucket := int(utils.GenHashKey(j.key)) % s.cfg.WorkerCount
+				nonConflictChs[queueBucket] <- j
+			}
 		}
 	}()
 	return nonConflictChs
@@ -718,11 +731,28 @@ func (s *Syncer) mergeDMLValues(compactedCh chan *job, nonConflictChs ...chan *j
 	return compactedMergedCh, nonConflictMergedCh
 }
 
-func (s *Syncer) dmlWorkers(compactedMergedCh chan *job, nonConflictMergedChs []chan *job) {
-	var wg sync.WaitGroup
-	eg := new(errgroup.Group)
+// waitTimeout waits for the waitgroup for the specified max timeout.
+// Returns true if waiting timed out.
+func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+		return false
+	case <-time.After(timeout):
+		return true
+	}
+}
 
-	executeJobs := func(jobCh chan *job) {
+func (s *Syncer) dmlWorkers(compactedMergedCh chan *job, nonConflictMergedChs []chan *job) (int, chan *job) {
+	var wg sync.WaitGroup
+	executeWg := make([]sync.WaitGroup, len(nonConflictMergedChs)+1)
+	flushCh := make(chan *job, len(nonConflictMergedChs)+1)
+
+	executeJobs := func(jobCh chan *job, workerWg *sync.WaitGroup, needWait bool) {
 		defer wg.Done()
 
 		allJobs := make([]*job, 0, s.cfg.Batch)
@@ -739,29 +769,46 @@ func (s *Syncer) dmlWorkers(compactedMergedCh chan *job, nonConflictMergedChs []
 					allJobs = append(allJobs, j)
 				}
 
-				if len(allJobs) < s.cfg.Batch && j.tp != flush {
+				if len(allJobs) < s.cfg.Batch && j.tp != flush && j.tp != conflict {
 					continue
 				}
 
+				if needWait {
+					workerWg.Wait()
+					s.conflictJobWg.Wait()
+				}
+
 				jobs := allJobs
-				s.dmlWorkerPool.ApplyWithIDInErrorGroup(eg, s.executeDML(jobs))
+				workerWg.Add(1)
+
+				if j.tp == conflict {
+					s.dmlWorkerPool.ApplyWithID(s.executeDML(jobs, func() {
+						workerWg.Done()
+						s.conflictJobWg.Done()
+					}))
+				} else {
+					s.dmlWorkerPool.ApplyWithID(s.executeDML(jobs, func() { workerWg.Done() }))
+				}
+
+				// TODO: waiting for async flush
 				if j.tp == flush {
-					if err := eg.Wait(); err != nil {
-						s.tctx.L().Error("flush dml jobs", log.ShortError(err))
-					}
-					s.jobWg.Done()
+					workerWg.Wait()
+					flushCh <- j
 				}
 				allJobs = make([]*job, 0, s.cfg.Batch)
 			case <-time.After(waitTime):
 				if len(allJobs) > 0 {
+					if needWait && waitTimeout(workerWg, time.Millisecond) {
+						continue
+					}
+
 					failpoint.Inject("syncDMLTicker", func() {
 						s.tctx.L().Info("job queue not full, executeSQLs by ticker")
 					})
-					if s.dmlWorkerPool.HasWorker() {
-						jobs := allJobs
-						s.dmlWorkerPool.ApplyWithIDInErrorGroup(eg, s.executeDML(jobs))
-						allJobs = make([]*job, 0, s.cfg.Batch)
-					}
+					jobs := allJobs
+					workerWg.Add(1)
+					s.dmlWorkerPool.ApplyWithID(s.executeDML(jobs, func() { workerWg.Done() }))
+					allJobs = make([]*job, 0, s.cfg.Batch)
 				} else {
 					// waiting #2060
 					failpoint.Inject("noJobInQueueLog", func() {
@@ -775,9 +822,15 @@ func (s *Syncer) dmlWorkers(compactedMergedCh chan *job, nonConflictMergedChs []
 	}
 
 	wg.Add(1 + len(nonConflictMergedChs))
-	go executeJobs(compactedMergedCh)
-	for _, nonConflictMergedCh := range nonConflictMergedChs {
-		go executeJobs(nonConflictMergedCh)
+	go executeJobs(compactedMergedCh, &executeWg[len(nonConflictMergedChs)], true)
+	for i, nonConflictMergedCh := range nonConflictMergedChs {
+		go executeJobs(nonConflictMergedCh, &executeWg[i], true)
 	}
-	wg.Wait()
+
+	go func() {
+		wg.Wait()
+		close(flushCh)
+	}()
+
+	return len(nonConflictMergedChs) + 1, flushCh
 }
