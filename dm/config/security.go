@@ -78,3 +78,16 @@ func (s *Security) ClearSSLBytesData() {
 	s.SSLKEYBytes = s.SSLKEYBytes[:0]
 	s.SSLCertBytes = s.SSLCertBytes[:0]
 }
+
+// Clone returns a deep copy of Security.
+func (s *Security) Clone() *Security {
+	if s == nil {
+		return nil
+	}
+	clone := *s
+	clone.CertAllowedCN = append(strArray(nil), s.CertAllowedCN...)
+	clone.SSLCABytes = append([]byte(nil), s.SSLCABytes...)
+	clone.SSLKEYBytes = append([]byte(nil), s.SSLKEYBytes...)
+	clone.SSLCertBytes = append([]byte(nil), s.SSLCertBytes...)
+	return &clone
+}
