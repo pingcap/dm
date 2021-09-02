@@ -1160,15 +1160,11 @@ func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 		cfg.Password = utils.DecryptOrPlaintext(cfg.Password)
 	}
 
-	fmt.Printf("adjustTargetDB %#v\n", conn.DefaultDBProvider)
-
 	toDB, err := conn.DefaultDBProvider.Apply(cfg)
 	if err != nil {
 		return err
 	}
 	defer toDB.Close()
-
-	println("!!!!!!!!", toDB.DB)
 
 	value, err := dbutil.ShowVersion(ctx, toDB.DB)
 	if err != nil {
