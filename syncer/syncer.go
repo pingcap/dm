@@ -102,9 +102,9 @@ const (
 	RemoteBinlog BinlogType = iota + 1
 	LocalBinlog
 
-	skipJobIdx               = 0
-	ddlJobIdx                = 1
-	workerJobTSArrayInitSize = 2 // size = skip + ddl
+	skipJobIdx               = iota
+	ddlJobIdx
+	workerJobTSArrayInitSize // size = skip + ddl
 )
 
 // waitXIDStatus represents the status for waiting XID event when pause/stop task.
