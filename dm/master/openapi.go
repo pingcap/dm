@@ -193,7 +193,7 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	if sourceCfg == nil {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
 	}
-	var workerName string
+	workerName := ""
 	if w := s.scheduler.GetWorkerBySource(sourceName); w != nil {
 		workerName = w.BaseInfo().Name
 	}
@@ -202,13 +202,8 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 		SourceName:  sourceCfg.SourceID,
 		WorkerName:  workerName,
 	}
-	queryWorker := false
 	// only query worker if source is bound to a worker
-	for _, name := range s.scheduler.BoundSources() {
-		if name == sourceName {
-			queryWorker = true
-		}
-	}
+	queryWorker := workerName != ""
 	if queryWorker {
 		ret := s.getStatusFromWorkers(ctx.Request().Context(), []string{sourceName}, "", sourceCfg.EnableRelay)
 		if len(ret) != 1 {
