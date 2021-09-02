@@ -76,7 +76,7 @@ func (t *testServer) testWorker(c *C) {
 	NewRelayHolder = NewDummyRelayHolder
 	w, err = NewSourceWorker(cfg, etcdCli, "")
 	c.Assert(err, IsNil)
-	c.Assert(w.StatusJSON(""), HasLen, emptyWorkerStatusInfoJSONLength)
+	c.Assert(w.StatusJSON("", nil), HasLen, emptyWorkerStatusInfoJSONLength)
 
 	// close twice
 	w.Close()

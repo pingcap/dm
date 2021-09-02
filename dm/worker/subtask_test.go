@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 
@@ -124,7 +125,7 @@ func (m *MockUnit) Update(_ *config.SubTaskConfig) error {
 	return m.errUpdate
 }
 
-func (m *MockUnit) Status() interface{} {
+func (m *MockUnit) Status(_ *binlog.SourceStatus) interface{} {
 	switch m.typ {
 	case pb.UnitType_Check:
 		return &pb.CheckStatus{}

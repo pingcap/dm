@@ -633,7 +633,7 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 		ctxWait, cancelWait := context.WithTimeout(hub.w.ctx, waitRelayCatchupTimeout)
 		defer cancelWait()
 
-		loadStatus := pu.Status().(*pb.LoadStatus)
+		loadStatus := pu.Status(nil).(*pb.LoadStatus)
 
 		if st.cfg.EnableGTID {
 			gset1, err = gtid.ParserGTID(st.cfg.Flavor, loadStatus.MetaBinlogGTID)
@@ -648,9 +648,7 @@ func (st *SubTask) unitTransWaitCondition(subTaskCtx context.Context) error {
 		}
 
 		for {
-			ctxStatus, cancelStatus := context.WithTimeout(ctxWait, utils.DefaultDBTimeout)
-			relayStatus := hub.w.relayHolder.Status(ctxStatus)
-			cancelStatus()
+			relayStatus := hub.w.relayHolder.Status(nil)
 
 			if st.cfg.EnableGTID {
 				gset2, err = gtid.ParserGTID(st.cfg.Flavor, relayStatus.RelayBinlogGtid)

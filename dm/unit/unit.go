@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -49,8 +50,9 @@ type Unit interface {
 	// Update updates the configuration
 	Update(cfg *config.SubTaskConfig) error
 
-	// Status returns the unit's current status
-	Status() interface{}
+	// Status returns the unit's current status. The result may need calculation with source status, like estimated time
+	// to catch up. If sourceStatus is nil, the calculation should be skipped.
+	Status(sourceStatus *binlog.SourceStatus) interface{}
 	// Type returns the unit's type
 	Type() pb.UnitType
 	// IsFreshTask return whether is a fresh task (not processed before)

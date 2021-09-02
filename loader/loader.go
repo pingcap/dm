@@ -445,6 +445,7 @@ type Loader struct {
 	dbTableDataTotalSize        map[string]map[string]*atomic.Int64
 	dbTableDataFinishedSize     map[string]map[string]*atomic.Int64
 	dbTableDataLastFinishedSize map[string]map[string]int64
+	dbTableDataLastUpdatedTime  time.Time
 
 	metaBinlog     atomic.String
 	metaBinlogGTID atomic.String
@@ -728,12 +729,6 @@ func (l *Loader) Restore(ctx context.Context) error {
 		l.logger.Error("initial and start worker pools failed", log.ShortError(err))
 		return err2
 	}
-
-	l.wg.Add(1)
-	go func() {
-		defer l.wg.Done()
-		l.PrintStatus(ctx)
-	}()
 
 	begin := time.Now()
 	err = l.restoreData(ctx)

@@ -53,10 +53,11 @@ type SourceWorker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cfg     *config.SourceConfig
-	db      *conn.BaseDB
-	dbMutex sync.Mutex
-	l       log.Logger
+	cfg *config.SourceConfig
+	db  *conn.BaseDB
+	l   log.Logger
+
+	sourceStatus atomic.Value // stores a pointer to SourceStatus
 
 	// subtask functionality
 	subTaskEnabled atomic.Bool
@@ -122,11 +123,17 @@ func NewSourceWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client, name
 	return w, nil
 }
 
-// Start starts working.
+// Start starts working, but the functionalities should be turned on separately.
 func (w *SourceWorker) Start() {
 	// start task status checker
 	if w.cfg.Checker.CheckEnable {
 		w.taskStatusChecker.Start()
+	}
+
+	var err error
+	w.db, err = conn.DefaultDBProvider.Apply(w.cfg.DecryptPassword().From)
+	if err != nil {
+		w.l.Error("can't connected to upstream", zap.Error(err))
 	}
 
 	w.wg.Add(1)
@@ -134,7 +141,7 @@ func (w *SourceWorker) Start() {
 
 	w.l.Info("start running")
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(utils.PrintTaskInterval)
 	w.closed.Store(false)
 	defer ticker.Stop()
 	for {
@@ -143,7 +150,24 @@ func (w *SourceWorker) Start() {
 			w.l.Info("status print process exits!")
 			return
 		case <-ticker.C:
-			w.l.Debug("runtime status", zap.String("status", w.StatusJSON("")))
+			old := w.sourceStatus.Load()
+			if old != nil {
+				status := old.(*binlog.SourceStatus)
+				if time.Since(status.UpdateTime) < utils.PrintTaskInterval/2 {
+					w.l.Info("we just updated the source status, skip once",
+						zap.Time("last update time", status.UpdateTime))
+					continue
+				}
+			}
+			if err2 := w.updateSourceStatus(); err2 != nil {
+				w.l.Error("failed to update source status", zap.Error(err2))
+				continue
+			}
+
+			sourceStatus := w.sourceStatus.Load().(*binlog.SourceStatus)
+			if w.l.Core().Enabled(zap.DebugLevel) {
+				w.l.Debug("runtime status", zap.String("status", w.StatusJSON("", sourceStatus)))
+			}
 		}
 	}
 }
@@ -164,10 +188,8 @@ func (w *SourceWorker) Close() {
 	w.Lock()
 	defer w.Unlock()
 
-	w.dbMutex.Lock()
 	w.db.Close()
 	w.db = nil
-	w.dbMutex.Unlock()
 
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()
@@ -187,6 +209,34 @@ func (w *SourceWorker) Close() {
 
 	w.closed.Store(true)
 	w.l.Info("Stop worker")
+}
+
+// updateSourceStatus updates w.sourceStatus.
+func (w *SourceWorker) updateSourceStatus() error {
+	var status *binlog.SourceStatus
+	ctx, cancel := context.WithTimeout(w.ctx, utils.DefaultDBTimeout)
+	defer cancel()
+	pos, gtidSet, err := utils.GetMasterStatus(ctx, w.db.DB, w.cfg.Flavor)
+	if err != nil {
+		return err
+	}
+	status.Location.Position = pos
+	if err2 := status.Location.SetGTID(gtidSet.Origin()); err2 != nil {
+		return err2
+	}
+
+	ctx2, cancel2 := context.WithTimeout(w.ctx, utils.DefaultDBTimeout)
+	defer cancel2()
+	binlogs, err := binlog.GetBinaryLogs(ctx2, w.db.DB)
+	if err != nil {
+		return err
+	}
+	status.Binlogs = binlogs
+
+	status.UpdateTime = time.Now()
+
+	w.sourceStatus.Store(status)
+	return nil
 }
 
 // EnableRelay enables the functionality of start/watch/handle relay.
@@ -494,78 +544,18 @@ func (w *SourceWorker) QueryStatus(ctx context.Context, name string) ([]*pb.SubT
 		return nil, nil, nil
 	}
 
-	ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
-	defer cancel2()
+	if err := w.updateSourceStatus(); err != nil {
+		return nil, nil, err
+	}
 	var (
-		subtaskStatus = w.Status(name)
+		sourceStatus  = w.sourceStatus.Load().(*binlog.SourceStatus)
+		subtaskStatus = w.Status(name, sourceStatus)
 		relayStatus   *pb.RelayStatus
 	)
 	if w.relayEnabled.Load() {
-		relayStatus = w.relayHolder.Status(ctx2)
-		w.postProcessStatus(subtaskStatus, relayStatus.MasterBinlog, relayStatus.MasterBinlogGtid)
-	} else {
-		// fetch master status if relay is not enabled
-		w.dbMutex.Lock()
-		if w.db == nil {
-			var err error
-			w.l.Info("will open a connection to get master status", zap.Any("upstream config", w.cfg.From))
-			w.db, err = conn.DefaultDBProvider.Apply(w.cfg.DecryptPassword().From)
-			if err != nil {
-				w.l.Error("can't open a connection to get master status", zap.Error(err))
-				w.dbMutex.Unlock()
-				return subtaskStatus, relayStatus, err
-			}
-		}
-		pos, gset, err := utils.GetMasterStatus(ctx2, w.db.DB, w.cfg.Flavor)
-		w.dbMutex.Unlock()
-		if err != nil {
-			return subtaskStatus, relayStatus, err
-		}
-		w.postProcessStatus(subtaskStatus, pos.String(), gset.String())
+		relayStatus = w.relayHolder.Status(sourceStatus)
 	}
 	return subtaskStatus, relayStatus, nil
-}
-
-// postProcessStatus fills the status of sync unit with master binlog location and other related fields.
-func (w *SourceWorker) postProcessStatus(
-	subtaskStatus []*pb.SubTaskStatus,
-	masterBinlogPos string,
-	masterBinlogGtid string,
-) {
-	for _, status := range subtaskStatus {
-		syncStatus := status.GetSync()
-		if syncStatus == nil {
-			// not a Sync unit
-			continue
-		}
-
-		syncStatus.MasterBinlog = masterBinlogPos
-		syncStatus.MasterBinlogGtid = masterBinlogGtid
-		if w.cfg.EnableGTID {
-			// rely on sorted GTID set when String()
-			if masterBinlogGtid == syncStatus.SyncerBinlogGtid {
-				syncStatus.Synced = true
-			}
-		} else {
-			syncPos, err := binlog.PositionFromPosStr(syncStatus.SyncerBinlog)
-			if err != nil {
-				w.l.Debug("fail to parse mysql position", zap.String("position", syncStatus.SyncerBinlog), log.ShortError(err))
-				continue
-			}
-			masterPos, err := binlog.PositionFromPosStr(masterBinlogPos)
-			if err != nil {
-				w.l.Debug("fail to parse mysql position", zap.String("position", syncStatus.SyncerBinlog), log.ShortError(err))
-				continue
-			}
-
-			syncRealPos, err := binlog.RealMySQLPos(syncPos)
-			if err != nil {
-				w.l.Debug("fail to parse real mysql position", zap.String("position", syncStatus.SyncerBinlog), log.ShortError(err))
-				continue
-			}
-			syncStatus.Synced = syncRealPos.Compare(masterPos) == 0
-		}
-	}
 }
 
 func (w *SourceWorker) resetSubtaskStage() (int64, error) {
@@ -862,7 +852,7 @@ func (w *SourceWorker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest
 	if !w.subTaskEnabled.Load() {
 		w.l.Info("worker received purge-relay but didn't handling subtasks, read global checkpoint to decided active relay log")
 
-		uuid := w.relayHolder.Status(ctx).RelaySubDir
+		uuid := w.relayHolder.Status(nil).RelaySubDir
 
 		_, subTaskCfgs, _, err := w.fetchSubTasksAndAdjust()
 		if err != nil {
