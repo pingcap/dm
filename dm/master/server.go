@@ -37,8 +37,9 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/checker"
+	dmcommon "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/ctl/common"
+	ctlcommon "github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/master/shardddl"
@@ -69,7 +70,7 @@ const (
 
 var (
 	// the retry times for dm-master to confirm the dm-workers status is expected.
-	maxRetryNum = 30
+	maxRetryNum = 10
 	// the retry interval for dm-master to confirm the dm-workers status is expected.
 	retryInterval = time.Second
 
@@ -332,7 +333,7 @@ func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest
 	}
 
 	switch req.Type {
-	case common.Worker:
+	case ctlcommon.Worker:
 		err := s.scheduler.RemoveWorker(req.Name)
 		if err != nil {
 			// nolint:nilerr
@@ -341,7 +342,7 @@ func (s *Server) OfflineMember(ctx context.Context, req *pb.OfflineMemberRequest
 				Msg:    err.Error(),
 			}, nil
 		}
-	case common.Master:
+	case ctlcommon.Master:
 		err := s.deleteMasterByName(ctx, req.Name)
 		if err != nil {
 			// nolint:nilerr
@@ -420,7 +421,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	}
 
 	resp := &pb.StartTaskResponse{}
-	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, common.DefaultErrorCnt, common.DefaultWarnCnt)
+	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, ctlcommon.DefaultErrorCnt, ctlcommon.DefaultWarnCnt)
 	if err != nil {
 		resp.Msg = err.Error()
 		// nolint:nilerr
@@ -609,7 +610,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		return resp2, err2
 	}
 
-	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, common.DefaultErrorCnt, common.DefaultWarnCnt)
+	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task, ctlcommon.DefaultErrorCnt, ctlcommon.DefaultWarnCnt)
 	if err != nil {
 		// nolint:nilerr
 		return &pb.UpdateTaskResponse{
@@ -1475,27 +1476,29 @@ func extractWorkerError(result *pb.ProcessResult) error {
 	return nil
 }
 
-/*
-QueryStatus for worker response
-Source:
-	OperateSource:
-		* StartSource, UpdateSource: sourceID = Source
-		* StopSource: return resp.Result = false && resp.Msg = “worker has not started”.
-		  But if len(resp.SourceStatus.Result) > 0, it means dm-worker has some error in
-		  StopWorker and it should be pushed to users.
-Task:
-	StartTask, UpdateTask: query status and related subTask stage is running
-	OperateTask:
-		* pause: related task status is paused
-		* resume: related task status is running
-		* stop: related task can't be found in worker's result
-Relay:
-	OperateRelay:
-		* pause: related relay status is paused
-		* resume: related relay status is running
-In the above situations, once we find an error in response we should return the error.
-*/
-func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, taskName, sourceID string, masterReq interface{}) (*pb.QueryStatusResponse, error) {
+// waitOperationOk calls QueryStatus internally to implement a declarative API. It will determine operation is OK by
+// Source:
+//   OperateSource:
+//     * StartSource, UpdateSource: sourceID = Source
+//     * StopSource: return resp.Result = false && resp.Msg = “worker has not started”.
+// Task:
+//   StartTask, UpdateTask: query status and related subTask stage is running
+//   OperateTask:
+//     * pause: related task status is paused
+//     * resume: related task status is running
+//     * stop: related task can't be found in worker's result
+// Relay:
+//   OperateRelay:
+//     * pause: related relay status is paused
+//     * resume: related relay status is running
+// returns OK, error message of QueryStatusResponse, raw QueryStatusResponse, error that not from QueryStatusResponse.
+func (s *Server) waitOperationOk(
+	ctx context.Context,
+	cli *scheduler.Worker,
+	taskName string,
+	sourceID string,
+	masterReq interface{},
+) (bool, string, *pb.QueryStatusResponse, error) {
 	var expect pb.Stage
 	switch req := masterReq.(type) {
 	case *pb.OperateSourceRequest:
@@ -1526,7 +1529,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 			expect = pb.Stage_Stopped
 		}
 	default:
-		return nil, terror.ErrMasterIsNotAsyncRequest.Generate(masterReq)
+		return false, "", nil, terror.ErrMasterIsNotAsyncRequest.Generate(masterReq)
 	}
 	req := &workerrpc.Request{
 		Type: workerrpc.CmdQueryStatus,
@@ -1544,73 +1547,99 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 					SourceStatus: &pb.SourceStatus{Source: sourceID, Worker: cli.BaseInfo().Name},
 				}
 				if w := s.scheduler.GetWorkerByName(cli.BaseInfo().Name); w == nil {
-					return resp, nil
+					return true, "", resp, nil
 				} else if cli.Stage() == scheduler.WorkerOffline {
-					return resp, nil
+					return true, "", resp, nil
 				}
 			}
 		}
-		var queryResp *pb.QueryStatusResponse
+
 		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
 		if err != nil {
-			log.L().Error("fail to query operation", zap.Int("retryNum", num), zap.String("task", taskName),
-				zap.String("source", sourceID), zap.Stringer("expect", expect), log.ShortError(err))
+			log.L().Error("fail to query operation",
+				zap.Int("retryNum", num),
+				zap.String("task", taskName),
+				zap.String("source", sourceID),
+				zap.Stringer("expect", expect),
+				log.ShortError(err))
 		} else {
-			queryResp = resp.QueryStatus
+			queryResp := resp.QueryStatus
+			if queryResp == nil {
+				// should not happen
+				return false, "", nil, errors.Errorf("expect a query-status response, got type %v", resp.Type)
+			}
 
 			switch masterReq.(type) {
 			case *pb.OperateSourceRequest:
+				if queryResp.SourceStatus == nil {
+					continue
+				}
 				switch expect {
 				case pb.Stage_Running:
 					if queryResp.SourceStatus.Source == sourceID {
-						if err := extractWorkerError(queryResp.SourceStatus.Result); err != nil {
-							return queryResp, err
+						msg := ""
+						if err2 := extractWorkerError(queryResp.SourceStatus.Result); err2 != nil {
+							msg = err2.Error()
 						}
-						return queryResp, nil
+						return true, msg, queryResp, nil
 					}
 				case pb.Stage_Stopped:
 					// we don't use queryResp.SourceStatus.Source == "" because worker might be re-arranged after being stopped
 					if queryResp.SourceStatus.Source != sourceID {
-						if err := extractWorkerError(queryResp.SourceStatus.Result); err != nil {
-							return queryResp, err
+						msg := ""
+						if err2 := extractWorkerError(queryResp.SourceStatus.Result); err2 != nil {
+							msg = err2.Error()
 						}
-						return queryResp, nil
+						return true, msg, queryResp, nil
 					}
 				}
 			case *pb.StartTaskRequest, *pb.UpdateTaskRequest, *pb.OperateTaskRequest:
 				if expect == pb.Stage_Stopped && len(queryResp.SubTaskStatus) == 0 {
-					return queryResp, nil
-				} else if len(queryResp.SubTaskStatus) == 1 {
+					return true, "", queryResp, nil
+				}
+				if len(queryResp.SubTaskStatus) == 1 {
 					if subtaskStatus := queryResp.SubTaskStatus[0]; subtaskStatus != nil {
-						if err := extractWorkerError(subtaskStatus.Result); err != nil {
-							return queryResp, err
+						msg := ""
+						if err2 := extractWorkerError(subtaskStatus.Result); err2 != nil {
+							msg = err2.Error()
 						}
+						ok := false
 						// If expect stage is running, finished should also be okay
 						var finished pb.Stage = -1
 						if expect == pb.Stage_Running {
 							finished = pb.Stage_Finished
 						}
 						if expect == pb.Stage_Stopped {
-							if st, ok := subtaskStatus.Status.(*pb.SubTaskStatus_Msg); ok && st.Msg == fmt.Sprintf("no sub task with name %s has started", taskName) {
-								return queryResp, nil
+							if st, ok2 := subtaskStatus.Status.(*pb.SubTaskStatus_Msg); ok2 && st.Msg == dmcommon.NoSubTaskMsg(taskName) {
+								ok = true
 							}
 						} else if subtaskStatus.Name == taskName && (subtaskStatus.Stage == expect || subtaskStatus.Stage == finished) {
-							return queryResp, nil
+							ok = true
+						}
+						if ok || msg != "" {
+							return ok, msg, queryResp, nil
 						}
 					}
 				}
 			case *pb.OperateWorkerRelayRequest:
-				if queryResp.SourceStatus != nil {
-					if relayStatus := queryResp.SourceStatus.RelayStatus; relayStatus != nil {
-						if err := extractWorkerError(relayStatus.Result); err != nil {
-							return queryResp, err
-						}
-						if relayStatus.Stage == expect {
-							return queryResp, nil
-						}
-					} else {
-						return queryResp, terror.ErrMasterOperRespNotSuccess.Generate("relay is disabled for this source")
+				if queryResp.SourceStatus == nil {
+					continue
+				}
+				if relayStatus := queryResp.SourceStatus.RelayStatus; relayStatus != nil {
+					msg := ""
+					if err2 := extractWorkerError(relayStatus.Result); err2 != nil {
+						msg = err2.Error()
 					}
+					ok := false
+					if relayStatus.Stage == expect {
+						ok = true
+					}
+
+					if ok || msg != "" {
+						return ok, msg, queryResp, nil
+					}
+				} else {
+					return false, "", queryResp, terror.ErrMasterOperRespNotSuccess.Generate("relay is disabled for this source")
 				}
 			}
 			log.L().Info("fail to get expect operation result", zap.Int("retryNum", num), zap.String("task", taskName),
@@ -1619,12 +1648,12 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return false, "", nil, ctx.Err()
 		case <-time.After(retryInterval):
 		}
 	}
 
-	return nil, terror.ErrMasterFailToGetExpectResult
+	return false, "", nil, terror.ErrMasterFailToGetExpectResult
 }
 
 func (s *Server) handleOperationResult(ctx context.Context, cli *scheduler.Worker, taskName, sourceID string, req interface{}) *pb.CommonWorkerResponse {
@@ -1632,12 +1661,13 @@ func (s *Server) handleOperationResult(ctx context.Context, cli *scheduler.Worke
 		return errorCommonWorkerResponse(sourceID+" relevant worker-client not found", sourceID, "")
 	}
 	var response *pb.CommonWorkerResponse
-	queryResp, err := s.waitOperationOk(ctx, cli, taskName, sourceID, req)
+	ok, msg, queryResp, err := s.waitOperationOk(ctx, cli, taskName, sourceID, req)
 	if err != nil {
 		response = errorCommonWorkerResponse(err.Error(), sourceID, cli.BaseInfo().Name)
 	} else {
 		response = &pb.CommonWorkerResponse{
-			Result: true,
+			Result: ok,
+			Msg:    msg,
 			Source: queryResp.SourceStatus.Source,
 			Worker: queryResp.SourceStatus.Worker,
 		}
