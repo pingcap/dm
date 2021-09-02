@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"reflect"
 
 	. "github.com/pingcap/check"
 )
@@ -136,4 +137,22 @@ mysql-instances:
 	c.Assert(bytes.Contains(task2.TargetDB.Security.SSLKEYBytes, noContentBytes), Equals, true)
 	c.Assert(bytes.Contains(task2.TargetDB.Security.SSLCertBytes, noContentBytes), Equals, true)
 	c.Assert(task2.adjust(), IsNil)
+}
+
+func (t *testTLSConfig) TestClone(c *C) {
+	s := &Security{
+		SSLCA:         "a",
+		SSLCert:       "b",
+		SSLKey:        "c",
+		CertAllowedCN: []string{"d"},
+		SSLCABytes:    nil,
+		SSLKEYBytes:   []byte("e"),
+		SSLCertBytes:  []byte("f"),
+	}
+	// When add new fields, also update this value
+	c.Assert(reflect.Indirect(reflect.ValueOf(s)).NumField(), Equals, 7)
+	clone := s.Clone()
+	c.Assert(clone, DeepEquals, s)
+	clone.CertAllowedCN[0] = "g"
+	c.Assert(clone, Not(DeepEquals), s)
 }
