@@ -493,8 +493,8 @@ type mockOnlinePlugin struct {
 	toFinish map[string]struct{}
 }
 
-func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*schemapkg.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
-	return nil, "", "", nil
+func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*schemapkg.Table, statement string, stmt ast.StmtNode) ([]string, error) {
+	return nil, nil
 }
 
 func (m mockOnlinePlugin) Finish(tctx *tcontext.Context, table *schemapkg.Table) error {

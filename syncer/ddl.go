@@ -132,6 +132,7 @@ func (s *Syncer) splitAndFilterDDL(
 	}
 
 	statements := make([]string, 0, len(sqls))
+	tables = make(map[string]*schemapkg.Table)
 	for _, sql := range sqls {
 		stmt2, err2 := p.ParseOneStmt(sql, "", "")
 		if err2 != nil {
@@ -210,7 +211,7 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, usedS
 		return nil, nil, err
 	}
 
-	sqls, realSchema, realTable, err := s.onlineDDL.Apply(tctx, tableNames, sql, stmt)
+	sqls, err := s.onlineDDL.Apply(tctx, tableNames, sql, stmt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -230,10 +231,8 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, usedS
 	}
 	sqls = sqls[:end]
 
-	// replace ghost table name by real table name
-	targetTables := []*schemapkg.Table{
-		{Schema: realSchema, Name: realTable},
-	}
+	// tableNames[1:2] is the real table name
+	targetTables := tableNames[1:2]
 	for i := range sqls {
 		stmt, err := p.ParseOneStmt(sqls[i], "", "")
 		if err != nil {
@@ -267,7 +266,7 @@ func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema strin
 	}
 	// delete from sharding group firstly
 	for name, tables := range sources {
-		var targetTable *schemapkg.Table
+		targetTable := &schemapkg.Table{}
 		targetTable.Schema, targetTable.Name = utils.UnpackTableID(name)
 		sourceIDs := make([]string, 0, len(tables))
 		for _, table := range tables {

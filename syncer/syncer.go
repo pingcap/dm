@@ -3169,7 +3169,7 @@ func (s *Syncer) renameShardingSchema(table *schemapkg.Table) *schemapkg.Table {
 	if table.Schema == "" {
 		return table
 	}
-	var targetTable *schemapkg.Table
+	targetTable := &schemapkg.Table{}
 	var err error
 	targetTable.Schema, targetTable.Name, err = s.tableRouter.Route(table.Schema, table.Name)
 	if err != nil {
