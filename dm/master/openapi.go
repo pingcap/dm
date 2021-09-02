@@ -67,7 +67,7 @@ func (s *Server) InitOpenAPIHandles() error {
 	logger := log.L().WithFields(zap.String("component", "openapi")).Logger
 	// set logger
 	e.Use(openapi.ZapLogger(logger))
-	fmt.Println(echomiddleware.Recover())
+	e.Use(echomiddleware.Recover())
 	e.Use(s.redirectRequestToLeaderMW())
 	// disables swagger server name validation. it seems to work poorly
 	swagger.Servers = nil
