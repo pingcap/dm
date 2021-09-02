@@ -615,8 +615,7 @@ func (k *ShardingGroupKeeper) UnresolvedGroups() []*pb.ShardingGroup {
 
 // ResolveShardingDDL resolves one sharding DDL in specific group.
 func (k *ShardingGroupKeeper) ResolveShardingDDL(targetTable *schemapkg.Table) (bool, error) {
-	group := k.Group(targetTable)
-	if group != nil {
+	if group := k.Group(targetTable); group != nil {
 		return group.ResolveShardingDDL(), nil
 	}
 	return false, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetTable)
@@ -624,10 +623,9 @@ func (k *ShardingGroupKeeper) ResolveShardingDDL(targetTable *schemapkg.Table) (
 
 // ActiveDDLFirstLocation returns the binlog position of active DDL.
 func (k *ShardingGroupKeeper) ActiveDDLFirstLocation(targetTable *schemapkg.Table) (binlog.Location, error) {
-	group := k.Group(targetTable)
 	k.Lock()
 	defer k.Unlock()
-	if group != nil {
+	if group := k.Group(targetTable); group != nil {
 		location, err := group.ActiveDDLFirstLocation()
 		return location, err
 	}
