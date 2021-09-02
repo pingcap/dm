@@ -202,3 +202,8 @@ var (
 	// k/v: Encode(source-id) -> the running stage of the relay.
 	StageRelayKeyAdapterV1 KeyAdapter = keyEncoderDecoder("/dm-master/stage/relay/")
 )
+
+// NoSubTaskMsg returns a formatted string for subtask not started.
+func NoSubTaskMsg(name string) string {
+	return fmt.Sprintf("no sub task with name %s has started", name)
+}

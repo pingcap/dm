@@ -15,12 +15,12 @@ package worker
 
 import (
 	"encoding/json"
-	"fmt"
 	"sort"
 
 	"github.com/golang/protobuf/jsonpb"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/syncer"
 )
@@ -72,7 +72,7 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 		if !ok {
 			stStatus = pb.SubTaskStatus{
 				Name:   name,
-				Status: &pb.SubTaskStatus_Msg{Msg: fmt.Sprintf("no sub task with name %s has started", name)},
+				Status: &pb.SubTaskStatus_Msg{Msg: common.NoSubTaskMsg(name)},
 			}
 		} else {
 			lockID := ""
