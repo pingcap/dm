@@ -80,6 +80,7 @@ import (
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
+	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/dbconn"
@@ -277,18 +278,18 @@ func (sg *ShardingGroup) Sources() map[string]bool {
 }
 
 // Tables returns all source tables' <schema, table> pair.
-func (sg *ShardingGroup) Tables() [][]string {
+func (sg *ShardingGroup) Tables() []*schemapkg.Table {
 	sources := sg.Sources()
-	tables := make([][]string, 0, len(sources))
+	tables := make([]*schemapkg.Table, 0, len(sources))
 	for id := range sources {
-		schema, table := utils.UnpackTableID(id)
-		tables = append(tables, []string{schema, table})
+		table := utils.UnpackTableID(id)
+		tables = append(tables, table)
 	}
 	return tables
 }
 
 // UnresolvedTables returns all source tables' <schema, table> pair if is unresolved, else returns nil.
-func (sg *ShardingGroup) UnresolvedTables() [][]string {
+func (sg *ShardingGroup) UnresolvedTables() []*schemapkg.Table {
 	sg.RLock()
 	defer sg.RUnlock()
 
@@ -298,10 +299,10 @@ func (sg *ShardingGroup) UnresolvedTables() [][]string {
 		return nil
 	}
 
-	tables := make([][]string, 0, len(sg.sources))
+	tables := make([]*schemapkg.Table, 0, len(sg.sources))
 	for id := range sg.sources {
-		schema, table := utils.UnpackTableID(id)
-		tables = append(tables, []string{schema, table})
+		table := utils.UnpackTableID(id)
+		tables = append(tables, table)
 	}
 	return tables
 }
@@ -395,11 +396,11 @@ func NewShardingGroupKeeper(tctx *tcontext.Context, cfg *config.SubTaskConfig) *
 }
 
 // AddGroup adds new group(s) according to target schema, table and source IDs.
-func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceIDs []string, meta *shardmeta.ShardingMeta, merge bool) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int, err error) {
+func (k *ShardingGroupKeeper) AddGroup(targetTable *schemapkg.Table, sourceIDs []string, meta *shardmeta.ShardingMeta, merge bool) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int, err error) {
 	// if need to support target table-level sharding DDL
 	// we also need to support target schema-level sharding DDL
-	schemaID, _ := utils.GenTableID(targetSchema, "")
-	targetTableID, _ := utils.GenTableID(targetSchema, targetTable)
+	schemaID := utils.GenSchemaID(targetTable)
+	targetTableID := utils.GenTableID(targetTable)
 
 	k.Lock()
 	defer k.Unlock()
@@ -462,9 +463,9 @@ func (k *ShardingGroupKeeper) ResetGroups() {
 
 // LeaveGroup leaves group according to target schema, table and source IDs
 // LeaveGroup doesn't affect in syncing process.
-func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sources []string) error {
-	schemaID, _ := utils.GenTableID(targetSchema, "")
-	targetTableID, _ := utils.GenTableID(targetSchema, targetTable)
+func (k *ShardingGroupKeeper) LeaveGroup(targetTable *schemapkg.Table, sources []string) error {
+	schemaID := utils.GenSchemaID(targetTable)
+	targetTableID := utils.GenTableID(targetTable)
 	k.Lock()
 	defer k.Unlock()
 	if group, ok := k.groups[targetTableID]; ok {
@@ -494,9 +495,10 @@ func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sourc
 //   active: whether is active DDL in sequence sharding DDL
 //   remain: remain un-synced source table's count
 func (k *ShardingGroupKeeper) TrySync(
-	targetSchema, targetTable, source string, location, endLocation binlog.Location, ddls []string) (
+	sourceTable, targetTable *schemapkg.Table, location, endLocation binlog.Location, ddls []string) (
 	needShardingHandle bool, group *ShardingGroup, synced, active bool, remain int, err error) {
-	targetTableID, schemaOnly := utils.GenTableID(targetSchema, targetTable)
+	targetTableID, schemaOnly := utils.GenTableIDAndCheckSchemaOnly(targetTable)
+	sourceID := utils.GenTableID(sourceTable)
 	if schemaOnly {
 		// NOTE: now we don't support syncing for schema only sharding DDL
 		return false, nil, true, false, 0, nil
@@ -509,17 +511,18 @@ func (k *ShardingGroupKeeper) TrySync(
 	if !ok {
 		return false, group, true, false, 0, nil
 	}
-	synced, active, remain, err = group.TrySync(source, location, endLocation, ddls)
+	synced, active, remain, err = group.TrySync(sourceID, location, endLocation, ddls)
 	return true, group, synced, active, remain, err
 }
 
 // InSyncing checks whether the source is in sharding syncing, that is to say not before active DDL.
-func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string, location binlog.Location) bool {
-	group := k.Group(targetSchema, targetTable)
+func (k *ShardingGroupKeeper) InSyncing(sourceTable, targetTable *schemapkg.Table, location binlog.Location) bool {
+	group := k.Group(targetTable)
 	if group == nil {
 		return false
 	}
-	return !group.CheckSyncing(source, location)
+	sourceID := utils.GenTableID(sourceTable)
+	return !group.CheckSyncing(sourceID, location)
 }
 
 // UnresolvedTables returns
@@ -528,9 +531,9 @@ func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string
 // NOTE: this func only ensure the returned tables are current un-resolved
 // if passing the returned tables to other func (like checkpoint),
 // must ensure their sync state not changed in this progress.
-func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, [][]string) {
+func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, []*schemapkg.Table) {
 	ids := make(map[string]bool)
-	tables := make([][]string, 0, 10)
+	tables := make([]*schemapkg.Table, 0, 10)
 	k.RLock()
 	defer k.RUnlock()
 	for id, group := range k.groups {
@@ -545,8 +548,8 @@ func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, [][]string) {
 }
 
 // Group returns target table's group, nil if not exist.
-func (k *ShardingGroupKeeper) Group(targetSchema, targetTable string) *ShardingGroup {
-	targetTableID, _ := utils.GenTableID(targetSchema, targetTable)
+func (k *ShardingGroupKeeper) Group(targetTable *schemapkg.Table) *ShardingGroup {
+	targetTableID := utils.GenTableID(targetTable)
 	k.RLock()
 	defer k.RUnlock()
 	return k.groups[targetTableID]
@@ -611,24 +614,24 @@ func (k *ShardingGroupKeeper) UnresolvedGroups() []*pb.ShardingGroup {
 }
 
 // ResolveShardingDDL resolves one sharding DDL in specific group.
-func (k *ShardingGroupKeeper) ResolveShardingDDL(targetSchema, targetTable string) (bool, error) {
-	group := k.Group(targetSchema, targetTable)
+func (k *ShardingGroupKeeper) ResolveShardingDDL(targetTable *schemapkg.Table) (bool, error) {
+	group := k.Group(targetTable)
 	if group != nil {
 		return group.ResolveShardingDDL(), nil
 	}
-	return false, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
+	return false, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetTable)
 }
 
 // ActiveDDLFirstLocation returns the binlog position of active DDL.
-func (k *ShardingGroupKeeper) ActiveDDLFirstLocation(targetSchema, targetTable string) (binlog.Location, error) {
-	group := k.Group(targetSchema, targetTable)
+func (k *ShardingGroupKeeper) ActiveDDLFirstLocation(targetTable *schemapkg.Table) (binlog.Location, error) {
+	group := k.Group(targetTable)
 	k.Lock()
 	defer k.Unlock()
 	if group != nil {
 		location, err := group.ActiveDDLFirstLocation()
 		return location, err
 	}
-	return binlog.Location{}, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
+	return binlog.Location{}, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetTable)
 }
 
 // PrepareFlushSQLs returns all sharding meta flushed SQLs except for given table IDs.
@@ -749,12 +752,11 @@ func (k *ShardingGroupKeeper) CheckAndFix(metas map[string]*shardmeta.ShardingMe
 type ShardingReSync struct {
 	currLocation   binlog.Location // current DDL's binlog location, initialize to first DDL's location
 	latestLocation binlog.Location // latest DDL's binlog location
-	targetSchema   string
-	targetTable    string
+	targetTable    *schemapkg.Table
 	allResolved    bool
 }
 
 // String implements stringer.String.
 func (s *ShardingReSync) String() string {
-	return fmt.Sprintf("{schema: %s, table: %s, current location: %v, latest location: %v, all resolved: %v}", s.targetSchema, s.targetTable, s.currLocation, s.latestLocation, s.allResolved)
+	return fmt.Sprintf("{table: %s, current location: %v, latest location: %v, all resolved: %v}", s.targetTable.String(), s.currLocation, s.latestLocation, s.allResolved)
 }

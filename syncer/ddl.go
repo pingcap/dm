@@ -24,6 +24,7 @@ import (
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
+	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/metrics"
@@ -252,7 +253,7 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 }
 
 func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema string) error {
-	sources := make(map[string][][]string)
+	sources := make(map[string][]*schemapkg.Table)
 	sgs := s.sgk.Groups()
 	for name, sg := range sgs {
 		if sg.IsSchemaOnly {
@@ -262,7 +263,7 @@ func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema strin
 		}
 		tables := sg.Tables()
 		for _, table := range tables {
-			if table[0] != sourceSchema {
+			if table.Schema != sourceSchema {
 				continue
 			}
 			sources[name] = append(sources[name], table)
@@ -270,13 +271,13 @@ func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema strin
 	}
 	// delete from sharding group firstly
 	for name, tables := range sources {
-		targetSchema, targetTable := utils.UnpackTableID(name)
+		targetTable := utils.UnpackTableID(name)
 		sourceIDs := make([]string, 0, len(tables))
 		for _, table := range tables {
-			sourceID, _ := utils.GenTableID(table[0], table[1])
+			sourceID := utils.GenTableID(table)
 			sourceIDs = append(sourceIDs, sourceID)
 		}
-		err := s.sgk.LeaveGroup(targetSchema, targetTable, sourceIDs)
+		err := s.sgk.LeaveGroup(targetTable, sourceIDs)
 		if err != nil {
 			return err
 		}
@@ -286,16 +287,16 @@ func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema strin
 		for _, table := range tables {
 			// refine clear them later if failed
 			// now it doesn't have problems
-			if err1 := s.checkpoint.DeleteTablePoint(tctx, table[0], table[1]); err1 != nil {
-				s.tctx.L().Error("fail to delete checkpoint", zap.String("schema", table[0]), zap.String("table", table[1]))
+			if err1 := s.checkpoint.DeleteTablePoint(tctx, table.Schema, table.Name); err1 != nil {
+				s.tctx.L().Error("fail to delete checkpoint", zap.String("schema", table.Schema), zap.String("table", table.Name))
 			}
 		}
 	}
 	return nil
 }
 
-func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetSchema, targetTable string) error {
-	group := s.sgk.Group(targetSchema, targetTable)
+func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *schemapkg.Table) error {
+	group := s.sgk.Group(targetTable)
 	if group == nil {
 		return nil
 	}
@@ -304,10 +305,10 @@ func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetSchema, targetTabl
 	tables := group.Tables()
 
 	for _, table := range tables {
-		s.tctx.L().Info("finish online ddl", zap.String("schema", table[0]), zap.String("table", table[1]))
-		err := s.onlineDDL.Finish(tctx, table[0], table[1])
+		s.tctx.L().Info("finish online ddl", zap.String("schema", table.Schema), zap.String("table", table.Name))
+		err := s.onlineDDL.Finish(tctx, table.Schema, table.Name)
 		if err != nil {
-			return terror.Annotatef(err, "finish online ddl on %s.%s", table[0], table[1])
+			return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
 		}
 	}
 
