@@ -15,7 +15,6 @@ package worker
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -37,22 +36,6 @@ import (
 )
 
 var emptyWorkerStatusInfoJSONLength = 25
-
-type mockDBProvider struct {
-	db *sql.DB
-}
-
-// Apply will build BaseDB with DBConfig.
-func (d *mockDBProvider) Apply(config config.DBConfig) (*conn.BaseDB, error) {
-	return conn.NewBaseDB(d.db, func() {}), nil
-}
-
-func initMockDB(c *C) sqlmock.Sqlmock {
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	conn.DefaultDBProvider = &mockDBProvider{db: db}
-	return mock
-}
 
 func mockShowMasterStatus(mockDB sqlmock.Sqlmock) {
 	rows := mockDB.NewRows([]string{"File", "Position", "Binlog_Do_DB", "Binlog_Ignore_DB", "Executed_Gtid_Set"}).AddRow(
@@ -530,7 +513,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return w.subTaskHolder.findSubTask(subtaskCfg.Name) != nil
 	}), IsTrue)
-	mockDB := initMockDB(c)
+	mockDB := conn.InitMockDB(c)
 	mockShowMasterStatus(mockDB)
 	status, _, err := w.QueryStatus(ctx1, subtaskCfg.Name)
 	c.Assert(err, IsNil)

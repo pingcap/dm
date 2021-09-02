@@ -114,7 +114,6 @@ func (d *testDumplingSuite) TestDumpling(c *C) {
 	c.Assert(result.IsCanceled, IsTrue)
 	c.Assert(len(result.Errors), Equals, 1)
 	c.Assert(result.Errors[0].String(), Matches, ".*context deadline exceeded.*")
-	println("===================after inint=================")
 }
 
 func (d *testDumplingSuite) TestDefaultConfig(c *C) {

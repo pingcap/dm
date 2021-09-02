@@ -14,7 +14,6 @@
 package loader
 
 import (
-	"database/sql"
 	"fmt"
 	"os"
 	"strconv"
@@ -27,22 +26,6 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
 )
-
-type mockDBProvider struct {
-	db *sql.DB
-}
-
-// Apply will build BaseDB with DBConfig.
-func (d *mockDBProvider) Apply(config config.DBConfig) (*conn.BaseDB, error) {
-	return conn.NewBaseDB(d.db, func() {}), nil
-}
-
-func initMockDB(c *C) sqlmock.Sqlmock {
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	conn.DefaultDBProvider = &mockDBProvider{db: db}
-	return mock
-}
 
 var _ = Suite(&testCheckPointSuite{})
 
@@ -117,7 +100,7 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 		},
 	}
 
-	mock := initMockDB(c)
+	mock := conn.InitMockDB(c)
 	// mock for cp prepare
 	mock.ExpectBegin()
 	mock.ExpectExec(schemaCreateSQL).WillReturnResult(sqlmock.NewResult(0, 1))
