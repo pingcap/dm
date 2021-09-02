@@ -63,7 +63,7 @@ func (d *DefaultDBProviderImpl) Apply(config config.DBConfig) (*BaseDB, error) {
 		config.User, config.Password, config.Host, config.Port)
 
 	doFuncInClose := func() {}
-	if config.Security != nil && len(config.Security.SSLCA) != 0 {
+	if config.Security != nil {
 		if loadErr := config.Security.LoadTLSContent(); loadErr != nil {
 			return nil, terror.ErrCtlLoadTLSCfg.Delegate(loadErr)
 		}
