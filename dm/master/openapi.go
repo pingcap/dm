@@ -67,7 +67,7 @@ func (s *Server) InitOpenAPIHandles() error {
 	logger := log.L().WithFields(zap.String("component", "openapi")).Logger
 	// set logger
 	e.Use(openapi.ZapLogger(logger))
-	e.Use(echomiddleware.Recover())
+	fmt.Println(echomiddleware.Recover())
 	e.Use(s.redirectRequestToLeaderMW())
 	// disables swagger server name validation. it seems to work poorly
 	swagger.Servers = nil
@@ -141,29 +141,39 @@ func (s *Server) DMAPIStartRelay(ctx echo.Context, sourceName string) error {
 	if sourceCfg == nil {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
 	}
-	if req.RelayBinlogName != nil {
+	// only need to update source config when relay log related config is changed
+	needUpdate := false
+	if req.RelayBinlogName != nil && sourceCfg.RelayBinLogName != *req.RelayBinlogName {
 		sourceCfg.RelayBinLogName = *req.RelayBinlogName
+		needUpdate = true
 	}
-	if req.RelayBinlogGtid != nil {
+	if req.RelayBinlogGtid != nil && sourceCfg.RelayBinlogGTID != *req.RelayBinlogGtid {
 		sourceCfg.RelayBinlogGTID = *req.RelayBinlogGtid
+		needUpdate = true
 	}
-	if req.RelayDir != nil {
+	if req.RelayDir != nil && sourceCfg.RelayDir != *req.RelayDir {
 		sourceCfg.RelayDir = *req.RelayDir
+		needUpdate = true
 	}
 	if purge := req.Purge; purge != nil {
-		if purge.Expires != nil {
+		if purge.Expires != nil && sourceCfg.Purge.Expires != *purge.Expires {
 			sourceCfg.Purge.Expires = *purge.Expires
+			needUpdate = true
 		}
-		if purge.Interval != nil {
+		if purge.Interval != nil && sourceCfg.Purge.Interval != *purge.Interval {
 			sourceCfg.Purge.Interval = *purge.Interval
+			needUpdate = true
 		}
-		if purge.RemainSpace != nil {
+		if purge.RemainSpace != nil && sourceCfg.Purge.RemainSpace != *purge.RemainSpace {
 			sourceCfg.Purge.RemainSpace = *purge.RemainSpace
+			needUpdate = true
 		}
 	}
-	// update current source relay config before start relay
-	if err := s.scheduler.UpdateSourceCfg(sourceCfg); err != nil {
-		return err
+	if needUpdate {
+		// update current source relay config before start relay
+		if err := s.scheduler.UpdateSourceCfg(sourceCfg); err != nil {
+			return err
+		}
 	}
 	return s.scheduler.StartRelay(sourceName, []string{req.WorkerName})
 }
@@ -183,6 +193,15 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	if sourceCfg == nil {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
 	}
+	var workerName string
+	if w := s.scheduler.GetWorkerBySource(sourceName); w != nil {
+		workerName = w.BaseInfo().Name
+	}
+	resp := openapi.SourceStatus{
+		EnableRelay: sourceCfg.EnableRelay,
+		SourceName:  sourceCfg.SourceID,
+		WorkerName:  workerName,
+	}
 	queryWorker := false
 	// only query worker if source is bound to a worker
 	for _, name := range s.scheduler.BoundSources() {
@@ -190,26 +209,18 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 			queryWorker = true
 		}
 	}
-	enableRelay := sourceCfg.EnableRelay
-	resp := openapi.SourceStatus{
-		EnableRelay: enableRelay,
-		SourceName:  sourceCfg.SourceID,
-	}
-
 	if queryWorker {
-		enableRelay = sourceCfg.EnableRelay && queryWorker
-		ret := s.getStatusFromWorkers(ctx.Request().Context(), []string{sourceName}, "", enableRelay)
+		ret := s.getStatusFromWorkers(ctx.Request().Context(), []string{sourceName}, "", sourceCfg.EnableRelay)
 		if len(ret) != 1 {
 			// No response from worker and master means that the current query source has not been created.
+			// and this should not happen here.
 			return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
 		}
 		status := ret[0]
 		if !status.Result {
 			return terror.ErrOpenAPICommonError.New(status.Msg)
 		}
-		sourceStatus := status.SourceStatus
-		relayStatus := sourceStatus.GetRelayStatus()
-		resp.WorkerName = sourceStatus.Worker
+		relayStatus := status.SourceStatus.GetRelayStatus()
 		if relayStatus != nil {
 			resp.RelayStatus = &openapi.RelayStatus{
 				MasterBinlog:       relayStatus.MasterBinlog,
