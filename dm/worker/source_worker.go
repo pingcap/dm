@@ -213,7 +213,7 @@ func (w *SourceWorker) Close() {
 
 // updateSourceStatus updates w.sourceStatus.
 func (w *SourceWorker) updateSourceStatus() error {
-	var status *binlog.SourceStatus
+	var status binlog.SourceStatus
 	ctx, cancel := context.WithTimeout(w.ctx, utils.DefaultDBTimeout)
 	defer cancel()
 	pos, gtidSet, err := utils.GetMasterStatus(ctx, w.db.DB, w.cfg.Flavor)
@@ -235,7 +235,7 @@ func (w *SourceWorker) updateSourceStatus() error {
 
 	status.UpdateTime = time.Now()
 
-	w.sourceStatus.Store(status)
+	w.sourceStatus.Store(&status)
 	return nil
 }
 
