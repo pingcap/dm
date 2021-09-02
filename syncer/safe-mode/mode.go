@@ -14,12 +14,12 @@
 package mode
 
 import (
-	"fmt"
 	"sync"
 
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
+	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -47,8 +47,8 @@ func (m *SafeMode) Add(tctx *tcontext.Context, n int32) error {
 
 // IncrForTable tries to add 1 on the count if the table not added before
 // can only be desc with DescForTable.
-func (m *SafeMode) IncrForTable(tctx *tcontext.Context, schema, table string) error {
-	key := key(schema, table)
+func (m *SafeMode) IncrForTable(tctx *tcontext.Context, table *schemapkg.Table) error {
+	key := key(table)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -60,8 +60,8 @@ func (m *SafeMode) IncrForTable(tctx *tcontext.Context, schema, table string) er
 }
 
 // DescForTable tries to add -1 on the count if the table added before.
-func (m *SafeMode) DescForTable(tctx *tcontext.Context, schema, table string) error {
-	key := key(schema, table)
+func (m *SafeMode) DescForTable(tctx *tcontext.Context, table *schemapkg.Table) error {
+	key := key(table)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -101,9 +101,6 @@ func (m *SafeMode) setCount(tctx *tcontext.Context, n int32) error {
 	return nil
 }
 
-func key(schema, table string) string {
-	if len(table) > 0 {
-		return fmt.Sprintf("`%s`.`%s`", schema, table)
-	}
-	return fmt.Sprintf("`%s`", schema)
+func key(table *schemapkg.Table) string {
+	return table.String()
 }

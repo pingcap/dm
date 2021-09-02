@@ -26,12 +26,12 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
+	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 )
 
@@ -46,10 +46,10 @@ type OnlinePlugin interface {
 	// * detect online ddl
 	// * record changes
 	// * apply online ddl on real table
-	// returns sqls, error
-	Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error)
+	// returns sqls, replaced/self schema, replaced/self table, error
+	Apply(tctx *tcontext.Context, tables []*schemapkg.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error)
 	// Finish would delete online ddl from memory and storage
-	Finish(tctx *tcontext.Context, schema, table string) error
+	Finish(tctx *tcontext.Context, table *schemapkg.Table) error
 	// TableType returns ghhost/real table
 	TableType(table string) TableType
 	// RealName returns real table name that removed ghost suffix and handled by table router
@@ -392,10 +392,10 @@ func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (Onl
 }
 
 // Apply implements interface.
-// returns ddls, error.
-func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error) {
+// returns ddls, real schema, real table, error.
+func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*schemapkg.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
 	if len(tables) < 1 {
-		return nil, terror.ErrSyncerUnitGhostApplyEmptyTable.Generate()
+		return nil, "", "", terror.ErrSyncerUnitGhostApplyEmptyTable.Generate()
 	}
 
 	schema, table := tables[0].Schema, tables[0].Name
@@ -406,27 +406,27 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 	case RealTable:
 		if _, ok := stmt.(*ast.RenameTableStmt); ok {
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
-				return nil, terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
 			}
 
 			tp1 := r.TableType(tables[1].Name)
 			if tp1 == TrashTable {
-				return nil, nil
+				return nil, "", "", nil
 			} else if tp1 == GhostTable {
-				return nil, terror.ErrSyncerUnitGhostRenameToGhostTable.Generate(statement)
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameToGhostTable.Generate(statement)
 			}
 		}
-		return []string{statement}, nil
+		return []string{statement}, schema, table, nil
 	case TrashTable:
 		// ignore TrashTable
 		if _, ok := stmt.(*ast.RenameTableStmt); ok {
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
-				return nil, terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
 			}
 
 			tp1 := r.TableType(tables[1].Name)
 			if tp1 == GhostTable {
-				return nil, terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
 			}
 		}
 	case GhostTable:
@@ -435,52 +435,53 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 		case *ast.CreateTableStmt:
 			err := r.storage.Delete(tctx, schema, table)
 			if err != nil {
-				return nil, err
+				return nil, "", "", err
 			}
 		case *ast.DropTableStmt:
 			err := r.storage.Delete(tctx, schema, table)
 			if err != nil {
-				return nil, err
+				return nil, "", "", err
 			}
 		case *ast.RenameTableStmt:
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
-				return nil, terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
 			}
 
 			tp1 := r.TableType(tables[1].Name)
 			if tp1 == RealTable {
 				ghostInfo := r.storage.Get(schema, table)
 				if ghostInfo != nil {
-					return ghostInfo.DDLs, nil
+					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
 				}
-				return nil, terror.ErrSyncerUnitGhostOnlineDDLOnGhostTbl.Generate(schema, table)
+				return nil, "", "", terror.ErrSyncerUnitGhostOnlineDDLOnGhostTbl.Generate(schema, table)
 			} else if tp1 == GhostTable {
-				return nil, terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
+				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
 			}
 
 			// rename ghost table to trash table
 			err := r.storage.Delete(tctx, schema, table)
 			if err != nil {
-				return nil, err
+				return nil, "", "", err
 			}
 
 		default:
 			err := r.storage.Save(tctx, schema, table, schema, targetTable, statement)
 			if err != nil {
-				return nil, err
+				return nil, "", "", err
 			}
 		}
 	}
-	return nil, nil
+
+	return nil, schema, table, nil
 }
 
 // Finish implements interface.
-func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) error {
+func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, table *schemapkg.Table) error {
 	if r == nil {
 		return nil
 	}
 
-	return r.storage.Delete(tctx, schema, table)
+	return r.storage.Delete(tctx, table.Schema, table.Name)
 }
 
 // TableType implements interface.

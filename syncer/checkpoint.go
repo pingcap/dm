@@ -32,7 +32,6 @@ import (
 	"github.com/pingcap/dm/pkg/dumpling"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/schema"
 	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -104,7 +103,7 @@ func (b *binlogPoint) flush() {
 	b.flushedTI = b.ti
 }
 
-func (b *binlogPoint) rollback(schemaTracker *schema.Tracker, schema string) (isSchemaChanged bool) {
+func (b *binlogPoint) rollback(schemaTracker *schemapkg.Tracker, schema string) (isSchemaChanged bool) {
 	b.Lock()
 	defer b.Unlock()
 
@@ -192,16 +191,16 @@ type CheckPoint interface {
 	LoadMeta() error
 
 	// SaveTablePoint saves checkpoint for specified table in memory
-	SaveTablePoint(sourceSchema, sourceTable string, point binlog.Location, ti *model.TableInfo)
+	SaveTablePoint(sourceTable *schemapkg.Table, point binlog.Location, ti *model.TableInfo)
 
 	// DeleteTablePoint deletes checkpoint for specified table in memory and storage
-	DeleteTablePoint(tctx *tcontext.Context, sourceSchema, sourceTable string) error
+	DeleteTablePoint(tctx *tcontext.Context, sourceTable *schemapkg.Table) error
 
 	// DeleteSchemaPoint deletes checkpoint for specified schema
 	DeleteSchemaPoint(tctx *tcontext.Context, sourceSchema string) error
 
 	// IsOlderThanTablePoint checks whether job's checkpoint is older than previous saved checkpoint
-	IsOlderThanTablePoint(sourceSchema, sourceTable string, point binlog.Location, useLE bool) bool
+	IsOlderThanTablePoint(sourceTable *schemapkg.Table, point binlog.Location, useLE bool) bool
 
 	// SaveGlobalPoint saves the global binlog stream's checkpoint
 	// corresponding to Meta.Save
@@ -244,10 +243,10 @@ type CheckPoint interface {
 
 	// GetFlushedTableInfo gets flushed table info
 	// use for lazy create table in schemaTracker
-	GetFlushedTableInfo(schema string, table string) *model.TableInfo
+	GetFlushedTableInfo(table *schemapkg.Table) *model.TableInfo
 
 	// Rollback rolls global checkpoint and all table checkpoints back to flushed checkpoints
-	Rollback(schemaTracker *schema.Tracker)
+	Rollback(schemaTracker *schemapkg.Tracker)
 
 	// String return text of global position
 	String() string
@@ -360,10 +359,10 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 }
 
 // SaveTablePoint implements CheckPoint.SaveTablePoint.
-func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, point binlog.Location, ti *model.TableInfo) {
+func (cp *RemoteCheckPoint) SaveTablePoint(sourceTable *schemapkg.Table, point binlog.Location, ti *model.TableInfo) {
 	cp.Lock()
 	defer cp.Unlock()
-	cp.saveTablePoint(sourceSchema, sourceTable, point, ti)
+	cp.saveTablePoint(sourceTable.Schema, sourceTable.Name, point, ti)
 }
 
 // saveTablePoint saves single table's checkpoint without mutex.Lock.
@@ -403,14 +402,14 @@ func (cp *RemoteCheckPoint) SafeModeExitPoint() *binlog.Location {
 }
 
 // DeleteTablePoint implements CheckPoint.DeleteTablePoint.
-func (cp *RemoteCheckPoint) DeleteTablePoint(tctx *tcontext.Context, sourceSchema, sourceTable string) error {
+func (cp *RemoteCheckPoint) DeleteTablePoint(tctx *tcontext.Context, sourceTable *schemapkg.Table) error {
 	cp.Lock()
 	defer cp.Unlock()
-	mSchema, ok := cp.points[sourceSchema]
+	mSchema, ok := cp.points[sourceTable.Schema]
 	if !ok {
 		return nil
 	}
-	_, ok = mSchema[sourceTable]
+	_, ok = mSchema[sourceTable.Name]
 	if !ok {
 		return nil
 	}
@@ -418,16 +417,16 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(tctx *tcontext.Context, sourceSchem
 	// use a new context apart from syncer, to make sure when syncer call `cancel` checkpoint could update
 	tctx2, cancel := tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
 	defer cancel()
-	cp.logCtx.L().Info("delete table checkpoint", zap.String("schema", sourceSchema), zap.String("table", sourceTable))
+	cp.logCtx.L().Info("delete table checkpoint", zap.Any("table", sourceTable))
 	_, err := cp.dbConn.ExecuteSQL(
 		tctx2,
 		[]string{`DELETE FROM ` + cp.tableName + ` WHERE id = ? AND cp_schema = ? AND cp_table = ?`},
-		[]interface{}{cp.id, sourceSchema, sourceTable},
+		[]interface{}{cp.id, sourceTable.Schema, sourceTable.Name},
 	)
 	if err != nil {
 		return err
 	}
-	delete(mSchema, sourceTable)
+	delete(mSchema, sourceTable.Name)
 	return nil
 }
 
@@ -464,14 +463,14 @@ func (cp *RemoteCheckPoint) DeleteSchemaPoint(tctx *tcontext.Context, sourceSche
 // We should note that e1 is not older than e2
 // For binlog position replication, currently DM will split rows changes of an event to jobs, so some job may has save position.
 // if useLE is true, we use less than or equal.
-func (cp *RemoteCheckPoint) IsOlderThanTablePoint(sourceSchema, sourceTable string, location binlog.Location, useLE bool) bool {
+func (cp *RemoteCheckPoint) IsOlderThanTablePoint(sourceTable *schemapkg.Table, location binlog.Location, useLE bool) bool {
 	cp.RLock()
 	defer cp.RUnlock()
-	mSchema, ok := cp.points[sourceSchema]
+	mSchema, ok := cp.points[sourceTable.Schema]
 	if !ok {
 		return false
 	}
-	point, ok := mSchema[sourceTable]
+	point, ok := mSchema[sourceTable.Name]
 	if !ok {
 		return false
 	}
@@ -502,14 +501,13 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 
 	// convert slice to map
 	excepts := make(map[string]map[string]struct{})
-	for _, schemaTable := range exceptTables {
-		schema, table := schemaTable.Schema, schemaTable.Name
-		m, ok := excepts[schema]
+	for _, table := range exceptTables {
+		m, ok := excepts[table.Schema]
 		if !ok {
 			m = make(map[string]struct{})
-			excepts[schema] = m
+			excepts[table.Schema] = m
 		}
-		m[table] = struct{}{}
+		m[table.Name] = struct{}{}
 	}
 
 	sqls := make([]string, 0, 100)
@@ -682,7 +680,7 @@ func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 }
 
 // Rollback implements CheckPoint.Rollback.
-func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
+func (cp *RemoteCheckPoint) Rollback(schemaTracker *schemapkg.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
 	cp.globalPoint.rollback(schemaTracker, "")
@@ -1031,11 +1029,11 @@ func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, *binlog.Location,
 }
 
 // GetFlushedTableInfo implements CheckPoint.GetFlushedTableInfo.
-func (cp *RemoteCheckPoint) GetFlushedTableInfo(schema string, table string) *model.TableInfo {
+func (cp *RemoteCheckPoint) GetFlushedTableInfo(table *schemapkg.Table) *model.TableInfo {
 	cp.Lock()
 	defer cp.Unlock()
-	if tables, ok := cp.points[schema]; ok {
-		if point, ok2 := tables[table]; ok2 {
+	if tables, ok := cp.points[table.Schema]; ok {
+		if point, ok2 := tables[table.Name]; ok2 {
 			return point.flushedTI
 		}
 	}

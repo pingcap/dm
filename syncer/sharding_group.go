@@ -282,7 +282,7 @@ func (sg *ShardingGroup) Tables() (tables []*schemapkg.Table) {
 	sources := sg.Sources()
 	for id := range sources {
 		schemaName, tableName := utils.UnpackTableID(id)
-		tables = append(tables, &schemapkg.Table{schemaName, tableName})
+		tables = append(tables, &schemapkg.Table{Schema: schemaName, Name: tableName})
 	}
 	return tables
 }
@@ -301,7 +301,7 @@ func (sg *ShardingGroup) UnresolvedTables() []*schemapkg.Table {
 	tables := make([]*schemapkg.Table, 0, len(sg.sources))
 	for id := range sg.sources {
 		schema, table := utils.UnpackTableID(id)
-		tables = append(tables, &schemapkg.Table{schema, table})
+		tables = append(tables, &schemapkg.Table{Schema: schema, Name: table})
 	}
 	return tables
 }

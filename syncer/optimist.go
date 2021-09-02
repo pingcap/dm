@@ -24,6 +24,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
+	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/shardddl/optimism"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -48,7 +49,8 @@ func (s *Syncer) initOptimisticShardDDL(ctx context.Context) error {
 	mapper := make(map[string]map[string]map[string]map[string]struct{})
 	for upSchema, UpTables := range sourceTables {
 		for _, upTable := range UpTables {
-			downSchema, downTable := s.renameShardingSchema(upSchema, upTable)
+			renamedSchema := s.renameShardingSchema(&schemapkg.Table{Schema: upSchema, Name: upTable})
+			downSchema, downTable := renamedSchema.Schema, renamedSchema.Name
 			if _, ok := mapper[downSchema]; !ok {
 				mapper[downSchema] = make(map[string]map[string]map[string]struct{})
 			}
@@ -71,7 +73,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	ec eventContext,
 	needHandleDDLs []string,
 	needTrackDDLs []trackedDDL,
-	onlineDDLTableNames map[string]*filter.Table,
+	onlineDDLTables map[string]*schemapkg.Table,
 	originSQL string,
 ) error {
 	// interrupted after flush old checkpoint and before track DDL.
@@ -206,9 +208,9 @@ func (s *Syncer) handleQueryEventOptimistic(
 	})
 
 	ddlInfo := &shardingDDLInfo{
-		name:       needTrackDDLs[0].tableNames[0][0].String(),
-		tableNames: needTrackDDLs[0].tableNames,
-		stmt:       needTrackDDLs[0].stmt,
+		name:   needTrackDDLs[0].tableNames[0][0].String(),
+		tables: needTrackDDLs[0].tableNames,
+		stmt:   needTrackDDLs[0].stmt,
 	}
 	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil, originSQL, ec.header)
 	err = s.addJobFunc(job)
@@ -223,13 +225,13 @@ func (s *Syncer) handleQueryEventOptimistic(
 		return nil
 	}
 
-	for _, table := range onlineDDLTableNames {
+	for _, table := range onlineDDLTables {
 		s.tctx.L().Info("finish online ddl and clear online ddl metadata in optimistic shard mode", zap.String("event", "query"),
 			zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query),
 			zap.String("schema", table.Schema), zap.String("table", table.Name))
-		err = s.onlineDDL.Finish(ec.tctx, table.Schema, table.Name)
+		err = s.onlineDDL.Finish(ec.tctx, table)
 		if err != nil {
-			return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
+			return terror.Annotatef(err, "finish online ddl on %s", table.String())
 		}
 	}
 

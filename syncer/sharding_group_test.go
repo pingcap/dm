@@ -321,7 +321,7 @@ func (t *testShardingGroupSuite) TestKeeper(c *C) {
 	c.Assert(active, IsTrue)
 	c.Assert(remain, Equals, 1)
 
-	c.Assert(k.InSyncing(sourceTbl1, &schemapkg.Table{targetTbl.Schema, "wrong table"}, pos11), IsFalse)
+	c.Assert(k.InSyncing(sourceTbl1, &schemapkg.Table{Schema: targetTbl.Schema, Name: "wrong table"}, pos11), IsFalse)
 	loc, err := k.ActiveDDLFirstLocation(targetTbl)
 	c.Assert(err, IsNil)
 	// position before active DDL, not in syncing

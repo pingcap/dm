@@ -19,6 +19,7 @@ import (
 	. "github.com/pingcap/check"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
+	schemapkg "github.com/pingcap/dm/pkg/schema"
 )
 
 var _ = Suite(&testModeSuite{})
@@ -54,26 +55,28 @@ func (t *testModeSuite) TestMode(c *C) {
 	c.Assert(err, IsNil)
 
 	// IncrForTable
-	schema := "schema"
-	table := "table"
-	err = m.IncrForTable(tctx, schema, table)
+	table := &schemapkg.Table{
+		Schema: "schema",
+		Name:   "table",
+	}
+	err = m.IncrForTable(tctx, table)
 	c.Assert(err, IsNil)
-	err = m.IncrForTable(tctx, schema, table) // re-Add
+	err = m.IncrForTable(tctx, table) // re-Add
 	c.Assert(err, IsNil)
 	c.Assert(m.Enable(), IsTrue)
-	err = m.DescForTable(tctx, schema, table)
+	err = m.DescForTable(tctx, table)
 	c.Assert(err, IsNil)
 	c.Assert(m.Enable(), IsFalse)
 
 	// Add n + IncrForTable
 	err = m.Add(tctx, 100)
 	c.Assert(err, IsNil)
-	err = m.IncrForTable(tctx, schema, table)
+	err = m.IncrForTable(tctx, table)
 	c.Assert(err, IsNil)
 	c.Assert(m.Enable(), IsTrue)
 	err = m.Add(tctx, -100)
 	c.Assert(err, IsNil)
-	err = m.DescForTable(tctx, schema, table)
+	err = m.DescForTable(tctx, table)
 	c.Assert(m.Enable(), IsFalse)
 	c.Assert(err, IsNil)
 

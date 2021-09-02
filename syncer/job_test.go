@@ -15,9 +15,9 @@ package syncer
 
 import (
 	. "github.com/pingcap/check"
-	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	schemapkg "github.com/pingcap/dm/pkg/schema"
 )
 
 var _ = Suite(&testJobSuite{})
@@ -67,7 +67,7 @@ func (t *testJobSuite) TestJobTypeString(c *C) {
 
 func (t *testJobSuite) TestJob(c *C) {
 	ddlInfo := &shardingDDLInfo{
-		tableNames: [][]*filter.Table{
+		tables: [][]*schemapkg.Table{
 			{
 				{
 					Schema: "test1",

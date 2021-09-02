@@ -124,9 +124,9 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation,
 	}
 
 	if ddlInfo != nil {
-		j.sourceTbl = map[string][]string{ddlInfo.tableNames[0][0].Schema: {ddlInfo.tableNames[0][0].Name}}
-		j.targetSchema = ddlInfo.tableNames[1][0].Schema
-		j.targetTable = ddlInfo.tableNames[1][0].Name
+		j.sourceTbl = map[string][]string{ddlInfo.tables[0][0].Schema: {ddlInfo.tables[0][0].Name}}
+		j.targetSchema = ddlInfo.tables[1][0].Schema
+		j.targetTable = ddlInfo.tables[1][0].Name
 	} else if sourceTbls != nil {
 		sourceTbl := make(map[string][]string, len(sourceTbls))
 		for schema, tbMap := range sourceTbls {

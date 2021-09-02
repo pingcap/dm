@@ -26,7 +26,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/schema"
+	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -67,7 +67,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 
 		// drop the previous schema first.
 		err = s.schemaTracker.DropTable(req.Database, req.Table)
-		if err != nil && !schema.IsTableNotExists(err) {
+		if err != nil && !schemapkg.IsTableNotExists(err) {
 			return "", terror.ErrSchemaTrackerCannotDropTable.Delegate(err, req.Database, req.Table)
 		}
 		err = s.schemaTracker.CreateSchemaIfNotExists(req.Database)
@@ -103,9 +103,9 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 				log.L().Warn("ignore --sync flag", zap.String("shard mode", s.cfg.ShardMode))
 				break
 			}
-			downSchema, downTable := s.renameShardingSchema(req.Database, req.Table)
+			downTable := s.renameShardingSchema(&schemapkg.Table{Schema: req.Database, Name: req.Table})
 			// use new table info as tableInfoBefore, we can also use the origin table from schemaTracker
-			info := s.optimist.ConstructInfo(req.Database, req.Table, downSchema, downTable, []string{""}, ti, []*model.TableInfo{ti})
+			info := s.optimist.ConstructInfo(req.Database, req.Table, downTable.Schema, downTable.Name, []string{""}, ti, []*model.TableInfo{ti})
 			info.IgnoreConflict = true
 			log.L().Info("sync info with operate-schema", zap.String("info", info.ShortString()))
 			_, err = s.optimist.PutInfo(info)
