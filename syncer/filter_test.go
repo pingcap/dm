@@ -26,7 +26,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
-	schemapkg "github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/pkg/schema"
 )
 
 type testFilterSuite struct {
@@ -283,7 +283,7 @@ create table t (
 	c.Assert(log.InitLogger(&log.Config{Level: "debug"}), IsNil)
 
 	for _, ca := range cases {
-		schemaTracker, err := schemapkg.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
+		schemaTracker, err := schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
 		c.Assert(err, IsNil)
 		c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
 		c.Assert(schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
@@ -537,7 +537,7 @@ create table t (
 
 	for _, ca := range cases {
 		c.Log(ca.tableStr)
-		schemaTracker, err := schemapkg.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
+		schemaTracker, err := schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
 		c.Assert(err, IsNil)
 		c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
 		c.Assert(schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
@@ -581,7 +581,7 @@ create table t (
 );`
 		exprStr = "d > 1"
 	)
-	schemaTracker, err := schemapkg.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
+	schemaTracker, err := schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
 	c.Assert(err, IsNil)
 	c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
 	c.Assert(schemaTracker.Exec(ctx, db, tableStr), IsNil)

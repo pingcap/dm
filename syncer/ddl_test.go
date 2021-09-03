@@ -22,7 +22,6 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
-	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/utils"
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 
@@ -466,7 +465,7 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 
 func (s *testSyncerSuite) TestDropSchemaInSharding(c *C) {
 	var (
-		targetTable = &schemapkg.Table{
+		targetTable = &filter.Table{
 			Schema: "target_db",
 			Name:   "tbl",
 		}
@@ -493,7 +492,7 @@ type mockOnlinePlugin struct {
 	toFinish map[string]struct{}
 }
 
-func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*schemapkg.Table, statement string, stmt ast.StmtNode) ([]string, error) {
+func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error) {
 	return nil, nil
 }
 
@@ -531,7 +530,7 @@ func (m mockOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[str
 
 func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
 	var (
-		targetTable = &schemapkg.Table{
+		targetTable = &filter.Table{
 			Schema: "target_db",
 			Name:   "tbl",
 		}

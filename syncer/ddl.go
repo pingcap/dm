@@ -24,7 +24,6 @@ import (
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
-	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/metrics"
@@ -253,7 +252,7 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 }
 
 func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema string) error {
-	sources := make(map[string][]*schemapkg.Table)
+	sources := make(map[string][]*filter.Table)
 	sgs := s.sgk.Groups()
 	for name, sg := range sgs {
 		if sg.IsSchemaOnly {
@@ -295,7 +294,7 @@ func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema strin
 	return nil
 }
 
-func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *schemapkg.Table) error {
+func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *filter.Table) error {
 	group := s.sgk.Group(targetTable)
 	if group == nil {
 		return nil

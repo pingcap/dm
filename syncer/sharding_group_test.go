@@ -22,6 +22,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -30,7 +31,6 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/retry"
-	schemapkg "github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/dbconn"
@@ -39,7 +39,7 @@ import (
 var _ = Suite(&testShardingGroupSuite{})
 
 var (
-	targetTbl = &schemapkg.Table{
+	targetTbl = &filter.Table{
 		Schema: "target_db",
 		Name:   "tbl",
 	}
@@ -47,10 +47,10 @@ var (
 	db1        = "db1"
 	tbl1       = "tbl1"
 	tbl2       = "tbl2"
-	sourceTbl1 = &schemapkg.Table{Schema: "db1", Name: "tbl1"}
-	sourceTbl2 = &schemapkg.Table{Schema: "db1", Name: "tbl2"}
-	sourceTbl3 = &schemapkg.Table{Schema: "db1", Name: "tbl3"}
-	sourceTbl4 = &schemapkg.Table{Schema: "db1", Name: "tbl4"}
+	sourceTbl1 = &filter.Table{Schema: "db1", Name: "tbl1"}
+	sourceTbl2 = &filter.Table{Schema: "db1", Name: "tbl2"}
+	sourceTbl3 = &filter.Table{Schema: "db1", Name: "tbl3"}
+	sourceTbl4 = &filter.Table{Schema: "db1", Name: "tbl4"}
 	source1    = sourceTbl1.String()
 	source2    = sourceTbl2.String()
 	source3    = sourceTbl3.String()
@@ -224,7 +224,7 @@ func (t *testShardingGroupSuite) TestSync(c *C) {
 }
 
 func (t *testShardingGroupSuite) TestTableID(c *C) {
-	cases := []*schemapkg.Table{
+	cases := []*filter.Table{
 		{Schema: "db", Name: "table"},
 		{Schema: `d"b`, Name: `t"able"`},
 		{Schema: "d`b", Name: "t`able"},
@@ -308,7 +308,7 @@ func (t *testShardingGroupSuite) TestKeeper(c *C) {
 	c.Assert(active, IsTrue)
 	c.Assert(remain, Equals, 1)
 
-	c.Assert(k.InSyncing(sourceTbl1, &schemapkg.Table{Schema: targetTbl.Schema, Name: "wrong table"}, pos11), IsFalse)
+	c.Assert(k.InSyncing(sourceTbl1, &filter.Table{Schema: targetTbl.Schema, Name: "wrong table"}, pos11), IsFalse)
 	loc, err := k.ActiveDDLFirstLocation(targetTbl)
 	c.Assert(err, IsNil)
 	// position before active DDL, not in syncing
