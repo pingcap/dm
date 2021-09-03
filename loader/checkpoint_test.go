@@ -14,16 +14,30 @@
 package loader
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/cputil"
 )
 
 var _ = Suite(&testCheckPointSuite{})
+
+var (
+	schemaCreateSQL     = ""
+	tableCreateSQL      = ""
+	clearCheckPointSQL  = ""
+	loadCheckPointSQL   = ""
+	countCheckPointSQL  = ""
+	flushCheckPointSQL  = ""
+	deleteCheckPointSQL = ""
+)
 
 type testCheckPointSuite struct {
 	cfg *config.SubTaskConfig
@@ -54,6 +68,14 @@ func (t *testCheckPointSuite) SetUpSuite(c *C) {
 		MetaSchema: "test",
 	}
 	t.cfg.To.Adjust()
+
+	schemaCreateSQL = fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", t.cfg.MetaSchema)
+	tableCreateSQL = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s` .*", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
+	clearCheckPointSQL = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = .*", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
+	loadCheckPointSQL = fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`.*", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
+	countCheckPointSQL = fmt.Sprintf("SELECT COUNT.* FROM `%s`.`%s` WHERE `id` = ?", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
+	flushCheckPointSQL = fmt.Sprintf("INSERT INTO `%s`.`%s` .* VALUES.*", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
+	deleteCheckPointSQL = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = .*", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
 }
 
 func (t *testCheckPointSuite) TearDownSuite(c *C) {
@@ -78,14 +100,29 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 		},
 	}
 
+	mock := conn.InitMockDB(c)
+	// mock for cp prepare
+	mock.ExpectBegin()
+	mock.ExpectExec(schemaCreateSQL).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectBegin()
+	mock.ExpectExec(tableCreateSQL).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
 	id := "test_for_db"
 	tctx := tcontext.Background()
 	cp, err := newRemoteCheckPoint(tctx, t.cfg, id)
 	c.Assert(err, IsNil)
 	defer cp.Close()
 
+	// mock cp clear
+	mock.ExpectBegin()
+	mock.ExpectExec(clearCheckPointSQL).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 	c.Assert(cp.Clear(tctx), IsNil)
 
+	// mock cp load
+	mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
 	// no checkpoint exist
 	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
@@ -93,6 +130,8 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	infos := cp.GetAllRestoringFileInfo()
 	c.Assert(len(infos), Equals, 0)
 
+	// mock cp count
+	mock.ExpectQuery(countCheckPointSQL).WillReturnRows(sqlmock.NewRows([]string{"COUNT(id)"}).AddRow(0))
 	count, err := cp.Count(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(count, Equals, 0)
@@ -104,6 +143,10 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 
 	// insert default checkpoints
 	for _, cs := range cases {
+		// mock init
+		mock.ExpectBegin()
+		mock.ExpectExec(flushCheckPointSQL).WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectCommit()
 		err = cp.Init(tctx, cs.filename, cs.endPos)
 		c.Assert(err, IsNil)
 	}
@@ -117,9 +160,14 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	c.Assert(info, HasLen, 1)
 	c.Assert(info[cases[0].filename], DeepEquals, []int64{0, cases[0].endPos})
 
+	// mock cp load
+	rows := sqlmock.NewRows([]string{"filename", "cp_schema", "cp_table", "offset", "end_pos"})
+	for i, cs := range cases {
+		rows = rows.AddRow(cs.filename, "db1", fmt.Sprintf("tbl%d", i+1), 0, cs.endPos)
+	}
+	mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(rows)
 	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
-
 	infos = cp.GetAllRestoringFileInfo()
 	c.Assert(len(infos), Equals, len(cases))
 	for _, cs := range cases {
@@ -130,27 +178,19 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 		c.Assert(info[1], Equals, cs.endPos)
 	}
 
+	mock.ExpectQuery(countCheckPointSQL).WillReturnRows(sqlmock.NewRows([]string{"COUNT(id)"}).AddRow(3))
 	count, err = cp.Count(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(count, Equals, len(cases))
 
-	// update checkpoints
-	db, conns, err := createConns(tctx, t.cfg, 1)
-	c.Assert(err, IsNil)
-	conn := conns[0]
-	defer func() {
-		err = db.Close()
-		c.Assert(err, IsNil)
-	}()
-	for _, cs := range cases {
-		sql2 := cp.GenSQL(cs.filename, cs.endPos)
-		err = conn.executeSQL(tctx, []string{sql2})
-		c.Assert(err, IsNil)
+	// update checkpoint to finished
+	rows = sqlmock.NewRows([]string{"filename", "cp_schema", "cp_table", "offset", "end_pos"})
+	for i, cs := range cases {
+		rows = rows.AddRow(cs.filename, "db1", fmt.Sprintf("tbl%d", i+1), cs.endPos, cs.endPos)
 	}
-
+	mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(rows)
 	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
-
 	c.Assert(cp.IsTableCreated("db1", ""), IsTrue)
 	c.Assert(cp.IsTableCreated("db1", "tbl1"), IsTrue)
 	c.Assert(cp.CalcProgress(allFiles), IsNil)
@@ -170,14 +210,19 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 		c.Assert(info[1], Equals, cs.endPos)
 	}
 
+	mock.ExpectQuery(countCheckPointSQL).WillReturnRows(sqlmock.NewRows([]string{"COUNT(id)"}).AddRow(3))
 	count, err = cp.Count(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(count, Equals, len(cases))
 
 	// clear all
+	mock.ExpectBegin()
+	mock.ExpectExec(deleteCheckPointSQL).WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectCommit()
 	c.Assert(cp.Clear(tctx), IsNil)
 
 	// no checkpoint exist
+	mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
 	err = cp.Load(tctx)
 	c.Assert(err, IsNil)
 
@@ -190,9 +235,11 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	c.Assert(len(infos), Equals, 0)
 
 	// obtain count again
+	mock.ExpectQuery(countCheckPointSQL).WillReturnRows(sqlmock.NewRows([]string{"COUNT(id)"}).AddRow(0))
 	count, err = cp.Count(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(count, Equals, 0)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
 func (t *testCheckPointSuite) TestDeepCopy(c *C) {
