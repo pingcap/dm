@@ -224,16 +224,16 @@ func (t *testShardingGroupSuite) TestSync(c *C) {
 }
 
 func (t *testShardingGroupSuite) TestTableID(c *C) {
-	cases := []*filter.Table{
+	originTables := []*filter.Table{
 		{Schema: "db", Name: "table"},
 		{Schema: `d"b`, Name: `t"able"`},
 		{Schema: "d`b", Name: "t`able"},
 	}
-	for _, ca := range cases {
+	for _, originTable := range originTables {
 		// ignore isSchemaOnly
-		id := utils.GenTableID(ca)
-		table := utils.UnpackTableID(id)
-		c.Assert(table, Equals, ca)
+		tableID := utils.GenTableID(originTable)
+		table := utils.UnpackTableID(tableID)
+		c.Assert(table, Equals, originTable)
 	}
 }
 
