@@ -1136,7 +1136,7 @@ func checkAndAdjustSourceConfig(ctx context.Context, cfg *config.SourceConfig) e
 	if err = cfg.Adjust(ctx, fromDB.DB); err != nil {
 		return err
 	}
-	if _, err := cfg.Yaml(); err != nil {
+	if _, err = cfg.Yaml(); err != nil {
 		return err
 	}
 	return cfg.Verify()

@@ -74,7 +74,7 @@ func (t *testCheckPointSuite) SetUpSuite(c *C) {
 	clearCheckPointSQL = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = .*", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
 	loadCheckPointSQL = fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`.*", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
 	countCheckPointSQL = fmt.Sprintf("SELECT COUNT.* FROM `%s`.`%s` WHERE `id` = ?", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
-	flushCheckPointSQL = fmt.Sprintf("INSERT INTO `%s`.`%s`  .* VALUES.*", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
+	flushCheckPointSQL = fmt.Sprintf("INSERT INTO `%s`.`%s` .* VALUES.*", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
 	deleteCheckPointSQL = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = .*", t.cfg.MetaSchema, cputil.LoaderCheckpoint(t.cfg.Name))
 }
 
@@ -239,6 +239,7 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	count, err = cp.Count(tctx)
 	c.Assert(err, IsNil)
 	c.Assert(count, Equals, 0)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
 func (t *testCheckPointSuite) TestDeepCopy(c *C) {

@@ -191,10 +191,12 @@ func (t *testMaster) SetUpSuite(c *check.C) {
 	t.workerClients = make(map[string]workerrpc.Client)
 	t.saveMaxRetryNum = maxRetryNum
 	maxRetryNum = 2
+	checkAndAdjustSourceConfigFunc = checkAndNoAdjustSourceConfigMock
 }
 
 func (t *testMaster) TearDownSuite(c *check.C) {
 	maxRetryNum = t.saveMaxRetryNum
+	checkAndAdjustSourceConfigFunc = checkAndAdjustSourceConfig
 }
 
 func (t *testMaster) SetUpTest(c *check.C) {
@@ -1616,11 +1618,6 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 }
 
 func (t *testMaster) TestOperateSource(c *check.C) {
-	checkAndAdjustSourceConfigFunc = checkAndAdjustSourceConfigMockFunc
-	defer func() {
-		checkAndAdjustSourceConfigFunc = checkAndAdjustSourceConfig
-	}()
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ctrl := gomock.NewController(c)
