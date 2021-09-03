@@ -399,14 +399,14 @@ func NewShardingGroupKeeper(tctx *tcontext.Context, cfg *config.SubTaskConfig) *
 func (k *ShardingGroupKeeper) AddGroup(targetTable *filter.Table, sourceIDs []string, meta *shardmeta.ShardingMeta, merge bool) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int, err error) {
 	// if need to support target table-level sharding DDL
 	// we also need to support target schema-level sharding DDL
-	schemaID := utils.GenSchemaID(targetTable)
+	targetSchemaID := utils.GenSchemaID(targetTable)
 	targetTableID := utils.GenTableID(targetTable)
 
 	k.Lock()
 	defer k.Unlock()
 
-	if schemaGroup, ok := k.groups[schemaID]; !ok {
-		k.groups[schemaID] = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, true, k.cfg.Flavor, k.cfg.EnableGTID)
+	if schemaGroup, ok := k.groups[targetSchemaID]; !ok {
+		k.groups[targetSchemaID] = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, true, k.cfg.Flavor, k.cfg.EnableGTID)
 	} else {
 		_, _, _, err = schemaGroup.Merge(sourceIDs)
 		if err != nil {
@@ -464,7 +464,7 @@ func (k *ShardingGroupKeeper) ResetGroups() {
 // LeaveGroup leaves group according to target schema, table and source IDs
 // LeaveGroup doesn't affect in syncing process.
 func (k *ShardingGroupKeeper) LeaveGroup(targetTable *filter.Table, sources []string) error {
-	schemaID := utils.GenSchemaID(targetTable)
+	targetSchemaID := utils.GenSchemaID(targetTable)
 	targetTableID := utils.GenTableID(targetTable)
 	k.Lock()
 	defer k.Unlock()
@@ -476,12 +476,12 @@ func (k *ShardingGroupKeeper) LeaveGroup(targetTable *filter.Table, sources []st
 			delete(k.groups, targetTableID)
 		}
 	}
-	if schemaGroup, ok := k.groups[schemaID]; ok {
+	if schemaGroup, ok := k.groups[targetSchemaID]; ok {
 		if err := schemaGroup.Leave(sources); err != nil {
 			return err
 		}
 		if len(schemaGroup.sources) == 0 {
-			delete(k.groups, schemaID)
+			delete(k.groups, targetSchemaID)
 		}
 	}
 	return nil
@@ -498,7 +498,7 @@ func (k *ShardingGroupKeeper) TrySync(
 	sourceTable, targetTable *filter.Table, location, endLocation binlog.Location, ddls []string) (
 	needShardingHandle bool, group *ShardingGroup, synced, active bool, remain int, err error) {
 	targetTableID, schemaOnly := utils.GenTableIDAndCheckSchemaOnly(targetTable)
-	sourceID := utils.GenTableID(sourceTable)
+	sourceTableID := utils.GenTableID(sourceTable)
 	if schemaOnly {
 		// NOTE: now we don't support syncing for schema only sharding DDL
 		return false, nil, true, false, 0, nil
@@ -511,7 +511,7 @@ func (k *ShardingGroupKeeper) TrySync(
 	if !ok {
 		return false, group, true, false, 0, nil
 	}
-	synced, active, remain, err = group.TrySync(sourceID, location, endLocation, ddls)
+	synced, active, remain, err = group.TrySync(sourceTableID, location, endLocation, ddls)
 	return true, group, synced, active, remain, err
 }
 
@@ -521,8 +521,8 @@ func (k *ShardingGroupKeeper) InSyncing(sourceTable, targetTable *filter.Table, 
 	if group == nil {
 		return false
 	}
-	sourceID := utils.GenTableID(sourceTable)
-	return !group.CheckSyncing(sourceID, location)
+	sourceTableID := utils.GenTableID(sourceTable)
+	return !group.CheckSyncing(sourceTableID, location)
 }
 
 // UnresolvedTables returns

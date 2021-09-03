@@ -271,12 +271,12 @@ func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema strin
 	// delete from sharding group firstly
 	for name, tables := range sources {
 		targetTable := utils.UnpackTableID(name)
-		sourceIDs := make([]string, 0, len(tables))
+		sourceTableIDs := make([]string, 0, len(tables))
 		for _, table := range tables {
-			sourceID := utils.GenTableID(table)
-			sourceIDs = append(sourceIDs, sourceID)
+			sourceTableID := utils.GenTableID(table)
+			sourceTableIDs = append(sourceTableIDs, sourceTableID)
 		}
-		err := s.sgk.LeaveGroup(targetTable, sourceIDs)
+		err := s.sgk.LeaveGroup(targetTable, sourceTableIDs)
 		if err != nil {
 			return err
 		}

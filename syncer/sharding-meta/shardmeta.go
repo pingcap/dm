@@ -290,8 +290,8 @@ func (meta *ShardingMeta) CheckAndUpdate(targetID string, schemaMap map[string]s
 	}
 
 	checkSourceID := func(source string) (string, bool) {
-		table := utils.UnpackTableID(source)
-		schemaName, tblName := table.Schema, table.Name
+		sourceTable := utils.UnpackTableID(source)
+		schemaName, tblName := sourceTable.Schema, sourceTable.Name
 		realSchema, changed := schemaMap[schemaName]
 		if !changed {
 			realSchema = schemaName
@@ -303,8 +303,8 @@ func (meta *ShardingMeta) CheckAndUpdate(targetID string, schemaMap map[string]s
 		} else {
 			realTable = tblName
 		}
-		newID := utils.GenTableID(&filter.Table{Schema: realSchema, Name: realTable})
-		return newID, changed
+		newTableID := utils.GenTableID(&filter.Table{Schema: realSchema, Name: realTable})
+		return newTableID, changed
 	}
 
 	for _, item := range meta.global.Items {
