@@ -16,11 +16,13 @@ type mockDBProvider struct {
 
 // Apply will build BaseDB with DBConfig.
 func (d *mockDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
-	if err := d.verDB.Ping(); err != nil {
-		// nolint:nilerr
-		return NewBaseDB(d.db, func() {}), nil
+	if d.verDB != nil {
+		if err := d.verDB.Ping(); err == nil {
+			// nolint:nilerr
+			return NewBaseDB(d.verDB, func() {}), nil
+		}
 	}
-	return NewBaseDB(d.verDB, func() {}), nil
+	return NewBaseDB(d.db, func() {}), nil
 }
 
 // InitMockDB return a mocked db for unit test.
