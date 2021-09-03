@@ -159,7 +159,7 @@ func (w *SourceWorker) Start() {
 					continue
 				}
 			}
-			if err2 := w.updateSourceStatus(); err2 != nil {
+			if err2 := w.updateSourceStatus(w.ctx); err2 != nil {
 				w.l.Error("failed to update source status", zap.Error(err2))
 				continue
 			}
@@ -212,9 +212,9 @@ func (w *SourceWorker) Close() {
 }
 
 // updateSourceStatus updates w.sourceStatus.
-func (w *SourceWorker) updateSourceStatus() error {
+func (w *SourceWorker) updateSourceStatus(ctx context.Context) error {
 	var status binlog.SourceStatus
-	ctx, cancel := context.WithTimeout(w.ctx, utils.DefaultDBTimeout)
+	ctx, cancel := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 	defer cancel()
 	pos, gtidSet, err := utils.GetMasterStatus(ctx, w.db.DB, w.cfg.Flavor)
 	if err != nil {
@@ -225,7 +225,7 @@ func (w *SourceWorker) updateSourceStatus() error {
 		return err2
 	}
 
-	ctx2, cancel2 := context.WithTimeout(w.ctx, utils.DefaultDBTimeout)
+	ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 	defer cancel2()
 	binlogs, err := binlog.GetBinaryLogs(ctx2, w.db.DB)
 	if err != nil {
@@ -544,14 +544,18 @@ func (w *SourceWorker) QueryStatus(ctx context.Context, name string) ([]*pb.SubT
 		return nil, nil, nil
 	}
 
-	if err := w.updateSourceStatus(); err != nil {
-		return nil, nil, err
-	}
 	var (
-		sourceStatus  = w.sourceStatus.Load().(*binlog.SourceStatus)
-		subtaskStatus = w.Status(name, sourceStatus)
-		relayStatus   *pb.RelayStatus
+		sourceStatus *binlog.SourceStatus
+		relayStatus  *pb.RelayStatus
 	)
+
+	if err := w.updateSourceStatus(ctx); err != nil {
+		w.l.Error("failed to update source status", zap.Error(err))
+	} else {
+		sourceStatus = w.sourceStatus.Load().(*binlog.SourceStatus)
+	}
+
+	subtaskStatus := w.Status(name, sourceStatus)
 	if w.relayEnabled.Load() {
 		relayStatus = w.relayHolder.Status(sourceStatus)
 	}
