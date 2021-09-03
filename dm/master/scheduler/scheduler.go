@@ -327,7 +327,7 @@ func (s *Scheduler) AddSourceCfg(cfg *config.SourceConfig) error {
 }
 
 // UpdateSourceCfg update the upstream source config to the cluster.
-// NOTE: please verify the config before call this.
+// please verify the config before call this.
 func (s *Scheduler) UpdateSourceCfg(cfg *config.SourceConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -341,8 +341,11 @@ func (s *Scheduler) UpdateSourceCfg(cfg *config.SourceConfig) error {
 	if !ok {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(cfg.SourceID)
 	}
-
-	// 2. put the config into etcd.
+	// 2. check if tasks using this configuration are running
+	if tasks := s.GetTaskNameListBySourceName(cfg.SourceID); len(tasks) > 0 {
+		return terror.ErrSchedulerSourceOpTaskExist.Generate(cfg.SourceID, tasks)
+	}
+	// 3. put the config into etcd.
 	_, err := ha.PutSourceCfg(s.etcdCli, cfg)
 	if err != nil {
 		return err
@@ -350,7 +353,6 @@ func (s *Scheduler) UpdateSourceCfg(cfg *config.SourceConfig) error {
 
 	// 3. record the config in the scheduler.
 	s.sourceCfgs[cfg.SourceID] = cfg
-
 	return nil
 }
 
@@ -904,6 +906,20 @@ func (s *Scheduler) GetSubTaskCfgs() map[string]map[string]config.SubTaskConfig 
 	})
 
 	return clone
+}
+
+// GetTaskNameListBySourceName gets task name list by source name.
+func (s *Scheduler) GetTaskNameListBySourceName(sourceName string) []string {
+	var taskNameList []string
+	s.subTaskCfgs.Range(func(k, v interface{}) bool {
+		task := k.(string)
+		subtaskCFGMap := v.(map[string]config.SubTaskConfig)
+		if _, ok := subtaskCFGMap[sourceName]; ok {
+			taskNameList = append(taskNameList, task)
+		}
+		return true
+	})
+	return taskNameList
 }
 
 // AddWorker adds the information of the DM-worker when registering a new instance.
