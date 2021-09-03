@@ -102,7 +102,7 @@ const (
 	RemoteBinlog BinlogType = iota + 1
 	LocalBinlog
 
-	skipJobIdx               = iota
+	skipJobIdx = iota
 	ddlJobIdx
 	workerJobTSArrayInitSize // size = skip + ddl
 )
