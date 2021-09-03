@@ -32,7 +32,7 @@ import (
 	"github.com/pingcap/dm/pkg/dumpling"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
-	schemapkg "github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/dbconn"
@@ -42,6 +42,7 @@ import (
 	"github.com/pingcap/parser/model"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 )
 
@@ -103,7 +104,7 @@ func (b *binlogPoint) flush() {
 	b.flushedTI = b.ti
 }
 
-func (b *binlogPoint) rollback(schemaTracker *schemapkg.Tracker, schema string) (isSchemaChanged bool) {
+func (b *binlogPoint) rollback(schemaTracker *schema.Tracker, schema string) (isSchemaChanged bool) {
 	b.Lock()
 	defer b.Unlock()
 
@@ -211,7 +212,7 @@ type CheckPoint interface {
 	// by extraSQLs and extraArgs. Currently extraSQLs contain shard meta only.
 	// @exceptTables: [[schema, table]... ]
 	// corresponding to Meta.Flush
-	FlushPointsExcept(tctx *tcontext.Context, exceptTables []*schemapkg.Table, extraSQLs []string, extraArgs [][]interface{}) error
+	FlushPointsExcept(tctx *tcontext.Context, exceptTables []*filter.Table, extraSQLs []string, extraArgs [][]interface{}) error
 
 	// FlushPointWithTableInfo flushed the table point with given table info
 	FlushPointWithTableInfo(tctx *tcontext.Context, sourceSchema, sourceTable string, ti *model.TableInfo) error
@@ -246,7 +247,7 @@ type CheckPoint interface {
 	GetFlushedTableInfo(schema string, table string) *model.TableInfo
 
 	// Rollback rolls global checkpoint and all table checkpoints back to flushed checkpoints
-	Rollback(schemaTracker *schemapkg.Tracker)
+	Rollback(schemaTracker *schema.Tracker)
 
 	// String return text of global position
 	String() string
@@ -494,8 +495,8 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(location binlog.Location) {
 	}
 }
 
-// FlushPointsExcept implements CheckPoint.FlushPointsExcept.
-func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTables []*schemapkg.Table, extraSQLs []string, extraArgs [][]interface{}) error {
+// FlushPointsExcept implements CheckPoint.FlushPointsExcept.filter.Table
+func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTables []*filter.Table, extraSQLs []string, extraArgs [][]interface{}) error {
 	cp.RLock()
 	defer cp.RUnlock()
 
@@ -681,7 +682,7 @@ func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 }
 
 // Rollback implements CheckPoint.Rollback.
-func (cp *RemoteCheckPoint) Rollback(schemaTracker *schemapkg.Tracker) {
+func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
 	cp.globalPoint.rollback(schemaTracker, "")

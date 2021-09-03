@@ -29,7 +29,7 @@ import (
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/retry"
-	schemapkg "github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -38,6 +38,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -57,7 +58,7 @@ var _ = Suite(&testCheckpointSuite{})
 type testCheckpointSuite struct {
 	cfg     *config.SubTaskConfig
 	mock    sqlmock.Sqlmock
-	tracker *schemapkg.Tracker
+	tracker *schema.Tracker
 }
 
 func (s *testCheckpointSuite) SetUpSuite(c *C) {
@@ -77,7 +78,7 @@ func (s *testCheckpointSuite) SetUpSuite(c *C) {
 		}
 	)
 
-	s.tracker, err = schemapkg.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, nil)
+	s.tracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, nil)
 	c.Assert(err, IsNil)
 }
 
@@ -450,7 +451,7 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	s.mock.ExpectBegin()
 	s.mock.ExpectExec("(320)?"+flushCheckPointSQL).WithArgs(cpid, "", "", pos2.Name, pos2.Pos, "", "", 0, "", "null", true).WillReturnResult(sqlmock.NewResult(0, 1))
 	s.mock.ExpectCommit()
-	err = cp.FlushPointsExcept(tctx, []*schemapkg.Table{{Schema: schema, Name: table}}, nil, nil)
+	err = cp.FlushPointsExcept(tctx, []*filter.Table{{Schema: schema, Name: table}}, nil, nil)
 	c.Assert(err, IsNil)
 	cp.Rollback(s.tracker)
 	older = cp.IsOlderThanTablePoint(schema, table, binlog.Location{Position: pos1}, false)

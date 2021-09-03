@@ -26,7 +26,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
-	schemapkg "github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -67,7 +67,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 
 		// drop the previous schema first.
 		err = s.schemaTracker.DropTable(req.Database, req.Table)
-		if err != nil && !schemapkg.IsTableNotExists(err) {
+		if err != nil && !schema.IsTableNotExists(err) {
 			return "", terror.ErrSchemaTrackerCannotDropTable.Delegate(err, req.Database, req.Table)
 		}
 		err = s.schemaTracker.CreateSchemaIfNotExists(req.Database)
