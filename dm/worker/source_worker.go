@@ -213,6 +213,10 @@ func (w *SourceWorker) Close() {
 
 // updateSourceStatus updates w.sourceStatus.
 func (w *SourceWorker) updateSourceStatus(ctx context.Context) error {
+	if w.db == nil {
+		return errors.New("connection to upstream is not established")
+	}
+
 	var status binlog.SourceStatus
 	ctx, cancel := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 	defer cancel()
