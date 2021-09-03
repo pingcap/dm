@@ -2151,7 +2151,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 	// ENDTODO
 
-	ignore, err := s.skipDMLEvent(originSchema, originTable, ec.header.EventType)
+	ignore, err := s.filterRowsEvent(&filter.Table{Schema: originSchema, Name: originTable}, ec.header.EventType)
 	if err != nil {
 		return err
 	}
@@ -2267,7 +2267,25 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	return nil
 }
 
-func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, originSQL string) error {
+type queryEventContext struct {
+	eventContext
+
+	p         *parser.Parser // 此时使用的 parser
+	ddlSchema string         // 该 ddl 所修改的 schema
+	originSQL string         // before split
+	// split multi-schema change DDL into multiple one schema change DDL due to TiDB's limitation
+	splitedDDLs []string // after split before online ddl
+	appliedDDLs []string // after onlineDDL apply if onlineDDL != nil and track, before route
+	routedDDLs  []string // after route
+
+	ddlInfo             *shardingDDLInfo
+	needHandleDDLs      []string
+	needTrackDDLs       []trackedDDL
+	sourceTbls          map[string]map[string]struct{} // db name -> tb name
+	onlineDDLTableNames map[string]*filter.Table
+}
+
+func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, originSQL string) (err error) {
 	if originSQL == "BEGIN" {
 		// GTID event: GTID_NEXT = xxx:11
 		// Query event: BEGIN (GTID set = xxx:1-11)
@@ -2277,56 +2295,72 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		*ec.lastLocation = *ec.currentLocation
 		return nil
 	}
+	qec := &queryEventContext{
+		eventContext:        ec,
+		ddlSchema:           string(ev.Schema),
+		originSQL:           utils.TrimCtrlChars(originSQL), // Will TrimCtrlChars affect code?
+		splitedDDLs:         make([]string, 0),
+		appliedDDLs:         make([]string, 0),
+		routedDDLs:          make([]string, 0),
+		needHandleDDLs:      make([]string, 0),
+		needTrackDDLs:       make([]trackedDDL, 0),
+		sourceTbls:          make(map[string]map[string]struct{}),
+		onlineDDLTableNames: make(map[string]*filter.Table),
+	}
 
-	usedSchema := string(ev.Schema)
-	parser2, err := event.GetParserForStatusVars(ev.StatusVars)
+	qec.p, err = event.GetParserForStatusVars(ev.StatusVars)
 	if err != nil {
 		log.L().Warn("found error when get sql_mode from binlog status_vars", zap.Error(err))
 	}
 
-	parseResult, err := s.parseDDLSQL(originSQL, parser2, usedSchema)
+	stmt, err := s.parseDDLSQL(qec)
 	if err != nil {
-		ec.tctx.L().Error("fail to parse statement", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
-		return err
-	}
-
-	if parseResult.ignore {
-		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
-		ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema))
-		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
-
-		// we try to insert an empty SQL to s.onlineDDL, because user may configure a filter to skip it, but simply
-		// ignoring it will cause a "not found" error when DM see RENAME of the ghost table
-		if s.onlineDDL == nil {
-			return s.recordSkipSQLsLocation(&ec)
-		}
-
-		stmts, err2 := parserpkg.Parse(parser2, originSQL, "", "")
+		ec.tctx.L().Error("fail to parse statement",
+			zap.String("event", "query"),
+			zap.String("statement", qec.originSQL),
+			zap.String("schema", qec.ddlSchema),
+			zap.Stringer("last location", ec.lastLocation),
+			log.WrapStringerField("location", ec.currentLocation),
+			log.ShortError(err))
+		// return error if parse fail and filter fail
+		needSkip, err2 := s.filterSQL(qec.originSQL)
 		if err2 != nil {
-			ec.tctx.L().Info("failed to parse a filtered SQL for online DDL", zap.String("SQL", originSQL))
+			return err2
 		}
-		// if err2 != nil, stmts should be nil so below for-loop is skipped
-		for _, stmt := range stmts {
-			if _, ok := stmt.(ast.DDLNode); ok {
-				tableNames, err3 := parserpkg.FetchDDLTableNames(usedSchema, stmt, s.SourceTableNamesFlavor)
-				if err3 != nil {
-					continue
-				}
-				// nolint:errcheck
-				s.onlineDDL.Apply(ec.tctx, tableNames, "", stmt)
-			}
+		if !needSkip {
+			return err
 		}
+		// don't return error if parse fail and filter success
+		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
+		ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", qec.originSQL), zap.String("schema", qec.ddlSchema))
+		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
+		// Q&A: If parse fail, ok must be false. Can we delete it?
+		// Q&A: Former logic will postpone to filterAndApply
 		return s.recordSkipSQLsLocation(&ec)
 	}
-	if !parseResult.isDDL {
-		// skipped sql maybe not a DDL
-		return nil
+
+	if node, ok := stmt.(ast.DMLNode); ok {
+		// if DML can be ignored, we do not report an error
+		schema, table, err2 := tableNameForDML(node)
+		if err2 == nil {
+			if len(schema) == 0 {
+				schema = qec.ddlSchema
+			}
+			ignore, err2 := s.filterRowsEvent(&filter.Table{Schema: schema, Name: table}, replication.QUERY_EVENT)
+			if err2 == nil && ignore {
+				return nil
+			}
+		}
+		return terror.Annotatef(terror.ErrSyncUnitDMLStatementFound.Generate(), "query %s", qec.originSQL)
 	}
 
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currLocation = *ec.currentLocation
 		if binlog.CompareLocation(ec.shardingReSync.currLocation, ec.shardingReSync.latestLocation, s.cfg.EnableGTID) >= 0 {
-			ec.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "query"), zap.String("statement", originSQL), zap.Stringer("re-shard", ec.shardingReSync))
+			ec.tctx.L().Info("re-replicate shard group was completed",
+				zap.String("event", "query"),
+				zap.String("statement", qec.originSQL),
+				zap.Stringer("re-shard", ec.shardingReSync))
 			err2 := ec.closeShardingResync()
 			if err2 != nil {
 				return err2
@@ -2336,28 +2370,49 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			// as they have been added to sharding DDL sequence
 			// only update lastPos when the query is a real DDL
 			*ec.lastLocation = ec.shardingReSync.currLocation
-			ec.tctx.L().Debug("skip event in re-replicating sharding group", zap.String("event", "query"), zap.String("statement", originSQL), zap.Reflect("re-shard", ec.shardingReSync))
+			ec.tctx.L().Debug("skip event in re-replicating sharding group",
+				zap.String("event", "query"),
+				zap.String("statement", qec.originSQL),
+				zap.Reflect("re-shard", ec.shardingReSync))
 		}
 		return nil
 	}
 
-	ec.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation))
+	ec.tctx.L().Info("",
+		zap.String("event", "query"),
+		zap.String("statement", qec.originSQL),
+		zap.String("schema", qec.ddlSchema),
+		zap.Stringer("last location", ec.lastLocation),
+		log.WrapStringerField("location", ec.currentLocation))
 	*ec.lastLocation = *ec.currentLocation // update lastLocation, because we have checked `isDDL`
 
+	qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
+	if err != nil {
+		return err
+	}
 	// TiDB can't handle multi schema change DDL, so we split it here.
 	// for DDL, we don't apply operator until we try to execute it. so can handle sharding cases
 	// We use default parser because inside function where need parser, sqls are came from parserpkg.SplitDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 	// TODO: save stmt, tableName to avoid parse the sql to get them again
-	sqls, onlineDDLTableNames, err := s.splitAndFilterDDL(ec, parser.New(), parseResult.stmt, usedSchema)
+	qec.p = parser.New()
+	err = s.preprocessDDL(qec)
 	if err != nil {
-		ec.tctx.L().Error("fail to split statement", zap.String("event", "query"), zap.String("statement", originSQL), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
+		ec.tctx.L().Error("fail to split statement",
+			zap.String("event", "query"),
+			zap.String("statement", qec.originSQL),
+			zap.String("schema", qec.ddlSchema),
+			zap.Stringer("last location", ec.lastLocation),
+			log.WrapStringerField("location", ec.currentLocation),
+			log.ShortError(err))
 		return err
 	}
-	ec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", originSQL), zap.Strings("statements", sqls), zap.String("schema", usedSchema), zap.Stringer("last location", ec.lastLocation), zap.Stringer("location", ec.currentLocation))
-
-	if len(onlineDDLTableNames) > 1 {
-		return terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(string(ev.Query))
-	}
+	ec.tctx.L().Info("preprocesss: online ddl apply and track sql",
+		zap.String("event", "query"),
+		zap.String("raw statement", qec.originSQL),
+		zap.Strings("statements", qec.appliedDDLs),
+		zap.String("schema", qec.ddlSchema),
+		zap.Stringer("last location", ec.lastLocation),
+		zap.Stringer("location", ec.currentLocation))
 
 	metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenQuery, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 
@@ -2373,23 +2428,18 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			* online ddl: we would ignore rename ghost table,  make no difference
 			* other rename: we don't allow user to execute more than one rename operation in one ddl event, then it would make no difference
 	*/
-	var (
-		ddlInfo        *shardingDDLInfo
-		needHandleDDLs = make([]string, 0, len(sqls))
-		needTrackDDLs  = make([]trackedDDL, 0, len(sqls))
-		sourceTbls     = make(map[string]map[string]struct{}) // db name -> tb name
-	)
 
 	// handle one-schema change DDL
-	for _, sql := range sqls {
-		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		sqlDDL, tableNames, stmt, handleErr := s.routeDDL(parser.New(), usedSchema, sql)
+	for _, sql := range qec.appliedDDLs {
+		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL,
+		// which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
+		sqlDDL, tableNames, stmt, handleErr := s.routeDDL(qec, sql)
 		if handleErr != nil {
 			return handleErr
 		}
 		if len(sqlDDL) == 0 {
 			metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
-			ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema))
+			ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", qec.ddlSchema))
 			continue
 		}
 
@@ -2426,13 +2476,13 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			}
 
 			// in sharding mode, we only support to do one ddl in one event
-			if ddlInfo == nil {
-				ddlInfo = &shardingDDLInfo{
+			if qec.ddlInfo == nil {
+				qec.ddlInfo = &shardingDDLInfo{
 					name:       tableNames[0][0].String(),
 					tableNames: tableNames,
 					stmt:       stmt,
 				}
-			} else if ddlInfo.name != tableNames[0][0].String() {
+			} else if qec.ddlInfo.name != tableNames[0][0].String() {
 				return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
 			}
 		} else if s.cfg.ShardMode == config.ShardOptimistic {
@@ -2445,16 +2495,23 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			}
 		}
 
-		needHandleDDLs = append(needHandleDDLs, sqlDDL)
-		needTrackDDLs = append(needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tableNames: tableNames})
+		qec.needHandleDDLs = append(qec.needHandleDDLs, sqlDDL)
+		qec.needTrackDDLs = append(qec.needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tableNames: tableNames})
 		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
 		//       we should use a better mechanism to combine these operations
-		recordSourceTbls(sourceTbls, stmt, tableNames[0][0])
+		recordSourceTbls(qec.sourceTbls, stmt, tableNames[0][0])
 	}
 
-	ec.tctx.L().Info("prepare to handle ddls", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
-	if len(needHandleDDLs) == 0 {
-		ec.tctx.L().Info("skip event, need handled ddls is empty", zap.String("event", "query"), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
+	ec.tctx.L().Info("prepare to handle ddls",
+		zap.String("event", "query"),
+		zap.Strings("ddls", qec.needHandleDDLs),
+		zap.ByteString("raw statement", ev.Query),
+		log.WrapStringerField("location", ec.currentLocation))
+	if len(qec.needHandleDDLs) == 0 {
+		ec.tctx.L().Info("skip event, need handled ddls is empty",
+			zap.String("event", "query"),
+			zap.ByteString("raw statement", ev.Query),
+			log.WrapStringerField("location", ec.currentLocation))
 		return s.recordSkipSQLsLocation(&ec)
 	}
 
@@ -2474,29 +2531,21 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 	switch s.cfg.ShardMode {
 	case "":
-		return s.handleQueryEventNoSharding(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames, originSQL, sourceTbls)
+		return s.handleQueryEventNoSharding(ev, qec)
 	case config.ShardOptimistic:
-		return s.handleQueryEventOptimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames, originSQL)
+		return s.handleQueryEventOptimistic(ev, qec)
 	case config.ShardPessimistic:
-		return s.handleQueryEventPessimistic(ev, ec, needHandleDDLs, needTrackDDLs, onlineDDLTableNames, originSQL, ddlInfo)
+		return s.handleQueryEventPessimistic(ev, qec)
 	}
 	return errors.Errorf("unsupported shard-mode %s, should not happened", s.cfg.ShardMode)
 }
 
-func (s *Syncer) handleQueryEventNoSharding(
-	ev *replication.QueryEvent,
-	ec eventContext,
-	needHandleDDLs []string,
-	needTrackDDLs []trackedDDL,
-	onlineDDLTableNames map[string]*filter.Table,
-	originSQL string,
-	sourceTbls map[string]map[string]struct{},
-) error {
-	ec.tctx.L().Info("start to handle ddls in normal mode",
+func (s *Syncer) handleQueryEventNoSharding(ev *replication.QueryEvent, qec *queryEventContext) error {
+	qec.tctx.L().Info("start to handle ddls in normal mode",
 		zap.String("event", "query"),
-		zap.Strings("ddls", needHandleDDLs),
+		zap.Strings("ddls", qec.needHandleDDLs),
 		zap.ByteString("raw statement", ev.Query),
-		log.WrapStringerField("location", ec.currentLocation))
+		log.WrapStringerField("location", qec.currentLocation))
 
 	// interrupted after flush old checkpoint and before track DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
@@ -2509,8 +2558,8 @@ func (s *Syncer) handleQueryEventNoSharding(
 	usedSchema := string(ev.Schema)
 
 	// run trackDDL before add ddl job to make sure checkpoint can be flushed
-	for _, td := range needTrackDDLs {
-		if err := s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+	for _, td := range qec.needTrackDDLs {
+		if err := s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &qec.eventContext); err != nil {
 			return err
 		}
 	}
@@ -2523,7 +2572,7 @@ func (s *Syncer) handleQueryEventNoSharding(
 		}
 	})
 
-	job := newDDLJob(nil, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, sourceTbls, originSQL, ec.header)
+	job := newDDLJob(nil, qec.needHandleDDLs, *qec.lastLocation, *qec.startLocation, *qec.currentLocation, qec.sourceTbls, qec.originSQL, qec.header)
 	err := s.addJobFunc(job)
 	if err != nil {
 		return err
@@ -2534,16 +2583,25 @@ func (s *Syncer) handleQueryEventNoSharding(
 	// return nil here to avoid duplicate error message
 	err = s.execError.Load()
 	if err != nil {
-		ec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		qec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
 		// nolint:nilerr
 		return nil
 	}
 
-	ec.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
+	qec.tctx.L().Info("finish to handle ddls in normal mode",
+		zap.String("event", "query"),
+		zap.Strings("ddls", qec.needHandleDDLs),
+		zap.ByteString("raw statement", ev.Query),
+		log.WrapStringerField("location", qec.currentLocation))
 
-	for _, table := range onlineDDLTableNames {
-		ec.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.String("schema", table.Schema), zap.String("table", table.Name))
-		err2 := s.onlineDDL.Finish(ec.tctx, table.Schema, table.Name)
+	for _, table := range qec.onlineDDLTableNames {
+		qec.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode",
+			zap.String("event", "query"),
+			zap.Strings("ddls", qec.needHandleDDLs),
+			zap.ByteString("raw statement", ev.Query),
+			zap.String("schema", table.Schema),
+			zap.String("table", table.Name))
+		err2 := s.onlineDDL.Finish(qec.tctx, table.Schema, table.Name)
 		if err2 != nil {
 			return terror.Annotatef(err2, "finish online ddl on %s.%s", table.Schema, table.Name)
 		}
@@ -2552,15 +2610,7 @@ func (s *Syncer) handleQueryEventNoSharding(
 	return nil
 }
 
-func (s *Syncer) handleQueryEventPessimistic(
-	ev *replication.QueryEvent,
-	ec eventContext,
-	needHandleDDLs []string,
-	needTrackDDLs []trackedDDL,
-	onlineDDLTableNames map[string]*filter.Table,
-	originSQL string,
-	ddlInfo *shardingDDLInfo,
-) error {
+func (s *Syncer) handleQueryEventPessimistic(ev *replication.QueryEvent, qec *queryEventContext) error {
 	var (
 		err                error
 		needShardingHandle bool
@@ -2569,11 +2619,17 @@ func (s *Syncer) handleQueryEventPessimistic(
 		active             bool
 		remain             int
 		source             string
-		usedSchema         = string(ev.Schema)
+
+		usedSchema          = string(ev.Schema)
+		needHandleDDLs      = qec.needHandleDDLs
+		needTrackDDLs       = qec.needTrackDDLs
+		onlineDDLTableNames = qec.onlineDDLTableNames
+		originSQL           = qec.originSQL
+		ddlInfo             = qec.ddlInfo
 	)
 	// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
 	// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
-	startLocation := ec.startLocation
+	startLocation := qec.startLocation
 
 	source, _ = utils.GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name)
 
@@ -2589,19 +2645,35 @@ func (s *Syncer) handleQueryEventPessimistic(
 		}
 		annotate = "add table to shard group"
 	default:
-		needShardingHandle, group, synced, active, remain, err = s.sgk.TrySync(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, source, *startLocation, *ec.currentLocation, needHandleDDLs)
+		needShardingHandle, group, synced, active, remain, err = s.sgk.TrySync(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, source, *startLocation, *qec.currentLocation, needHandleDDLs)
 		if err != nil {
 			return err
 		}
 		annotate = "try to sync table in shard group"
 		// meets DDL that will not be processed in sequence sharding
 		if !active {
-			ec.tctx.L().Info("skip in-activeDDL", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start location", startLocation), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
+			qec.tctx.L().Info("skip in-activeDDL",
+				zap.String("event", "query"),
+				zap.String("source", source),
+				zap.Strings("ddls", needHandleDDLs),
+				zap.ByteString("raw statement", ev.Query),
+				zap.Bool("in-sharding", needShardingHandle),
+				zap.Stringer("start location", startLocation),
+				zap.Bool("is-synced", synced),
+				zap.Int("unsynced", remain))
 			return nil
 		}
 	}
 
-	ec.tctx.L().Info(annotate, zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start location", startLocation), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
+	qec.tctx.L().Info(annotate,
+		zap.String("event", "query"),
+		zap.String("source", source),
+		zap.Strings("ddls", needHandleDDLs),
+		zap.ByteString("raw statement", ev.Query),
+		zap.Bool("in-sharding", needShardingHandle),
+		zap.Stringer("start location", startLocation),
+		zap.Bool("is-synced", synced),
+		zap.Int("unsynced", remain))
 
 	// interrupted after flush old checkpoint and before track DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
@@ -2612,7 +2684,7 @@ func (s *Syncer) handleQueryEventPessimistic(
 	})
 
 	for _, td := range needTrackDDLs {
-		if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+		if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &qec.eventContext); err != nil {
 			return err
 		}
 	}
@@ -2620,7 +2692,7 @@ func (s *Syncer) handleQueryEventPessimistic(
 	if needShardingHandle {
 		target, _ := utils.GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 		metrics.UnsyncedTableGauge.WithLabelValues(s.cfg.Name, target, s.cfg.SourceID).Set(float64(remain))
-		err = s.safeMode.IncrForTable(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
+		err = s.safeMode.IncrForTable(qec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
 		if err != nil {
 			return err
 		}
@@ -2628,21 +2700,33 @@ func (s *Syncer) handleQueryEventPessimistic(
 		// save checkpoint in memory, don't worry, if error occurred, we can rollback it
 		// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing
 		// NOTE: when last sharding DDL executed, all this checkpoints will be flushed in the same txn
-		ec.tctx.L().Info("save table checkpoint for source", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-		s.saveTablePoint(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name, *ec.currentLocation)
+		qec.tctx.L().Info("save table checkpoint for source",
+			zap.String("event", "query"),
+			zap.String("source", source),
+			zap.Stringer("start location", startLocation),
+			log.WrapStringerField("end location", qec.currentLocation))
+		s.saveTablePoint(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name, *qec.currentLocation)
 		if !synced {
-			ec.tctx.L().Info("source shard group is not synced", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
+			qec.tctx.L().Info("source shard group is not synced",
+				zap.String("event", "query"),
+				zap.String("source", source),
+				zap.Stringer("start location", startLocation),
+				log.WrapStringerField("end location", qec.currentLocation))
 			return nil
 		}
 
-		ec.tctx.L().Info("source shard group is synced", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-		err = s.safeMode.DescForTable(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try disable safe-mode after sharding group synced
+		qec.tctx.L().Info("source shard group is synced",
+			zap.String("event", "query"),
+			zap.String("source", source),
+			zap.Stringer("start location", startLocation),
+			log.WrapStringerField("end location", qec.currentLocation))
+		err = s.safeMode.DescForTable(qec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try disable safe-mode after sharding group synced
 		if err != nil {
 			return err
 		}
 		// maybe multi-groups' sharding DDL synced in this for-loop (one query-event, multi tables)
-		if cap(*ec.shardingReSyncCh) < len(needHandleDDLs) {
-			*ec.shardingReSyncCh = make(chan *ShardingReSync, len(needHandleDDLs))
+		if cap(*qec.shardingReSyncCh) < len(needHandleDDLs) {
+			*qec.shardingReSyncCh = make(chan *ShardingReSync, len(needHandleDDLs))
 		}
 		firstEndLocation := group.FirstEndPosUnresolved()
 		if firstEndLocation == nil {
@@ -2653,9 +2737,9 @@ func (s *Syncer) handleQueryEventPessimistic(
 		if err2 != nil {
 			return err2
 		}
-		*ec.shardingReSyncCh <- &ShardingReSync{
+		*qec.shardingReSyncCh <- &ShardingReSync{
 			currLocation:   *firstEndLocation,
-			latestLocation: *ec.currentLocation,
+			latestLocation: *qec.currentLocation,
 			targetSchema:   ddlInfo.tableNames[1][0].Schema,
 			targetTable:    ddlInfo.tableNames[1][0].Name,
 			allResolved:    allResolved,
@@ -2669,14 +2753,14 @@ func (s *Syncer) handleQueryEventPessimistic(
 
 		// construct & send shard DDL info into etcd, DM-master will handle it.
 		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, needHandleDDLs)
-		rev, err2 := s.pessimist.PutInfo(ec.tctx.Ctx, shardInfo)
+		rev, err2 := s.pessimist.PutInfo(qec.tctx.Ctx, shardInfo)
 		if err2 != nil {
 			return err2
 		}
 		metrics.ShardLockResolving.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Set(1) // block and wait DDL lock to be synced
-		ec.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo), zap.Int64("revision", rev))
+		qec.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo), zap.Int64("revision", rev))
 
-		shardOp, err2 := s.pessimist.GetOperation(ec.tctx.Ctx, shardInfo, rev+1)
+		shardOp, err2 := s.pessimist.GetOperation(qec.tctx.Ctx, shardInfo, rev+1)
 		metrics.ShardLockResolving.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Set(0)
 		if err2 != nil {
 			return err2
@@ -2684,7 +2768,7 @@ func (s *Syncer) handleQueryEventPessimistic(
 
 		if shardOp.Exec {
 			failpoint.Inject("ShardSyncedExecutionExit", func() {
-				ec.tctx.L().Warn("exit triggered", zap.String("failpoint", "ShardSyncedExecutionExit"))
+				qec.tctx.L().Warn("exit triggered", zap.String("failpoint", "ShardSyncedExecutionExit"))
 				//nolint:errcheck
 				s.flushCheckPoints()
 				utils.OsExit(1)
@@ -2694,7 +2778,7 @@ func (s *Syncer) handleQueryEventPessimistic(
 				if group != nil {
 					// exit in the first round sequence sharding DDL only
 					if group.meta.ActiveIdx() == 1 {
-						ec.tctx.L().Warn("exit triggered", zap.String("failpoint", "SequenceShardSyncedExecutionExit"))
+						qec.tctx.L().Warn("exit triggered", zap.String("failpoint", "SequenceShardSyncedExecutionExit"))
 						//nolint:errcheck
 						s.flushCheckPoints()
 						utils.OsExit(1)
@@ -2702,13 +2786,30 @@ func (s *Syncer) handleQueryEventPessimistic(
 				}
 			})
 
-			ec.tctx.L().Info("execute DDL job", zap.String("event", "query"), zap.String("source", source), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation), zap.Stringer("operation", shardOp))
+			qec.tctx.L().Info("execute DDL job",
+				zap.String("event", "query"),
+				zap.String("source", source),
+				zap.ByteString("raw statement", ev.Query),
+				zap.Stringer("start location", startLocation),
+				log.WrapStringerField("end location", qec.currentLocation),
+				zap.Stringer("operation", shardOp))
 		} else {
-			ec.tctx.L().Info("ignore DDL job", zap.String("event", "query"), zap.String("source", source), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation), zap.Stringer("operation", shardOp))
+			qec.tctx.L().Info("ignore DDL job",
+				zap.String("event", "query"),
+				zap.String("source", source),
+				zap.ByteString("raw statement", ev.Query),
+				zap.Stringer("start location", startLocation),
+				log.WrapStringerField("end location", qec.currentLocation),
+				zap.Stringer("operation", shardOp))
 		}
 	}
 
-	ec.tctx.L().Info("start to handle ddls in shard mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
+	qec.tctx.L().Info("start to handle ddls in shard mode",
+		zap.String("event", "query"),
+		zap.Strings("ddls", needHandleDDLs),
+		zap.ByteString("raw statement", ev.Query),
+		zap.Stringer("start location", startLocation),
+		log.WrapStringerField("end location", qec.currentLocation))
 
 	// interrupted after track DDL and before execute DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
@@ -2718,7 +2819,7 @@ func (s *Syncer) handleQueryEventPessimistic(
 		}
 	})
 
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil, originSQL, ec.header)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *qec.lastLocation, *qec.startLocation, *qec.currentLocation, nil, originSQL, qec.header)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
@@ -2726,19 +2827,24 @@ func (s *Syncer) handleQueryEventPessimistic(
 
 	err = s.execError.Load()
 	if err != nil {
-		ec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		qec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
 		// nolint:nilerr
 		return nil
 	}
 
 	if len(onlineDDLTableNames) > 0 {
-		err = s.clearOnlineDDL(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+		err = s.clearOnlineDDL(qec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 		if err != nil {
 			return err
 		}
 	}
 
-	ec.tctx.L().Info("finish to handle ddls in shard mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
+	qec.tctx.L().Info("finish to handle ddls in shard mode",
+		zap.String("event", "query"),
+		zap.Strings("ddls", needHandleDDLs),
+		zap.ByteString("raw statement", ev.Query),
+		zap.Stringer("start location", startLocation),
+		log.WrapStringerField("end location", qec.currentLocation))
 	return nil
 }
 

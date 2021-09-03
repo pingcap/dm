@@ -66,14 +66,7 @@ func (s *Syncer) initOptimisticShardDDL(ctx context.Context) error {
 }
 
 // handleQueryEventOptimistic handles QueryEvent in the optimistic shard DDL mode.
-func (s *Syncer) handleQueryEventOptimistic(
-	ev *replication.QueryEvent,
-	ec eventContext,
-	needHandleDDLs []string,
-	needTrackDDLs []trackedDDL,
-	onlineDDLTableNames map[string]*filter.Table,
-	originSQL string,
-) error {
+func (s *Syncer) handleQueryEventOptimistic(ev *replication.QueryEvent, qec *queryEventContext) error {
 	// interrupted after flush old checkpoint and before track DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
 		err := handleFlushCheckpointStage(1, val.(int), "before track DDL")
@@ -93,11 +86,16 @@ func (s *Syncer) handleQueryEventOptimistic(
 		tiAfter  *model.TableInfo
 		tisAfter []*model.TableInfo
 		err      error
+
+		needHandleDDLs      = qec.needHandleDDLs
+		needTrackDDLs       = qec.needTrackDDLs
+		onlineDDLTableNames = qec.onlineDDLTableNames
+		originSQL           = qec.originSQL
 	)
 
 	err = s.execError.Load()
 	if err != nil {
-		ec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
+		qec.tctx.L().Error("error detected when executing SQL job", log.ShortError(err))
 		// nolint:nilerr
 		return nil
 	}
@@ -121,7 +119,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 
 	if !isDBDDL {
 		if _, ok := needTrackDDLs[0].stmt.(*ast.CreateTableStmt); !ok {
-			tiBefore, err = s.getTable(ec.tctx, upSchema, upTable, downSchema, downTable)
+			tiBefore, err = s.getTable(qec.tctx, upSchema, upTable, downSchema, downTable)
 			if err != nil {
 				return err
 			}
@@ -129,11 +127,11 @@ func (s *Syncer) handleQueryEventOptimistic(
 	}
 
 	for _, td := range needTrackDDLs {
-		if err = s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+		if err = s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &qec.eventContext); err != nil {
 			return err
 		}
 		if !isDBDDL {
-			tiAfter, err = s.getTable(ec.tctx, upSchema, upTable, downSchema, downTable)
+			tiAfter, err = s.getTable(qec.tctx, upSchema, upTable, downSchema, downTable)
 			if err != nil {
 				return err
 			}
@@ -180,7 +178,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 
 	if !skipOp {
 		s.tctx.L().Info("putted a shard DDL info into etcd", zap.Stringer("info", info))
-		op, err = s.optimist.GetOperation(ec.tctx.Ctx, info, rev+1)
+		op, err = s.optimist.GetOperation(qec.tctx.Ctx, info, rev+1)
 		if err != nil {
 			return err
 		}
@@ -195,7 +193,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	needHandleDDLs = op.DDLs
 
 	s.tctx.L().Info("start to handle ddls in optimistic shard mode", zap.String("event", "query"),
-		zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
+		zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", qec.currentLocation))
 
 	// interrupted after track DDL and before execute DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
@@ -210,7 +208,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 		tableNames: needTrackDDLs[0].tableNames,
 		stmt:       needTrackDDLs[0].stmt,
 	}
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil, originSQL, ec.header)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *qec.lastLocation, *qec.startLocation, *qec.currentLocation, nil, originSQL, qec.header)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
@@ -227,14 +225,14 @@ func (s *Syncer) handleQueryEventOptimistic(
 		s.tctx.L().Info("finish online ddl and clear online ddl metadata in optimistic shard mode", zap.String("event", "query"),
 			zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query),
 			zap.String("schema", table.Schema), zap.String("table", table.Name))
-		err = s.onlineDDL.Finish(ec.tctx, table.Schema, table.Name)
+		err = s.onlineDDL.Finish(qec.tctx, table.Schema, table.Name)
 		if err != nil {
 			return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
 		}
 	}
 
 	s.tctx.L().Info("finish to handle ddls in optimistic shard mode", zap.String("event", "query"),
-		zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
+		zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", qec.currentLocation))
 	return nil
 }
 

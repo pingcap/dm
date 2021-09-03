@@ -24,84 +24,25 @@ import (
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
 
-// skipQuery will return true when
-// - given `sql` matches builtin pattern.
-// - any schema of table names is system schema.
-// - any table name doesn't pass block-allow list.
-// - type of SQL doesn't pass binlog filter.
-func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string) (bool, error) {
-	if utils.IsBuildInSkipDDL(sql) {
-		return true, nil
-	}
-
+func (s *Syncer) filterQueryEvent(tables []*filter.Table, stmt ast.StmtNode, sql string) (bool, error) {
+	et := bf.AstToDDLEvent(stmt)
 	for _, table := range tables {
-		if filter.IsSystemSchema(table.Schema) {
-			return true, nil
+		needFilter, err := s.filterOneEvent(table, et, sql)
+		if err != nil || needFilter {
+			return needFilter, err
 		}
 	}
-
-	if len(tables) > 0 {
-		tbs := s.baList.Apply(tables)
-		if len(tbs) != len(tables) {
-			return true, nil
-		}
-	}
-
-	if s.binlogFilter == nil {
-		return false, nil
-	}
-
-	et := bf.NullEvent
-	if stmt != nil {
-		et = bf.AstToDDLEvent(stmt)
-	}
-	if len(tables) == 0 {
-		action, err := s.binlogFilter.Filter("", "", et, sql)
-		if err != nil {
-			return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip query %s", sql)
-		}
-
-		if action == bf.Ignore {
-			return true, nil
-		}
-	}
-
-	for _, table := range tables {
-		action, err := s.binlogFilter.Filter(table.Schema, table.Name, et, sql)
-		if err != nil {
-			return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip query %s on `%s`.`%s`", sql, table.Schema, table.Name)
-		}
-
-		if action == bf.Ignore {
-			return true, nil
-		}
-	}
-
 	return false, nil
 }
 
-func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication.EventType) (bool, error) {
-	if filter.IsSystemSchema(schema) {
-		return true, nil
-	}
-
-	tbs := []*filter.Table{{Schema: schema, Name: table}}
-	tbs = s.baList.Apply(tbs)
-	if len(tbs) == 0 {
-		return true, nil
-	}
+func (s *Syncer) filterRowsEvent(table *filter.Table, eventType replication.EventType) (bool, error) {
 	// filter ghost table
 	if s.onlineDDL != nil {
-		tp := s.onlineDDL.TableType(table)
+		tp := s.onlineDDL.TableType(table.Name)
 		if tp != onlineddl.RealTable {
 			return true, nil
 		}
 	}
-
-	if s.binlogFilter == nil {
-		return false, nil
-	}
-
 	var et bf.EventType
 	switch eventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
@@ -113,11 +54,44 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 	default:
 		return false, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
 	}
+	return s.filterOneEvent(table, et, "")
+}
 
-	action, err := s.binlogFilter.Filter(schema, table, et, "")
-	if err != nil {
-		return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip row event %s on `%s`.`%s`", eventType, schema, table)
+// filterSQL filter unsupported sql in tidb and global sql-patterns in binlog-filter config file.
+func (s *Syncer) filterSQL(sql string) (bool, error) {
+	if utils.IsBuildInSkipDDL(sql) {
+		return true, nil
 	}
+	action, err := s.binlogFilter.Filter("", "", bf.NullEvent, sql)
+	if err != nil {
+		return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip query %s", sql)
+	}
+	return action == bf.Ignore, nil
+}
 
+// filterOneEvent will return true when
+// - given `sql` matches builtin pattern.
+// - any schema of table names is system schema.
+// - any table name doesn't pass block-allow list.
+// - type of SQL doesn't pass binlog filter.
+// - pattern of SQL doesn't pass binlog filter.
+func (s *Syncer) filterOneEvent(table *filter.Table, et bf.EventType, sql string) (bool, error) {
+	if utils.IsBuildInSkipDDL(sql) {
+		return true, nil
+	}
+	if filter.IsSystemSchema(table.Schema) {
+		return true, nil
+	}
+	tables := s.baList.Apply([]*filter.Table{table})
+	if len(tables) == 0 {
+		return true, nil
+	}
+	if s.binlogFilter == nil {
+		return false, nil
+	}
+	action, err := s.binlogFilter.Filter(table.Schema, table.Name, et, sql)
+	if err != nil {
+		return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip event %s on `%s`.`%s`", et, table.Schema, table.Name)
+	}
 	return action == bf.Ignore, nil
 }
