@@ -93,7 +93,7 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		<-ctx.Done()
 		pr <- pb.ProcessResult{
 			IsCanceled: true,
-			Errors:     []*pb.ProcessError{unit.NewProcessError(context.Canceled)},
+			Errors:     []*pb.ProcessError{unit.NewProcessError(ctx.Err())},
 		}
 		failpoint.Return()
 	})
@@ -146,6 +146,11 @@ func (m *Dumpling) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		m.logger.Error("dump data exits with error", zap.Duration("cost time", time.Since(begin)),
 			zap.String("error", unit.JoinProcessErrors(errs)))
 	}
+
+	failpoint.Inject("dumpUnitProcessNoError", func() {
+		m.logger.Info("dump unit runs no error", zap.String("failpoint", "dumpUnitProcessNoError"))
+		errs = errs[:0]
+	})
 
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,

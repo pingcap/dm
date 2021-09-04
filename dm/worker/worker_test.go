@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
 	"github.com/tikv/pd/pkg/tempurl"
@@ -28,12 +29,20 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
 var emptyWorkerStatusInfoJSONLength = 25
+
+func mockShowMasterStatus(mockDB sqlmock.Sqlmock) {
+	rows := mockDB.NewRows([]string{"File", "Position", "Binlog_Do_DB", "Binlog_Ignore_DB", "Executed_Gtid_Set"}).AddRow(
+		"mysql-bin.000009", 11232, nil, nil, "074be7f4-f0f1-11ea-95bd-0242ac120002:1-699",
+	)
+	mockDB.ExpectQuery(`SHOW MASTER STATUS`).WillReturnRows(rows)
+}
 
 func (t *testServer) testWorker(c *C) {
 	cfg := loadSourceConfigWithoutPassword(c)
@@ -164,7 +173,6 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 
 	s := NewServer(cfg)
-
 	defer s.Close()
 	go func() {
 		c.Assert(s.Start(), IsNil)
@@ -184,6 +192,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 	var subtaskCfg config.SubTaskConfig
 	c.Assert(subtaskCfg.DecodeFile("./subtask.toml", true), IsNil)
 	c.Assert(err, IsNil)
+	subtaskCfg.Mode = "full"
 	c.Assert(s.getWorker(true).StartSubTask(&subtaskCfg, pb.Stage_Running, true), IsNil)
 
 	// check task in paused state
@@ -423,6 +432,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 		keepAliveTTL = int64(1)
 		startRev     = int64(1)
 	)
+
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
 	c.Assert(err, IsNil)
@@ -503,6 +513,8 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return w.subTaskHolder.findSubTask(subtaskCfg.Name) != nil
 	}), IsTrue)
+	mockDB := conn.InitMockDB(c)
+	mockShowMasterStatus(mockDB)
 	status, _, err := w.QueryStatus(ctx1, subtaskCfg.Name)
 	c.Assert(err, IsNil)
 	c.Assert(status, HasLen, 1)
@@ -522,6 +534,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return w.subTaskHolder.findSubTask(subtaskCfg.Name) != nil
 	}), IsTrue)
+	mockShowMasterStatus(mockDB)
 	status, _, err = w.QueryStatus(ctx2, subtaskCfg.Name)
 	c.Assert(err, IsNil)
 	c.Assert(status, HasLen, 1)

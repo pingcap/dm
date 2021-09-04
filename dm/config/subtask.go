@@ -127,6 +127,36 @@ func (db *DBConfig) Adjust() {
 	}
 }
 
+// Clone returns a deep copy of DBConfig. This function only fixes data race when adjusting Session.
+func (db *DBConfig) Clone() *DBConfig {
+	if db == nil {
+		return nil
+	}
+
+	clone := *db
+
+	if db.MaxAllowedPacket != nil {
+		packet := *(db.MaxAllowedPacket)
+		clone.MaxAllowedPacket = &packet
+	}
+
+	if db.Session != nil {
+		clone.Session = make(map[string]string, len(db.Session))
+		for k, v := range db.Session {
+			clone.Session[k] = v
+		}
+	}
+
+	clone.Security = db.Security.Clone()
+
+	if db.RawDBCfg != nil {
+		dbCfg := *(db.RawDBCfg)
+		clone.RawDBCfg = &dbCfg
+	}
+
+	return &clone
+}
+
 // GetDBConfigFromEnv is a helper function to read config from environment. It's commonly used in unit tests.
 func GetDBConfigFromEnv() DBConfig {
 	host := os.Getenv("MYSQL_HOST")
