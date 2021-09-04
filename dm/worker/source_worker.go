@@ -53,9 +53,11 @@ type SourceWorker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cfg *config.SourceConfig
-	db  *conn.BaseDB
-	l   log.Logger
+	cfg        *config.SourceConfig
+	sourceDB   *conn.BaseDB
+	sourceDBMu sync.Mutex // if the sourceDB can't be connected at start time, we try to re-connect before using it.
+
+	l log.Logger
 
 	sourceStatus atomic.Value // stores a pointer to SourceStatus
 
@@ -131,7 +133,7 @@ func (w *SourceWorker) Start() {
 	}
 
 	var err error
-	w.db, err = conn.DefaultDBProvider.Apply(w.cfg.DecryptPassword().From)
+	w.sourceDB, err = conn.DefaultDBProvider.Apply(w.cfg.DecryptPassword().From)
 	if err != nil {
 		w.l.Error("can't connected to upstream", zap.Error(err))
 	}
@@ -188,9 +190,6 @@ func (w *SourceWorker) Close() {
 	w.Lock()
 	defer w.Unlock()
 
-	w.db.Close()
-	w.db = nil
-
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()
 
@@ -208,19 +207,30 @@ func (w *SourceWorker) Close() {
 	}
 
 	w.closed.Store(true)
+
+	w.sourceDB.Close()
+	w.sourceDB = nil
+
 	w.l.Info("Stop worker")
 }
 
 // updateSourceStatus updates w.sourceStatus.
 func (w *SourceWorker) updateSourceStatus(ctx context.Context) error {
-	if w.db == nil {
-		return errors.New("connection to upstream is not established")
+	w.sourceDBMu.Lock()
+	if w.sourceDB == nil {
+		var err error
+		w.sourceDB, err = conn.DefaultDBProvider.Apply(w.cfg.DecryptPassword().From)
+		w.sourceDBMu.Unlock()
+		if err != nil {
+			return err
+		}
 	}
+	w.sourceDBMu.Unlock()
 
 	var status binlog.SourceStatus
 	ctx, cancel := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 	defer cancel()
-	pos, gtidSet, err := utils.GetMasterStatus(ctx, w.db.DB, w.cfg.Flavor)
+	pos, gtidSet, err := utils.GetMasterStatus(ctx, w.sourceDB.DB, w.cfg.Flavor)
 	if err != nil {
 		return err
 	}
@@ -231,7 +241,7 @@ func (w *SourceWorker) updateSourceStatus(ctx context.Context) error {
 
 	ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
 	defer cancel2()
-	binlogs, err := binlog.GetBinaryLogs(ctx2, w.db.DB)
+	binlogs, err := binlog.GetBinaryLogs(ctx2, w.sourceDB.DB)
 	if err != nil {
 		return err
 	}
