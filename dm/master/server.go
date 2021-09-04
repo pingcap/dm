@@ -80,6 +80,8 @@ var (
 	// so we need sync.Once to prevent data race.
 	registerOnce      sync.Once
 	runBackgroundOnce sync.Once
+
+	checkAndAdjustSourceConfigFunc = checkAndAdjustSourceConfig
 )
 
 // Server handles RPC requests for dm-master.
@@ -1116,7 +1118,7 @@ func parseAndAdjustSourceConfig(ctx context.Context, contents []string) ([]*conf
 		if err != nil {
 			return cfgs, err
 		}
-		if err := checkAndAdjustSourceConfig(ctx, cfg); err != nil {
+		if err := checkAndAdjustSourceConfigFunc(ctx, cfg); err != nil {
 			return cfgs, err
 		}
 		cfgs[i] = cfg
