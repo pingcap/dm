@@ -79,7 +79,7 @@ func (t *testMaster) TestCollectSourceConfigFilesV1Import(c *C) {
 	cfg1.From.User = user
 	cfg1.From.Password = password
 	cfg1.RelayDir = "relay-dir"
-	c.Assert(checkAndAdjustSourceConfig(ctx, cfg1), IsNil) // adjust source config.
+	c.Assert(checkAndAdjustSourceConfigFunc(ctx, cfg1), IsNil) // adjust source config.
 	cfg2 := cfg1.Clone()
 	cfg2.SourceID = "mysql-replica-02"
 
@@ -347,4 +347,11 @@ func (t *testMaster) TestSubtaskCfgsStagesV1Import(c *C) {
 	c.Assert(err, ErrorMatches, ".*fail to get subtask config and stage.*")
 	c.Assert(cfgs, HasLen, 0)
 	c.Assert(stages, HasLen, 0)
+}
+
+func checkAndNoAdjustSourceConfigMock(ctx context.Context, cfg *config.SourceConfig) error {
+	if _, err := cfg.Yaml(); err != nil {
+		return err
+	}
+	return cfg.Verify()
 }
