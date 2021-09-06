@@ -173,7 +173,7 @@ func newFlushJob() *job {
 	}
 }
 
-func newConflictJob() *job {
+func newCausalityJob() *job {
 	return &job{
 		tp:         conflict,
 		jobAddTime: time.Now(),

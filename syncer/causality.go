@@ -14,31 +14,43 @@
 package syncer
 
 import (
-	"github.com/pingcap/dm/pkg/terror"
+	"time"
+
+	"github.com/pingcap/dm/syncer/metrics"
 )
 
-// causality provides a simple mechanism to improve the concurrency of SQLs execution under the premise of ensuring correctness.
+// Causality provides a simple mechanism to improve the concurrency of SQLs execution under the premise of ensuring correctness.
 // causality groups sqls that maybe contain causal relationships, and syncer executes them linearly.
 // if some conflicts exist in more than one groups, then syncer waits all SQLs that are grouped be executed and reset causality.
 // this mechanism meets quiescent consistency to ensure correctness.
-type causality struct {
-	relations map[string]string
+type Causality struct {
+	relations   map[string]string
+	CausalityCh chan *job
+	in          chan *job
+
+	// for metrics
+	task   string
+	source string
 }
 
-func newCausality() *causality {
-	return &causality{
-		relations: make(map[string]string),
+// RunCausality creates and runs causality.
+func RunCausality(chanSize int, task, source string, in chan *job) *Causality {
+	causality := &Causality{
+		relations:   make(map[string]string),
+		CausalityCh: make(chan *job, chanSize),
+		in:          in,
+		task:        task,
+		source:      source,
 	}
+	go causality.run()
+	return causality
 }
 
-func (c *causality) add(keys []string) error {
+func (c *Causality) add(keys []string) {
 	if len(keys) == 0 {
-		return nil
+		return
 	}
 
-	if c.detectConflict(keys) {
-		return terror.ErrSyncUnitCausalityConflict.Generate()
-	}
 	// find causal key
 	selectedRelation := keys[0]
 	var nonExistKeys []string
@@ -53,19 +65,43 @@ func (c *causality) add(keys []string) error {
 	for _, key := range nonExistKeys {
 		c.relations[key] = selectedRelation
 	}
-	return nil
 }
 
-func (c *causality) get(key string) string {
+func (c *Causality) run() {
+	defer c.close()
+
+	for j := range c.in {
+		startTime := time.Now()
+		if j.tp != flush {
+			if c.detectConflict(j.keys) {
+				// s.tctx.L().Debug("meet causality key, will generate a flush job and wait all sqls executed", zap.Strings("keys", j.keys))
+				c.CausalityCh <- newCausalityJob()
+				c.reset()
+			}
+			c.add(j.keys)
+			j.key = c.get(j.key)
+			// s.tctx.L().Debug("key for keys", zap.String("key", j.key), zap.Strings("keys", j.keys))
+		}
+		metrics.ConflictDetectDurationHistogram.WithLabelValues(c.task, c.source).Observe(time.Since(startTime).Seconds())
+
+		c.CausalityCh <- j
+	}
+}
+
+func (c *Causality) close() {
+	close(c.CausalityCh)
+}
+
+func (c *Causality) get(key string) string {
 	return c.relations[key]
 }
 
-func (c *causality) reset() {
+func (c *Causality) reset() {
 	c.relations = make(map[string]string)
 }
 
 // detectConflict detects whether there is a conflict.
-func (c *causality) detectConflict(keys []string) bool {
+func (c *Causality) detectConflict(keys []string) bool {
 	if len(keys) == 0 {
 		return false
 	}
