@@ -174,6 +174,10 @@ func queueBucketName(queueID int) string {
 	return fmt.Sprintf("q_%d", queueID%defaultBucketCount)
 }
 
-func dmlWorkerLagKey(queueID int) string {
-	return fmt.Sprintf("lag_%d", queueID)
+func dmlWorkerJobIdx(queueID int) int {
+	return queueID + workerJobTSArrayInitSize
+}
+
+func dmlWorkerJobIdxToQueueID(idx int) int {
+	return idx - workerJobTSArrayInitSize
 }
