@@ -553,9 +553,15 @@ func (r *BinlogReader) parseFile(
 	if err != nil {
 		if possibleLast && isIgnorableParseError(err) {
 			r.tctx.L().Warn("fail to parse relay log file, meet some ignorable error", zap.String("file", fullPath), zap.Int64("offset", offset), zap.Error(err))
-			// the file is truncated, need to notify the caller
+			// the file is truncated, we send a mock event with `IGNORABLE_EVENT` to notify the the consumer
 			// TODO: should add a integration test for this
-			s.ech <- ErrorMaybeDuplicateEvent
+			e := &replication.BinlogEvent{
+				RawData: []byte(ErrorMaybeDuplicateEvent.Error()),
+				Header: &replication.EventHeader{
+					EventType: replication.IGNORABLE_EVENT,
+				},
+			}
+			s.ch <- e
 		} else {
 			r.tctx.L().Error("parse relay log file", zap.String("file", fullPath), zap.Int64("offset", offset), zap.Error(err))
 			return false, false, 0, "", "", false, terror.ErrParserParseRelayLog.Delegate(err, fullPath)
