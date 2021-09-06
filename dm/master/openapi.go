@@ -217,6 +217,7 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 		}
 		relayStatus := status.SourceStatus.GetRelayStatus()
 		if relayStatus != nil {
+			resp.EnableRelay = true
 			resp.RelayStatus = &openapi.RelayStatus{
 				MasterBinlog:       relayStatus.MasterBinlog,
 				MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
