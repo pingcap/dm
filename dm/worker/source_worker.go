@@ -220,8 +220,8 @@ func (w *SourceWorker) updateSourceStatus(ctx context.Context) error {
 	if w.sourceDB == nil {
 		var err error
 		w.sourceDB, err = conn.DefaultDBProvider.Apply(w.cfg.DecryptPassword().From)
-		w.sourceDBMu.Unlock()
 		if err != nil {
+			w.sourceDBMu.Unlock()
 			return err
 		}
 	}

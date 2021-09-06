@@ -30,18 +30,13 @@ import (
 // Status implements Unit.Status
 // it returns status, but does not calc status.
 func (s *Syncer) Status(sourceStatus *binlog.SourceStatus) interface{} {
-	total := s.count.Load()
-	totalTps := s.totalTps.Load()
-	tps := s.tps.Load()
-	lag := s.secondsBehindMaster.Load()
-
 	syncerLocation := s.checkpoint.FlushedGlobalPoint()
 	st := &pb.SyncStatus{
-		TotalEvents:         total,
-		TotalTps:            totalTps,
-		RecentTps:           tps,
+		TotalEvents:         s.count.Load(),
+		TotalTps:            s.totalTps.Load(),
+		RecentTps:           s.tps.Load(),
 		SyncerBinlog:        syncerLocation.Position.String(),
-		SecondsBehindMaster: lag,
+		SecondsBehindMaster: s.secondsBehindMaster.Load(),
 	}
 
 	if syncerLocation.GetGTID() != nil {
