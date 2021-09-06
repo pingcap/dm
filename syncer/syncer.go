@@ -2198,7 +2198,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), ignore it
 			ec.tctx.L().Debug("replicate sharding DDL, ignore Rows event",
 				zap.String("event", "row"),
-				zap.Any("source", &filter.Table{Schema: originSchema, Name: originTable}),
+				zap.Stringer("source", &filter.Table{Schema: originSchema, Name: originTable}),
 				log.WrapStringerField("location", ec.currentLocation))
 			return nil
 		}
