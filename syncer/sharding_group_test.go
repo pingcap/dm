@@ -233,7 +233,7 @@ func (t *testShardingGroupSuite) TestTableID(c *C) {
 		// ignore isSchemaOnly
 		tableID := utils.GenTableID(originTable)
 		table := utils.UnpackTableID(tableID)
-		c.Assert(table, Equals, originTable)
+		c.Assert(table, DeepEquals, originTable)
 	}
 }
 
@@ -334,7 +334,7 @@ func (t *testShardingGroupSuite) TestKeeper(c *C) {
 	if unresolvedTables[0].Name > unresolvedTables[1].Name {
 		unresolvedTables[0], unresolvedTables[1] = unresolvedTables[1], unresolvedTables[0]
 	}
-	c.Assert(unresolvedTables, DeepEquals, [][]string{{db1, tbl1}, {db1, tbl2}})
+	c.Assert(unresolvedTables, DeepEquals, []*filter.Table{sourceTbl1, sourceTbl2})
 
 	unresolvedGroups := k.UnresolvedGroups()
 	c.Assert(unresolvedGroups, HasLen, 1)
