@@ -2122,7 +2122,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			ec.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "row"), zap.Stringer("re-shard", ec.shardingReSync))
 			return ec.closeShardingResync()
 		}
-		if !reflect.DeepEqual(ec.shardingReSync.targetTable, &filter.Table{Schema: schemaName, Name: tableName}) {
+		if ec.shardingReSync.targetTable.String() != (&filter.Table{Schema: schemaName, Name: tableName}).String() {
 			// in re-syncing, ignore non current sharding group's events
 			ec.tctx.L().Debug("skip event in re-replicating shard group", zap.String("event", "row"), zap.Reflect("re-shard", ec.shardingReSync))
 			return nil
@@ -2165,7 +2165,10 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if s.sgk.InSyncing(&filter.Table{Schema: originSchema, Name: originTable}, &filter.Table{Schema: schemaName, Name: tableName}, *ec.currentLocation) {
 			// if in unsync stage and not before active DDL, ignore it
 			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), ignore it
-			ec.tctx.L().Debug("replicate sharding DDL, ignore Rows event", zap.String("event", "row"), log.WrapStringerField("location", ec.currentLocation))
+			ec.tctx.L().Debug("replicate sharding DDL, ignore Rows event",
+				zap.String("event", "row"),
+				zap.Any("source", &filter.Table{Schema: originSchema, Name: originTable}),
+				log.WrapStringerField("location", ec.currentLocation))
 			return nil
 		}
 	}
