@@ -282,8 +282,7 @@ func (sg *ShardingGroup) Tables() []*filter.Table {
 	sources := sg.Sources()
 	tables := make([]*filter.Table, 0, len(sources))
 	for id := range sources {
-		table := utils.UnpackTableID(id)
-		tables = append(tables, table)
+		tables = append(tables, utils.UnpackTableID(id))
 	}
 	return tables
 }
@@ -301,8 +300,7 @@ func (sg *ShardingGroup) UnresolvedTables() []*filter.Table {
 
 	tables := make([]*filter.Table, 0, len(sg.sources))
 	for id := range sg.sources {
-		table := utils.UnpackTableID(id)
-		tables = append(tables, table)
+		tables = append(tables, utils.UnpackTableID(id))
 	}
 	return tables
 }
@@ -521,8 +519,7 @@ func (k *ShardingGroupKeeper) InSyncing(sourceTable, targetTable *filter.Table, 
 	if group == nil {
 		return false
 	}
-	sourceTableID := utils.GenTableID(sourceTable)
-	return !group.CheckSyncing(sourceTableID, location)
+	return !group.CheckSyncing(utils.GenTableID(sourceTable), location)
 }
 
 // UnresolvedTables returns
@@ -549,10 +546,9 @@ func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, []*filter.Tab
 
 // Group returns target table's group, nil if not exist.
 func (k *ShardingGroupKeeper) Group(targetTable *filter.Table) *ShardingGroup {
-	targetTableID := utils.GenTableID(targetTable)
 	k.RLock()
 	defer k.RUnlock()
-	return k.groups[targetTableID]
+	return k.groups[utils.GenTableID(targetTable)]
 }
 
 // lowestFirstLocationInGroups returns the lowest pos in all groups which are unresolved.
@@ -623,9 +619,10 @@ func (k *ShardingGroupKeeper) ResolveShardingDDL(targetTable *filter.Table) (boo
 
 // ActiveDDLFirstLocation returns the binlog position of active DDL.
 func (k *ShardingGroupKeeper) ActiveDDLFirstLocation(targetTable *filter.Table) (binlog.Location, error) {
+	group := k.Group(targetTable)
 	k.Lock()
 	defer k.Unlock()
-	if group := k.Group(targetTable); group != nil {
+	if group != nil {
 		location, err := group.ActiveDDLFirstLocation()
 		return location, err
 	}
@@ -756,5 +753,5 @@ type ShardingReSync struct {
 
 // String implements stringer.String.
 func (s *ShardingReSync) String() string {
-	return fmt.Sprintf("{table: %s, current location: %v, latest location: %v, all resolved: %v}", s.targetTable.String(), s.currLocation, s.latestLocation, s.allResolved)
+	return fmt.Sprintf("{table: %v, current location: %v, latest location: %v, all resolved: %v}", s.targetTable, s.currLocation, s.latestLocation, s.allResolved)
 }
