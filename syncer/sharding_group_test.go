@@ -44,9 +44,6 @@ var (
 		Name:   "tbl",
 	}
 	target     = targetTbl.String()
-	db1        = "db1"
-	tbl1       = "tbl1"
-	tbl2       = "tbl2"
 	sourceTbl1 = &filter.Table{Schema: "db1", Name: "tbl1"}
 	sourceTbl2 = &filter.Table{Schema: "db1", Name: "tbl2"}
 	sourceTbl3 = &filter.Table{Schema: "db1", Name: "tbl3"}
