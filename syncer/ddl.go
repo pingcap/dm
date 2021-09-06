@@ -147,33 +147,29 @@ func (s *Syncer) handleOnlineDDL(qec *queryEventContext, tableNames []*filter.Ta
 		return sqls, nil
 	}
 
-	// remove empty sqls which inserted because online DDL is filtered
-	end := 0
-	for _, sql2 := range sqls {
-		if sql2 != "" {
-			sqls[end] = sql2
-			end++
-		}
-	}
-	sqls = sqls[:end]
-
+	renamedSqls := []string{}
 	sourceTable := tableNames[0]
 	// RenameDDLTable need []*filter.table
 	targetTables := tableNames[1:2]
 	// TODO(okJiang): seems to repeat with some logic in routeDDL
-	for i := range sqls {
-		stmt, err := qec.p.ParseOneStmt(sqls[i], "", "")
+	for _, sql := range sqls {
+		// remove empty sqls which inserted because online DDL is filtered
+		if sql == "" {
+			continue
+		}
+		stmt, err := qec.p.ParseOneStmt(sql, "", "")
 		if err != nil {
 			return nil, terror.ErrSyncerUnitParseStmt.New(err.Error())
 		}
 
-		sqls[i], err = parserpkg.RenameDDLTable(stmt, targetTables)
+		sql, err = parserpkg.RenameDDLTable(stmt, targetTables)
 		if err != nil {
 			return nil, err
 		}
+		renamedSqls = append(renamedSqls, sql)
 	}
 	qec.onlineDDLTableNames[sourceTable.String()] = sourceTable
-	return sqls, nil
+	return renamedSqls, nil
 }
 
 func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema string) error {
