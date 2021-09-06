@@ -532,10 +532,11 @@ func (s *Syncer) initShardingGroups(ctx context.Context, needCheck bool) error {
 	}
 
 	// add sharding group
-	for targetSchema, mSchema := range mapper {
-		for targetTable, sourceIDs := range mSchema {
-			targetTableID := utils.GenTableID(&filter.Table{Schema: targetSchema, Name: targetTable})
-			_, _, _, _, err := s.sgk.AddGroup(&filter.Table{Schema: targetSchema, Name: targetTable}, sourceIDs, loadMeta[targetTableID], false)
+	for targetSchemaName, mSchema := range mapper {
+		for targetTableName, sourceIDs := range mSchema {
+			targetTable := &filter.Table{Schema: targetSchemaName, Name: targetTableName}
+			targetTableID := utils.GenTableID(targetTable)
+			_, _, _, _, err := s.sgk.AddGroup(targetTable, sourceIDs, loadMeta[targetTableID], false)
 			if err != nil {
 				return err
 			}
