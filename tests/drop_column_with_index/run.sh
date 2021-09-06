@@ -46,7 +46,7 @@ function run() {
 		"\"isCanceled\": false" 1
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"pause-task test" \
-		"\"result\": true" 1 \
+		"\"result\": true" 2 \
 		"go-mysql returned an error" 1
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
