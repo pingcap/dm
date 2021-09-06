@@ -50,20 +50,6 @@ const (
 	defaultBaseServerID = math.MaxUint32 / 10
 )
 
-// PrintTaskInterval is used to periodically print task status.
-var PrintTaskInterval = 30 * time.Second
-
-func init() {
-	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
-		if seconds, ok := val.(int); ok {
-			PrintTaskInterval = time.Duration(seconds) * time.Second
-			log.L().Info("set printStatusInterval",
-				zap.String("failpoint", "PrintStatusCheckSeconds"),
-				zap.Int("value", seconds))
-		}
-	})
-}
-
 // GetFlavor gets flavor from DB.
 func GetFlavor(ctx context.Context, db *sql.DB) (string, error) {
 	value, err := dbutil.ShowVersion(ctx, db)

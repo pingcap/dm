@@ -21,6 +21,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
@@ -143,7 +144,17 @@ func (w *SourceWorker) Start() {
 
 	w.l.Info("start running")
 
-	ticker := time.NewTicker(utils.PrintTaskInterval)
+	printTaskInterval := 30 * time.Second
+	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
+		if seconds, ok := val.(int); ok {
+			printTaskInterval = time.Duration(seconds) * time.Second
+			log.L().Info("set printStatusInterval",
+				zap.String("failpoint", "PrintStatusCheckSeconds"),
+				zap.Int("value", seconds))
+		}
+	})
+
+	ticker := time.NewTicker(printTaskInterval)
 	w.closed.Store(false)
 	defer ticker.Stop()
 	for {
@@ -155,7 +166,7 @@ func (w *SourceWorker) Start() {
 			old := w.sourceStatus.Load()
 			if old != nil {
 				status := old.(*binlog.SourceStatus)
-				if time.Since(status.UpdateTime) < utils.PrintTaskInterval/2 {
+				if time.Since(status.UpdateTime) < printTaskInterval/2 {
 					w.l.Info("we just updated the source status, skip once",
 						zap.Time("last update time", status.UpdateTime))
 					continue
