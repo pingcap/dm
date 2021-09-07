@@ -1649,7 +1649,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36011]
-message = "sharding group for `%s`.`%s` not found"
+message = "sharding group for %v not found"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
