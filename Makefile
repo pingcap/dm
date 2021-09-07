@@ -84,6 +84,10 @@ tools_setup:
 	@echo "setup tools"
 	@cd tools && make
 
+install_test_python_dep:
+	@echo "install python requirments for test"
+	sudo pip install -r tests/requirements.txt
+
 generate_proto: tools_setup
 	./generate-dm.sh
 
@@ -99,7 +103,6 @@ test: unit_test integration_test
 
 define run_unit_test
 	@echo "running unit test for packages:" $(1)
-	bash -x ./tests/wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
 	$(FAILPOINT_ENABLE)
 	@export log_level=error; \

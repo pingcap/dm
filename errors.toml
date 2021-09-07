@@ -3076,6 +3076,12 @@ description = ""
 workaround = "Please `stop-relay` first."
 tags = ["internal", "high"]
 
+[error.DM-scheduler-46024]
+message = "when %s, resource %s is in use by other client"
+description = ""
+workaround = "Please try again later"
+tags = ["internal", "low"]
+
 [error.DM-dmctl-48001]
 message = "can not create grpc connection"
 description = ""

@@ -182,6 +182,19 @@ func FetchLowerCaseTableNamesSetting(ctx context.Context, conn *sql.Conn) (Lower
 	return LowerCaseTableNamesFlavor(res), nil
 }
 
+// GetDBCaseSensitive returns the case sensitive setting of target db.
+func GetDBCaseSensitive(ctx context.Context, db *sql.DB) (bool, error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return true, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	lcFlavor, err := FetchLowerCaseTableNamesSetting(ctx, conn)
+	if err != nil {
+		return true, err
+	}
+	return lcFlavor == LCTableNamesSensitive, nil
+}
+
 // CompareShardingDDLs compares s and t ddls
 // only concern in content, ignore order of ddl.
 func CompareShardingDDLs(s, t []string) bool {
@@ -248,19 +261,29 @@ func NonRepeatStringsEqual(a, b []string) bool {
 }
 
 // GenTableID generates table ID.
-func GenTableID(schema, table string) (id string, isSchemaOnly bool) {
-	if len(table) == 0 {
-		return "`" + schema + "`", true
-	}
-	return "`" + schema + "`.`" + table + "`", false
+func GenTableID(table *filter.Table) string {
+	return table.String()
+}
+
+// GenSchemaID generates schema ID.
+func GenSchemaID(table *filter.Table) string {
+	return "`" + table.Schema + "`"
+}
+
+// GenTableIDAndCheckSchemaOnly generates table ID and check if schema only.
+func GenTableIDAndCheckSchemaOnly(table *filter.Table) (id string, isSchemaOnly bool) {
+	return GenTableID(table), len(table.Name) == 0
 }
 
 // UnpackTableID unpacks table ID to <schema, table> pair.
-func UnpackTableID(id string) (string, string) {
+func UnpackTableID(id string) *filter.Table {
 	parts := strings.Split(id, "`.`")
 	schema := strings.TrimLeft(parts[0], "`")
 	table := strings.TrimRight(parts[1], "`")
-	return schema, table
+	return &filter.Table{
+		Schema: schema,
+		Name:   table,
+	}
 }
 
 type session struct {
