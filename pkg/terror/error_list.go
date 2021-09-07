@@ -983,7 +983,7 @@ var (
 	ErrSyncUnitDDLWrongSequence          = New(codeSyncUnitDDLWrongSequence, ClassSyncUnit, ScopeInternal, LevelHigh, "detect inconsistent DDL sequence from source %+v, right DDL sequence should be %+v", "Please use `show-ddl-locks` command for more details.")
 	ErrSyncUnitDDLActiveIndexLarger      = New(codeSyncUnitDDLActiveIndexLarger, ClassSyncUnit, ScopeInternal, LevelHigh, "activeIdx %d larger than length of global DDLItems: %v", "")
 	ErrSyncUnitDupTableGroup             = New(codeSyncUnitDupTableGroup, ClassSyncUnit, ScopeInternal, LevelHigh, "table group %s exists", "")
-	ErrSyncUnitShardingGroupNotFound     = New(codeSyncUnitShardingGroupNotFound, ClassSyncUnit, ScopeInternal, LevelHigh, "sharding group for `%s`.`%s` not found", "")
+	ErrSyncUnitShardingGroupNotFound     = New(codeSyncUnitShardingGroupNotFound, ClassSyncUnit, ScopeInternal, LevelHigh, "sharding group for %v not found", "")
 	ErrSyncUnitSafeModeSetCount          = New(codeSyncUnitSafeModeSetCount, ClassSyncUnit, ScopeInternal, LevelHigh, "", "")
 	ErrSyncUnitCausalityConflict         = New(codeSyncUnitCausalityConflict, ClassSyncUnit, ScopeInternal, LevelHigh, "some conflicts in causality, must be resolved", "")
 	// ErrSyncUnitDMLStatementFound defines an error which means we found unexpected dml statement found in query event.

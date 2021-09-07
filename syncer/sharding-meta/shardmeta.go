@@ -19,6 +19,7 @@ import (
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
@@ -289,7 +290,8 @@ func (meta *ShardingMeta) CheckAndUpdate(targetID string, schemaMap map[string]s
 	}
 
 	checkSourceID := func(source string) (string, bool) {
-		schemaName, tblName := utils.UnpackTableID(source)
+		sourceTable := utils.UnpackTableID(source)
+		schemaName, tblName := sourceTable.Schema, sourceTable.Name
 		realSchema, changed := schemaMap[schemaName]
 		if !changed {
 			realSchema = schemaName
@@ -301,8 +303,8 @@ func (meta *ShardingMeta) CheckAndUpdate(targetID string, schemaMap map[string]s
 		} else {
 			realTable = tblName
 		}
-		newID, _ := utils.GenTableID(realSchema, realTable)
-		return newID, changed
+		newTableID := utils.GenTableID(&filter.Table{Schema: realSchema, Name: realTable})
+		return newTableID, changed
 	}
 
 	for _, item := range meta.global.Items {
