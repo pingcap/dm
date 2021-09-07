@@ -62,7 +62,7 @@ function run() {
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"start-relay -s $SOURCE_ID2 worker2" \
 		"\"result\": true" 1
-	run_dmctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status -s $SOURCE_ID2" \
 		"\"relayCatchUpMaster\": true" 1
 
