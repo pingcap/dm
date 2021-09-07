@@ -70,6 +70,11 @@ type Scheduler struct {
 
 	etcdCli *clientv3.Client
 
+	// must acquire latch from subtaskLatch before accessing subTaskCfgs and expectSubTaskStages,
+	// the latch key is task name.
+	// TODO: also sourceLatch, relayLatch
+	subtaskLatch *latches
+
 	// all source configs, source ID -> source config.
 	// add:
 	// - add source by user request (calling `AddSourceCfg`).
@@ -84,7 +89,7 @@ type Scheduler struct {
 	// - recover from etcd (calling `recoverSubTasks`).
 	// delete:
 	// - remove/stop subtask by user request (calling `RemoveSubTasks`).
-	subTaskCfgs map[string]map[string]config.SubTaskConfig
+	subTaskCfgs sync.Map
 
 	// all DM-workers, worker name -> worker.
 	// add:
@@ -134,7 +139,7 @@ type Scheduler struct {
 	// - update stage by user request (calling `UpdateExpectSubTaskStage`).
 	// delete:
 	// - remove/stop subtask by user request (calling `RemoveSubTasks`).
-	expectSubTaskStages map[string]map[string]ha.Stage
+	expectSubTaskStages sync.Map
 
 	// a source has its relay workers. source-id -> set(worker-name)
 	// add:
@@ -154,18 +159,17 @@ type Scheduler struct {
 // NewScheduler creates a new scheduler instance.
 func NewScheduler(pLogger *log.Logger, securityCfg config.Security) *Scheduler {
 	return &Scheduler{
-		logger:              pLogger.WithFields(zap.String("component", "scheduler")),
-		sourceCfgs:          make(map[string]*config.SourceConfig),
-		subTaskCfgs:         make(map[string]map[string]config.SubTaskConfig),
-		workers:             make(map[string]*Worker),
-		bounds:              make(map[string]*Worker),
-		unbounds:            make(map[string]struct{}),
-		lastBound:           make(map[string]ha.SourceBound),
-		expectRelayStages:   make(map[string]ha.Stage),
-		expectSubTaskStages: make(map[string]map[string]ha.Stage),
-		relayWorkers:        make(map[string]map[string]struct{}),
-		loadTasks:           make(map[string]map[string]string),
-		securityCfg:         securityCfg,
+		logger:            pLogger.WithFields(zap.String("component", "scheduler")),
+		subtaskLatch:      newLatches(),
+		sourceCfgs:        make(map[string]*config.SourceConfig),
+		workers:           make(map[string]*Worker),
+		bounds:            make(map[string]*Worker),
+		unbounds:          make(map[string]struct{}),
+		lastBound:         make(map[string]ha.SourceBound),
+		expectRelayStages: make(map[string]ha.Stage),
+		relayWorkers:      make(map[string]map[string]struct{}),
+		loadTasks:         make(map[string]map[string]string),
+		securityCfg:       securityCfg,
 	}
 }
 
@@ -342,13 +346,17 @@ func (s *Scheduler) RemoveSourceCfg(source string) error {
 
 	// 2. check whether any subtask or relay config exists for the source.
 	existingSubtasksM := make(map[string]struct{})
-	for task, cfg := range s.subTaskCfgs {
+	s.subTaskCfgs.Range(func(k, v interface{}) bool {
+		task := k.(string)
+		cfg := v.(map[string]config.SubTaskConfig)
 		for source2 := range cfg {
 			if source2 == source {
 				existingSubtasksM[task] = struct{}{}
 			}
 		}
-	}
+		return true
+	})
+
 	existingSubtasks := strMapToSlice(existingSubtasksM)
 	if len(existingSubtasks) > 0 {
 		return terror.ErrSchedulerSourceOpTaskExist.Generate(source, existingSubtasks)
@@ -604,15 +612,19 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 
 	// 4. if there's old worker, make sure it's not running
 	var runningTasks []string
-	for task, subtaskM := range s.expectSubTaskStages {
+	s.expectSubTaskStages.Range(func(k, v interface{}) bool {
+		task := k.(string)
+		subtaskM := v.(map[string]ha.Stage)
 		subtaskStage, ok2 := subtaskM[source]
 		if !ok2 {
-			continue
+			return true
 		}
 		if subtaskStage.Expect == pb.Stage_Running {
 			runningTasks = append(runningTasks, task)
 		}
-	}
+		return true
+	})
+
 	if len(runningTasks) > 0 {
 		return terror.ErrSchedulerRequireNotRunning.Generate(runningTasks, source)
 	}
@@ -637,10 +649,17 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 	return nil
 }
 
+// AcquireSubtaskLatch tries acquiring a latch for subtask name.
+func (s *Scheduler) AcquireSubtaskLatch(name string) (ReleaseFunc, error) {
+	return s.subtaskLatch.tryAcquire(name)
+}
+
 // AddSubTasks adds the information of one or more subtasks for one task.
-func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// use s.mu.RLock() to protect s.bound, and s.subtaskLatch to protect subtask related members.
+// setting `latched` to true means caller has acquired latch.
+func (s *Scheduler) AddSubTasks(latched bool, cfgs ...config.SubTaskConfig) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	if !s.started {
 		return terror.ErrSchedulerNotStarted.Generate()
@@ -650,29 +669,44 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 		return nil // no subtasks need to add, this should not happen.
 	}
 
-	// 1. check whether exists.
 	var (
 		taskNamesM    = make(map[string]struct{}, 1)
 		existSourcesM = make(map[string]struct{}, len(cfgs))
 	)
+
 	for _, cfg := range cfgs {
 		taskNamesM[cfg.Name] = struct{}{}
-		cfgM, ok := s.subTaskCfgs[cfg.Name]
+	}
+	taskNames := strMapToSlice(taskNamesM)
+	if len(taskNames) > 1 {
+		// only subtasks from one task supported now.
+		return terror.ErrSchedulerMultiTask.Generate(taskNames)
+	}
+
+	if !latched {
+		release, err := s.subtaskLatch.tryAcquire(taskNames[0])
+		if err != nil {
+			return terror.ErrSchedulerLatchInUse.Generate("AddSubTasks", taskNames[0])
+		}
+		defer release()
+	}
+
+	// 1. check whether exists.
+	for _, cfg := range cfgs {
+		v, ok := s.subTaskCfgs.Load(cfg.Name)
 		if !ok {
 			continue
 		}
+		cfgM := v.(map[string]config.SubTaskConfig)
 		_, ok = cfgM[cfg.SourceID]
 		if !ok {
 			continue
 		}
 		existSourcesM[cfg.SourceID] = struct{}{}
 	}
-	taskNames := strMapToSlice(taskNamesM)
+
 	existSources := strMapToSlice(existSourcesM)
 	switch {
-	case len(taskNames) > 1:
-		// only subtasks from one task supported now.
-		return terror.ErrSchedulerMultiTask.Generate(taskNames)
 	case len(existSources) == len(cfgs):
 		// all subtasks already exist, return an error.
 		return terror.ErrSchedulerSubTaskExist.Generate(taskNames[0], existSources)
@@ -709,16 +743,14 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 
 	// 5. record the config and the expectant stage.
 	for _, cfg := range newCfgs {
-		if _, ok := s.subTaskCfgs[cfg.Name]; !ok {
-			s.subTaskCfgs[cfg.Name] = make(map[string]config.SubTaskConfig)
-		}
-		s.subTaskCfgs[cfg.Name][cfg.SourceID] = cfg
+		v, _ := s.subTaskCfgs.LoadOrStore(cfg.Name, map[string]config.SubTaskConfig{})
+		m := v.(map[string]config.SubTaskConfig)
+		m[cfg.SourceID] = cfg
 	}
 	for _, stage := range newStages {
-		if _, ok := s.expectSubTaskStages[stage.Task]; !ok {
-			s.expectSubTaskStages[stage.Task] = make(map[string]ha.Stage)
-		}
-		s.expectSubTaskStages[stage.Task][stage.Source] = stage
+		v, _ := s.expectSubTaskStages.LoadOrStore(stage.Task, map[string]ha.Stage{})
+		m := v.(map[string]ha.Stage)
+		m[stage.Source] = stage
 	}
 
 	return nil
@@ -726,9 +758,6 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 
 // RemoveSubTasks removes the information of one or more subtasks for one task.
 func (s *Scheduler) RemoveSubTasks(task string, sources ...string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if !s.started {
 		return terror.ErrSchedulerNotStarted.Generate()
 	}
@@ -737,14 +766,22 @@ func (s *Scheduler) RemoveSubTasks(task string, sources ...string) error {
 		return nil // no subtask need to stop, this should not happen.
 	}
 
+	release, err := s.subtaskLatch.tryAcquire(task)
+	if err != nil {
+		return terror.ErrSchedulerLatchInUse.Generate("RemoveSubTasks", task)
+	}
+	defer release()
+
 	// 1. check the task exists.
-	stagesM, ok1 := s.expectSubTaskStages[task]
-	cfgsM, ok2 := s.subTaskCfgs[task]
+	stagesMapV, ok1 := s.expectSubTaskStages.Load(task)
+	cfgsMapV, ok2 := s.subTaskCfgs.Load(task)
 	if !ok1 || !ok2 {
 		return terror.ErrSchedulerSubTaskOpTaskNotExist.Generate(task)
 	}
 
 	var (
+		stagesM          = stagesMapV.(map[string]ha.Stage)
+		cfgsM            = cfgsMapV.(map[string]config.SubTaskConfig)
 		notExistSourcesM = make(map[string]struct{})
 		stages           = make([]ha.Stage, 0, len(sources))
 		cfgs             = make([]config.SubTaskConfig, 0, len(sources))
@@ -766,36 +803,36 @@ func (s *Scheduler) RemoveSubTasks(task string, sources ...string) error {
 	}
 
 	// 2. delete the configs and the stages.
-	_, err := ha.DeleteSubTaskCfgStage(s.etcdCli, cfgs, stages)
+	_, err = ha.DeleteSubTaskCfgStage(s.etcdCli, cfgs, stages)
 	if err != nil {
 		return err
 	}
 
 	// 3. clear the config and the expectant stage.
 	for _, cfg := range cfgs {
-		delete(s.subTaskCfgs[task], cfg.SourceID)
+		delete(cfgsM, cfg.SourceID)
 	}
-	if len(s.subTaskCfgs[task]) == 0 {
-		delete(s.subTaskCfgs, task)
+	if len(cfgsM) == 0 {
+		s.subTaskCfgs.Delete(task)
 	}
 	for _, stage := range stages {
-		delete(s.expectSubTaskStages[task], stage.Source)
+		delete(stagesM, stage.Source)
 	}
-	if len(s.expectSubTaskStages[task]) == 0 {
-		delete(s.expectSubTaskStages, task)
+	if len(stagesM) == 0 {
+		s.expectSubTaskStages.Delete(task)
 	}
 
 	return nil
 }
 
-// GetSubTaskCfgByTaskSource gets subtask config by task name and source ID.
-func (s *Scheduler) GetSubTaskCfgByTaskSource(task, source string) *config.SubTaskConfig {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	cfgM, ok := s.subTaskCfgs[task]
+// getSubTaskCfgByTaskSource gets subtask config by task name and source ID. Only used in tests.
+func (s *Scheduler) getSubTaskCfgByTaskSource(task, source string) *config.SubTaskConfig {
+	v, ok := s.subTaskCfgs.Load(task)
 	if !ok {
 		return nil
 	}
+
+	cfgM := v.(map[string]config.SubTaskConfig)
 	cfg, ok := cfgM[source]
 	if !ok {
 		return nil
@@ -806,12 +843,12 @@ func (s *Scheduler) GetSubTaskCfgByTaskSource(task, source string) *config.SubTa
 
 // GetSubTaskCfgsByTask gets subtask configs' map by task name.
 func (s *Scheduler) GetSubTaskCfgsByTask(task string) map[string]*config.SubTaskConfig {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	cfgM, ok := s.subTaskCfgs[task]
+	v, ok := s.subTaskCfgs.Load(task)
 	if !ok {
 		return nil
 	}
+
+	cfgM := v.(map[string]config.SubTaskConfig)
 	cloneM := make(map[string]*config.SubTaskConfig, len(cfgM))
 	for source, cfg := range cfgM {
 		clone := cfg
@@ -822,20 +859,21 @@ func (s *Scheduler) GetSubTaskCfgsByTask(task string) map[string]*config.SubTask
 
 // GetSubTaskCfgs gets all subconfig, return nil when error happens.
 func (s *Scheduler) GetSubTaskCfgs() map[string]map[string]config.SubTaskConfig {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	clone := make(map[string]map[string]config.SubTaskConfig, len(s.subTaskCfgs))
-	for task, m := range s.subTaskCfgs {
+	clone := make(map[string]map[string]config.SubTaskConfig)
+	s.subTaskCfgs.Range(func(k, v interface{}) bool {
+		task := k.(string)
+		m := v.(map[string]config.SubTaskConfig)
 		clone2 := make(map[string]config.SubTaskConfig, len(m))
 		for source, cfg := range m {
 			cfg2, err := cfg.Clone()
 			if err != nil {
-				return nil
+				return true
 			}
 			clone2[source] = *cfg2
 		}
 		clone[task] = clone2
-	}
+		return true
+	})
 
 	return clone
 }
@@ -1233,9 +1271,6 @@ func (s *Scheduler) GetExpectRelayStage(source string) ha.Stage {
 // because some user may want to update `{Running, Paused, ...}` to `{Running, Running, ...}`.
 // so, this should be also supported in DM-worker.
 func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sources ...string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if !s.started {
 		return terror.ErrSchedulerNotStarted.Generate()
 	}
@@ -1251,13 +1286,20 @@ func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sou
 		return terror.ErrSchedulerSubTaskStageInvalidUpdate.Generate(newStage)
 	}
 
+	release, err := s.subtaskLatch.tryAcquire(task)
+	if err != nil {
+		return terror.ErrSchedulerLatchInUse.Generate("UpdateExpectSubTaskStage", task)
+	}
+	defer release()
+
 	// 2. check the task exists.
-	stagesM, ok := s.expectSubTaskStages[task]
+	v, ok := s.expectSubTaskStages.Load(task)
 	if !ok {
 		return terror.ErrSchedulerSubTaskOpTaskNotExist.Generate(task)
 	}
 
 	var (
+		stagesM          = v.(map[string]ha.Stage)
 		notExistSourcesM = make(map[string]struct{})
 		currStagesM      = make(map[string]struct{})
 		stages           = make([]ha.Stage, 0, len(sources))
@@ -1282,14 +1324,14 @@ func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sou
 	}
 
 	// 3. put the stages into etcd.
-	_, err := ha.PutSubTaskStage(s.etcdCli, stages...)
+	_, err = ha.PutSubTaskStage(s.etcdCli, stages...)
 	if err != nil {
 		return err
 	}
 
 	// 4. update the stages in the scheduler.
 	for _, stage := range stages {
-		s.expectSubTaskStages[task][stage.Source] = stage
+		stagesM[stage.Source] = stage
 	}
 
 	return nil
@@ -1299,13 +1341,19 @@ func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sou
 // If the stage not exists, an invalid stage is returned.
 // This func is used for testing.
 func (s *Scheduler) GetExpectSubTaskStage(task, source string) ha.Stage {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	invalidStage := ha.NewSubTaskStage(pb.Stage_InvalidStage, source, task)
-	stageM, ok := s.expectSubTaskStages[task]
+
+	release, err := s.subtaskLatch.tryAcquire(task)
+	if err != nil {
+		return invalidStage
+	}
+	defer release()
+
+	v, ok := s.expectSubTaskStages.Load(task)
 	if !ok {
 		return invalidStage
 	}
+	stageM := v.(map[string]ha.Stage)
 	stage, ok := stageM[source]
 	if !ok {
 		return invalidStage
@@ -1353,18 +1401,16 @@ func (s *Scheduler) recoverSubTasks(cli *clientv3.Client) error {
 	// recover in-memory data.
 	for source, cfgM := range cfgMM {
 		for task, cfg := range cfgM {
-			if _, ok := s.subTaskCfgs[task]; !ok {
-				s.subTaskCfgs[task] = make(map[string]config.SubTaskConfig)
-			}
-			s.subTaskCfgs[task][source] = cfg
+			v, _ := s.subTaskCfgs.LoadOrStore(task, map[string]config.SubTaskConfig{})
+			m := v.(map[string]config.SubTaskConfig)
+			m[source] = cfg
 		}
 	}
 	for source, stageM := range stageMM {
 		for task, stage := range stageM {
-			if _, ok := s.expectSubTaskStages[task]; !ok {
-				s.expectSubTaskStages[task] = make(map[string]ha.Stage)
-			}
-			s.expectSubTaskStages[task][source] = stage
+			v, _ := s.expectSubTaskStages.LoadOrStore(task, map[string]ha.Stage{})
+			m := v.(map[string]ha.Stage)
+			m[source] = stage
 		}
 	}
 
@@ -1959,13 +2005,15 @@ func (s *Scheduler) updateStatusForUnbound(source string) {
 
 // reset resets the internal status.
 func (s *Scheduler) reset() {
+	s.subtaskLatch = newLatches()
 	s.sourceCfgs = make(map[string]*config.SourceConfig)
-	s.subTaskCfgs = make(map[string]map[string]config.SubTaskConfig)
+	s.subTaskCfgs = sync.Map{}
 	s.workers = make(map[string]*Worker)
 	s.bounds = make(map[string]*Worker)
 	s.unbounds = make(map[string]struct{})
 	s.expectRelayStages = make(map[string]ha.Stage)
-	s.expectSubTaskStages = make(map[string]map[string]ha.Stage)
+	s.expectSubTaskStages = sync.Map{}
+	s.loadTasks = make(map[string]map[string]string)
 }
 
 // strMapToSlice converts a `map[string]struct{}` to `[]string` in increasing order.
