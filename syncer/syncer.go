@@ -40,7 +40,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
-	brutils "github.com/pingcap/tidb/br/pkg/utils"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -91,8 +90,8 @@ var (
 
 	maxPauseOrStopWaitTime = 10 * time.Second
 
-	adminQueueName = "ddl queue"
-	dmlQueueName   = "dml queue"
+	adminQueueName     = "admin queue"
+	defaultBucketCount = 8
 )
 
 // BinlogType represents binlog sync type.
@@ -135,9 +134,8 @@ type Syncer struct {
 	streamerController *StreamerController
 	enableRelay        bool
 
-	wg          sync.WaitGroup
-	jobWg       sync.WaitGroup
-	causalityWg sync.WaitGroup
+	wg    sync.WaitGroup
+	jobWg sync.WaitGroup
 
 	schemaTracker *schema.Tracker
 
@@ -155,6 +153,9 @@ type Syncer struct {
 	waitXIDJob          atomic.Int64
 	isTransactionEnd    bool
 	waitTransactionLock sync.Mutex
+
+	causality *Causality
+	dmlWorker *DMLWorker
 
 	tableRouter     *router.Table
 	binlogFilter    *bf.BinlogEvent
@@ -228,8 +229,6 @@ type Syncer struct {
 	secondsBehindMaster       atomic.Int64    // current task delay second behind upstream
 	workerJobTSArray          []*atomic.Int64 // worker's sync job TS array, note that idx=0 is skip idx and idx=1 is ddl idx,sql worker job idx=(queue id + 2)
 	lastCheckpointFlushedTime time.Time
-
-	connectionPool *brutils.WorkerPool
 }
 
 // NewSyncer creates a new Syncer.
@@ -249,6 +248,8 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.binlogSizeCount.Store(0)
 	syncer.lastCount.Store(0)
 	syncer.count.Store(0)
+	syncer.causality = newCausality(cfg.WorkerCount*cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
+	syncer.dmlWorker = newDMLWorker(cfg.Batch, cfg.WorkerCount, cfg.QueueSize, &logger, cfg.Name, cfg.SourceID, cfg.WorkerName, syncer.successFunc, syncer.fatalFunc, syncer.updateReplicationJobTS, syncer.addCount)
 	syncer.done = nil
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
@@ -271,7 +272,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.workerJobTSArray[i] = atomic.NewInt64(0)
 	}
 	syncer.lastCheckpointFlushedTime = time.Time{}
-	syncer.connectionPool = brutils.NewWorkerPool(uint(cfg.WorkerCount), "connection_pool")
 	return syncer
 }
 
@@ -283,7 +283,7 @@ func (s *Syncer) GetSecondsBehindMaster() int64 {
 func (s *Syncer) newJobChans() {
 	s.closeJobChans()
 	s.dmlJobCh = make(chan *job, s.cfg.QueueSize*s.cfg.WorkerCount)
-	s.ddlJobCh = make(chan *job, 10)
+	s.ddlJobCh = make(chan *job, s.cfg.QueueSize)
 	s.jobsClosed.Store(false)
 }
 
@@ -980,8 +980,6 @@ func (s *Syncer) addJob(job *job) error {
 		s.addCount(false, adminQueueName, job.tp, 1, job.targetSchema, job.targetTable)
 		s.jobWg.Add(1)
 		s.dmlJobCh <- job
-		startTime := time.Now()
-		metrics.AddJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, dmlQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		s.jobWg.Wait()
 		s.addCount(true, adminQueueName, job.tp, 1, job.targetSchema, job.targetTable)
 		return s.flushCheckPoints()
@@ -994,9 +992,6 @@ func (s *Syncer) addJob(job *job) error {
 		metrics.AddJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		s.jobWg.Wait()
 	case insert, update, del:
-		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
-		s.addCount(false, dmlQueueName, job.tp, 1, job.targetSchema, job.targetTable)
-		startTime := time.Now()
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.dmlJobCh <- job
 		s.isTransactionEnd = false
@@ -1004,7 +999,6 @@ func (s *Syncer) addJob(job *job) error {
 			s.tctx.L().Info("receive dml job", zap.Any("dml job", job))
 			time.Sleep(100 * time.Millisecond)
 		})
-		metrics.AddJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, dmlQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 	}
 
 	// nolint:ifshort
@@ -1287,8 +1281,40 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *dbconn.
 	}
 }
 
+func (s *Syncer) successFunc(queueID int, jobs []*job) {
+	queueBucket := queueBucketName(queueID)
+	if len(jobs) > 0 {
+		// NOTE: we can use the first job of job queue to calculate lag because when this job committed,
+		// every event before this job's event in this queue has already commit.
+		// and we can use this job to maintain the oldest binlog event ts among all workers.
+		j := jobs[0]
+		switch j.tp {
+		case ddl:
+			metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageDDLExec, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(j.jobAddTime).Seconds())
+		case insert, update, del:
+			metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageDMLExec, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(j.jobAddTime).Seconds())
+			// metric only increases by 1 because dm batches sql jobs in a single transaction.
+			metrics.FinishedTransactionTotal.WithLabelValues(s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Inc()
+		}
+	}
+
+	for _, sqlJob := range jobs {
+		s.addCount(true, queueBucket, sqlJob.tp, 1, sqlJob.targetSchema, sqlJob.targetTable)
+	}
+	s.updateReplicationJobTS(nil, dmlWorkerJobIdx(queueID))
+	metrics.ReplicationTransactionBatch.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID, queueBucket).Observe(float64(len(jobs)))
+}
+
+func (s *Syncer) fatalFunc(job *job, err error) {
+	s.execError.Store(err)
+	if !utils.IsContextCanceledError(err) {
+		err = s.handleEventError(err, job.startLocation, job.currentLocation, false, "")
+		s.runFatalChan <- unit.NewProcessError(err)
+	}
+}
+
 // DML synced in batch by one worker.
-func (s *Syncer) syncDML() {
+func (s *Syncer) syncDML(tctx *tcontext.Context) {
 	defer s.wg.Done()
 
 	failpoint.Inject("changeTickerInterval", func(val failpoint.Value) {
@@ -1297,10 +1323,18 @@ func (s *Syncer) syncDML() {
 		s.tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
 	})
 
-	chanSize := s.cfg.QueueSize * s.cfg.WorkerCount
-	// compactor := RunCompactor(chanSize, chanSize, s.dmlJobCh)
-	causality := RunCausality(chanSize, s.cfg.Name, s.cfg.SourceID, nil)
-	s.RunDMLWorker(nil, nil, causality.CausalityCh)
+	// TODO: add compactor
+	causalityCh := s.causality.run(s.dmlJobCh)
+	flushCount, flushCh := s.dmlWorker.run(tctx, s.toDBConns, causalityCh)
+
+	counter := 0
+	for range flushCh {
+		counter++
+		if counter == flushCount {
+			counter = 0
+			s.jobWg.Done()
+		}
+	}
 }
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
@@ -1449,19 +1483,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 
 	s.wg.Add(1)
-	go func() {
-		s.syncDML()
-	}()
+	go s.syncDML(tctx)
 
 	s.wg.Add(1)
-	go func() {
-		s.syncDDL(tctx, adminQueueName, s.ddlDBConn, s.ddlJobCh)
-	}()
+	go s.syncDDL(tctx, adminQueueName, s.ddlDBConn, s.ddlJobCh)
 
 	s.wg.Add(1)
-	go func() {
-		s.printStatus(runCtx)
-	}()
+	go s.printStatus(runCtx)
 
 	s.wg.Add(1)
 	go func() {

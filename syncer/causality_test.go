@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/tidb/util/mock"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -56,7 +57,9 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 
 	location := binlog.NewLocation("")
 	jobCh := make(chan *job, 10)
-	causality := RunCausality(1024, "task", "source", jobCh)
+	logger := log.L()
+	causality := newCausality(1024, "task", "source", &logger)
+	causalityCh := causality.run(jobCh)
 	testCases := []struct {
 		op   opType
 		vals [][]interface{}
@@ -94,11 +97,11 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	}
 
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return len(causality.CausalityCh) == len(results)
+		return len(causality.causalityCh) == len(results)
 	}), IsTrue)
 
 	for _, op := range results {
-		job := <-causality.CausalityCh
+		job := <-causalityCh
 		c.Assert(job.tp, Equals, op)
 	}
 }

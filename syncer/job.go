@@ -182,7 +182,7 @@ func newCausalityJob() *job {
 
 // put queues into bucket to monitor them.
 func queueBucketName(queueID int) string {
-	return fmt.Sprintf("q_%d", queueID)
+	return fmt.Sprintf("q_%d", queueID%defaultBucketCount)
 }
 
 func dmlWorkerJobIdx(queueID int) int {

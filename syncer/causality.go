@@ -14,8 +14,12 @@
 package syncer
 
 import (
+	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/syncer/metrics"
 )
 
@@ -25,25 +29,44 @@ import (
 // this mechanism meets quiescent consistency to ensure correctness.
 type Causality struct {
 	relations   map[string]string
-	CausalityCh chan *job
+	causalityCh chan *job
 	in          chan *job
+	logger      log.Logger
+	chanSize    int
 
 	// for metrics
 	task   string
 	source string
 }
 
-// RunCausality creates and runs causality.
-func RunCausality(chanSize int, task, source string, in chan *job) *Causality {
+func newCausality(chanSize int, task, source string, pLogger *log.Logger) *Causality {
 	causality := &Causality{
-		relations:   make(map[string]string),
-		CausalityCh: make(chan *job, chanSize),
-		in:          in,
-		task:        task,
-		source:      source,
+		relations: make(map[string]string),
+		task:      task,
+		chanSize:  chanSize,
+		source:    source,
+		logger:    pLogger.WithFields(zap.String("component", "causality")),
 	}
-	go causality.run()
 	return causality
+}
+
+func (c *Causality) run(in chan *job) chan *job {
+	c.in = in
+	c.causalityCh = make(chan *job, c.chanSize)
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.runCausality()
+	}()
+
+	go func() {
+		defer c.close()
+		wg.Wait()
+	}()
+	return c.causalityCh
 }
 
 func (c *Causality) add(keys []string) {
@@ -67,29 +90,29 @@ func (c *Causality) add(keys []string) {
 	}
 }
 
-func (c *Causality) run() {
-	defer c.close()
-
+func (c *Causality) runCausality() {
 	for j := range c.in {
 		startTime := time.Now()
 		if j.tp != flush {
 			if c.detectConflict(j.keys) {
-				// s.tctx.L().Debug("meet causality key, will generate a flush job and wait all sqls executed", zap.Strings("keys", j.keys))
-				c.CausalityCh <- newCausalityJob()
+				c.logger.Debug("meet causality key, will generate a flush job and wait all sqls executed", zap.Strings("keys", j.keys))
+				c.causalityCh <- newCausalityJob()
 				c.reset()
 			}
 			c.add(j.keys)
 			j.key = c.get(j.key)
-			// s.tctx.L().Debug("key for keys", zap.String("key", j.key), zap.Strings("keys", j.keys))
+			c.logger.Debug("key for keys", zap.String("key", j.key), zap.Strings("keys", j.keys))
+		} else {
+			c.reset()
 		}
 		metrics.ConflictDetectDurationHistogram.WithLabelValues(c.task, c.source).Observe(time.Since(startTime).Seconds())
 
-		c.CausalityCh <- j
+		c.causalityCh <- j
 	}
 }
 
 func (c *Causality) close() {
-	close(c.CausalityCh)
+	close(c.causalityCh)
 }
 
 func (c *Causality) get(key string) string {
