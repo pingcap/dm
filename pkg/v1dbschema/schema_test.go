@@ -263,5 +263,5 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	}
 	c.Assert(rows.Err(), IsNil)
 	defer rows.Close()
-	t.mockDB.ExpectationsWereMet()
+	c.Assert(t.mockDB.ExpectationsWereMet(), IsNil)
 }
