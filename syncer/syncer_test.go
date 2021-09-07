@@ -28,6 +28,7 @@ import (
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/util/mock"
@@ -310,7 +311,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
 
-		r, err := syncer.skipQuery(tableNames, stmt, query)
+		r, err := syncer.filterQueryEvent(tableNames, stmt, query)
 		c.Assert(err, IsNil)
 		c.Assert(r, Equals, cs.skip)
 	}
@@ -447,7 +448,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 
 		tableNames, err := parserpkg.FetchDDLTableNames(sql, stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
-		r, err := syncer.skipQuery(tableNames, stmt, sql)
+		r, err := syncer.filterQueryEvent(tableNames, stmt, sql)
 		c.Assert(err, IsNil)
 		c.Assert(r, Equals, res[i])
 		i++
@@ -634,7 +635,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 				_, err = p.ParseOneStmt(string(ev.Query), "", "")
 				c.Assert(err, IsNil)
 			case *replication.RowsEvent:
-				r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+				r, err := syncer.filterRowsEvent(&filter.Table{Schema: string(ev.Table.Schema), Name: string(ev.Table.Table)}, e.Header.EventType)
 				c.Assert(err, IsNil)
 				c.Assert(r, Equals, sql.skipped)
 			default:
@@ -1488,6 +1489,11 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		testTbl  = "test_tbl"
 		testTbl2 = "test_tbl2"
 		ec       = &eventContext{tctx: tcontext.Background()}
+		qec      = &queryEventContext{
+			eventContext: *ec,
+			ddlSchema:    testDB,
+			p:            parser.New(),
+		}
 	)
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
@@ -1585,9 +1591,8 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		}},
 	}
 
-	p := parser.New()
 	for _, ca := range cases {
-		ddlSQL, filter, stmt, err := syncer.routeDDL(p, testDB, ca.sql)
+		ddlSQL, filter, stmt, err := syncer.routeDDL(qec, ca.sql)
 		c.Assert(err, IsNil)
 
 		ca.callback()
@@ -1608,34 +1613,45 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 	for _, e := range allEvents {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
-			query := string(ev.Query)
-
-			result, err := syncer.parseDDLSQL(query, p, string(ev.Schema))
+			qec := &queryEventContext{
+				eventContext: ec,
+				originSQL:    string(ev.Query),
+				ddlSchema:    string(ev.Schema),
+				p:            p,
+			}
+			stmt, err := syncer.parseDDLSQL(qec)
 			c.Assert(err, IsNil)
-			if !result.isDDL {
+
+			if _, ok := stmt.(ast.DDLNode); !ok {
 				continue // BEGIN event
 			}
-			querys, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, string(ev.Schema))
+			qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 			c.Assert(err, IsNil)
-			if len(querys) == 0 {
+			err = syncer.preprocessDDL(qec)
+			c.Assert(err, IsNil)
+			if len(qec.appliedDDLs) == 0 {
 				c.Assert(res[i], HasLen, 1)
 				c.Assert(res[i][0], Equals, true)
 				i++
 				continue
 			}
 
-			for j, sql := range querys {
+			for j, sql := range qec.appliedDDLs {
 				stmt, err := p.ParseOneStmt(sql, "", "")
 				c.Assert(err, IsNil)
 
 				tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
 				c.Assert(err, IsNil)
-				r, err := syncer.skipQuery(tableNames, stmt, sql)
+				r, err := syncer.filterQueryEvent(tableNames, stmt, sql)
 				c.Assert(err, IsNil)
 				c.Assert(r, Equals, res[i][j])
 			}
 		case *replication.RowsEvent:
-			r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+			table := &filter.Table{
+				Schema: string(ev.Table.Schema),
+				Name:   string(ev.Table.Table),
+			}
+			r, err := syncer.filterRowsEvent(table, e.Header.EventType)
 			c.Assert(err, IsNil)
 			c.Assert(r, Equals, res[i][0])
 		default:
@@ -1988,7 +2004,11 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 			c.Assert(err, IsNil)
 			switch ev := e.Event.(type) {
 			case *replication.RowsEvent:
-				skip, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+				table := &filter.Table{
+					Schema: string(ev.Table.Schema),
+					Name:   string(ev.Table.Table),
+				}
+				skip, err := syncer.filterRowsEvent(table, e.Header.EventType)
 				c.Assert(err, IsNil)
 				if skip {
 					continue

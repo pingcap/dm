@@ -51,7 +51,8 @@ func (s *testFilterSuite) TearDownSuite(c *C) {
 	c.Assert(s.db.Close(), IsNil)
 }
 
-func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
+// Q: Should rename to TestFilterOneEvent?
+func (s *testFilterSuite) TestFilterQueryEvent(c *C) {
 	cases := []struct {
 		sql           string
 		expectSkipped bool
@@ -144,79 +145,84 @@ END`, true},
 	// c.Assert(err, IsNil)
 	syncer := &Syncer{}
 	for _, t := range cases {
-		skipped, err := syncer.skipQuery(nil, nil, t.sql)
+		skipped, err := syncer.filterSQL(t.sql)
 		c.Assert(err, IsNil)
 		c.Assert(skipped, Equals, t.expectSkipped)
 	}
 
 	// system table
-	skipped, err := syncer.skipQuery([]*filter.Table{{Schema: "mysql", Name: "test"}}, nil, "create table mysql.test (id int)")
+	skipped, err := syncer.filterQueryEvent([]*filter.Table{{Schema: "mysql", Name: "test"}}, nil, "create table mysql.test (id int)")
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, true)
 
+	type smallCase struct {
+		sql     string
+		skipped bool
+	}
 	// test binlog filter
-	filterRules := []*bf.BinlogEventRule{
+	cases2 := []struct {
+		filterRule  *bf.BinlogEventRule
+		filterTable []*filter.Table
+		smallCases  []smallCase
+	}{
 		{
-			SchemaPattern: "*",
-			TablePattern:  "",
-			Events:        []bf.EventType{bf.DropTable},
-			SQLPattern:    []string{"^drop\\s+table"},
-			Action:        bf.Ignore,
+			// test global rule
+			filterRule: &bf.BinlogEventRule{
+				SchemaPattern: "*",
+				TablePattern:  "",
+				Events:        []bf.EventType{bf.DropTable},
+				SQLPattern:    []string{"^drop\\s+table"},
+				Action:        bf.Ignore,
+			},
+			filterTable: []*filter.Table{{Schema: "tx", Name: "test"}},
+			smallCases: []smallCase{
+				{"drop table tx.test", true},
+				{"create table tx.test (id int)", false},
+			},
 		}, {
-			SchemaPattern: "foo*",
-			TablePattern:  "",
-			Events:        []bf.EventType{bf.CreateTable},
-			SQLPattern:    []string{"^create\\s+table"},
-			Action:        bf.Do,
+			// test schema rule
+			filterRule: &bf.BinlogEventRule{
+				SchemaPattern: "foo*",
+				TablePattern:  "",
+				Events:        []bf.EventType{bf.CreateTable},
+				SQLPattern:    []string{"^create\\s+table"},
+				Action:        bf.Do,
+			},
+			filterTable: []*filter.Table{{Schema: "foo", Name: "test"}},
+			smallCases: []smallCase{
+				{"create table foo.test(id int)", false},
+				{"rename table foo.test to foo.test1", true},
+			},
 		}, {
-			SchemaPattern: "foo*",
-			TablePattern:  "bar*",
-			Events:        []bf.EventType{bf.CreateTable},
-			SQLPattern:    []string{"^create\\s+table"},
-			Action:        bf.Ignore,
+			// test table rule
+			filterRule: &bf.BinlogEventRule{
+				SchemaPattern: "foo*",
+				TablePattern:  "bar*",
+				Events:        []bf.EventType{bf.CreateTable},
+				SQLPattern:    []string{"^create\\s+table"},
+				Action:        bf.Ignore,
+			},
+			filterTable: []*filter.Table{{Schema: "foo", Name: "bar"}},
+			smallCases: []smallCase{
+				{"create table foo.bar(id int)", true},
+			},
 		},
+		// TODO: add single sql-pattern test
 	}
 
-	syncer.binlogFilter, err = bf.NewBinlogEvent(false, filterRules)
-	c.Assert(err, IsNil)
+	p := parser.New()
 
-	// test global rule
-	sql := "drop table tx.test"
-	stmt, err := parser.New().ParseOneStmt(sql, "", "")
-	c.Assert(err, IsNil)
-	skipped, err = syncer.skipQuery([]*filter.Table{{Schema: "tx", Name: "test"}}, stmt, sql)
-	c.Assert(err, IsNil)
-	c.Assert(skipped, Equals, true)
-
-	sql = "create table tx.test (id int)"
-	stmt, err = parser.New().ParseOneStmt(sql, "", "")
-	c.Assert(err, IsNil)
-	skipped, err = syncer.skipQuery([]*filter.Table{{Schema: "tx", Name: "test"}}, stmt, sql)
-	c.Assert(err, IsNil)
-	c.Assert(skipped, Equals, false)
-
-	// test schema rule
-	sql = "create table foo.test(id int)"
-	stmt, err = parser.New().ParseOneStmt(sql, "", "")
-	c.Assert(err, IsNil)
-	skipped, err = syncer.skipQuery([]*filter.Table{{Schema: "foo", Name: "test"}}, stmt, sql)
-	c.Assert(err, IsNil)
-	c.Assert(skipped, Equals, false)
-
-	sql = "rename table foo.test to foo.test1"
-	stmt, err = parser.New().ParseOneStmt(sql, "", "")
-	c.Assert(err, IsNil)
-	skipped, err = syncer.skipQuery([]*filter.Table{{Schema: "foo", Name: "test"}}, stmt, sql)
-	c.Assert(err, IsNil)
-	c.Assert(skipped, Equals, true)
-
-	// test table rule
-	sql = "create table foo.bar(id int)"
-	stmt, err = parser.New().ParseOneStmt(sql, "", "")
-	c.Assert(err, IsNil)
-	skipped, err = syncer.skipQuery([]*filter.Table{{Schema: "foo", Name: "bar"}}, stmt, sql)
-	c.Assert(err, IsNil)
-	c.Assert(skipped, Equals, true)
+	for _, cs := range cases2 {
+		syncer.binlogFilter, err = bf.NewBinlogEvent(false, []*bf.BinlogEventRule{cs.filterRule})
+		c.Assert(err, IsNil)
+		for _, smallCase := range cs.smallCases {
+			stmt, err := p.ParseOneStmt(smallCase.sql, "", "")
+			c.Assert(err, IsNil)
+			skipped, err = syncer.filterQueryEvent(cs.filterTable, stmt, smallCase.sql)
+			c.Assert(err, IsNil)
+			c.Assert(skipped, Equals, smallCase.skipped)
+		}
+	}
 }
 
 func (s *testFilterSuite) TestSkipDMLByExpression(c *C) {

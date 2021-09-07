@@ -87,16 +87,23 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 
 	stmt, err := parser.ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
-
-	syncer := &Syncer{}
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestCommentQuote")))
 	ec := eventContext{
 		tctx: tctx,
 	}
-	sqls, _, err := syncer.splitAndFilterDDL(ec, parser, stmt, "schemadb")
+	qec := &queryEventContext{
+		eventContext: ec,
+		ddlSchema:    "schemadb",
+		p:            parser,
+	}
+	qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 	c.Assert(err, IsNil)
-	c.Assert(len(sqls), Equals, 1)
-	c.Assert(sqls[0], Equals, expectedSQL)
+
+	syncer := &Syncer{}
+	err = syncer.preprocessDDL(qec)
+	c.Assert(err, IsNil)
+	c.Assert(len(qec.appliedDDLs), Equals, 1)
+	c.Assert(qec.appliedDDLs[0], Equals, expectedSQL)
 }
 
 func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
@@ -182,7 +189,6 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 		{"ALTER TABLE `xs1`.`t1` ADD COLUMN `c1` INT"},
 	}
 
-	p := parser.New()
 	cfg := &config.SubTaskConfig{
 		BAList: &filter.Rules{
 			DoDBs: []string{"s1"},
@@ -207,18 +213,28 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 	}
 
 	for i, sql := range sqls {
-		result, err := syncer.parseDDLSQL(sql, p, "test")
+		qec := &queryEventContext{
+			eventContext: ec,
+			ddlSchema:    "test",
+			originSQL:    sql,
+			appliedDDLs:  make([]string, 0),
+			p:            parser.New(),
+		}
+		stmt, err := syncer.parseDDLSQL(qec)
 		c.Assert(err, IsNil)
-		c.Assert(result.ignore, IsFalse)
-		c.Assert(result.isDDL, IsTrue)
+		_, ok := stmt.(ast.DDLNode)
+		c.Assert(ok, IsTrue)
 
-		statements, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, "test")
+		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		c.Assert(statements, DeepEquals, expectedSQLs[i])
-		c.Assert(targetSQLs[i], HasLen, len(statements))
+		// c.Assert(targetSQLs[i], HasLen, len(qec.splitedDDLs))
+		err = syncer.preprocessDDL(qec)
+		c.Assert(err, IsNil)
+		c.Assert(qec.appliedDDLs, DeepEquals, expectedSQLs[i])
+		c.Assert(targetSQLs[i], HasLen, len(qec.appliedDDLs))
 
-		for j, statement := range statements {
-			s, _, _, err := syncer.routeDDL(p, "test", statement)
+		for j, statement := range qec.appliedDDLs {
+			s, _, _, err := syncer.routeDDL(qec, statement)
 			c.Assert(err, IsNil)
 			c.Assert(s, Equals, targetSQLs[i][j])
 		}
@@ -226,130 +242,115 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 }
 
 func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
+	// TODO: need refine cases
 	cases := []struct {
 		sql      string
 		schema   string
-		ignore   bool
 		isDDL    bool
 		hasError bool
 	}{
 		{
 			sql:      "FLUSH",
 			schema:   "",
-			ignore:   true,
 			isDDL:    false,
-			hasError: false,
+			hasError: true,
 		},
 		{
 			sql:      "BEGIN",
 			schema:   "",
-			ignore:   false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "CREATE TABLE do_db.do_table (c1 INT)",
 			schema:   "",
-			ignore:   false,
 			isDDL:    true,
 			hasError: false,
 		},
 		{
 			sql:      "INSERT INTO do_db.do_table VALUES (1)",
 			schema:   "",
-			ignore:   false,
 			isDDL:    false,
-			hasError: true,
+			hasError: false,
 		},
 		{
 			sql:      "INSERT INTO ignore_db.ignore_table VALUES (1)",
 			schema:   "",
-			ignore:   true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "UPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
 			schema:   "ignore_db",
-			ignore:   true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "DELETE FROM `ignore_table` WHERE c1=2",
 			schema:   "ignore_db",
-			ignore:   true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "SELECT * FROM ignore_db.ignore_table",
 			schema:   "",
-			ignore:   false,
 			isDDL:    false,
-			hasError: true,
+			hasError: false,
 		},
 		{
 			sql:      "#",
 			schema:   "",
-			ignore:   false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "# this is a comment",
 			schema:   "",
-			ignore:   false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "# a comment with DDL\nCREATE TABLE do_db.do_table (c1 INT)",
 			schema:   "",
-			ignore:   false,
 			isDDL:    true,
 			hasError: false,
 		},
 		{
 			sql:      "# a comment with DML\nUPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
 			schema:   "ignore_db",
-			ignore:   true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "NOT A SQL",
 			schema:   "",
-			ignore:   false,
 			isDDL:    false,
 			hasError: true,
 		},
 	}
-
-	cfg := &config.SubTaskConfig{
-		BAList: &filter.Rules{
-			IgnoreDBs: []string{"ignore_db"},
-		},
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestParseDDLSQL")))
+	syncer := &Syncer{
+		tctx: tctx,
 	}
-	var err error
-	syncer := NewSyncer(cfg, nil)
-	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
-	c.Assert(err, IsNil)
-
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 	parser, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
+	qec := &queryEventContext{
+		p: parser,
+	}
 
 	for _, cs := range cases {
-		pr, err := syncer.parseDDLSQL(cs.sql, parser, cs.schema)
+		qec.originSQL = cs.sql
+		qec.ddlSchema = cs.schema
+		stmt, err := syncer.parseDDLSQL(qec)
 		if cs.hasError {
 			c.Assert(err, NotNil)
 		} else {
 			c.Assert(err, IsNil)
 		}
-		c.Assert(pr.ignore, Equals, cs.ignore)
-		c.Assert(pr.isDDL, Equals, cs.isDDL)
+		_, ok := stmt.(ast.DDLNode)
+		c.Assert(ok, Equals, cs.isDDL)
 	}
 }
 
@@ -375,20 +376,25 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	c.Assert(err, IsNil)
 
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveGeneratedColumnSQL")))
-	ec := eventContext{
-		tctx: tctx,
-	}
-
 	for _, tc := range testCases {
-		ast1, err := parser.ParseOneStmt(tc.sql, "", "")
+		qec := &queryEventContext{
+			eventContext: eventContext{
+				tctx: tctx,
+			},
+			appliedDDLs: make([]string, 0),
+			ddlSchema:   "test",
+			p:           parser,
+		}
+		stmt, err := parser.ParseOneStmt(tc.sql, "", "")
 		c.Assert(err, IsNil)
 
-		sqls, _, err := syncer.splitAndFilterDDL(ec, parser, ast1, "test")
+		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
+		c.Assert(err, IsNil)
+		err = syncer.preprocessDDL(qec)
 		c.Assert(err, IsNil)
 
-		c.Assert(len(sqls), Equals, 1)
-		getSQL := sqls[0]
-		c.Assert(getSQL, Equals, tc.expected)
+		c.Assert(len(qec.appliedDDLs), Equals, 1)
+		c.Assert(qec.appliedDDLs[0], Equals, tc.expected)
 	}
 }
 
@@ -410,8 +416,6 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		},
 	}
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveOnlineDDL")))
-	p := parser.New()
-
 	ec := eventContext{
 		tctx: tctx,
 	}
@@ -423,43 +427,68 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
 
+		// TODO: change to a loop
 		// real table
+		qec := &queryEventContext{
+			eventContext:        ec,
+			ddlSchema:           "test",
+			appliedDDLs:         make([]string, 0),
+			onlineDDLTableNames: make(map[string]*filter.Table),
+			p:                   parser.New(),
+		}
 		sql := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
-		stmt, err := p.ParseOneStmt(sql, "", "")
+		stmt, err := qec.p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err := syncer.splitAndFilterDDL(ec, p, stmt, "test")
+		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		c.Assert(sqls, HasLen, 1)
-		c.Assert(sqls[0], Equals, sql)
-		c.Assert(tables, HasLen, 0)
+		err = syncer.preprocessDDL(qec)
+		c.Assert(err, IsNil)
+		c.Assert(qec.appliedDDLs, HasLen, 1)
+		c.Assert(qec.appliedDDLs[0], Equals, sql)
 
 		// trash table
+		qec = &queryEventContext{
+			eventContext:        ec,
+			ddlSchema:           "test",
+			appliedDDLs:         make([]string, 0),
+			onlineDDLTableNames: make(map[string]*filter.Table),
+			p:                   parser.New(),
+		}
 		sql = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `test`.`%s` (`n` INT)", ca.trashName)
-		stmt, err = p.ParseOneStmt(sql, "", "")
+		stmt, err = qec.p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
+		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		c.Assert(sqls, HasLen, 0)
-		c.Assert(tables, HasLen, 0)
+		err = syncer.preprocessDDL(qec)
+		c.Assert(err, IsNil)
+		c.Assert(qec.appliedDDLs, HasLen, 0)
 
 		// ghost table
+		qec = &queryEventContext{
+			eventContext:        ec,
+			ddlSchema:           "test",
+			appliedDDLs:         make([]string, 0),
+			onlineDDLTableNames: make(map[string]*filter.Table),
+			p:                   parser.New(),
+		}
 		sql = fmt.Sprintf("ALTER TABLE `test`.`%s` ADD COLUMN `n` INT", ca.ghostname)
 		newSQL := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
-		stmt, err = p.ParseOneStmt(sql, "", "")
+		stmt, err = qec.p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
+		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		c.Assert(sqls, HasLen, 0)
-		c.Assert(tables, HasLen, 0)
+		err = syncer.preprocessDDL(qec)
+		c.Assert(err, IsNil)
+		c.Assert(qec.appliedDDLs, HasLen, 0)
 		sql = fmt.Sprintf("RENAME TABLE `test`.`%s` TO `test`.`t1`", ca.ghostname)
-		stmt, err = p.ParseOneStmt(sql, "", "")
+		stmt, err = qec.p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
+		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		c.Assert(sqls, HasLen, 1)
-		c.Assert(sqls[0], Equals, newSQL)
-		tableName := &filter.Table{Schema: "test", Name: ca.ghostname}
-		c.Assert(tables, DeepEquals, map[string]*filter.Table{tableName.String(): tableName})
+		err = syncer.preprocessDDL(qec)
+		c.Assert(err, IsNil)
+		c.Assert(qec.appliedDDLs, HasLen, 1)
+		c.Assert(qec.appliedDDLs[0], Equals, newSQL)
 	}
 }
 

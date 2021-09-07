@@ -30,6 +30,7 @@ import (
 func (s *Syncer) parseDDLSQL(qec *queryEventContext) (stmt ast.StmtNode, err error) {
 	// We use Parse not ParseOneStmt here, because sometimes we got a commented out ddl which can't be parsed
 	// by ParseOneStmt(it's a limitation of tidb parser.)
+	s.tctx.L().Info("parse ddl", zap.String("statement", qec.originSQL))
 	stmts, err := parserpkg.Parse(qec.p, qec.originSQL, "", "")
 	if err != nil {
 		// log error rather than fatal, so other defer can be executed
@@ -62,13 +63,17 @@ func (s *Syncer) preprocessDDL(qec *queryEventContext) error {
 
 		// get real tableNames before apply block-allow list
 		realTables := []*filter.Table{}
-		if s.onlineDDL != nil {
-			for _, table := range tableNames {
-				realTables = append(realTables, &filter.Table{
-					Schema: table.Schema,
-					Name:   s.onlineDDL.RealName(table.Name),
-				})
+		for _, table := range tableNames {
+			var realName string
+			if s.onlineDDL != nil {
+				realName = s.onlineDDL.RealName(table.Name)
+			} else {
+				realName = table.Name
 			}
+			realTables = append(realTables, &filter.Table{
+				Schema: table.Schema,
+				Name:   realName,
+			})
 		}
 
 		shouldSkip, err := s.filterQueryEvent(realTables, stmt, sql)
