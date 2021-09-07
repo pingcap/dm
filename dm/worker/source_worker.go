@@ -217,10 +217,10 @@ func (w *SourceWorker) Close() {
 		w.taskStatusChecker.Close()
 	}
 
-	w.closed.Store(true)
-
 	w.sourceDB.Close()
 	w.sourceDB = nil
+
+	w.closed.Store(true)
 
 	w.l.Info("Stop worker")
 }
