@@ -1769,7 +1769,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	// eventIndex is the rows event index in this transaction, it's used to avoiding read duplicate event in gtid mode
 	eventIndex := 0
-	// the relay log file may be truncated(not end with an RotateEvent), int this situation, we may read some rows events
+	// the relay log file may be truncated(not end with an RotateEvent), in this situation, we may read some rows events
 	// and then read from the gtid again, so we force enter safe-mode for one more transaction to avoid failure due to
 	// conflict
 	safeMode := false
@@ -1816,7 +1816,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		})
 		failpoint.Inject("GetEventErrorInTxn", func(val failpoint.Value) {
 			if intVal, ok := val.(int); ok && intVal == eventIndex {
-				err = errors.New("fail point triggered")
+				err = errors.New("failpoint triggered")
 				s.tctx.L().Warn("failed to get event", zap.Int("event_index", eventIndex),
 					zap.Any("cur_pos", currentLocation), zap.Any("las_pos", lastLocation),
 					zap.Any("pos", e.Header.LogPos), log.ShortError(err))

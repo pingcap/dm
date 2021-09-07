@@ -302,7 +302,7 @@ func (r *Relay) process(ctx context.Context) error {
 	// handles binlog events with retry mechanism.
 	// it only do the retry for some binlog reader error now.
 	for {
-		eventInx, err := r.handleEvents(ctx, reader2, transformer2, writer2)
+		eventIdx, err := r.handleEvents(ctx, reader2, transformer2, writer2)
 	checkError:
 		if err == nil {
 			return nil
@@ -320,7 +320,7 @@ func (r *Relay) process(ctx context.Context) error {
 			return err
 		}
 		r.logger.Info("retrying to read binlog")
-		if r.cfg.EnableGTID && eventInx > 0 {
+		if r.cfg.EnableGTID && eventIdx > 0 {
 			// check if server has switched
 			isNew, err2 := isNewServer(ctx, r.meta.UUID(), r.db.DB, r.cfg.Flavor)
 			// should start from the transaction beginning when switch to a new server
@@ -330,7 +330,7 @@ func (r *Relay) process(ctx context.Context) error {
 				goto checkError
 			}
 			if !isNew {
-				for i := 0; i < eventInx; {
+				for i := 0; i < eventIdx; {
 					res, err2 := reader2.GetEvent(ctx)
 					if err2 != nil {
 						err = err2
@@ -342,8 +342,8 @@ func (r *Relay) process(ctx context.Context) error {
 						i++
 					}
 				}
-				if eventInx > 0 {
-					r.logger.Info("discard duplicate event", zap.Int("count", eventInx))
+				if eventIdx > 0 {
+					r.logger.Info("discard duplicate event", zap.Int("count", eventIdx))
 				}
 			}
 		}
