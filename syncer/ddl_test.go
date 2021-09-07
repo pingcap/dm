@@ -465,21 +465,23 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 
 func (s *testSyncerSuite) TestDropSchemaInSharding(c *C) {
 	var (
-		targetDB  = "target_db"
-		targetTbl = "tbl"
-		sourceDB  = "db1"
-		source1   = "`db1`.`tbl1`"
-		source2   = "`db1`.`tbl2`"
-		tctx      = tcontext.Background()
+		targetTable = &filter.Table{
+			Schema: "target_db",
+			Name:   "tbl",
+		}
+		sourceDB = "db1"
+		source1  = "`db1`.`tbl1`"
+		source2  = "`db1`.`tbl2`"
+		tctx     = tcontext.Background()
 	)
 	clone, _ := s.cfg.Clone()
 	clone.ShardMode = config.ShardPessimistic
 	syncer := NewSyncer(clone, nil)
 	// nolint:dogsled
-	_, _, _, _, err := syncer.sgk.AddGroup(targetDB, targetTbl, []string{source1}, nil, true)
+	_, _, _, _, err := syncer.sgk.AddGroup(targetTable, []string{source1}, nil, true)
 	c.Assert(err, IsNil)
 	// nolint:dogsled
-	_, _, _, _, err = syncer.sgk.AddGroup(targetDB, targetTbl, []string{source2}, nil, true)
+	_, _, _, _, err = syncer.sgk.AddGroup(targetTable, []string{source2}, nil, true)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.sgk.Groups(), HasLen, 2)
 	c.Assert(syncer.dropSchemaInSharding(tctx, sourceDB), IsNil)
@@ -499,7 +501,7 @@ func (m mockOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) e
 	if _, ok := m.toFinish[k]; !ok {
 		return errors.New("finish table not found")
 	}
-	delete(m.toFinish, schema+table)
+	delete(m.toFinish, k)
 	return nil
 }
 
@@ -528,13 +530,15 @@ func (m mockOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[str
 
 func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
 	var (
-		targetDB  = "target_db"
-		targetTbl = "tbl"
-		source1   = "`db1`.`tbl1`"
-		key1      = "db1tbl1"
-		source2   = "`db1`.`tbl2`"
-		key2      = "db1tbl2"
-		tctx      = tcontext.Background()
+		targetTable = &filter.Table{
+			Schema: "target_db",
+			Name:   "tbl",
+		}
+		source1 = "`db1`.`tbl1`"
+		key1    = "db1tbl1"
+		source2 = "`db1`.`tbl2`"
+		key2    = "db1tbl2"
+		tctx    = tcontext.Background()
 	)
 	clone, _ := s.cfg.Clone()
 	clone.ShardMode = config.ShardPessimistic
@@ -545,12 +549,12 @@ func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
 	syncer.onlineDDL = mock
 
 	// nolint:dogsled
-	_, _, _, _, err := syncer.sgk.AddGroup(targetDB, targetTbl, []string{source1}, nil, true)
+	_, _, _, _, err := syncer.sgk.AddGroup(targetTable, []string{source1}, nil, true)
 	c.Assert(err, IsNil)
 	// nolint:dogsled
-	_, _, _, _, err = syncer.sgk.AddGroup(targetDB, targetTbl, []string{source2}, nil, true)
+	_, _, _, _, err = syncer.sgk.AddGroup(targetTable, []string{source2}, nil, true)
 	c.Assert(err, IsNil)
 
-	c.Assert(syncer.clearOnlineDDL(tctx, targetDB, targetTbl), IsNil)
+	c.Assert(syncer.clearOnlineDDL(tctx, targetTable), IsNil)
 	c.Assert(mock.toFinish, HasLen, 0)
 }
