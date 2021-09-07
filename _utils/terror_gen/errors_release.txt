@@ -273,7 +273,7 @@ ErrSyncUnitInvalidShardMeta,[code=36007:class=sync-unit:scope=internal:level=hig
 ErrSyncUnitDDLWrongSequence,[code=36008:class=sync-unit:scope=internal:level=high], "Message: detect inconsistent DDL sequence from source %+v, right DDL sequence should be %+v, Workaround: Please use `show-ddl-locks` command for more details."
 ErrSyncUnitDDLActiveIndexLarger,[code=36009:class=sync-unit:scope=internal:level=high], "Message: activeIdx %d larger than length of global DDLItems: %v"
 ErrSyncUnitDupTableGroup,[code=36010:class=sync-unit:scope=internal:level=high], "Message: table group %s exists"
-ErrSyncUnitShardingGroupNotFound,[code=36011:class=sync-unit:scope=internal:level=high], "Message: sharding group for `%s`.`%s` not found"
+ErrSyncUnitShardingGroupNotFound,[code=36011:class=sync-unit:scope=internal:level=high], "Message: sharding group for %v not found"
 ErrSyncUnitSafeModeSetCount,[code=36012:class=sync-unit:scope=internal:level=high]
 ErrSyncUnitCausalityConflict,[code=36013:class=sync-unit:scope=internal:level=high], "Message: some conflicts in causality, must be resolved"
 ErrSyncUnitDMLStatementFound,[code=36014:class=sync-unit:scope=internal:level=high], "Message: only support ROW format binlog, unexpected DML statement found in query event"
