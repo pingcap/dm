@@ -1018,6 +1018,10 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 		return nil, terror.Annotate(err, "fail to get random server id when relay adjust gtid")
 	}
 	syncCfg.ServerID = randomServerID
+	failpoint.Inject("MockReturnEmptyGTID", func(_ failpoint.Value) {
+		gset, _ = gtid.ParserGTID("mysql", "")
+		failpoint.Return(gset, nil)
+	})
 
 	tcpReader := binlogReader.NewTCPReader(syncCfg)
 	resultGs, err := binlogReader.GetPreviousGTIDFromGTIDSet(ctx, tcpReader, gset)
