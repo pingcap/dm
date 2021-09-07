@@ -9,7 +9,7 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 function run() {
 	# 1. test sync fetch binlog met error and reset binlog streamer with remote binlog
 
-	# with a 5 rows insert txn: 1 * GTID + 1 * BEGIN + 5 * (Table_map + Write_rows) + 1 * XID
+  # with a 5 rows insert txn: 1 * FormatDesc + 1 * PreviousGTID + 1 * GTID + 1 * BEGIN + 5 * (Table_map + Write_rows) + 1 * XID
 	# here we fail at the third write rows event, sync should retry and auto recover without any duplicate event
 	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/GetEventErrorInTxn=13*return(3)"
 
