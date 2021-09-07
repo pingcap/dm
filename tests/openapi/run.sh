@@ -81,6 +81,8 @@ function test_relay() {
 	# delete source success
 	openapi_source_check "delete_source_success" "mysql-01"
 
+	# TODO add transfer-source test when openapi support this
+
 	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: RELAY SUCCESS"
 
 }
