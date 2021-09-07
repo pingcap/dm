@@ -5,10 +5,6 @@ set -eu
 cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
-TASK_NAME="test"
-SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
-
-API_VERSION="v1alpha1"
 
 function run() {
 	# 1. test sync fetch binlog met error and reset binlog streamer with remote binlog
@@ -26,8 +22,7 @@ function run() {
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
-	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
-	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+	dmctl_operate_source create $cur/conf/source1.yaml $SOURCE_ID1
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"start-task $cur/conf/dm-task.yaml --remove-meta"
@@ -67,7 +62,9 @@ function run() {
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"start-relay -s $SOURCE_ID2 worker2" \
 		"\"result\": true" 1
-	sleep 5
+	run_dmctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s $SOURCE_ID2" \
+		"\"relayCatchUpMaster\": true" 1
 
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
