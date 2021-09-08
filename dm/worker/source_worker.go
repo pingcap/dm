@@ -276,10 +276,13 @@ func (w *SourceWorker) EnableRelay() (err error) {
 	// we need update worker source config from etcd first
 	// because the configuration of the relay part of the data source may be changed via scheduler.UpdateSourceCfg
 	sourceCfg, _, err := ha.GetRelayConfig(w.etcdClient, w.name)
-	w.cfg = sourceCfg
 	if err != nil {
 		return err
 	}
+	failpoint.Inject("MockGetSourceCFGFromETCD", func(_ failpoint.Value) {
+		sourceCfg = w.cfg
+	})
+	w.cfg = sourceCfg
 	w.relayCtx, w.relayCancel = context.WithCancel(w.ctx)
 
 	// 1. adjust relay starting position, to the earliest of subtasks
