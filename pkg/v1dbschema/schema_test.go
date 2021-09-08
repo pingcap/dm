@@ -14,26 +14,19 @@
 package v1dbschema
 
 import (
-	"database/sql"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
@@ -92,11 +85,8 @@ func (t *testSchema) setUpDBConn(c *C) {
 
 func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	var (
-		_, currFile, _, _ = runtime.Caller(0)
-		v1DataDir         = filepath.Join(filepath.Dir(currFile), "v106_data_for_test")
-		tctx              = tcontext.Background()
-
-		cfg = &config.SubTaskConfig{
+		tctx = tcontext.Background()
+		cfg  = &config.SubTaskConfig{
 			Name:       "test",
 			SourceID:   "mysql-replica-01",
 			ServerID:   429523137,
@@ -108,11 +98,6 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 				Password: t.password,
 			},
 		}
-
-		endPos = gmysql.Position{
-			Name: "mysql-bin|000001.000001",
-			Pos:  3574,
-		}
 		endGS, _ = gtid.ParserGTID(gmysql.MySQLFlavor, "ccb992ad-a557-11ea-ba6a-0242ac140002:1-16")
 	)
 
@@ -122,63 +107,6 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged", `return("ccb992ad-a557-11ea-ba6a-0242ac140002:1-9")`), IsNil)
 	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged")
-
-	dbConn, err := t.db.GetBaseConn(tctx.Ctx)
-	c.Assert(err, IsNil)
-	defer func() {
-		_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{
-			`DROP DATABASE ` + cfg.MetaSchema,
-		})
-	}()
-
-	// create metadata schema.
-	createSchemaSQL := `CREATE DATABASE IF NOT EXISTS ` + cfg.MetaSchema
-	t.mockDB.ExpectBegin()
-	t.mockDB.ExpectExec(createSchemaSQL).WithArgs().WillReturnResult(sqlmock.NewErrorResult(nil))
-	t.mockDB.ExpectCommit()
-	_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{createSchemaSQL})
-	c.Assert(err, IsNil)
-
-	// create v1.0.6 checkpoint table.
-	createCpV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_checkpoint-schema.sql"))
-	c.Assert(err, IsNil)
-	createCpV106SQL := string(createCpV106)
-	t.mockDB.ExpectBegin()
-	t.mockDB.ExpectExec(createCpV106SQL[:10] + ".*").WithArgs().WillReturnResult(sqlmock.NewErrorResult(nil))
-	t.mockDB.ExpectCommit()
-	_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{createCpV106SQL})
-	c.Assert(err, IsNil)
-
-	// create v1.0.6 online DDL metadata table.
-	createOnV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_onlineddl-schema.sql"))
-	c.Assert(err, IsNil)
-	createOnV106SQL := string(createOnV106)
-	t.mockDB.ExpectBegin()
-	t.mockDB.ExpectExec(createOnV106SQL[:10] + ".*").WithArgs().WillReturnResult(sqlmock.NewErrorResult(nil))
-	t.mockDB.ExpectCommit()
-	_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{createOnV106SQL})
-	c.Assert(err, IsNil)
-
-	// update position.
-	insertCpV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_checkpoint.sql"))
-	c.Assert(err, IsNil)
-	insertCpV106sSQL := strings.ReplaceAll(string(insertCpV106), "123456", strconv.FormatUint(uint64(endPos.Pos), 10))
-	// load syncer checkpoint into table.
-	t.mockDB.ExpectBegin()
-	t.mockDB.ExpectExec(insertCpV106sSQL[:10] + ".*").WithArgs().WillReturnResult(sqlmock.NewErrorResult(nil))
-	t.mockDB.ExpectCommit()
-	_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{insertCpV106sSQL})
-	c.Assert(err, IsNil)
-
-	// load online DDL metadata into table.
-	insertOnV106, err := ioutil.ReadFile(filepath.Join(v1DataDir, "v106_syncer_onlineddl.sql"))
-	insertOnV106SQL := string(insertOnV106)
-	t.mockDB.ExpectBegin()
-	t.mockDB.ExpectExec(insertOnV106SQL[:10] + ".*").WithArgs().WillReturnResult(sqlmock.NewErrorResult(nil))
-	t.mockDB.ExpectCommit()
-	c.Assert(err, IsNil)
-	_, err = dbConn.ExecuteSQL(tctx, nil, cfg.Name, []string{insertOnV106SQL})
-	c.Assert(err, IsNil)
 
 	// update schema without GTID enabled.
 	// mock updateSyncerCheckpoint
@@ -192,38 +120,14 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	t.mockDB.ExpectCommit()
 	c.Assert(UpdateSchema(tctx, t.db, cfg), IsNil)
 
-	// verify the column data of online DDL already updated.
-	countSQL := fmt.Sprintf("SELECT count(1) FROM %s", dbutil.TableName(cfg.MetaSchema, cputil.SyncerOnlineDDL(cfg.Name)))
-	t.mockDB.ExpectQuery(countSQL[:10] + ".*").WillReturnRows(sqlmock.NewRows([]string{"COUNT(1)"}).AddRow(2))
-	rows, err := dbConn.QuerySQL(tctx, countSQL)
-	c.Assert(err, IsNil)
-	c.Assert(rows.Next(), IsTrue)
-	var count int
-	c.Assert(rows.Scan(&count), IsNil)
-	c.Assert(rows.Next(), IsFalse)
-	c.Assert(rows.Err(), IsNil)
-	defer rows.Close()
-	c.Assert(count, Equals, 2)
-
-	// verify the column data of checkpoint not updated.
-	selectSQL := fmt.Sprintf(`SELECT binlog_gtid FROM %s`, dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)))
-	t.mockDB.ExpectQuery(selectSQL[:10] + ".*").WithArgs().WillReturnRows(sqlmock.NewRows([]string{"binlog_gtid"}).AddRow(nil))
-	rows, err = dbConn.QuerySQL(tctx, selectSQL)
-	c.Assert(err, IsNil)
-	for rows.Next() {
-		var gs sql.NullString
-		c.Assert(rows.Scan(&gs), IsNil)
-		c.Assert(gs.Valid, IsFalse)
-	}
-	c.Assert(rows.Err(), IsNil)
-	defer rows.Close()
-
 	// update schema with GTID enabled.
 	cfg.EnableGTID = true
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGlobalPos", `return("mysql-bin.000001")`), IsNil)
 	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGlobalPos")
 
+	// reset mockDB conn because last UpdateSchema will close the conn.
+	t.setUpDBConn(c)
 	// mock updateSyncerCheckpoint
 	t.mockDB.ExpectBegin()
 	t.mockDB.ExpectExec("ALTER TABLE `dm_meta_v106_test`.`test_syncer_checkpoint` ADD COLUMN binlog_gtid TEXT AFTER binlog_pos").WithArgs().WillReturnResult(sqlmock.NewErrorResult(nil))
@@ -239,29 +143,5 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	t.mockDB.ExpectCommit()
 	c.Assert(UpdateSchema(tctx, t.db, cfg), IsNil)
 
-	// verify the column data of global checkpoint already updated.
-	selectSQL = fmt.Sprintf(`SELECT binlog_gtid FROM %s WHERE is_global=1`, dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)))
-	t.mockDB.ExpectQuery(selectSQL[:10] + ".*").WithArgs().WillReturnRows(sqlmock.NewRows([]string{"binlog_gtid"}).AddRow(endGS.String()))
-	rows, err = dbConn.QuerySQL(tctx, selectSQL)
-	c.Assert(err, IsNil)
-	c.Assert(rows.Next(), IsTrue)
-	var gs sql.NullString
-	c.Assert(rows.Scan(&gs), IsNil)
-	c.Assert(rows.Next(), IsFalse)
-	c.Assert(rows.Err(), IsNil)
-	defer rows.Close()
-	c.Assert(gs.String, Equals, endGS.String())
-
-	selectSQL = fmt.Sprintf(`SELECT binlog_gtid FROM %s WHERE is_global!=1`, dbutil.TableName(cfg.MetaSchema, cputil.SyncerCheckpoint(cfg.Name)))
-	t.mockDB.ExpectQuery(selectSQL).WithArgs().WillReturnRows(sqlmock.NewRows([]string{"binlog_gtid"}).AddRow(nil))
-	rows, err = dbConn.QuerySQL(tctx, selectSQL)
-	c.Assert(err, IsNil)
-	for rows.Next() {
-		var gs sql.NullString
-		c.Assert(rows.Scan(&gs), IsNil)
-		c.Assert(gs.Valid, IsFalse)
-	}
-	c.Assert(rows.Err(), IsNil)
-	defer rows.Close()
 	c.Assert(t.mockDB.ExpectationsWereMet(), IsNil)
 }
