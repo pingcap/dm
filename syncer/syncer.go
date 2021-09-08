@@ -1766,8 +1766,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	maybeSkipNRowsEvent := func(n int) error {
 		if s.cfg.EnableGTID && n > 0 {
 			for i := 0; i < n; {
-				e, err := s.getEvent(tctx, currentLocation)
-				if err != nil {
+				e, err1 := s.getEvent(tctx, currentLocation)
+				if err1 != nil {
 					return err
 				}
 				if _, ok := e.Event.(*replication.RowsEvent); ok {
