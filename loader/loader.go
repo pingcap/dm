@@ -621,10 +621,6 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	default:
 	}
 
-	if len(errs) != 0 {
-		// pause because of error occurred
-		l.Pause()
-	}
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
 		Errors:     errs,
@@ -808,8 +804,7 @@ func (l *Loader) stopLoad() {
 	l.logger.Debug("all loader's go-routines have been closed")
 }
 
-// Pause pauses the process, and it can be resumed later
-// should cancel context from external.
+// Pause implements Unit.Pause.
 func (l *Loader) Pause() {
 	if l.isClosed() {
 		l.logger.Warn("try to pause, but already closed")

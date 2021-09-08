@@ -686,11 +686,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	default:
 	}
 
-	if len(errs) != 0 {
-		// pause because of error occurred
-		s.Pause()
-	}
-
 	// try to rollback checkpoints, if they already flushed, no effect
 	prePos := s.checkpoint.GlobalPoint()
 	s.checkpoint.Rollback(s.schemaTracker)
@@ -3167,9 +3162,7 @@ func (s *Syncer) removeHeartbeat() {
 	}
 }
 
-// Pause pauses the process, and it can be resumed later
-// should cancel context from external
-// TODO: it is not a true-meaning Pause because you can't stop it by calling Pause only.
+// Pause implements Unit.Pause.
 func (s *Syncer) Pause() {
 	if s.isClosed() {
 		s.tctx.L().Warn("try to pause, but already closed")
@@ -3462,6 +3455,16 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 	gs, err := reader.GetGTIDsForPosFromStreamer(tctx.Context(), streamerController.streamer, endPos)
 	if err != nil {
 		s.tctx.L().Warn("fail to get gtids for global location", zap.Stringer("pos", location), zap.Error(err))
+		return false, err
+	}
+	dbConn, err := s.fromDB.BaseDB.GetBaseConn(tctx.Context())
+	if err != nil {
+		s.tctx.L().Warn("fail to build connection", zap.Stringer("pos", location), zap.Error(err))
+		return false, err
+	}
+	gs, err = utils.AddGSetWithPurged(tctx.Context(), gs, dbConn.DBConn)
+	if err != nil {
+		s.tctx.L().Warn("fail to merge purged gtidSet", zap.Stringer("pos", location), zap.Error(err))
 		return false, err
 	}
 	err = location.SetGTID(gs.Origin())
