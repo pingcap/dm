@@ -307,10 +307,10 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		stmt, err := p.ParseOneStmt(query, "", "")
 		c.Assert(err, IsNil)
 
-		tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
+		tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
 
-		r, err := syncer.skipQuery(tableNames, stmt, query)
+		r, err := syncer.skipQuery(tables, stmt, query)
 		c.Assert(err, IsNil)
 		c.Assert(r, Equals, cs.skip)
 	}
@@ -445,9 +445,9 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 		stmt, err := p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
 
-		tableNames, err := parserpkg.FetchDDLTableNames(sql, stmt, syncer.SourceTableNamesFlavor)
+		tables, err := parserpkg.FetchDDLTables(sql, stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
-		r, err := syncer.skipQuery(tableNames, stmt, sql)
+		r, err := syncer.skipQuery(tables, stmt, sql)
 		c.Assert(err, IsNil)
 		c.Assert(r, Equals, res[i])
 		i++

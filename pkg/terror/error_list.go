@@ -1203,17 +1203,17 @@ var (
 	// Schema-tracker error.
 	ErrSchemaTrackerInvalidJSON        = New(codeSchemaTrackerInvalidJSON, ClassSchemaTracker, ScopeDownstream, LevelHigh, "saved schema of `%s`.`%s` is not proper JSON", "")
 	ErrSchemaTrackerCannotCreateSchema = New(codeSchemaTrackerCannotCreateSchema, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create database for `%s` in schema tracker", "")
-	ErrSchemaTrackerCannotCreateTable  = New(codeSchemaTrackerCannotCreateTable, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create table for `%s`.`%s` in schema tracker", "")
+	ErrSchemaTrackerCannotCreateTable  = New(codeSchemaTrackerCannotCreateTable, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create table for `%v` in schema tracker", "")
 	ErrSchemaTrackerCannotSerialize    = New(codeSchemaTrackerCannotSerialize, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to serialize table info for `%s`.`%s`", "")
-	ErrSchemaTrackerCannotGetTable     = New(codeSchemaTrackerCannotGetTable, ClassSchemaTracker, ScopeInternal, LevelHigh, "cannot get table info for `%s`.`%s` from schema tracker", "")
+	ErrSchemaTrackerCannotGetTable     = New(codeSchemaTrackerCannotGetTable, ClassSchemaTracker, ScopeInternal, LevelHigh, "cannot get table info for `%v` from schema tracker", "")
 	ErrSchemaTrackerCannotExecDDL      = New(codeSchemaTrackerCannotExecDDL, ClassSchemaTracker, ScopeInternal, LevelHigh, "cannot track DDL: %s", "")
 
 	ErrSchemaTrackerCannotFetchDownstreamTable = New(
 		codeSchemaTrackerCannotFetchDownstreamTable, ClassSchemaTracker, ScopeDownstream, LevelMedium,
-		"cannot fetch downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker", "")
+		"cannot fetch downstream table schema of `%v` to initialize upstream schema `%v` in schema tracker", "")
 	ErrSchemaTrackerCannotParseDownstreamTable = New(
 		codeSchemaTrackerCannotParseDownstreamTable, ClassSchemaTracker, ScopeInternal, LevelHigh,
-		"cannot parse downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker", "")
+		"cannot parse downstream table schema of `%v` to initialize upstream schema `%v` in schema tracker", "")
 	ErrSchemaTrackerInvalidCreateTableStmt = New(codeSchemaTrackerInvalidCreateTableStmt, ClassSchemaTracker, ScopeInternal, LevelMedium,
 		"%s is not a valid `CREATE TABLE` statement", "")
 	ErrSchemaTrackerRestoreStmtFail = New(codeSchemaTrackerRestoreStmtFail, ClassSchemaTracker, ScopeInternal, LevelMedium,

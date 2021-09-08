@@ -20,6 +20,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/format"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -76,7 +77,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 		}
 		err = s.schemaTracker.Exec(ctx, req.Database, newSQL)
 		if err != nil {
-			return "", terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, req.Database, req.Table)
+			return "", terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, &filter.Table{Schema: req.Database, Name: req.Table})
 		}
 
 		s.exprFilterGroup.ResetExprs(req.Schema, req.Table)
@@ -92,7 +93,11 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 
 		if req.Flush {
 			log.L().Info("flush table info", zap.String("table info", newSQL))
-			err = s.checkpoint.FlushPointWithTableInfo(tcontext.NewContext(ctx, log.L()), req.Database, req.Table, ti)
+			err = s.checkpoint.FlushPointWithTableInfo(
+				tcontext.NewContext(ctx, log.L()),
+				&filter.Table{Schema: req.Database, Name: req.Table},
+				ti,
+			)
 			if err != nil {
 				return "", err
 			}
@@ -103,9 +108,9 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 				log.L().Warn("ignore --sync flag", zap.String("shard mode", s.cfg.ShardMode))
 				break
 			}
-			downSchema, downTable := s.renameShardingSchema(req.Database, req.Table)
+			downTable := s.renameShardingSchema(&filter.Table{Schema: req.Database, Name: req.Table})
 			// use new table info as tableInfoBefore, we can also use the origin table from schemaTracker
-			info := s.optimist.ConstructInfo(req.Database, req.Table, downSchema, downTable, []string{""}, ti, []*model.TableInfo{ti})
+			info := s.optimist.ConstructInfo(req.Database, req.Table, downTable.Schema, downTable.Name, []string{""}, ti, []*model.TableInfo{ti})
 			info.IgnoreConflict = true
 			log.L().Info("sync info with operate-schema", zap.String("info", info.ShortString()))
 			_, err = s.optimist.PutInfo(info)

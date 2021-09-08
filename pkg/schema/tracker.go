@@ -309,12 +309,12 @@ func cloneTableInfo(ti *model.TableInfo) *model.TableInfo {
 }
 
 // CreateTableIfNotExists creates a TABLE of the given name if it did not exist.
-func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo) error {
-	dbName := model.NewCIStr(db)
-	tableName := model.NewCIStr(table)
+func (tr *Tracker) CreateTableIfNotExists(table *filter.Table, ti *model.TableInfo) error {
+	schemaName := model.NewCIStr(table.Schema)
+	tableName := model.NewCIStr(table.Name)
 	ti = cloneTableInfo(ti)
 	ti.Name = tableName
-	return tr.dom.DDL().CreateTableWithInfo(tr.se, dbName, ti, ddl.OnExistIgnore, false)
+	return tr.dom.DDL().CreateTableWithInfo(tr.se, schemaName, ti, ddl.OnExistIgnore, false)
 }
 
 // GetSystemVar gets a variable from schema tracker.
