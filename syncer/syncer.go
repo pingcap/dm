@@ -2651,7 +2651,7 @@ func (s *Syncer) handleQueryEventPessimistic(ev *replication.QueryEvent, qec *qu
 		synced             bool
 		active             bool
 		remain             int
-		source             = utils.GenTableID(ddlInfo.tableNames[0][0])
+		sourceTableID      = utils.GenTableID(qec.ddlInfo.tableNames[0][0])
 
 		usedSchema          = string(ev.Schema)
 		needHandleDDLs      = qec.needHandleDDLs
@@ -2659,7 +2659,6 @@ func (s *Syncer) handleQueryEventPessimistic(ev *replication.QueryEvent, qec *qu
 		onlineDDLTableNames = qec.onlineDDLTableNames
 		originSQL           = qec.originSQL
 		ddlInfo             = qec.ddlInfo
-
 	)
 	// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
 	// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
