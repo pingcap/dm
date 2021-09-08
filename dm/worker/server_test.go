@@ -291,7 +291,7 @@ func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
 		return false
 	}), IsTrue)
 
-	// enable failpont
+	// enable failpoint
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/ha/FailToGetSourceCfg", `return(true)`), IsNil)
 	sourceCfg := loadSourceConfigWithoutPassword(c)
 	sourceCfg.EnableRelay = false
