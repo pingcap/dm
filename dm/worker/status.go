@@ -111,13 +111,13 @@ func (w *SourceWorker) Status(stName string, sourceStatus *binlog.SourceStatus) 
 	return status
 }
 
-// StatusJSON returns the status of the worker as json string.
-func (w *SourceWorker) StatusJSON(stName string, sourceStatus *binlog.SourceStatus) string {
+// GetUnitAndSourceStatusJSON returns the status of the worker as json string.
+func (w *SourceWorker) GetUnitAndSourceStatusJSON(stName string, sourceStatus *binlog.SourceStatus) string {
 	sl := &pb.SubTaskStatusList{Status: w.Status(stName, sourceStatus)}
 	mar := jsonpb.Marshaler{EmitDefaults: true, Indent: "    "}
 	s, err := mar.MarshalToString(sl)
 	if err != nil {
-		w.l.Error("fail to marshal status", zap.Reflect("status", sl), zap.Error(err))
+		w.l.Error("fail to marshal status", zap.Any("status", sl), zap.Error(err))
 		return ""
 	}
 	return s

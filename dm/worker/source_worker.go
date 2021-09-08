@@ -179,7 +179,7 @@ func (w *SourceWorker) Start() {
 
 			sourceStatus := w.sourceStatus.Load().(*binlog.SourceStatus)
 			if w.l.Core().Enabled(zap.DebugLevel) {
-				w.l.Debug("runtime status", zap.String("status", w.StatusJSON("", sourceStatus)))
+				w.l.Debug("runtime status", zap.String("status", w.GetUnitAndSourceStatusJSON("", sourceStatus)))
 			}
 		}
 	}
