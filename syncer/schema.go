@@ -73,7 +73,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 		// drop the previous schema first.
 		err = s.schemaTracker.DropTable(table)
 		if err != nil && !schema.IsTableNotExists(err) {
-			return "", terror.ErrSchemaTrackerCannotDropTable.Delegate(err, req.Database, req.Table)
+			return "", terror.ErrSchemaTrackerCannotDropTable.Delegate(err, table)
 		}
 		err = s.schemaTracker.CreateSchemaIfNotExists(req.Database)
 		if err != nil {
