@@ -706,7 +706,7 @@ func (s *Syncer) getMasterStatus(ctx context.Context) (mysql.Position, gtid.Set,
 }
 
 func (s *Syncer) getTable(tctx *tcontext.Context, origTable, targetTable *filter.Table) (*model.TableInfo, error) {
-	ti, err := s.schemaTracker.GetTable(origTable.Schema, origTable.Name)
+	ti, err := s.schemaTracker.GetTable(origTable)
 	if err == nil {
 		return ti, nil
 	}
@@ -743,7 +743,7 @@ func (s *Syncer) getTable(tctx *tcontext.Context, origTable, targetTable *filter
 		}
 	}
 
-	ti, err = s.schemaTracker.GetTable(origTable.Schema, origTable.Name)
+	ti, err = s.schemaTracker.GetTable(origTable)
 	if err != nil {
 		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origTable)
 	}
@@ -892,7 +892,7 @@ func (s *Syncer) checkWait(job *job) bool {
 }
 
 func (s *Syncer) saveTablePoint(table *filter.Table, location binlog.Location) {
-	ti, err := s.schemaTracker.GetTable(table.Schema, table.Name)
+	ti, err := s.schemaTracker.GetTable(table)
 	if err != nil && table.Name != "" {
 		s.tctx.L().DPanic("table info missing from schema tracker",
 			zap.Stringer("table", table),

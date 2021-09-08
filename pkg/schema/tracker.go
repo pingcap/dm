@@ -170,8 +170,10 @@ func (tr *Tracker) Exec(ctx context.Context, db string, sql string) error {
 }
 
 // GetTable returns the schema associated with the table.
-func (tr *Tracker) GetTable(db, table string) (*model.TableInfo, error) {
-	t, err := tr.dom.InfoSchema().TableByName(model.NewCIStr(db), model.NewCIStr(table))
+func (tr *Tracker) GetTable(table *filter.Table) (*model.TableInfo, error) {
+	dbName := model.NewCIStr(table.Schema)
+	tableName := model.NewCIStr(table.Name)
+	t, err := tr.dom.InfoSchema().TableByName(dbName, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -275,13 +277,21 @@ func (tr *Tracker) Close() error {
 }
 
 // DropTable drops a table from this tracker.
-func (tr *Tracker) DropTable(db, table string) error {
-	return tr.dom.DDL().DropTable(tr.se, ast.Ident{Schema: model.NewCIStr(db), Name: model.NewCIStr(table)})
+func (tr *Tracker) DropTable(table *filter.Table) error {
+	tableIdent := ast.Ident{
+		Schema: model.NewCIStr(table.Schema),
+		Name:   model.NewCIStr(table.Name),
+	}
+	return tr.dom.DDL().DropTable(tr.se, tableIdent)
 }
 
 // DropIndex drops an index from this tracker.
-func (tr *Tracker) DropIndex(db, table, index string) error {
-	return tr.dom.DDL().DropIndex(tr.se, ast.Ident{Schema: model.NewCIStr(db), Name: model.NewCIStr(table)}, model.NewCIStr(index), true)
+func (tr *Tracker) DropIndex(table *filter.Table, index string) error {
+	tableIdent := ast.Ident{
+		Schema: model.NewCIStr(table.Schema),
+		Name:   model.NewCIStr(table.Name),
+	}
+	return tr.dom.DDL().DropIndex(tr.se, tableIdent, model.NewCIStr(index), true)
 }
 
 // CreateSchemaIfNotExists creates a SCHEMA of the given name if it did not exist.

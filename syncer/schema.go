@@ -71,7 +71,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 		newSQL := newCreateSQLBuilder.String()
 
 		// drop the previous schema first.
-		err = s.schemaTracker.DropTable(req.Database, req.Table)
+		err = s.schemaTracker.DropTable(table)
 		if err != nil && !schema.IsTableNotExists(err) {
 			return "", terror.ErrSchemaTrackerCannotDropTable.Delegate(err, req.Database, req.Table)
 		}
@@ -90,7 +90,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 			break
 		}
 
-		ti, err := s.schemaTracker.GetTable(req.Database, req.Table)
+		ti, err := s.schemaTracker.GetTable(table)
 		if err != nil {
 			return "", err
 		}
@@ -122,7 +122,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 	case pb.SchemaOp_RemoveSchema:
 		// we only drop the schema in the schema-tracker now,
 		// so if we drop the schema and continue to replicate any DDL/DML, it will try to get schema from downstream again.
-		return "", s.schemaTracker.DropTable(req.Database, req.Table)
+		return "", s.schemaTracker.DropTable(table)
 	}
 	return "", nil
 }

@@ -117,7 +117,7 @@ func (b *binlogPoint) rollback(schemaTracker *schema.Tracker, schema string) (is
 
 	// NOTE: no `Equal` function for `model.TableInfo` exists now, so we compare `pointer` directly,
 	// and after a new DDL applied to the schema, the returned pointer of `model.TableInfo` changed now.
-	trackedTi, _ := schemaTracker.GetTable(schema, b.ti.Name.O) // ignore the returned error, only compare `trackerTi` is enough.
+	trackedTi, _ := schemaTracker.GetTable(&filter.Table{Schema: schema, Name: b.ti.Name.O}) // ignore the returned error, only compare `trackerTi` is enough.
 	// may three versions of schema exist:
 	// - the one tracked in the TiDB-with-mockTiKV.
 	// - the one in the checkpoint but not flushed.
@@ -688,23 +688,27 @@ func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
 	cp.globalPoint.rollback(schemaTracker, "")
-	for schema, mSchema := range cp.points {
-		for table, point := range mSchema {
-			logger := cp.logCtx.L().WithFields(zap.String("schema", schema), zap.String("table", table))
+	for schemaName, mSchema := range cp.points {
+		for tableName, point := range mSchema {
+			table := &filter.Table{
+				Schema: schemaName,
+				Name:   tableName,
+			}
+			logger := cp.logCtx.L().WithFields(zap.Stringer("table", table))
 			logger.Debug("try to rollback checkpoint", log.WrapStringerField("checkpoint", point))
 			from := point.MySQLLocation()
-			if point.rollback(schemaTracker, schema) {
+			if point.rollback(schemaTracker, schemaName) {
 				logger.Info("rollback checkpoint", zap.Stringer("from", from), zap.Stringer("to", point.FlushedMySQLLocation()))
 				// schema changed
-				if err := schemaTracker.DropTable(schema, table); err != nil {
+				if err := schemaTracker.DropTable(table); err != nil {
 					logger.Warn("failed to drop table from schema tracker", log.ShortError(err))
 				}
 				if point.ti != nil {
 					// TODO: Figure out how to recover from errors.
-					if err := schemaTracker.CreateSchemaIfNotExists(schema); err != nil {
+					if err := schemaTracker.CreateSchemaIfNotExists(schemaName); err != nil {
 						logger.Error("failed to rollback schema on schema tracker: cannot create schema", log.ShortError(err))
 					}
-					if err := schemaTracker.CreateTableIfNotExists(&filter.Table{Schema: schema, Name: table}, point.ti); err != nil {
+					if err := schemaTracker.CreateTableIfNotExists(table, point.ti); err != nil {
 						logger.Error("failed to rollback schema on schema tracker: cannot create table", log.ShortError(err))
 					}
 				}
@@ -721,7 +725,7 @@ func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 				_, ok2 = cp.points[schema.Name.O][table.Name.O]
 			}
 			if !ok2 {
-				err := schemaTracker.DropTable(schema.Name.O, table.Name.O)
+				err := schemaTracker.DropTable(&filter.Table{Schema: schema.Name.O, Name: table.Name.O})
 				cp.logCtx.L().Info("drop table in schema tracker because no checkpoint exists", zap.String("schema", schema.Name.O), zap.String("table", table.Name.O), log.ShortError(err))
 			}
 		}

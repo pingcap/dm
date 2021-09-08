@@ -1836,7 +1836,7 @@ func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
-	c.Assert(syncer.schemaTracker.DropTable("test", "tbl"), IsNil)
+	c.Assert(syncer.schemaTracker.DropTable(table), IsNil)
 	sql := "create table tbl (c bigint primary key);"
 	c.Assert(syncer.schemaTracker.Exec(ctx, schemaName, sql), IsNil)
 	ti2, err := syncer.getTable(tctx, table, table)
@@ -1872,7 +1872,7 @@ func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
-	c.Assert(syncer.schemaTracker.DropTable("test", "tbl"), IsNil)
+	c.Assert(syncer.schemaTracker.DropTable(table), IsNil)
 	sql = "create table tbl (c bigint primary key auto_random);"
 	c.Assert(syncer.schemaTracker.Exec(ctx, schemaName, sql), IsNil)
 	ti2, err = syncer.getTable(tctx, table, table)
