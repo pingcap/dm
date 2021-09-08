@@ -100,7 +100,12 @@ func (c *Causality) runCausality() {
 				c.reset()
 			}
 			c.add(j.keys)
-			j.key = c.get(j.key)
+
+			var key string
+			if len(j.keys) > 0 {
+				key = j.keys[0]
+			}
+			j.key = c.get(key)
 			c.logger.Debug("key for keys", zap.String("key", j.key), zap.Strings("keys", j.keys))
 		} else {
 			c.reset()

@@ -190,7 +190,6 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 			wg.Wait()
 			// wait for previous causality jobs
 			w.causalityWg.Wait()
-
 			batchJobs := jobs
 			wg.Add(1)
 
@@ -214,6 +213,10 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 				failpoint.Inject("syncDMLTicker", func() {
 					w.tctx.L().Info("job queue not full, executeSQLs by ticker")
 				})
+				// wait for previous jobs executed
+				wg.Wait()
+				// wait for previous causality jobs
+				w.causalityWg.Wait()
 				batchJobs := jobs
 				wg.Add(1)
 				w.connectionPool.Apply(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))

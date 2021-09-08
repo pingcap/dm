@@ -962,7 +962,6 @@ func (s *Syncer) addJob(job *job) error {
 		s.tctx.L().Info("All jobs is completed before syncer close, the coming job will be reject", zap.Any("job", job))
 		return nil
 	}
-	var queueBucket int
 	switch job.tp {
 	case xid:
 		s.waitXIDJob.CAS(int64(waiting), int64(waitComplete))
@@ -987,7 +986,6 @@ func (s *Syncer) addJob(job *job) error {
 		metrics.AddJobDurationHistogram.WithLabelValues("ddl", s.cfg.Name, adminQueueName, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		s.jobWg.Wait()
 	case insert, update, del:
-		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.dmlJobCh <- job
 		s.isTransactionEnd = false
 		failpoint.Inject("checkCheckpointInMiddleOfTransaction", func() {
