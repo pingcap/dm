@@ -111,7 +111,8 @@ func (w *SourceWorker) Status(stName string, sourceStatus *binlog.SourceStatus) 
 	return status
 }
 
-// GetUnitAndSourceStatusJSON returns the status of the worker as json string.
+// GetUnitAndSourceStatusJSON returns the status of the worker and its unit as json string.
+// This function will also cause every unit to print its status to log.
 func (w *SourceWorker) GetUnitAndSourceStatusJSON(stName string, sourceStatus *binlog.SourceStatus) string {
 	sl := &pb.SubTaskStatusList{Status: w.Status(stName, sourceStatus)}
 	mar := jsonpb.Marshaler{EmitDefaults: true, Indent: "    "}
