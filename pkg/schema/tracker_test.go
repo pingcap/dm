@@ -26,6 +26,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/pingcap/dm/pkg/conn"
@@ -63,6 +64,10 @@ func (s *trackerSuite) TearDownSuite(c *C) {
 
 func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
+	table := &filter.Table{
+		Schema: "testdb",
+		Name:   "foo",
+	}
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
@@ -129,7 +134,7 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	err = tracker.Exec(ctx, "testdb", "create table \"foo\" (a varchar(255) primary key, b DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00')")
 	c.Assert(err, IsNil)
 
-	cts, err := tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	cts, err := tracker.GetCreateTable(context.Background(), table)
 	c.Assert(err, IsNil)
 	c.Assert(cts, Equals, "CREATE TABLE \"foo\" ( \"a\" varchar(255) NOT NULL, \"b\" datetime NOT NULL DEFAULT '0000-00-00 00:00:00', PRIMARY KEY (\"a\") /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
 
@@ -137,7 +142,7 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	err = tracker.Exec(ctx, "testdb", "alter table foo drop column \"b\"")
 	c.Assert(err, IsNil)
 
-	cts, err = tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	cts, err = tracker.GetCreateTable(context.Background(), table)
 	c.Assert(err, IsNil)
 	c.Assert(cts, Equals, "CREATE TABLE \"foo\" ( \"a\" varchar(255) NOT NULL, PRIMARY KEY (\"a\") /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
 
@@ -158,13 +163,17 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	c.Assert(err, IsNil)
 	err = tracker.Exec(ctx, "testdb", "create table \"foo\" (a varchar(255) primary key)")
 	c.Assert(err, IsNil)
-	cts, err = tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	cts, err = tracker.GetCreateTable(context.Background(), table)
 	c.Assert(err, IsNil)
 	c.Assert(cts, Equals, "CREATE TABLE \"foo\" ( \"a\" varchar(255) NOT NULL, PRIMARY KEY (\"a\") /*T![clustered_index] CLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
 }
 
 func (s *trackerSuite) TestDDL(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
+	table := &filter.Table{
+		Schema: "testdb",
+		Name:   "foo",
+	}
 
 	tracker, err := NewTracker(context.Background(), "test-tracker", defaultTestSessionCfg, s.baseConn)
 	c.Assert(err, IsNil)
@@ -174,7 +183,7 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(err, ErrorMatches, `.*Table 'testdb\.foo' doesn't exist`)
 	c.Assert(IsTableNotExists(err), IsTrue)
 
-	_, err = tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	_, err = tracker.GetCreateTable(context.Background(), table)
 	c.Assert(err, ErrorMatches, `.*Table 'testdb\.foo' doesn't exist`)
 	c.Assert(IsTableNotExists(err), IsTrue)
 
@@ -206,7 +215,7 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(ti, Equals, ti2)
 
-	cts, err := tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	cts, err := tracker.GetCreateTable(context.Background(), table)
 	c.Assert(err, IsNil)
 	c.Assert(cts, Equals, "CREATE TABLE `foo` ( `a` varchar(255) NOT NULL, `b` varchar(255) GENERATED ALWAYS AS (concat(`a`, `a`)) VIRTUAL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
 
@@ -224,7 +233,7 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(ti2.Columns[1].Name.L, Equals, "c")
 	c.Assert(ti2.Columns[1].IsGenerated(), IsFalse)
 
-	cts, err = tracker.GetCreateTable(context.Background(), "testdb", "foo")
+	cts, err = tracker.GetCreateTable(context.Background(), table)
 	c.Assert(err, IsNil)
 	c.Assert(cts, Equals, "CREATE TABLE `foo` ( `a` varchar(255) NOT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
 }
@@ -382,7 +391,7 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	c.Assert(err, ErrorMatches, `.*Table 'testdb\.foo' doesn't exist`)
 
 	// Recover the table using the table info.
-	err = tracker.CreateTableIfNotExists("testdb", "foo", ti1)
+	err = tracker.CreateTableIfNotExists(&filter.Table{Schema: "testdb", Name: "foo"}, ti1)
 	c.Assert(err, IsNil)
 
 	// The new table info should be equivalent to the old one except the TS and generated IDs.
@@ -392,15 +401,15 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	c.Assert(ti2, DeepEquals, ti1, Commentf("ti2 = %s\nti1 = %s", asJSON{ti2}, asJSON{ti1}))
 
 	// no error if table already exist
-	err = tracker.CreateTableIfNotExists("testdb", "foo", ti1)
+	err = tracker.CreateTableIfNotExists(&filter.Table{Schema: "testdb", Name: "foo"}, ti1)
 	c.Assert(err, IsNil)
 
 	// error if db not exist
-	err = tracker.CreateTableIfNotExists("test-another-db", "foo", ti1)
+	err = tracker.CreateTableIfNotExists(&filter.Table{Schema: "test-another-db", Name: "foo"}, ti1)
 	c.Assert(err, ErrorMatches, ".*Unknown database.*")
 
 	// Can use the table info to recover a table using a different name.
-	err = tracker.CreateTableIfNotExists("testdb", "bar", ti1)
+	err = tracker.CreateTableIfNotExists(&filter.Table{Schema: "testdb", Name: "bar"}, ti1)
 	c.Assert(err, IsNil)
 
 	ti3, err := tracker.GetTable("testdb", "bar")
@@ -412,7 +421,7 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 
 	start := time.Now()
 	for n := 0; n < 100; n++ {
-		err = tracker.CreateTableIfNotExists("testdb", fmt.Sprintf("foo-%d", n), ti1)
+		err = tracker.CreateTableIfNotExists(&filter.Table{Schema: "testdb", Name: fmt.Sprintf("foo-%d", n)}, ti1)
 		c.Assert(err, IsNil)
 	}
 	duration := time.Since(start)

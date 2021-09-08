@@ -22,7 +22,6 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/terror"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	tidbConfig "github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/ddl"
@@ -180,10 +179,9 @@ func (tr *Tracker) GetTable(db, table string) (*model.TableInfo, error) {
 }
 
 // GetCreateTable returns the `CREATE TABLE` statement of the table.
-func (tr *Tracker) GetCreateTable(ctx context.Context, db, table string) (string, error) {
-	name := dbutil.TableName(db, table)
+func (tr *Tracker) GetCreateTable(ctx context.Context, table *filter.Table) (string, error) {
 	// use `SHOW CREATE TABLE` now, another method maybe `executor.ConstructResultOfShowCreateTable`.
-	rs, err := tr.se.Execute(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", name))
+	rs, err := tr.se.Execute(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", table.String()))
 	if err != nil {
 		return "", err
 	} else if len(rs) != 1 {
