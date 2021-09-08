@@ -223,7 +223,9 @@ func (t *testServer) TestServer(c *C) {
 	}), IsTrue)
 
 	// test worker, just make sure testing sort
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCFGFromETCD", `return(true)`), IsNil)
 	t.testWorker(c)
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCFGFromETCD"), IsNil)
 }
 
 func (t *testServer) TestHandleSourceBoundAfterError(c *C) {
