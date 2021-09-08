@@ -595,6 +595,19 @@ function run() {
 	init_database
 
 	DM_CAUSALITY
+	DM_UpdateBARule
+	DM_RENAME_TABLE
+	DM_RENAME_COLUMN_OPTIMISTIC
+	DM_RemoveLock
+	DM_RestartMaster
+	DM_ADD_DROP_COLUMNS
+	DM_COLUMN_INDEX
+	start=1
+	end=5
+	for i in $(seq -f "%03g" ${start} ${end}); do
+		DM_${i}
+		sleep 1
+	done
 }
 
 cleanup_data $shardddl
