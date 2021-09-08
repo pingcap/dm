@@ -832,7 +832,7 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 		m = metrics.FinishedJobsTotal
 	}
 	switch tp {
-	case insert, update, del, ddl, flush:
+	case insert, update, del, ddl, flush, conflict:
 		m.WithLabelValues(tp.String(), s.cfg.Name, queueBucket, s.cfg.SourceID, s.cfg.WorkerName, targetSchema, targetTable).Add(float64(n))
 	case skip, xid:
 		// ignore skip/xid jobs
@@ -1320,6 +1320,8 @@ func (s *Syncer) syncDML(tctx *tcontext.Context) {
 	causalityCh := s.causality.run(s.dmlJobCh)
 	flushCount, flushCh := s.dmlWorker.run(tctx, s.toDBConns, causalityCh)
 
+	// wait all worker flushed
+	// use counter is enough since we only add new flush job after previous flush job done
 	counter := 0
 	for range flushCh {
 		counter++

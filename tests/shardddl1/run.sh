@@ -427,7 +427,7 @@ function DM_UpdateBARule() {
 	run_case UpdateBARule "double-source-optimistic" "init_table 111 121 211 221" "clean_table" "optimistic"
 }
 
-function DM_ADD_DROP_COLUMNS_CASE {
+function DM_ADD_DROP_COLUMNS_CASE() {
 	# add cols
 	run_sql_source1 "alter table ${shardddl1}.${tb1} add column col1 int, add column col2 int, add column col3 int;"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,now(),1,1,1);"
@@ -500,7 +500,7 @@ function DM_ADD_DROP_COLUMNS() {
 		"clean_table" "optimistic"
 }
 
-function DM_COLUMN_INDEX_CASE {
+function DM_COLUMN_INDEX_CASE() {
 	# add col and index
 	run_sql_source1 "alter table ${shardddl1}.${tb1} add column col3 int, add index idx_col1(col1);"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,1,1,1);"
@@ -573,6 +573,22 @@ function DM_COLUMN_INDEX() {
 		"clean_table" "optimistic"
 }
 
+function DM_CAUSALITY_CASE() {
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,2)"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(2,3)"
+	run_sql_source1 "update ${shardddl1}.${tb1} set a=3, b=4 where b=3"
+	run_sql_source1 "delete from ${shardddl1}.${tb1} where a=1"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,3)"
+	check_log_contain_with_retry "meet causality key, will generate a conflict job to flush all sqls" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_CAUSALITY() {
+	run_case CAUSALITY "single-source-no-sharding" \
+		"run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int unique);\"" \
+		"clean_table" ""
+}
+
 function run() {
 	init_cluster
 	init_database
@@ -584,6 +600,7 @@ function run() {
 	DM_RestartMaster
 	DM_ADD_DROP_COLUMNS
 	DM_COLUMN_INDEX
+	DM_CAUSALITY
 	start=1
 	end=5
 	for i in $(seq -f "%03g" ${start} ${end}); do

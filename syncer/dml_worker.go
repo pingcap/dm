@@ -19,9 +19,8 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
-	"go.uber.org/zap"
-
 	brutils "github.com/pingcap/tidb/br/pkg/utils"
+	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -48,6 +47,7 @@ type DMLWorker struct {
 	worker string
 
 	// callback func
+	// TODO: refine callback func
 	successFunc  func(int, []*job)
 	fatalFunc    func(*job, error)
 	lagFunc      func(*job, int)
@@ -59,7 +59,10 @@ type DMLWorker struct {
 }
 
 func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, source, worker string,
-	successFunc func(int, []*job), fatalFunc func(*job, error), lagFunc func(*job, int), addCountFunc func(bool, string, opType, int64, string, string),
+	successFunc func(int, []*job),
+	fatalFunc func(*job, error),
+	lagFunc func(*job, int),
+	addCountFunc func(bool, string, opType, int64, string, string),
 ) *DMLWorker {
 	return &DMLWorker{
 		batch:          batch,
@@ -77,7 +80,7 @@ func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, 
 	}
 }
 
-// Run runs dml workers.
+// run runs dml workers, return worker count and flush job channel.
 func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, causalityCh chan *job) (int, chan *job) {
 	w.tctx = tctx
 	w.toDBConns = toDBConns
@@ -104,11 +107,12 @@ func (w *DMLWorker) close() {
 	close(w.flushCh)
 }
 
-func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job, clearFunc func()) func() {
-	executeJobs := func() {
+// executeBatchJobs execute jobs with batch size.
+func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job, clearFunc func()) func(uint64) {
+	executeJobs := func(id uint64) {
 		var (
 			affect int
-			db     = w.toDBConns[queueID]
+			db     = w.toDBConns[int(id)-1]
 			err    error
 		)
 
@@ -132,7 +136,7 @@ func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job, clearFunc func())
 
 		failpoint.Inject("failSecondJob", func() {
 			if failExecuteSQL && failOnce.CAS(false, true) {
-				// s.tctx.L().Info("trigger failSecondJob")
+				w.logger.Info("trigger failSecondJob")
 				err = terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJob"), "mock")
 				failpoint.Return()
 			}
@@ -154,7 +158,7 @@ func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job, clearFunc func())
 		affect, err = db.ExecuteSQL(ctctx, queries, args...)
 		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
 			if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
-				w.tctx.L().Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
+				w.logger.Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
 				affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
 			}
 		})
@@ -162,6 +166,8 @@ func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job, clearFunc func())
 	return executeJobs
 }
 
+// executeCausalityJobs execute jobs in same queueBucket
+// All the jobs received should be executed consecutively.
 func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 	jobs := make([]*job, 0, w.batch)
 	workerJobIdx := dmlWorkerJobIdx(queueID)
@@ -170,10 +176,10 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 	for {
 		select {
 		case j, ok := <-jobCh:
-			metrics.QueueSizeGauge.WithLabelValues(w.task, queueBucket, "").Set(float64(len(jobCh)))
+			metrics.QueueSizeGauge.WithLabelValues(w.task, queueBucket, w.source).Set(float64(len(jobCh)))
 			if !ok {
 				if len(jobs) > 0 {
-					w.tctx.L().Warn("have unexecuted jobs when close job chan!", zap.Any("rest job", jobs))
+					w.logger.Warn("have unexecuted jobs when close job chan!", zap.Any("rest job", jobs))
 				}
 				return
 			}
@@ -190,21 +196,23 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 
 			// wait for previous jobs executed
 			wg.Wait()
-			// wait for previous causality jobs
-			w.causalityWg.Wait()
 			batchJobs := jobs
 			wg.Add(1)
 
 			if j.tp == conflict {
-				w.connectionPool.Apply(w.executeBatchJobs(queueID, batchJobs, func() {
+				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() {
 					wg.Done()
 					w.causalityWg.Done()
 				}))
 			} else {
-				w.connectionPool.Apply(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))
+				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))
 			}
 
-			// TODO: waiting for async flush
+			// wait for all conflict jobs done
+			if j.tp == conflict {
+				w.causalityWg.Wait()
+			}
+
 			if j.tp == flush {
 				wg.Wait()
 				w.flushCh <- j
@@ -213,7 +221,7 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 		case <-time.After(waitTime):
 			if len(jobs) > 0 {
 				failpoint.Inject("syncDMLTicker", func() {
-					w.tctx.L().Info("job queue not full, executeSQLs by ticker")
+					w.logger.Info("job queue not full, executeSQLs by ticker")
 				})
 				// wait for previous jobs executed
 				wg.Wait()
@@ -221,11 +229,11 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 				w.causalityWg.Wait()
 				batchJobs := jobs
 				wg.Add(1)
-				w.connectionPool.Apply(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))
+				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))
 				jobs = make([]*job, 0, w.batch)
 			} else {
 				failpoint.Inject("noJobInQueueLog", func() {
-					w.tctx.L().Debug("no job in queue, update lag to zero", zap.Int(
+					w.logger.Debug("no job in queue, update lag to zero", zap.Int(
 						"workerJobIdx", workerJobIdx), zap.Int64("current ts", time.Now().Unix()))
 				})
 				w.lagFunc(nil, workerJobIdx)
@@ -234,6 +242,7 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 	}
 }
 
+// runCausalityDMLWorker distribute jobs by queueBucket.
 func (w *DMLWorker) runCausalityDMLWorker(causalityCh chan *job) {
 	causalityJobChs := make([]chan *job, w.workerCount)
 
@@ -255,17 +264,21 @@ func (w *DMLWorker) runCausalityDMLWorker(causalityCh chan *job) {
 
 	for j := range causalityCh {
 		if j.tp == flush || j.tp == conflict {
+			if j.tp == conflict {
+				w.causalityWg.Add(w.workerCount)
+			}
 			// flush for every DML queue
 			for i, causalityJobCh := range causalityJobChs {
+				w.addCountFunc(false, queueBucketMapping[i], j.tp, 1, j.targetSchema, j.targetTable)
 				startTime := time.Now()
 				causalityJobCh <- j
-				metrics.AddJobDurationHistogram.WithLabelValues("flush", w.task, queueBucketMapping[i], w.source).Observe(time.Since(startTime).Seconds())
+				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[i], w.source).Observe(time.Since(startTime).Seconds())
 			}
 		} else {
 			queueBucket := int(utils.GenHashKey(j.key)) % w.workerCount
 			w.addCountFunc(false, queueBucketMapping[queueBucket], j.tp, 1, j.targetSchema, j.targetTable)
 			startTime := time.Now()
-			w.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.key))
+			w.logger.Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.key))
 			causalityJobChs[queueBucket] <- j
 			metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[queueBucket], w.source).Observe(time.Since(startTime).Seconds())
 		}

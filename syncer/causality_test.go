@@ -74,7 +74,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 		},
 		{
 			op:   update,
-			vals: [][]interface{}{{2, 3}, {4, 3}},
+			vals: [][]interface{}{{2, 3}, {3, 4}},
 		},
 		{
 			op:   del,

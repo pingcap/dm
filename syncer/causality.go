@@ -25,7 +25,7 @@ import (
 
 // Causality provides a simple mechanism to improve the concurrency of SQLs execution under the premise of ensuring correctness.
 // causality groups sqls that maybe contain causal relationships, and syncer executes them linearly.
-// if some conflicts exist in more than one groups, then syncer waits all SQLs that are grouped be executed and reset causality.
+// if some conflicts exist in more than one groups, causality generate a conflict job and reset.
 // this mechanism meets quiescent consistency to ensure correctness.
 type Causality struct {
 	relations   map[string]string
@@ -92,12 +92,13 @@ func (c *Causality) add(keys []string) {
 
 func (c *Causality) runCausality() {
 	for j := range c.in {
-		metrics.QueueSizeGauge.WithLabelValues(c.task, "causality_queue", "").Set(float64(len(c.in)))
+		metrics.QueueSizeGauge.WithLabelValues(c.task, "causality_queue", c.source).Set(float64(len(c.in)))
 
 		startTime := time.Now()
 		if j.tp != flush {
+			// detectConflict before add
 			if c.detectConflict(j.keys) {
-				c.logger.Debug("meet causality key, will generate a flush job and wait all sqls executed", zap.Strings("keys", j.keys))
+				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", j.keys))
 				c.causalityCh <- newCausalityJob()
 				c.reset()
 			}
