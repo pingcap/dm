@@ -574,11 +574,63 @@ function DM_COLUMN_INDEX() {
 }
 
 function DM_CAUSALITY_CASE() {
+    truncate -s 0 $WORK_DIR/worker1/log/dm-worker.log
+    truncate -s 0 $WORK_DIR/worker2/log/dm-worker.log
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,2)"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(2,3)"
 	run_sql_source1 "update ${shardddl1}.${tb1} set a=3, b=4 where b=3"
 	run_sql_source1 "delete from ${shardddl1}.${tb1} where a=1"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,3)"
+	check_log_contain_with_retry "meet causality key, will generate a conflict job to flush all sqls" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    truncate -s 0 $WORK_DIR/worker1/log/dm-worker.log
+    truncate -s 0 $WORK_DIR/worker2/log/dm-worker.log
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(11,12)"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(12,13)"
+	run_sql_source1 "update ${shardddl1}.${tb1} set a=13, b=14 where b=13"
+	run_sql_source1 "delete from ${shardddl1}.${tb1} where a=11"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(11,13)"
+	check_log_contain_with_retry "meet causality key, will generate a conflict job to flush all sqls" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    truncate -s 0 $WORK_DIR/worker1/log/dm-worker.log
+    truncate -s 0 $WORK_DIR/worker2/log/dm-worker.log
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(21,22)"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(22,23)"
+	run_sql_source1 "update ${shardddl1}.${tb1} set a=23, b=24 where b=23"
+	run_sql_source1 "delete from ${shardddl1}.${tb1} where a=21"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(21,23)"
+	check_log_contain_with_retry "meet causality key, will generate a conflict job to flush all sqls" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    truncate -s 0 $WORK_DIR/worker1/log/dm-worker.log
+    truncate -s 0 $WORK_DIR/worker2/log/dm-worker.log
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(31,32)"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(32,33)"
+	run_sql_source1 "update ${shardddl1}.${tb1} set a=33, b=34 where b=33"
+	run_sql_source1 "delete from ${shardddl1}.${tb1} where a=31"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(31,33)"
+	check_log_contain_with_retry "meet causality key, will generate a conflict job to flush all sqls" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    truncate -s 0 $WORK_DIR/worker1/log/dm-worker.log
+    truncate -s 0 $WORK_DIR/worker2/log/dm-worker.log
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(41,42)"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(42,43)"
+	run_sql_source1 "update ${shardddl1}.${tb1} set a=43, b=44 where b=43"
+	run_sql_source1 "delete from ${shardddl1}.${tb1} where a=41"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(41,43)"
+	check_log_contain_with_retry "meet causality key, will generate a conflict job to flush all sqls" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    truncate -s 0 $WORK_DIR/worker1/log/dm-worker.log
+    truncate -s 0 $WORK_DIR/worker2/log/dm-worker.log
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(51,52)"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(52,53)"
+	run_sql_source1 "update ${shardddl1}.${tb1} set a=53, b=54 where b=53"
+	run_sql_source1 "delete from ${shardddl1}.${tb1} where a=51"
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(51,53)"
 	check_log_contain_with_retry "meet causality key, will generate a conflict job to flush all sqls" $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
@@ -593,20 +645,7 @@ function run() {
 	init_cluster
 	init_database
 
-	DM_UpdateBARule
-	DM_RENAME_TABLE
-	DM_RENAME_COLUMN_OPTIMISTIC
-	DM_RemoveLock
-	DM_RestartMaster
-	DM_ADD_DROP_COLUMNS
-	DM_COLUMN_INDEX
 	DM_CAUSALITY
-	start=1
-	end=5
-	for i in $(seq -f "%03g" ${start} ${end}); do
-		DM_${i}
-		sleep 1
-	done
 }
 
 cleanup_data $shardddl

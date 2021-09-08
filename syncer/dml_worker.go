@@ -200,19 +200,12 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 			wg.Add(1)
 
 			if j.tp == conflict {
-				w.logger.Debug("receive conflict job", zap.String("queue bucket", queueBucket))
 				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() {
 					wg.Done()
 					w.causalityWg.Done()
-					w.logger.Debug("done conflict job", zap.String("queue bucket", queueBucket))
 				}))
 			} else {
 				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))
-			}
-
-			// wait for all conflict jobs done
-			if j.tp == conflict {
-				w.causalityWg.Wait()
 			}
 
 			if j.tp == flush {
@@ -227,8 +220,6 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 				})
 				// wait for previous jobs executed
 				wg.Wait()
-				// wait for previous causality jobs
-				w.causalityWg.Wait()
 				batchJobs := jobs
 				wg.Add(1)
 				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))
@@ -275,6 +266,9 @@ func (w *DMLWorker) runCausalityDMLWorker(causalityCh chan *job) {
 				startTime := time.Now()
 				causalityJobCh <- j
 				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[i], w.source).Observe(time.Since(startTime).Seconds())
+			}
+			if j.tp == conflict {
+				w.causalityWg.Wait()
 			}
 		} else {
 			queueBucket := int(utils.GenHashKey(j.key)) % w.workerCount
