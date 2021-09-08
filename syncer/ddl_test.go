@@ -245,85 +245,71 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 	// TODO: need refine cases
 	cases := []struct {
 		sql      string
-		schema   string
 		isDDL    bool
 		hasError bool
 	}{
 		{
 			sql:      "FLUSH",
-			schema:   "",
 			isDDL:    false,
 			hasError: true,
 		},
 		{
 			sql:      "BEGIN",
-			schema:   "",
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "CREATE TABLE do_db.do_table (c1 INT)",
-			schema:   "",
 			isDDL:    true,
 			hasError: false,
 		},
 		{
 			sql:      "INSERT INTO do_db.do_table VALUES (1)",
-			schema:   "",
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "INSERT INTO ignore_db.ignore_table VALUES (1)",
-			schema:   "",
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "UPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
-			schema:   "ignore_db",
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "DELETE FROM `ignore_table` WHERE c1=2",
-			schema:   "ignore_db",
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "SELECT * FROM ignore_db.ignore_table",
-			schema:   "",
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "#",
-			schema:   "",
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "# this is a comment",
-			schema:   "",
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "# a comment with DDL\nCREATE TABLE do_db.do_table (c1 INT)",
-			schema:   "",
 			isDDL:    true,
 			hasError: false,
 		},
 		{
 			sql:      "# a comment with DML\nUPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
-			schema:   "ignore_db",
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "NOT A SQL",
-			schema:   "",
 			isDDL:    false,
 			hasError: true,
 		},
@@ -342,7 +328,6 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 
 	for _, cs := range cases {
 		qec.originSQL = cs.sql
-		qec.ddlSchema = cs.schema
 		stmt, err := syncer.parseDDLSQL(qec)
 		if cs.hasError {
 			c.Assert(err, NotNil)

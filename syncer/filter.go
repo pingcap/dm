@@ -25,6 +25,9 @@ import (
 )
 
 func (s *Syncer) filterQueryEvent(tables []*filter.Table, stmt ast.StmtNode, sql string) (bool, error) {
+	if utils.IsBuildInSkipDDL(sql) {
+		return true, nil
+	}
 	et := bf.AstToDDLEvent(stmt)
 	for _, table := range tables {
 		needFilter, err := s.filterOneEvent(table, et, sql)
@@ -76,9 +79,6 @@ func (s *Syncer) filterSQL(sql string) (bool, error) {
 // - type of SQL doesn't pass binlog filter.
 // - pattern of SQL doesn't pass binlog filter.
 func (s *Syncer) filterOneEvent(table *filter.Table, et bf.EventType, sql string) (bool, error) {
-	if utils.IsBuildInSkipDDL(sql) {
-		return true, nil
-	}
 	if filter.IsSystemSchema(table.Schema) {
 		return true, nil
 	}

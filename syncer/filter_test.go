@@ -51,9 +51,8 @@ func (s *testFilterSuite) TearDownSuite(c *C) {
 	c.Assert(s.db.Close(), IsNil)
 }
 
-// Q: Should rename to TestFilterOneEvent?
 func (s *testFilterSuite) TestFilterQueryEvent(c *C) {
-	cases := []struct {
+	sqlCases := []struct {
 		sql           string
 		expectSkipped bool
 	}{
@@ -140,18 +139,15 @@ END`, true},
 		{"GRANT ALL PRIVILEGES ON *.* TO 't2'@'%' IDENTIFIED WITH 'mysql_native_password' AS '*12033B78389744F3F39AC4CE4CCFCAD6960D8EA0'", true},
 		{"revoke reload on *.* from 't2'@'%'", true},
 	}
-
-	// filter, err := bf.NewBinlogEvent(nil)
-	// c.Assert(err, IsNil)
 	syncer := &Syncer{}
-	for _, t := range cases {
-		skipped, err := syncer.filterSQL(t.sql)
+	for _, ca := range sqlCases {
+		skipped, err := syncer.filterQueryEvent(nil, nil, ca.sql)
 		c.Assert(err, IsNil)
-		c.Assert(skipped, Equals, t.expectSkipped)
+		c.Assert(skipped, Equals, ca.expectSkipped)
 	}
 
 	// system table
-	skipped, err := syncer.filterQueryEvent([]*filter.Table{{Schema: "mysql", Name: "test"}}, nil, "create table mysql.test (id int)")
+	skipped, err := syncer.filterOneEvent(&filter.Table{Schema: "mysql", Name: "test"}, bf.NullEvent, "create table mysql.test (id int)")
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, true)
 
