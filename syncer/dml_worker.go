@@ -200,9 +200,11 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 			wg.Add(1)
 
 			if j.tp == conflict {
+				w.logger.Debug("receive conflict job", zap.String("queue bucket", queueBucket))
 				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() {
 					wg.Done()
 					w.causalityWg.Done()
+					w.logger.Debug("done conflict job", zap.String("queue bucket", queueBucket))
 				}))
 			} else {
 				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))
