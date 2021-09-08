@@ -104,7 +104,7 @@ func (s *Server) DMAPICreateSource(ctx echo.Context) error {
 		return err
 	}
 	cfg := modelToSourceCfg(createSourceReq)
-	if err := checkAndAdjustSourceConfig(ctx.Request().Context(), cfg); err != nil {
+	if err := checkAndAdjustSourceConfigFunc(ctx.Request().Context(), cfg); err != nil {
 		return err
 	}
 	if err := s.scheduler.AddSourceCfg(cfg); err != nil {

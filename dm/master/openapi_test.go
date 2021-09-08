@@ -54,6 +54,14 @@ type openAPISuite struct {
 	workerClients   map[string]workerrpc.Client
 }
 
+func (t *openAPISuite) SetUpSuite(c *check.C) {
+	checkAndAdjustSourceConfigFunc = checkAndNoAdjustSourceConfigMock
+}
+
+func (t *openAPISuite) TearDownSuite(c *check.C) {
+	checkAndAdjustSourceConfigFunc = checkAndAdjustSourceConfig
+}
+
 func (t *openAPISuite) SetUpTest(c *check.C) {
 	t.testEtcdCluster = integration.NewClusterV3(t.testT, &integration.ClusterConfig{Size: 1})
 	t.etcdTestCli = t.testEtcdCluster.RandClient()
@@ -275,7 +283,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	err = result3.UnmarshalBodyToObject(&resultSourceStatus1)
 	c.Assert(err, check.IsNil)
 	c.Assert(resultSourceStatus1.WorkerName, check.Equals, workerName1) // worker1 is bound
-	c.Assert(resultSourceStatus1.EnableRelay, check.Equals, false)
+	c.Assert(resultSourceStatus1.EnableRelay, check.Equals, true)
 
 	// mock start relay
 	startRelayReq := pb.OperateRelayRequest{}
