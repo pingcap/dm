@@ -179,7 +179,7 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(err, IsNil)
 
 	// Table shouldn't exist before initialization.
-	_, err = tracker.GetTable("testdb", "foo")
+	_, err = tracker.GetTable(table)
 	c.Assert(err, ErrorMatches, `.*Table 'testdb\.foo' doesn't exist`)
 	c.Assert(IsTableNotExists(err), IsTrue)
 
@@ -191,7 +191,7 @@ func (s *trackerSuite) TestDDL(c *C) {
 	err = tracker.Exec(ctx, "", "create database testdb;")
 	c.Assert(err, IsNil)
 
-	_, err = tracker.GetTable("testdb", "foo")
+	_, err = tracker.GetTable(table)
 	c.Assert(err, ErrorMatches, `.*Table 'testdb\.foo' doesn't exist`)
 	c.Assert(IsTableNotExists(err), IsTrue)
 
@@ -200,7 +200,7 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(err, IsNil)
 
 	// Verify the table has 3 columns.
-	ti, err := tracker.GetTable("testdb", "foo")
+	ti, err := tracker.GetTable(table)
 	c.Assert(err, IsNil)
 	c.Assert(ti.Columns, HasLen, 3)
 	c.Assert(ti.Columns[0].Name.L, Equals, "a")
@@ -211,7 +211,7 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(ti.Columns[2].IsGenerated(), IsFalse)
 
 	// Verify the table info not changed (pointer equal) when getting again.
-	ti2, err := tracker.GetTable("testdb", "foo")
+	ti2, err := tracker.GetTable(table)
 	c.Assert(err, IsNil)
 	c.Assert(ti, Equals, ti2)
 
@@ -224,7 +224,7 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(err, IsNil)
 
 	// Verify that 2 columns remain.
-	ti2, err = tracker.GetTable("testdb", "foo")
+	ti2, err = tracker.GetTable(table)
 	c.Assert(err, IsNil)
 	c.Assert(ti, Not(Equals), ti2) // changed (not pointer equal) after applied DDL.
 	c.Assert(ti2.Columns, HasLen, 2)
@@ -300,7 +300,7 @@ func (s *trackerSuite) TestCreateSchemaIfNotExists(c *C) {
 	err = tracker.Exec(ctx, "testdb", "create table foo(a int)")
 	c.Assert(err, IsNil)
 
-	ti, err := tracker.GetTable("testdb", "foo")
+	ti, err := tracker.GetTable(&filter.Table{Schema: "testdb", Name: "foo"})
 	c.Assert(err, IsNil)
 	c.Assert(ti.Name.L, Equals, "foo")
 }
@@ -351,6 +351,10 @@ func (aj asJSON) String() string {
 
 func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
+	table := &filter.Table{
+		Schema: "testdb",
+		Name:   "foo",
+	}
 
 	tracker, err := NewTracker(context.Background(), "test-tracker", defaultTestSessionCfg, s.baseConn)
 	c.Assert(err, IsNil)
@@ -376,7 +380,7 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	c.Assert(err, IsNil)
 
 	// Save the table info
-	ti1, err := tracker.GetTable("testdb", "foo")
+	ti1, err := tracker.GetTable(table)
 	c.Assert(err, IsNil)
 	c.Assert(ti1, NotNil)
 	c.Assert(ti1.Name.O, Equals, "foo")
@@ -384,10 +388,10 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	clearVolatileInfo(ti1)
 
 	// Remove the table. Should not be found anymore.
-	err = tracker.DropTable("testdb", "foo")
+	err = tracker.DropTable(table)
 	c.Assert(err, IsNil)
 
-	_, err = tracker.GetTable("testdb", "foo")
+	_, err = tracker.GetTable(table)
 	c.Assert(err, ErrorMatches, `.*Table 'testdb\.foo' doesn't exist`)
 
 	// Recover the table using the table info.
@@ -395,7 +399,7 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	c.Assert(err, IsNil)
 
 	// The new table info should be equivalent to the old one except the TS and generated IDs.
-	ti2, err := tracker.GetTable("testdb", "foo")
+	ti2, err := tracker.GetTable(table)
 	c.Assert(err, IsNil)
 	clearVolatileInfo(ti2)
 	c.Assert(ti2, DeepEquals, ti1, Commentf("ti2 = %s\nti1 = %s", asJSON{ti2}, asJSON{ti1}))
@@ -412,7 +416,7 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	err = tracker.CreateTableIfNotExists(&filter.Table{Schema: "testdb", Name: "bar"}, ti1)
 	c.Assert(err, IsNil)
 
-	ti3, err := tracker.GetTable("testdb", "bar")
+	ti3, err := tracker.GetTable(&filter.Table{Schema: "testdb", Name: "bar"})
 	c.Assert(err, IsNil)
 	c.Assert(ti3.Name.O, Equals, "bar")
 	clearVolatileInfo(ti3)
@@ -478,7 +482,7 @@ func (s *trackerSuite) TestAllSchemas(c *C) {
 			c.Assert(table.Name.O, Equals, "a")
 			c.Assert(table.Columns, HasLen, 1)
 			// the table should be equivalent to the result of GetTable.
-			table2, err2 := tracker.GetTable("testdb2", "a")
+			table2, err2 := tracker.GetTable(&filter.Table{Schema: "testdb2", Name: "a"})
 			c.Assert(err2, IsNil)
 			c.Assert(table2, DeepEquals, table)
 		case "testdb3":
@@ -493,7 +497,7 @@ func (s *trackerSuite) TestAllSchemas(c *C) {
 	err = tracker.Reset()
 	c.Assert(err, IsNil)
 	c.Assert(tracker.AllSchemas(), HasLen, 0)
-	_, err = tracker.GetTable("testdb2", "a")
+	_, err = tracker.GetTable(&filter.Table{Schema: "testdb2", Name: "a"})
 	c.Assert(err, ErrorMatches, `.*Table 'testdb2\.a' doesn't exist`)
 }
 
