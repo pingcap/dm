@@ -125,8 +125,9 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGlobalPos", `return("mysql-bin.000001")`), IsNil)
 	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGlobalPos")
+	c.Assert(t.mockDB.ExpectationsWereMet(), IsNil)
 
-	// reset mockDB conn because last UpdateSchema will close the conn.
+	// reset mockDB conn because last UpdateSchema would close the conn.
 	t.setUpDBConn(c)
 	// mock updateSyncerCheckpoint
 	t.mockDB.ExpectBegin()
@@ -142,6 +143,5 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	t.mockDB.ExpectExec("UPDATE `dm_meta_v106_test`.`test_onlineddl`.*").WithArgs(cfg.SourceID, fmt.Sprint(cfg.ServerID)).WillReturnResult(sqlmock.NewErrorResult(nil))
 	t.mockDB.ExpectCommit()
 	c.Assert(UpdateSchema(tctx, t.db, cfg), IsNil)
-
 	c.Assert(t.mockDB.ExpectationsWereMet(), IsNil)
 }
