@@ -166,9 +166,11 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 	jobs := make([]*job, 0, w.batch)
 	workerJobIdx := dmlWorkerJobIdx(queueID)
 	var wg sync.WaitGroup
+	queueBucket := queueBucketName(queueID)
 	for {
 		select {
 		case j, ok := <-jobCh:
+			metrics.QueueSizeGauge.WithLabelValues(w.task, queueBucket, "").Set(float64(len(jobCh)))
 			if !ok {
 				if len(jobs) > 0 {
 					w.tctx.L().Warn("have unexecuted jobs when close job chan!", zap.Any("rest job", jobs))

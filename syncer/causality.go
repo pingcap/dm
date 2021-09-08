@@ -92,6 +92,8 @@ func (c *Causality) add(keys []string) {
 
 func (c *Causality) runCausality() {
 	for j := range c.in {
+		metrics.QueueSizeGauge.WithLabelValues(c.task, "causality_queue", "").Set(float64(len(c.in)))
+
 		startTime := time.Now()
 		if j.tp != flush {
 			if c.detectConflict(j.keys) {

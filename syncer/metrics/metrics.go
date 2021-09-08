@@ -127,7 +127,7 @@ var (
 			Subsystem: "syncer",
 			Name:      "queue_size",
 			Help:      "remain size of the DML queue",
-		}, []string{"task", "source_id"})
+		}, []string{"task", "queue_id", "source_id"})
 
 	BinlogPosGauge = metricsproxy.NewGaugeVec(
 		prometheus.GaugeOpts{
