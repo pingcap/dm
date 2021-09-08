@@ -256,6 +256,7 @@ func (w *DMLWorker) runCausalityDMLWorker(causalityCh chan *job) {
 	}
 
 	for j := range causalityCh {
+		metrics.QueueSizeGauge.WithLabelValues(w.task, "causality_output", w.source).Set(float64(len(causalityCh)))
 		if j.tp == flush || j.tp == conflict {
 			if j.tp == conflict {
 				w.causalityWg.Add(w.workerCount)

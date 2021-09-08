@@ -92,7 +92,7 @@ func (c *Causality) add(keys []string) {
 
 func (c *Causality) runCausality() {
 	for j := range c.in {
-		metrics.QueueSizeGauge.WithLabelValues(c.task, "causality_queue", c.source).Set(float64(len(c.in)))
+		metrics.QueueSizeGauge.WithLabelValues(c.task, "causality_input", c.source).Set(float64(len(c.in)))
 
 		startTime := time.Now()
 		if j.tp != flush {
