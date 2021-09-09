@@ -152,16 +152,6 @@ func updateSyncerOnlineDDLMeta(tctx *tcontext.Context, dbConn *conn.BaseConn, ta
 
 // getGlobalPos tries to get the global checkpoint position.
 func getGlobalPos(tctx *tcontext.Context, dbConn *conn.BaseConn, tableName, sourceID string) (gmysql.Position, error) {
-	failpoint.Inject("MockGetGlobalPos", func(val failpoint.Value) {
-		posName := val.(string)
-		pos := gmysql.Position{
-			Name: posName,
-			Pos:  uint32(0),
-		}
-		tctx.L().Info("MockGetGlobalPos", zap.String("failpoint", "MockGetGlobalPos"), zap.Any("pos", pos))
-		failpoint.Return(pos, nil)
-	})
-
 	query := fmt.Sprintf(`SELECT binlog_name, binlog_pos FROM %s WHERE id=? AND is_global=? LIMIT 1`, tableName)
 	args := []interface{}{sourceID, true}
 	rows, err := dbConn.QuerySQL(tctx, query, args...)
