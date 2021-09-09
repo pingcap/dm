@@ -27,7 +27,7 @@ import (
 	"github.com/pingcap/dm/syncer/metrics"
 )
 
-// Status implements Unit.Status
+// Status implements Unit.Status.
 func (s *Syncer) Status(sourceStatus *binlog.SourceStatus) interface{} {
 	syncerLocation := s.checkpoint.FlushedGlobalPoint()
 	st := &pb.SyncStatus{
