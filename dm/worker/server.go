@@ -72,7 +72,7 @@ type Server struct {
 
 	rootLis    net.Listener
 	svr        *grpc.Server
-	worker     *Worker
+	worker     *SourceWorker
 	etcdClient *clientv3.Client
 
 	// relay status will never be put in server.sourceStatus
@@ -497,7 +497,7 @@ func (s *Server) Close() {
 }
 
 // if needLock is false, we should make sure Server has been locked in caller.
-func (s *Server) getWorker(needLock bool) *Worker {
+func (s *Server) getWorker(needLock bool) *SourceWorker {
 	if needLock {
 		s.Lock()
 		defer s.Unlock()
@@ -506,7 +506,7 @@ func (s *Server) getWorker(needLock bool) *Worker {
 }
 
 // if needLock is false, we should make sure Server has been locked in caller.
-func (s *Server) setWorker(worker *Worker, needLock bool) {
+func (s *Server) setWorker(worker *SourceWorker, needLock bool) {
 	if needLock {
 		s.Lock()
 		defer s.Unlock()
@@ -819,7 +819,7 @@ func (s *Server) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 	}, nil
 }
 
-func (s *Server) getOrStartWorker(cfg *config.SourceConfig, needLock bool) (*Worker, error) {
+func (s *Server) getOrStartWorker(cfg *config.SourceConfig, needLock bool) (*SourceWorker, error) {
 	if needLock {
 		s.Lock()
 		defer s.Unlock()
@@ -834,7 +834,7 @@ func (s *Server) getOrStartWorker(cfg *config.SourceConfig, needLock bool) (*Wor
 	}
 
 	log.L().Info("will start a new worker", zap.String("sourceID", cfg.SourceID))
-	w, err := NewWorker(cfg, s.etcdClient, s.cfg.Name)
+	w, err := NewSourceWorker(cfg, s.etcdClient, s.cfg.Name)
 	if err != nil {
 		return nil, err
 	}

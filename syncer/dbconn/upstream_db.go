@@ -15,7 +15,6 @@ package dbconn
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/failpoint"
@@ -32,20 +31,6 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
-
-// in MySQL, we can set `max_binlog_size` to control the max size of a binlog file.
-// but this is not absolute:
-// > A transaction is written in one chunk to the binary log, so it is never split between several binary logs.
-// > Therefore, if you have big transactions, you might see binary log files larger than max_binlog_size.
-// ref: https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html#sysvar_max_binlog_size
-// The max value of `max_binlog_size` is 1073741824 (1GB)
-// but the actual file size still can be larger, and it may exceed the range of an uint32
-// so, if we use go-mysql.Position(with uint32 Pos) to store the binlog size, it may become out of range.
-// ps, use go-mysql.Position to store a position of binlog event (position of the next event) is enough.
-type binlogSize struct {
-	name string
-	size int64
-}
 
 // UpStreamConn connect to upstream DB
 // Normally, we need to get some upstream information through some helper functions
@@ -101,70 +86,9 @@ func (conn *UpStreamConn) FetchAllDoTables(ctx context.Context, bw *filter.Filte
 	return utils.FetchAllDoTables(ctx, conn.BaseDB.DB, bw)
 }
 
-// CountBinaryLogsSize returns the remaining size after given position.
-func (conn *UpStreamConn) CountBinaryLogsSize(ctx context.Context, pos mysql.Position) (int64, error) {
-	return countBinaryLogsSize(ctx, pos, conn.BaseDB.DB)
-}
-
 // CloseUpstreamConn closes the UpStreamConn.
 func CloseUpstreamConn(tctx *tcontext.Context, conn *UpStreamConn) {
 	if conn != nil {
 		CloseBaseDB(tctx, conn.BaseDB)
 	}
-}
-
-func countBinaryLogsSize(ctx context.Context, fromFile mysql.Position, db *sql.DB) (int64, error) {
-	files, err := getBinaryLogs(ctx, db)
-	if err != nil {
-		return 0, err
-	}
-
-	var total int64
-	for _, file := range files {
-		switch {
-		case file.name < fromFile.Name:
-			continue
-		case file.name > fromFile.Name:
-			total += file.size
-		case file.name == fromFile.Name:
-			if file.size > int64(fromFile.Pos) {
-				total += file.size - int64(fromFile.Pos)
-			}
-		}
-	}
-
-	return total, nil
-}
-
-func getBinaryLogs(ctx context.Context, db *sql.DB) ([]binlogSize, error) {
-	query := "SHOW BINARY LOGS"
-	rows, err := db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-	defer rows.Close()
-
-	rowColumns, err := rows.Columns()
-	if err != nil {
-		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-	files := make([]binlogSize, 0, 10)
-	for rows.Next() {
-		var file string
-		var pos int64
-		var nullPtr interface{}
-		if len(rowColumns) == 2 {
-			err = rows.Scan(&file, &pos)
-		} else {
-			err = rows.Scan(&file, &pos, &nullPtr)
-		}
-		if err != nil {
-			return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
-		files = append(files, binlogSize{name: file, size: pos})
-	}
-	if rows.Err() != nil {
-		return nil, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
-	}
-	return files, nil
 }

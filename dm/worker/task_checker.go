@@ -30,7 +30,6 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 // Backoff related constants
@@ -145,12 +144,12 @@ type realTaskStatusChecker struct {
 
 	cfg config.CheckerConfig
 	l   log.Logger
-	w   *Worker
+	w   *SourceWorker
 	bc  *backoffController
 }
 
 // NewRealTaskStatusChecker creates a new realTaskStatusChecker instance.
-func NewRealTaskStatusChecker(cfg config.CheckerConfig, w *Worker) TaskStatusChecker {
+func NewRealTaskStatusChecker(cfg config.CheckerConfig, w *SourceWorker) TaskStatusChecker {
 	tsc := &realTaskStatusChecker{
 		cfg: cfg,
 		l:   log.With(zap.String("component", "task checker")),
@@ -300,10 +299,7 @@ func (tsc *realTaskStatusChecker) getRelayResumeStrategy(relayStatus *pb.RelaySt
 }
 
 func (tsc *realTaskStatusChecker) checkRelayStatus() {
-	ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultDBTimeout)
-	defer cancel()
-
-	relayStatus := tsc.w.relayHolder.Status(ctx)
+	relayStatus := tsc.w.relayHolder.Status(nil)
 	if tsc.bc.relayBackoff == nil {
 		tsc.bc.relayBackoff, _ = backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin.Duration, tsc.cfg.BackoffMax.Duration)
 		tsc.bc.latestRelayPausedTime = time.Now()
