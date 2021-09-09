@@ -63,7 +63,7 @@
   "panels": [
     {
       "collapsed": false,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -77,7 +77,7 @@
       "type": "row"
     },
     {
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "description": "The current state of subtasks in instances.\n\n0: Invalid\n\n1: New\n\n2: Running\n\n3: Paused\n\n4: Stopped\n\n5: Finished",
       "fieldConfig": {
         "defaults": {
@@ -138,7 +138,7 @@
       "type": "stat"
     },
     {
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "description": "The current state of subtasks in instances.\n\n0: Invalid\n\n1: New\n\n2: Running\n\n3: Paused\n\n4: Stopped\n\n5: Finished",
       "fieldConfig": {
         "defaults": {
@@ -294,7 +294,7 @@
       "cacheTimeout": null,
       "dashLength": 10,
       "dashes": false,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "decimals": 1,
       "description": "The predicted remaining time it takes Syncer to be completely synchronized with the master\n\nThis indicator is rough and crude and may vary greatly due to environmental factors",
       "fieldConfig": {
@@ -887,7 +887,7 @@
     },
     {
       "collapsed": false,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -906,7 +906,7 @@
       "cacheTimeout": null,
       "dashLength": 10,
       "dashes": false,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "decimals": 1,
       "description": "The data import process percentage of Dumpling. The value is an estimated value and may exceed less than 100%.",
       "fieldConfig": {
@@ -1010,7 +1010,7 @@
       "cacheTimeout": null,
       "dashLength": 10,
       "dashes": false,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "description": "The data import process percentage of Loader. The value range is 0% ~ 100%",
       "fieldConfig": {
         "defaults": {},
