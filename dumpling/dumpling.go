@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	dutils "github.com/pingcap/dm/pkg/dumpling"
 	"github.com/pingcap/dm/pkg/log"
@@ -195,7 +196,7 @@ func (m *Dumpling) Update(cfg *config.SubTaskConfig) error {
 }
 
 // Status implements Unit.Status.
-func (m *Dumpling) Status() interface{} {
+func (m *Dumpling) Status(_ *binlog.SourceStatus) interface{} {
 	// NOTE: try to add some status, like dumped file count
 	return &pb.DumpStatus{}
 }

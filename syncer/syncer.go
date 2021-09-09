@@ -55,7 +55,6 @@ import (
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
-	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
@@ -77,7 +76,6 @@ var (
 
 	retryTimeout = 3 * time.Second
 	waitTime     = 10 * time.Millisecond
-	statusTime   = 30 * time.Second
 
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL.
 	MaxDDLConnectionTimeoutMinute = 5
@@ -273,11 +271,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	}
 	syncer.lastCheckpointFlushedTime = time.Time{}
 	return syncer
-}
-
-// GetSecondsBehindMaster returns secondsBehindMaster.
-func (s *Syncer) GetSecondsBehindMaster() int64 {
-	return s.secondsBehindMaster.Load()
 }
 
 func (s *Syncer) newJobChans() {
@@ -704,10 +697,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		IsCanceled: isCanceled,
 		Errors:     errs,
 	}
-}
-
-func (s *Syncer) getMasterStatus(ctx context.Context) (mysql.Position, gtid.Set, error) {
-	return s.fromDB.GetMasterStatus(ctx, s.cfg.Flavor)
 }
 
 func (s *Syncer) getTable(tctx *tcontext.Context, origSchema, origTable, renamedSchema, renamedTable string) (*model.TableInfo, error) {
@@ -1482,9 +1471,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	s.wg.Add(1)
 	go s.syncDDL(tctx, adminQueueName, s.ddlDBConn, s.ddlJobCh)
-
-	s.wg.Add(1)
-	go s.printStatus(runCtx)
 
 	s.wg.Add(1)
 	go func() {
@@ -2833,107 +2819,6 @@ func (s *Syncer) loadTableStructureFromDump(ctx context.Context) error {
 		}
 	}
 	return firstErr
-}
-
-func (s *Syncer) printStatus(ctx context.Context) {
-	defer s.wg.Done()
-
-	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
-		if seconds, ok := val.(int); ok {
-			statusTime = time.Duration(seconds) * time.Second
-			s.tctx.L().Info("set printStatusInterval", zap.Int("value", seconds), zap.String("failpoint", "PrintStatusCheckSeconds"))
-		}
-	})
-
-	timer := time.NewTicker(statusTime)
-	defer timer.Stop()
-
-	var (
-		err                 error
-		latestMasterPos     mysql.Position
-		latestmasterGTIDSet gtid.Set
-	)
-
-	for {
-		select {
-		case <-ctx.Done():
-			s.tctx.L().Info("print status routine exits", log.ShortError(ctx.Err()))
-			return
-		case <-timer.C:
-			now := time.Now()
-			s.lastTime.RLock()
-			seconds := now.Unix() - s.lastTime.t.Unix()
-			s.lastTime.RUnlock()
-			totalSeconds := now.Unix() - s.start.Unix()
-			last := s.lastCount.Load()
-			total := s.count.Load()
-
-			totalBinlogSize := s.binlogSizeCount.Load()
-			lastBinlogSize := s.lastBinlogSizeCount.Load()
-
-			tps, totalTps := int64(0), int64(0)
-			if seconds > 0 {
-				tps = (total - last) / seconds
-				totalTps = total / totalSeconds
-
-				s.currentLocationMu.RLock()
-				currentLocation := s.currentLocationMu.currentLocation
-				s.currentLocationMu.RUnlock()
-
-				ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
-				remainingSize, err2 := s.fromDB.CountBinaryLogsSize(ctx2, currentLocation.Position)
-				cancel2()
-				if err2 != nil {
-					// log the error, but still handle the rest operation
-					s.tctx.L().Error("fail to estimate unreplicated binlog size", zap.Error(err2))
-				} else {
-					bytesPerSec := (totalBinlogSize - lastBinlogSize) / seconds
-					if bytesPerSec > 0 {
-						remainingSeconds := remainingSize / bytesPerSec
-						s.tctx.L().Info("binlog replication progress",
-							zap.Int64("total binlog size", totalBinlogSize),
-							zap.Int64("last binlog size", lastBinlogSize),
-							zap.Int64("cost time", seconds),
-							zap.Int64("bytes/Second", bytesPerSec),
-							zap.Int64("unsynced binlog size", remainingSize),
-							zap.Int64("estimate time to catch up", remainingSeconds))
-						metrics.RemainingTimeGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Set(float64(remainingSeconds))
-					}
-				}
-			}
-
-			ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
-			latestMasterPos, latestmasterGTIDSet, err = s.getMasterStatus(ctx2)
-			cancel2()
-			if err != nil {
-				s.tctx.L().Error("fail to get master status", log.ShortError(err))
-			} else {
-				metrics.BinlogPosGauge.WithLabelValues("master", s.cfg.Name, s.cfg.SourceID).Set(float64(latestMasterPos.Pos))
-				index, err := binlog.GetFilenameIndex(latestMasterPos.Name)
-				if err != nil {
-					s.tctx.L().Error("fail to parse binlog file", log.ShortError(err))
-				} else {
-					metrics.BinlogFileGauge.WithLabelValues("master", s.cfg.Name, s.cfg.SourceID).Set(float64(index))
-				}
-			}
-
-			s.tctx.L().Info("binlog replication status",
-				zap.Int64("total_events", total),
-				zap.Int64("total_tps", totalTps),
-				zap.Int64("tps", tps),
-				zap.Stringer("master_position", latestMasterPos),
-				log.WrapStringerField("master_gtid", latestmasterGTIDSet),
-				zap.Stringer("checkpoint", s.checkpoint))
-
-			s.lastCount.Store(total)
-			s.lastBinlogSizeCount.Store(totalBinlogSize)
-			s.lastTime.Lock()
-			s.lastTime.t = time.Now()
-			s.lastTime.Unlock()
-			s.totalTps.Store(totalTps)
-			s.tps.Store(tps)
-		}
-	}
 }
 
 func (s *Syncer) createDBs(ctx context.Context) error {
