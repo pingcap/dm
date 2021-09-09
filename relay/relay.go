@@ -87,8 +87,8 @@ type Process interface {
 	Pause()
 	// Error returns error message if having one
 	Error() interface{}
-	// Status returns status of relay log process unit
-	Status(ctx context.Context) interface{}
+	// Status returns status of relay log process unit.
+	Status(sourceStatus *binlog.SourceStatus) interface{}
 	// Close does some clean works
 	Close()
 	// IsClosed returns whether relay log process unit was closed
@@ -894,32 +894,32 @@ func (r *Relay) Close() {
 }
 
 // Status implements the dm.Unit interface.
-func (r *Relay) Status(ctx context.Context) interface{} {
-	masterPos, masterGTID, err := utils.GetMasterStatus(ctx, r.db.DB, r.cfg.Flavor)
-	if err != nil {
-		r.logger.Warn("get master status", zap.Error(err))
-	}
-
+func (r *Relay) Status(sourceStatus *binlog.SourceStatus) interface{} {
 	uuid, relayPos := r.meta.Pos()
-	_, relayGTIDSet := r.meta.GTID()
+
 	rs := &pb.RelayStatus{
-		MasterBinlog: masterPos.String(),
-		RelaySubDir:  uuid,
-		RelayBinlog:  relayPos.String(),
+		RelaySubDir: uuid,
+		RelayBinlog: relayPos.String(),
 	}
-	if masterGTID != nil { // masterGTID maybe a nil interface
-		rs.MasterBinlogGtid = masterGTID.String()
-	}
-	if relayGTIDSet != nil {
+	if _, relayGTIDSet := r.meta.GTID(); relayGTIDSet != nil {
 		rs.RelayBinlogGtid = relayGTIDSet.String()
 	}
-	if r.cfg.EnableGTID {
-		if masterGTID != nil && relayGTIDSet != nil && relayGTIDSet.Equal(masterGTID) {
-			rs.RelayCatchUpMaster = true
+
+	if sourceStatus != nil {
+		masterPos, masterGTID := sourceStatus.Location.Position, sourceStatus.Location.GetGTID()
+		rs.MasterBinlog = masterPos.String()
+		if masterGTID != nil { // masterGTID maybe a nil interface
+			rs.MasterBinlogGtid = masterGTID.String()
 		}
-	} else {
-		rs.RelayCatchUpMaster = masterPos.Compare(relayPos) == 0
+
+		if r.cfg.EnableGTID {
+			// rely on sorted GTID set when String()
+			rs.RelayCatchUpMaster = rs.MasterBinlogGtid == rs.RelayBinlogGtid
+		} else {
+			rs.RelayCatchUpMaster = masterPos.Compare(relayPos) == 0
+		}
 	}
+
 	return rs
 }
 

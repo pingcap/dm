@@ -17,11 +17,11 @@ var conditionHub *ConditionHub
 
 // ConditionHub holds a DM-worker and it is used for wait condition detection.
 type ConditionHub struct {
-	w *Worker
+	w *SourceWorker
 }
 
 // InitConditionHub inits the singleton instance of ConditionHub.
-func InitConditionHub(w *Worker) {
+func InitConditionHub(w *SourceWorker) {
 	conditionHub = &ConditionHub{
 		w: w,
 	}

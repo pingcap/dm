@@ -23,6 +23,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -39,7 +40,7 @@ type RelayHolder interface {
 	// Close closes the holder
 	Close()
 	// Status returns relay unit's status
-	Status(ctx context.Context) *pb.RelayStatus
+	Status(sourceStatus *binlog.SourceStatus) *pb.RelayStatus
 	// Stage returns the stage of the relay
 	Stage() pb.Stage
 	// Error returns relay unit's status
@@ -148,14 +149,14 @@ func (h *realRelayHolder) run() {
 }
 
 // Status returns relay unit's status.
-func (h *realRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
+func (h *realRelayHolder) Status(sourceStatus *binlog.SourceStatus) *pb.RelayStatus {
 	if h.closed.Load() || h.relay.IsClosed() {
 		return &pb.RelayStatus{
 			Stage: pb.Stage_Stopped,
 		}
 	}
 
-	s := h.relay.Status(ctx).(*pb.RelayStatus)
+	s := h.relay.Status(sourceStatus).(*pb.RelayStatus)
 	s.Stage = h.Stage()
 	s.Result = h.Result()
 
@@ -374,7 +375,7 @@ func (d *dummyRelayHolder) Close() {
 }
 
 // Status implements interface of RelayHolder.
-func (d *dummyRelayHolder) Status(ctx context.Context) *pb.RelayStatus {
+func (d *dummyRelayHolder) Status(sourceStatus *binlog.SourceStatus) *pb.RelayStatus {
 	d.Lock()
 	defer d.Unlock()
 	return &pb.RelayStatus{
