@@ -78,14 +78,14 @@ func (t *testServer) testWorker(c *C) {
 	defer func() {
 		NewRelayHolder = NewRealRelayHolder
 	}()
-	w, err := NewWorker(cfg, etcdCli, "")
+	w, err := NewSourceWorker(cfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	c.Assert(w.EnableRelay(), ErrorMatches, "init error")
 
 	NewRelayHolder = NewDummyRelayHolder
-	w, err = NewWorker(cfg, etcdCli, "")
+	w, err = NewSourceWorker(cfg, etcdCli, "")
 	c.Assert(err, IsNil)
-	c.Assert(w.StatusJSON(""), HasLen, emptyWorkerStatusInfoJSONLength)
+	c.Assert(w.GetUnitAndSourceStatusJSON("", nil), HasLen, emptyWorkerStatusInfoJSONLength)
 
 	// close twice
 	w.Close()
@@ -288,7 +288,7 @@ func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
 	c.Assert(err, IsNil)
 
 	// start worker
-	w, err := NewWorker(sourceCfg, etcdCli, "")
+	w, err := NewSourceWorker(sourceCfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	defer w.Close()
 	go func() {
@@ -357,7 +357,7 @@ func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
 	c.Assert(w.subTaskEnabled.Load(), IsFalse)
 }
 
-func (t *testWorkerFunctionalities) testEnableRelay(c *C, w *Worker, etcdCli *clientv3.Client,
+func (t *testWorkerFunctionalities) testEnableRelay(c *C, w *SourceWorker, etcdCli *clientv3.Client,
 	sourceCfg *config.SourceConfig, cfg *Config) {
 	c.Assert(w.EnableRelay(), IsNil)
 
@@ -380,14 +380,14 @@ func (t *testWorkerFunctionalities) testEnableRelay(c *C, w *Worker, etcdCli *cl
 	}), IsTrue)
 }
 
-func (t *testWorkerFunctionalities) testDisableRelay(c *C, w *Worker) {
+func (t *testWorkerFunctionalities) testDisableRelay(c *C, w *SourceWorker) {
 	w.DisableRelay()
 
 	c.Assert(w.relayEnabled.Load(), IsFalse)
 	c.Assert(w.relayHolder, IsNil)
 }
 
-func (t *testWorkerFunctionalities) testEnableHandleSubtasks(c *C, w *Worker, etcdCli *clientv3.Client,
+func (t *testWorkerFunctionalities) testEnableHandleSubtasks(c *C, w *SourceWorker, etcdCli *clientv3.Client,
 	subtaskCfg config.SubTaskConfig, sourceCfg *config.SourceConfig) {
 	c.Assert(w.EnableHandleSubtasks(), IsNil)
 	c.Assert(w.subTaskEnabled.Load(), IsTrue)
@@ -457,7 +457,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	sourceCfg.EnableRelay = false
 
 	// step 1: start worker
-	w, err := NewWorker(sourceCfg, etcdCli, "")
+	w, err := NewSourceWorker(sourceCfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -576,7 +576,7 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	sourceCfg.MetaDir = c.MkDir()
 
 	// step 1: start worker
-	w, err := NewWorker(sourceCfg, etcdCli, "")
+	w, err := NewSourceWorker(sourceCfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
