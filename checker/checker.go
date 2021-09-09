@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
@@ -420,7 +421,7 @@ func (c *Checker) IsFreshTask() (bool, error) {
 }
 
 // Status implements Unit interface.
-func (c *Checker) Status() interface{} {
+func (c *Checker) Status(_ *binlog.SourceStatus) interface{} {
 	c.result.RLock()
 	res := c.result.detail
 	c.result.RUnlock()

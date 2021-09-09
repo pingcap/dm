@@ -1217,7 +1217,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	executeSQLAndWait(len(expectJobs1))
-	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(0))
+	c.Assert(syncer.Status(nil).(*pb.SyncStatus).TotalEvents, Equals, int64(0))
 	syncer.mockFinishJob(expectJobs1)
 
 	testJobs.Lock()
@@ -1277,9 +1277,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	executeSQLAndWait(len(expectJobs2))
-	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)))
+	c.Assert(syncer.Status(nil).(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)))
 	syncer.mockFinishJob(expectJobs2)
-	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)+len(expectJobs2)))
+	c.Assert(syncer.Status(nil).(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)+len(expectJobs2)))
 
 	testJobs.RLock()
 	checkJobs(c, testJobs.jobs, expectJobs2)
@@ -1436,7 +1436,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	}
 
 	executeSQLAndWait(len(expectJobs))
-	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(0))
+	c.Assert(syncer.Status(nil).(*pb.SyncStatus).TotalEvents, Equals, int64(0))
 	syncer.mockFinishJob(expectJobs)
 
 	testJobs.Lock()
