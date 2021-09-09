@@ -162,7 +162,7 @@ type Syncer struct {
 
 	closed atomic.Bool
 
-	start atomic.Time
+	start    atomic.Time
 	lastTime atomic.Time
 
 	// safeMode is used to track if we need to generate dml with safe-mode

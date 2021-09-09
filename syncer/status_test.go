@@ -19,7 +19,7 @@ var _ = Suite(&statusSuite{})
 
 type statusSuite struct{}
 
-func (t *statusSuite) TestStatueRace(c *C) {
+func (t *statusSuite) TestStatusRace(c *C) {
 	s := &Syncer{}
 
 	l := log.With(zap.String("unit test", "TestStatueRace"))
@@ -32,7 +32,7 @@ func (t *statusSuite) TestStatueRace(c *C) {
 		Location: binlog.Location{
 			Position: mysql.Position{
 				Name: "mysql-bin.000123",
-				Pos: 223,
+				Pos:  223,
 			},
 		},
 		Binlogs: binlog.FileSizes(nil),
@@ -42,12 +42,14 @@ func (t *statusSuite) TestStatueRace(c *C) {
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			ret := s.Status(sourceStatus)
 			status := ret.(*pb.SyncStatus)
 			c.Assert(status.MasterBinlog, Equals, "(mysql-bin.000123, 223)")
 			c.Assert(status.SyncerBinlog, Equals, "(mysql-bin.000123, 123)")
 		}()
 	}
+	wg.Wait()
 }
 
 type mockCheckpoint struct {
@@ -58,7 +60,7 @@ func (*mockCheckpoint) FlushedGlobalPoint() binlog.Location {
 	return binlog.Location{
 		Position: mysql.Position{
 			Name: "mysql-bin.000123",
-			Pos: 123,
+			Pos:  123,
 		},
 	}
 }
