@@ -2252,6 +2252,10 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	if err != nil {
 		return err
 	}
+	if err2 := checkLogColumns(ev.SkippedColumns); err2 != nil {
+		return err2
+	}
+
 	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(ti, rows)
 	if err != nil {
 		return err
