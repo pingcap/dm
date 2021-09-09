@@ -3241,10 +3241,10 @@ func (s *Syncer) renameShardingSchema(table *filter.Table) *filter.Table {
 		return table
 	}
 	if targetTable == "" {
-		table.Schema = targetSchema
+		targetTable = table.Name
 	}
 
-	return table
+	return &filter.Table{Schema: targetSchema, Name: targetTable}
 }
 
 func (s *Syncer) isClosed() bool {
