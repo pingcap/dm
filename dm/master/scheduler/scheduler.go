@@ -362,7 +362,6 @@ func (s *Scheduler) UpdateSourceCfg(cfg *config.SourceConfig) error {
 // currently the source cfg can only update and relay-log related parts.
 func checkSourceCfgCanUpdated(oldCFG, newCFG *config.SourceConfig) bool {
 	newCFGClone := newCFG.Clone()
-	newCFGClone.EnableRelay = oldCFG.EnableRelay
 	newCFGClone.RelayBinLogName = oldCFG.RelayBinLogName
 	newCFGClone.RelayBinlogGTID = oldCFG.RelayBinlogGTID
 	newCFGClone.RelayDir = oldCFG.RelayDir

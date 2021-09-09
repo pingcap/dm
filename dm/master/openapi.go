@@ -143,31 +143,39 @@ func (s *Server) DMAPIStartRelay(ctx echo.Context, sourceName string) error {
 	if sourceCfg == nil {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
 	}
+	needUpdate := false
 	// update relay related in source cfg
-	sourceCfg.EnableRelay = true
 	if req.RelayBinlogName != nil && sourceCfg.RelayBinLogName != *req.RelayBinlogName {
 		sourceCfg.RelayBinLogName = *req.RelayBinlogName
+		needUpdate = true
 	}
 	if req.RelayBinlogGtid != nil && sourceCfg.RelayBinlogGTID != *req.RelayBinlogGtid {
 		sourceCfg.RelayBinlogGTID = *req.RelayBinlogGtid
+		needUpdate = true
 	}
 	if req.RelayDir != nil && sourceCfg.RelayDir != *req.RelayDir {
 		sourceCfg.RelayDir = *req.RelayDir
+		needUpdate = true
 	}
 	if purge := req.Purge; purge != nil {
 		if purge.Expires != nil && sourceCfg.Purge.Expires != *purge.Expires {
 			sourceCfg.Purge.Expires = *purge.Expires
+			needUpdate = true
 		}
 		if purge.Interval != nil && sourceCfg.Purge.Interval != *purge.Interval {
 			sourceCfg.Purge.Interval = *purge.Interval
+			needUpdate = true
 		}
 		if purge.RemainSpace != nil && sourceCfg.Purge.RemainSpace != *purge.RemainSpace {
 			sourceCfg.Purge.RemainSpace = *purge.RemainSpace
+			needUpdate = true
 		}
 	}
-	// update current source relay config before start relay
-	if err := s.scheduler.UpdateSourceCfg(sourceCfg); err != nil {
-		return err
+	if needUpdate {
+		// update current source relay config before start relay
+		if err := s.scheduler.UpdateSourceCfg(sourceCfg); err != nil {
+			return err
+		}
 	}
 	return s.scheduler.StartRelay(sourceName, []string{req.WorkerName})
 }
