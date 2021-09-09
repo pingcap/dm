@@ -16,7 +16,6 @@ package syncer
 import (
 	"context"
 
-	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
@@ -66,11 +65,7 @@ func (s *Syncer) initOptimisticShardDDL(ctx context.Context) error {
 }
 
 // handleQueryEventOptimistic handles QueryEvent in the optimistic shard DDL mode.
-func (s *Syncer) handleQueryEventOptimistic(
-	ev *replication.QueryEvent,
-	qec *queryEventContext,
-
-) error {
+func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	// interrupted after flush old checkpoint and before track DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
 		err := handleFlushCheckpointStage(1, val.(int), "before track DDL")
@@ -91,10 +86,9 @@ func (s *Syncer) handleQueryEventOptimistic(
 		tisAfter []*model.TableInfo
 		err      error
 
-		needHandleDDLs      = qec.needHandleDDLs
-		needTrackDDLs       = qec.needTrackDDLs
-		onlineDDLTableNames = qec.onlineDDLTableNames
-		originSQL           = qec.originSQL
+		needHandleDDLs = qec.needHandleDDLs
+		needTrackDDLs  = qec.needTrackDDLs
+		originSQL      = qec.originSQL
 	)
 
 	err = s.execError.Load()
@@ -113,7 +107,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 		// check whether do shard DDL for multi upstream tables.
 		if upSchema != "" && upSchema != td.tableNames[0][0].Schema &&
 			upTable != "" && upTable != td.tableNames[0][0].Name {
-			return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
+			return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(originSQL)
 		}
 		upSchema = td.tableNames[0][0].Schema
 		upTable = td.tableNames[0][0].Name
@@ -131,7 +125,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	}
 
 	for _, td := range needTrackDDLs {
-		if err = s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, qec.eventContext); err != nil {
+		if err = s.trackDDL(qec.ddlSchema, td.rawSQL, td.tableNames, td.stmt, qec.eventContext); err != nil {
 			return err
 		}
 		if !isDBDDL {
@@ -199,7 +193,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	s.tctx.L().Info("start to handle ddls in optimistic shard mode",
 		zap.String("event", "query"),
 		zap.Strings("ddls", needHandleDDLs),
-		zap.ByteString("raw statement", ev.Query),
+		zap.String("raw statement", originSQL),
 		log.WrapStringerField("location", qec.currentLocation))
 
 	// interrupted after track DDL and before execute DDL.
@@ -228,11 +222,11 @@ func (s *Syncer) handleQueryEventOptimistic(
 		return nil
 	}
 
-	for _, table := range onlineDDLTableNames {
+	for _, table := range qec.onlineDDLTables {
 		s.tctx.L().Info("finish online ddl and clear online ddl metadata in optimistic shard mode",
 			zap.String("event", "query"),
 			zap.Strings("ddls", needHandleDDLs),
-			zap.ByteString("raw statement", ev.Query),
+			zap.String("raw statement", originSQL),
 			zap.String("schema", table.Schema),
 			zap.String("table", table.Name))
 		err = s.onlineDDL.Finish(qec.tctx, table.Schema, table.Name)
@@ -244,7 +238,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	s.tctx.L().Info("finish to handle ddls in optimistic shard mode",
 		zap.String("event", "query"),
 		zap.Strings("ddls", needHandleDDLs),
-		zap.ByteString("raw statement", ev.Query),
+		zap.String("raw statement", originSQL),
 		log.WrapStringerField("location", qec.currentLocation))
 	return nil
 }
