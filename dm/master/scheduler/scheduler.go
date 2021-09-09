@@ -359,7 +359,7 @@ func (s *Scheduler) UpdateSourceCfg(cfg *config.SourceConfig) error {
 	return nil
 }
 
-// currently the source cfg can only update and relay-log related parts.
+// currently the source cfg can only update relay-log related parts.
 func checkSourceCfgCanUpdated(oldCFG, newCFG *config.SourceConfig) bool {
 	newCFGClone := newCFG.Clone()
 	newCFGClone.RelayBinLogName = oldCFG.RelayBinLogName
