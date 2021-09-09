@@ -249,6 +249,7 @@ func (t *testWorkerFunctionalities) SetUpSuite(c *C) {
 		return []unit.Unit{mockDumper, mockLoader, mockSync}
 	}
 	getMinLocForSubTaskFunc = getFakeLocForSubTask
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCFGFromETCD", `return(true)`), IsNil)
 }
 
 func (t *testWorkerFunctionalities) TearDownSuite(c *C) {
@@ -256,6 +257,7 @@ func (t *testWorkerFunctionalities) TearDownSuite(c *C) {
 	NewSubTask = NewRealSubTask
 	createUnits = createRealUnits
 	getMinLocForSubTaskFunc = getMinLocForSubTask
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCFGFromETCD"), IsNil)
 }
 
 func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
