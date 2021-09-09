@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
@@ -104,7 +105,7 @@ func (d *DummyRelay) Error() interface{} {
 }
 
 // Status implements Process interface.
-func (d *DummyRelay) Status(ctx context.Context) interface{} {
+func (d *DummyRelay) Status(sourceStatus *binlog.SourceStatus) interface{} {
 	return &pb.RelayStatus{
 		Stage: pb.Stage_New,
 	}
@@ -185,7 +186,7 @@ func (t *testRelay) testStart(c *C, holder *realRelayHolder) {
 	c.Assert(holder.closed.Load(), IsFalse)
 
 	// test status
-	status := holder.Status(context.Background())
+	status := holder.Status(nil)
 	c.Assert(status.Stage, Equals, pb.Stage_Running)
 	c.Assert(status.Result, IsNil)
 
@@ -226,7 +227,7 @@ func (t *testRelay) testClose(c *C, holder *realRelayHolder) {
 	c.Assert(holder.closed.Load(), IsTrue)
 
 	// todo: very strange, and can't resume
-	status := holder.Status(context.Background())
+	status := holder.Status(nil)
 	c.Assert(status.Stage, Equals, pb.Stage_Stopped)
 	c.Assert(status.Result, IsNil)
 
@@ -244,7 +245,7 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 	c.Assert(err, ErrorMatches, ".*current stage is Paused.*")
 
 	// test status
-	status := holder.Status(context.Background())
+	status := holder.Status(nil)
 	c.Assert(status.Stage, Equals, pb.Stage_Paused)
 
 	// test update
@@ -260,7 +261,7 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 	c.Assert(err, ErrorMatches, ".*current stage is Running.*")
 
 	// test status
-	status = holder.Status(context.Background())
+	status = holder.Status(nil)
 	c.Assert(status.Stage, Equals, pb.Stage_Running)
 	c.Assert(status.Result, IsNil)
 
