@@ -1649,7 +1649,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36011]
-message = "sharding group for `%s`.`%s` not found"
+message = "sharding group for %v not found"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -3080,6 +3080,12 @@ tags = ["internal", "high"]
 message = "when %s, resource %s is in use by other client"
 description = ""
 workaround = "Please try again later"
+tags = ["internal", "low"]
+
+[error.DM-scheduler-46025]
+message = "source can only update relay-log related parts for now"
+description = ""
+workaround = ""
 tags = ["internal", "low"]
 
 [error.DM-dmctl-48001]

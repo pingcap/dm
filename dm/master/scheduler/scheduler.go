@@ -345,15 +345,29 @@ func (s *Scheduler) UpdateSourceCfg(cfg *config.SourceConfig) error {
 	if tasks := s.GetTaskNameListBySourceName(cfg.SourceID); len(tasks) > 0 {
 		return terror.ErrSchedulerSourceOpTaskExist.Generate(cfg.SourceID, tasks)
 	}
-	// 3. put the config into etcd.
+	// 3. check this cfg is ok to update.
+	if !checkSourceCfgCanUpdated(s.sourceCfgs[cfg.SourceID], cfg) {
+		return terror.ErrSchedulerSourceCfgUpdate.Generate()
+	}
+	// 4. put the config into etcd.
 	_, err := ha.PutSourceCfg(s.etcdCli, cfg)
 	if err != nil {
 		return err
 	}
-
-	// 3. record the config in the scheduler.
+	// 5. record the config in the scheduler.
 	s.sourceCfgs[cfg.SourceID] = cfg
 	return nil
+}
+
+// currently the source cfg can only update and relay-log related parts.
+func checkSourceCfgCanUpdated(oldCFG, newCFG *config.SourceConfig) bool {
+	newCFGClone := newCFG.Clone()
+	newCFGClone.EnableRelay = oldCFG.EnableRelay
+	newCFGClone.RelayBinLogName = oldCFG.RelayBinLogName
+	newCFGClone.RelayBinlogGTID = oldCFG.RelayBinlogGTID
+	newCFGClone.RelayDir = oldCFG.RelayDir
+	newCFGClone.Purge = oldCFG.Purge
+	return newCFGClone.String() == oldCFG.String()
 }
 
 // RemoveSourceCfg removes the upstream source config in the cluster.

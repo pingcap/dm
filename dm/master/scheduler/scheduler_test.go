@@ -177,6 +177,11 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	fake.SourceID = "not a source id"
 	c.Assert(s.UpdateSourceCfg(fake), ErrorMatches, "*.not exists.*")
 
+	// update field not related to relay-log will failed
+	fake2 := newCfg.Clone()
+	fake2.AutoFixGTID = !fake2.AutoFixGTID
+	c.Assert(s.UpdateSourceCfg(fake2), ErrorMatches, ".*source can only update relay-log related parts for now.*")
+
 	// one unbound source exist (because no free worker).
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 	rebuildScheduler(ctx)
