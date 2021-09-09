@@ -425,8 +425,8 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 		replication.ErrSyncClosed,
 		replication.ErrNeedSyncAgain,
 	} {
-		err2 := r.handleEvents(ctx, reader2, transformer2, writer2)
-		c.Assert(errors.Cause(err2), Equals, reader2.err)
+		_, handleErr := r.handleEvents(ctx, reader2, transformer2, writer2)
+		c.Assert(errors.Cause(handleErr), Equals, reader2.err)
 	}
 
 	// reader return valid event
@@ -436,14 +436,14 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	// writer return error
 	writer2.err = errors.New("writer error for testing")
 	// return with the annotated writer error
-	err = r.handleEvents(ctx, reader2, transformer2, writer2)
+	_, err = r.handleEvents(ctx, reader2, transformer2, writer2)
 	c.Assert(errors.Cause(err), Equals, writer2.err)
 	// after handle rotate event, we save and flush the meta immediately
 	c.Assert(r.meta.Dirty(), Equals, false)
 
 	// writer without error
 	writer2.err = nil
-	err = r.handleEvents(ctx, reader2, transformer2, writer2) // returned when ctx timeout
+	_, err = r.handleEvents(ctx, reader2, transformer2, writer2) // returned when ctx timeout
 	c.Assert(errors.Cause(err), Equals, ctx.Err())
 	// check written event
 	c.Assert(writer2.latestEvent, Equals, reader2.result.Event)
@@ -458,7 +458,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 
 	// write a QueryEvent with GTID sets
 	reader2.result.Event = queryEv
-	err = r.handleEvents(ctx2, reader2, transformer2, writer2)
+	_, err = r.handleEvents(ctx2, reader2, transformer2, writer2)
 	c.Assert(errors.Cause(err), Equals, ctx.Err())
 	// check written event
 	c.Assert(writer2.latestEvent, Equals, reader2.result.Event)
@@ -477,7 +477,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	}
 	ctx4, cancel4 := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel4()
-	err = r.handleEvents(ctx4, reader2, transformer2, writer2)
+	_, err = r.handleEvents(ctx4, reader2, transformer2, writer2)
 	c.Assert(errors.Cause(err), Equals, ctx.Err())
 	select {
 	case <-ctx4.Done():
@@ -490,7 +490,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	writer2.result.Ignore = true
 	ctx5, cancel5 := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel5()
-	err = r.handleEvents(ctx5, reader2, transformer2, writer2)
+	_, err = r.handleEvents(ctx5, reader2, transformer2, writer2)
 	c.Assert(errors.Cause(err), Equals, ctx.Err())
 	select {
 	case <-ctx5.Done():

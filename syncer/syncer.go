@@ -55,7 +55,6 @@ import (
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
-	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
@@ -77,7 +76,6 @@ var (
 
 	retryTimeout = 3 * time.Second
 	waitTime     = 10 * time.Millisecond
-	statusTime   = 30 * time.Second
 
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL.
 	MaxDDLConnectionTimeoutMinute = 5
@@ -271,11 +269,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	}
 	syncer.lastCheckpointFlushedTime = time.Time{}
 	return syncer
-}
-
-// GetSecondsBehindMaster returns secondsBehindMaster.
-func (s *Syncer) GetSecondsBehindMaster() int64 {
-	return s.secondsBehindMaster.Load()
 }
 
 func (s *Syncer) newJobChans(count int) {
@@ -705,10 +698,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		IsCanceled: isCanceled,
 		Errors:     errs,
 	}
-}
-
-func (s *Syncer) getMasterStatus(ctx context.Context) (mysql.Position, gtid.Set, error) {
-	return s.fromDB.GetMasterStatus(ctx, s.cfg.Flavor)
 }
 
 func (s *Syncer) getTable(tctx *tcontext.Context, origSchema, origTable, renamedSchema, renamedTable string) (*model.TableInfo, error) {
@@ -1648,11 +1637,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	s.wg.Add(1)
 	go func() {
-		s.printStatus(runCtx)
-	}()
-
-	s.wg.Add(1)
-	go func() {
 		defer s.wg.Done()
 		updateLagTicker := time.NewTicker(time.Millisecond * 100)
 		defer updateLagTicker.Stop()
@@ -1763,6 +1747,28 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		return nil
 	}
 
+	maybeSkipNRowsEvent := func(n int) error {
+		if s.cfg.EnableGTID && n > 0 {
+			for i := 0; i < n; {
+				e, err1 := s.getEvent(tctx, currentLocation)
+				if err1 != nil {
+					return err
+				}
+				if _, ok := e.Event.(*replication.RowsEvent); ok {
+					i++
+				}
+			}
+			log.L().Info("discard event already consumed", zap.Int("count", n),
+				zap.Any("cur_loc", currentLocation))
+		}
+		return nil
+	}
+
+	// eventIndex is the rows event index in this transaction, it's used to avoiding read duplicate event in gtid mode
+	eventIndex := 0
+	// the relay log file may be truncated(not end with an RotateEvent), in this situation, we may read some rows events
+	// and then read from the gtid again, so we force enter safe-mode for one more transaction to avoid failure due to
+	// conflict
 	for {
 		if s.execError.Load() != nil {
 			return nil
@@ -1804,6 +1810,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				err = errors.New("connect: connection refused")
 			}
 		})
+		failpoint.Inject("GetEventErrorInTxn", func(val failpoint.Value) {
+			if intVal, ok := val.(int); ok && intVal == eventIndex {
+				err = errors.New("failpoint triggered")
+				s.tctx.L().Warn("failed to get event", zap.Int("event_index", eventIndex),
+					zap.Any("cur_pos", currentLocation), zap.Any("las_pos", lastLocation),
+					zap.Any("pos", e.Header.LogPos), log.ShortError(err))
+			}
+		})
 		switch {
 		case err == context.Canceled:
 			tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last location", lastLocation))
@@ -1819,6 +1833,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err1
 			}
 			continue
+		case err == streamer.ErrorMaybeDuplicateEvent:
+			tctx.L().Warn("read binlog met a truncated file, need to open safe-mode until the next transaction")
+			err = maybeSkipNRowsEvent(eventIndex)
+			if err == nil {
+				continue
+			}
+			log.L().Warn("skip duplicate rows event failed", zap.Error(err))
 		}
 
 		if err != nil {
@@ -1829,11 +1850,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			if s.streamerController.CanRetry(err) {
-				err = s.streamerController.ResetReplicationSyncer(tctx, lastLocation)
+				// GlobalPoint is the last finished GTID
+				err = s.streamerController.ResetReplicationSyncer(tctx, s.checkpoint.GlobalPoint())
 				if err != nil {
 					return err
 				}
-				log.L().Info("reset replication binlog puller")
+				log.L().Info("reset replication binlog puller", zap.Any("pos", s.checkpoint.GlobalPoint()))
+				if err = maybeSkipNRowsEvent(eventIndex); err != nil {
+					return err
+				}
 				continue
 			}
 
@@ -1985,12 +2010,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		case *replication.RotateEvent:
 			err2 = s.handleRotateEvent(ev, ec)
 		case *replication.RowsEvent:
+			eventIndex++
 			metrics.BinlogEventRowHistogram.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Observe(float64(len(ev.Rows)))
 			err2 = s.handleRowsEvent(ev, ec)
 		case *replication.QueryEvent:
 			originSQL = strings.TrimSpace(string(ev.Query))
 			err2 = s.handleQueryEvent(ev, ec, originSQL)
 		case *replication.XIDEvent:
+			// reset eventIndex and force safeMode flag here.
+			eventIndex = 0
 			if shardingReSync != nil {
 				shardingReSync.currLocation.Position.Pos = e.Header.LogPos
 				shardingReSync.currLocation.Suffix = currentLocation.Suffix
@@ -2991,107 +3019,6 @@ func (s *Syncer) loadTableStructureFromDump(ctx context.Context) error {
 	return firstErr
 }
 
-func (s *Syncer) printStatus(ctx context.Context) {
-	defer s.wg.Done()
-
-	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
-		if seconds, ok := val.(int); ok {
-			statusTime = time.Duration(seconds) * time.Second
-			s.tctx.L().Info("set printStatusInterval", zap.Int("value", seconds), zap.String("failpoint", "PrintStatusCheckSeconds"))
-		}
-	})
-
-	timer := time.NewTicker(statusTime)
-	defer timer.Stop()
-
-	var (
-		err                 error
-		latestMasterPos     mysql.Position
-		latestmasterGTIDSet gtid.Set
-	)
-
-	for {
-		select {
-		case <-ctx.Done():
-			s.tctx.L().Info("print status routine exits", log.ShortError(ctx.Err()))
-			return
-		case <-timer.C:
-			now := time.Now()
-			s.lastTime.RLock()
-			seconds := now.Unix() - s.lastTime.t.Unix()
-			s.lastTime.RUnlock()
-			totalSeconds := now.Unix() - s.start.Unix()
-			last := s.lastCount.Load()
-			total := s.count.Load()
-
-			totalBinlogSize := s.binlogSizeCount.Load()
-			lastBinlogSize := s.lastBinlogSizeCount.Load()
-
-			tps, totalTps := int64(0), int64(0)
-			if seconds > 0 {
-				tps = (total - last) / seconds
-				totalTps = total / totalSeconds
-
-				s.currentLocationMu.RLock()
-				currentLocation := s.currentLocationMu.currentLocation
-				s.currentLocationMu.RUnlock()
-
-				ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
-				remainingSize, err2 := s.fromDB.CountBinaryLogsSize(ctx2, currentLocation.Position)
-				cancel2()
-				if err2 != nil {
-					// log the error, but still handle the rest operation
-					s.tctx.L().Error("fail to estimate unreplicated binlog size", zap.Error(err2))
-				} else {
-					bytesPerSec := (totalBinlogSize - lastBinlogSize) / seconds
-					if bytesPerSec > 0 {
-						remainingSeconds := remainingSize / bytesPerSec
-						s.tctx.L().Info("binlog replication progress",
-							zap.Int64("total binlog size", totalBinlogSize),
-							zap.Int64("last binlog size", lastBinlogSize),
-							zap.Int64("cost time", seconds),
-							zap.Int64("bytes/Second", bytesPerSec),
-							zap.Int64("unsynced binlog size", remainingSize),
-							zap.Int64("estimate time to catch up", remainingSeconds))
-						metrics.RemainingTimeGauge.WithLabelValues(s.cfg.Name, s.cfg.SourceID, s.cfg.WorkerName).Set(float64(remainingSeconds))
-					}
-				}
-			}
-
-			ctx2, cancel2 := context.WithTimeout(ctx, utils.DefaultDBTimeout)
-			latestMasterPos, latestmasterGTIDSet, err = s.getMasterStatus(ctx2)
-			cancel2()
-			if err != nil {
-				s.tctx.L().Error("fail to get master status", log.ShortError(err))
-			} else {
-				metrics.BinlogPosGauge.WithLabelValues("master", s.cfg.Name, s.cfg.SourceID).Set(float64(latestMasterPos.Pos))
-				index, err := binlog.GetFilenameIndex(latestMasterPos.Name)
-				if err != nil {
-					s.tctx.L().Error("fail to parse binlog file", log.ShortError(err))
-				} else {
-					metrics.BinlogFileGauge.WithLabelValues("master", s.cfg.Name, s.cfg.SourceID).Set(float64(index))
-				}
-			}
-
-			s.tctx.L().Info("binlog replication status",
-				zap.Int64("total_events", total),
-				zap.Int64("total_tps", totalTps),
-				zap.Int64("tps", tps),
-				zap.Stringer("master_position", latestMasterPos),
-				log.WrapStringerField("master_gtid", latestmasterGTIDSet),
-				zap.Stringer("checkpoint", s.checkpoint))
-
-			s.lastCount.Store(total)
-			s.lastBinlogSizeCount.Store(totalBinlogSize)
-			s.lastTime.Lock()
-			s.lastTime.t = time.Now()
-			s.lastTime.Unlock()
-			s.totalTps.Store(totalTps)
-			s.tps.Store(tps)
-		}
-	}
-}
-
 func (s *Syncer) createDBs(ctx context.Context) error {
 	var err error
 	dbCfg := s.cfg.From
@@ -3572,6 +3499,16 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 	gs, err := reader.GetGTIDsForPosFromStreamer(tctx.Context(), streamerController.streamer, endPos)
 	if err != nil {
 		s.tctx.L().Warn("fail to get gtids for global location", zap.Stringer("pos", location), zap.Error(err))
+		return false, err
+	}
+	dbConn, err := s.fromDB.BaseDB.GetBaseConn(tctx.Context())
+	if err != nil {
+		s.tctx.L().Warn("fail to build connection", zap.Stringer("pos", location), zap.Error(err))
+		return false, err
+	}
+	gs, err = utils.AddGSetWithPurged(tctx.Context(), gs, dbConn.DBConn)
+	if err != nil {
+		s.tctx.L().Warn("fail to merge purged gtidSet", zap.Stringer("pos", location), zap.Error(err))
 		return false, err
 	}
 	err = location.SetGTID(gs.Origin())

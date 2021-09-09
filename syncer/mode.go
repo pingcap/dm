@@ -45,6 +45,9 @@ func (s *Syncer) enableSafeModeInitializationPhase(tctx *tcontext.Context) {
 					// send error to the fatal chan to interrupt the process
 					s.runFatalChan <- unit.NewProcessError(err)
 				}
+				if !s.safeMode.Enable() {
+					s.tctx.L().Info("disable safe-mode after task initialization finished")
+				}
 			}()
 
 			initPhaseSeconds := s.cfg.CheckpointFlushInterval * 2

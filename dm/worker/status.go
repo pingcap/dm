@@ -22,13 +22,13 @@ import (
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/syncer"
+	"github.com/pingcap/dm/pkg/binlog"
 )
 
 // Status returns the status of the current sub task.
 func (st *SubTask) Status() interface{} {
 	if cu := st.CurrUnit(); cu != nil {
-		return cu.Status()
+		return cu.Status(nil)
 	}
 	return nil
 }
@@ -46,7 +46,7 @@ func (st *SubTask) StatusJSON() string {
 
 // Status returns the status of the worker (and sub tasks)
 // if stName is empty, all sub task's status will be returned.
-func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
+func (w *SourceWorker) Status(stName string, sourceStatus *binlog.SourceStatus) []*pb.SubTaskStatus {
 	sts := w.subTaskHolder.getAllSubTasks()
 
 	if len(sts) == 0 {
@@ -92,7 +92,7 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 			if cu != nil {
 				stStatus.Unit = cu.Type()
 				// oneof status
-				us := cu.Status()
+				us := cu.Status(sourceStatus)
 				switch stStatus.Unit {
 				case pb.UnitType_Check:
 					stStatus.Status = &pb.SubTaskStatus_Check{Check: us.(*pb.CheckStatus)}
@@ -101,10 +101,7 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 				case pb.UnitType_Load:
 					stStatus.Status = &pb.SubTaskStatus_Load{Load: us.(*pb.LoadStatus)}
 				case pb.UnitType_Sync:
-					cus := cu.(*syncer.Syncer) // ss must be *syncer.Syncer
-					ss := us.(*pb.SyncStatus)
-					ss.SecondsBehindMaster = cus.GetSecondsBehindMaster()
-					stStatus.Status = &pb.SubTaskStatus_Sync{Sync: ss}
+					stStatus.Status = &pb.SubTaskStatus_Sync{Sync: us.(*pb.SyncStatus)}
 				}
 			}
 		}
@@ -114,13 +111,14 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 	return status
 }
 
-// StatusJSON returns the status of the worker as json string.
-func (w *Worker) StatusJSON(stName string) string {
-	sl := &pb.SubTaskStatusList{Status: w.Status(stName)}
+// GetUnitAndSourceStatusJSON returns the status of the worker and its unit as json string.
+// This function will also cause every unit to print its status to log.
+func (w *SourceWorker) GetUnitAndSourceStatusJSON(stName string, sourceStatus *binlog.SourceStatus) string {
+	sl := &pb.SubTaskStatusList{Status: w.Status(stName, sourceStatus)}
 	mar := jsonpb.Marshaler{EmitDefaults: true, Indent: "    "}
 	s, err := mar.MarshalToString(sl)
 	if err != nil {
-		w.l.Error("fail to marshal status", zap.Reflect("status", sl), zap.Error(err))
+		w.l.Error("fail to marshal status", zap.Any("status", sl), zap.Error(err))
 		return ""
 	}
 	return s
