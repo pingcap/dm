@@ -420,12 +420,14 @@ func (t *testWorkerEtcdCompact) SetUpSuite(c *C) {
 		mockSync := NewMockUnit(pb.UnitType_Sync)
 		return []unit.Unit{mockDumper, mockLoader, mockSync}
 	}
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCFGFromETCD", `return(true)`), IsNil)
 }
 
 func (t *testWorkerEtcdCompact) TearDownSuite(c *C) {
 	NewRelayHolder = NewRealRelayHolder
 	NewSubTask = NewRealSubTask
 	createUnits = createRealUnits
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCFGFromETCD"), IsNil)
 }
 
 func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
