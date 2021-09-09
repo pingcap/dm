@@ -199,18 +199,21 @@ func (w *Worker) EnableRelay() (err error) {
 		w.l.Warn("already enabled relay")
 		return nil
 	}
-	// we need update worker source config from etcd first
-	// because the configuration of the relay part of the data source may be changed via scheduler.UpdateSourceCfg
-	sourceCfg, _, err := ha.GetRelayConfig(w.etcdClient, w.name)
-	if err != nil {
-		return err
-	}
-	failpoint.Inject("MockGetSourceCFGFromETCD", func(_ failpoint.Value) {
-		sourceCfg = w.cfg
-	})
-	w.cfg = sourceCfg
-	w.relayCtx, w.relayCancel = context.WithCancel(w.ctx)
 
+	needGetSourceCFGFromETCD := true
+	failpoint.Inject("MockGetSourceCFGFromETCD", func(_ failpoint.Value) {
+		needGetSourceCFGFromETCD = false
+	})
+	if needGetSourceCFGFromETCD {
+		// we need update worker source config from etcd first
+		// because the configuration of the relay part of the data source may be changed via scheduler.UpdateSourceCfg
+		sourceCfg, _, err2 := ha.GetRelayConfig(w.etcdClient, w.name)
+		if err2 != nil {
+			return err2
+		}
+		w.cfg = sourceCfg
+	}
+	w.relayCtx, w.relayCancel = context.WithCancel(w.ctx)
 	// 1. adjust relay starting position, to the earliest of subtasks
 	var subTaskCfgs map[string]config.SubTaskConfig
 	_, subTaskCfgs, _, err = w.fetchSubTasksAndAdjust()
