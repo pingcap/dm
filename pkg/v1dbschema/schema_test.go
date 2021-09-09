@@ -119,17 +119,16 @@ func (t *testSchema) TestSchemaV106ToV20x(c *C) {
 	t.mockDB.ExpectExec("UPDATE `dm_meta_v106_test`.`test_onlineddl`.*").WithArgs(cfg.SourceID, fmt.Sprint(cfg.ServerID)).WillReturnResult(sqlmock.NewErrorResult(nil))
 	t.mockDB.ExpectCommit()
 	c.Assert(UpdateSchema(tctx, t.db, cfg), IsNil)
+	c.Assert(t.mockDB.ExpectationsWereMet(), IsNil)
 
 	// update schema with GTID enabled.
 	cfg.EnableGTID = true
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGlobalPos", `return("mysql-bin.000001")`), IsNil)
-	//nolint:errcheck
-	defer failpoint.Disable("github.com/pingcap/dm/pkg/v1dbschema/MockGetGlobalPos")
-	c.Assert(t.mockDB.ExpectationsWereMet(), IsNil)
-
 	// reset mockDB conn because last UpdateSchema would close the conn.
 	t.setUpDBConn(c)
 	// mock updateSyncerCheckpoint
+	t.mockDB.ExpectQuery("SELECT binlog_name, binlog_pos FROM `dm_meta_v106_test`.`test_syncer_checkpoint`.*").
+		WithArgs(cfg.SourceID, true).WillReturnRows(sqlmock.NewRows([]string{"binlog_name", "binlog_pos"}).
+		AddRow("mysql-bin.000001", "0"))
 	t.mockDB.ExpectBegin()
 	t.mockDB.ExpectExec("ALTER TABLE `dm_meta_v106_test`.`test_syncer_checkpoint` ADD COLUMN binlog_gtid TEXT AFTER binlog_pos").WithArgs().WillReturnResult(sqlmock.NewErrorResult(nil))
 	t.mockDB.ExpectExec("ALTER TABLE `dm_meta_v106_test`.`test_syncer_checkpoint` ADD COLUMN table_info JSON NOT NULL AFTER binlog_gtid").WithArgs().WillReturnResult(sqlmock.NewErrorResult(nil))
