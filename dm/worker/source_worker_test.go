@@ -121,10 +121,12 @@ func (t *testServer2) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 
 	getMinLocForSubTaskFunc = getFakeLocForSubTask
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCFGFromETCD", `return(true)`), IsNil)
 }
 
 func (t *testServer2) TearDownSuite(c *C) {
 	getMinLocForSubTaskFunc = getMinLocForSubTask
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCFGFromETCD"), IsNil)
 }
 
 func (t *testServer2) TestTaskAutoResume(c *C) {
