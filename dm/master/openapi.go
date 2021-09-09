@@ -25,6 +25,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/pkg/log"
@@ -186,45 +187,39 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	if sourceCfg == nil {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
 	}
-	workerName := ""
-	if w := s.scheduler.GetWorkerBySource(sourceName); w != nil {
-		workerName = w.BaseInfo().Name
-	}
 	resp := openapi.SourceStatus{
 		EnableRelay: sourceCfg.EnableRelay,
 		SourceName:  sourceCfg.SourceID,
-		WorkerName:  workerName,
 	}
-	// only query worker if source is bound to a worker
-	queryWorker := workerName != ""
-	if queryWorker {
-		var statusResp *pb.QueryStatusResponse
-		workerResp := s.getStatusFromWorkers(ctx.Request().Context(), []string{sourceName}, "", sourceCfg.EnableRelay)
-		for idx := range workerResp {
-			if workerResp[idx].SourceStatus.Worker == workerName {
-				statusResp = workerResp[idx]
-				break
-			}
-		}
-		if statusResp == nil {
-			// No response from worker and master means that the current query source has not been created.
-			// and this should not happen here.
-			return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
-		}
-		if !statusResp.Result {
-			return terror.ErrOpenAPICommonError.New(statusResp.Msg)
-		}
-		relayStatus := statusResp.SourceStatus.GetRelayStatus()
-		if relayStatus != nil {
-			resp.EnableRelay = true
-			resp.RelayStatus = &openapi.RelayStatus{
-				MasterBinlog:       relayStatus.MasterBinlog,
-				MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
-				RelayBinlogGtid:    relayStatus.RelayBinlogGtid,
-				RelayCatchUpMaster: relayStatus.RelayCatchUpMaster,
-				RelayDir:           relayStatus.RelaySubDir,
-				Stage:              relayStatus.Stage.String(),
-			}
+	worker := s.scheduler.GetWorkerBySource(sourceName)
+	// current this source not bound to any worker
+	if worker == nil {
+		return ctx.JSON(http.StatusOK, resp)
+	}
+	resp.WorkerName = worker.BaseInfo().Name
+	// get status from worker
+	workerReq := &workerrpc.Request{
+		Type:        workerrpc.CmdQueryStatus,
+		QueryStatus: &pb.QueryStatusRequest{Name: ""},
+	}
+	workerResp, err := worker.SendRequest(ctx.Request().Context(), workerReq, s.cfg.RPCTimeout)
+	if err != nil {
+		return terror.ErrOpenAPICommonError.New(err.Error())
+	}
+	statusResp := workerResp.QueryStatus
+	if !statusResp.Result {
+		return terror.ErrOpenAPICommonError.New(statusResp.Msg)
+	}
+	relayStatus := statusResp.SourceStatus.GetRelayStatus()
+	if relayStatus != nil {
+		resp.EnableRelay = true
+		resp.RelayStatus = &openapi.RelayStatus{
+			MasterBinlog:       relayStatus.MasterBinlog,
+			MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
+			RelayBinlogGtid:    relayStatus.RelayBinlogGtid,
+			RelayCatchUpMaster: relayStatus.RelayCatchUpMaster,
+			RelayDir:           relayStatus.RelaySubDir,
+			Stage:              relayStatus.Stage.String(),
 		}
 	}
 	return ctx.JSON(http.StatusOK, resp)
