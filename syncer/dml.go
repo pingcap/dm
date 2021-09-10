@@ -619,3 +619,15 @@ func pruneGeneratedColumnDML(ti *model.TableInfo, data [][]interface{}) ([]*mode
 	}
 	return cols, rows, nil
 }
+
+// checkLogColumns returns error when not all rows in skipped is empty, which means the binlog doesn't contain all
+// columns.
+// TODO: don't return error when all skipped columns is non-PK.
+func checkLogColumns(skipped [][]int) error {
+	for _, row := range skipped {
+		if len(row) > 0 {
+			return terror.ErrBinlogNotLogColumn
+		}
+	}
+	return nil
+}
