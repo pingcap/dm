@@ -523,7 +523,6 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 		r.db.Close()
 		r.db = nil
 	}()
-	salveServerID := []uint32{100, 101}
 	mockGetServerUUID(mockDB)
 	uuid, err := utils.GetServerUUID(ctx, r.db.DB, r.cfg.Flavor)
 	c.Assert(err, IsNil)
@@ -539,17 +538,15 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	c.Assert(err, IsNil)
 
 	mockGetServerUUID(mockDB)
-	mockSlaveHosts(mockDB, salveServerID, r.cfg.Flavor)
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/relay/MockReturnEmptyGTID", "return()"), IsNil)
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/relay/MockAdjustGTIDReturnEmptyGTID", "return()"), IsNil)
 	//nolint:errcheck
-	defer failpoint.Disable("github.com/pingcap/dm/relay/MockReturnEmptyGTID")
+	defer failpoint.Disable("github.com/pingcap/dm/relay/MockAdjustGTIDReturnEmptyGTID")
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid001 := fmt.Sprintf("%s.000001", uuid)
 	t.verifyMetadata(c, r, uuid001, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, emptyGTID.String(), []string{uuid001})
 
 	// re-setup meta again, often happen when connecting a server behind a VIP.
 	mockGetServerUUID(mockDB)
-	mockSlaveHosts(mockDB, salveServerID, r.cfg.Flavor)
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid002 := fmt.Sprintf("%s.000002", uuid)
 	t.verifyMetadata(c, r, uuid002, minCheckpoint, emptyGTID.String(), []string{uuid001, uuid002})
@@ -558,13 +555,11 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	r.cfg.BinlogGTID = "24ecd093-8cec-11e9-aa0d-0242ac170002:1-50,24ecd093-8cec-11e9-aa0d-0242ac170003:1-50"
 	r.cfg.UUIDSuffix = 2
 	mockGetServerUUID(mockDB)
-	mockSlaveHosts(mockDB, salveServerID, r.cfg.Flavor)
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	t.verifyMetadata(c, r, uuid002, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, emptyGTID.String(), []string{uuid002})
 
 	// re-setup meta again, often happen when connecting a server behind a VIP.
 	mockGetServerUUID(mockDB)
-	mockSlaveHosts(mockDB, salveServerID, r.cfg.Flavor)
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid003 := fmt.Sprintf("%s.000003", uuid)
 	t.verifyMetadata(c, r, uuid003, minCheckpoint, emptyGTID.String(), []string{uuid002, uuid003})

@@ -66,28 +66,3 @@ func mockGetServerUUID(mockDB sqlmock.Sqlmock) {
 	mockDB.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'server_uuid'").WithArgs().
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("server_uuid", "12e57f06-f360-11eb-8235-585cc2bc66c9"))
 }
-
-func mockSlaveHosts(mock sqlmock.Sqlmock, serverIDs []uint32, flavor string) {
-	expectQuery := mock.ExpectQuery("SHOW SLAVE HOSTS")
-
-	host := "test"
-	port := 3306
-	slaveUUID := "test"
-	masterID := uint32(1)
-
-	if flavor == gmysql.MariaDBFlavor {
-		rows := sqlmock.NewRows([]string{"Server_id", "Host", "Port", "Master_id"})
-		for _, serverID := range serverIDs {
-			rows.AddRow(serverID, host, port, masterID)
-		}
-		expectQuery.WillReturnRows(rows)
-	} else {
-		rows := sqlmock.NewRows([]string{"Server_id", "Host", "Port", "Master_id", "Slave_UUID"})
-		for _, serverID := range serverIDs {
-			rows.AddRow(serverID, host, port, masterID, slaveUUID)
-		}
-		expectQuery.WillReturnRows(rows)
-	}
-
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'server_id'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("server_id", masterID))
-}

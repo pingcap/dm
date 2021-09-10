@@ -1060,6 +1060,10 @@ func (r *Relay) setSyncConfig() error {
 // AdjustGTID implements Relay.AdjustGTID
 // starting sync at returned gset will wholly fetch a binlog from beginning of the file.
 func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error) {
+	failpoint.Inject("MockAdjustGTIDReturnEmptyGTID", func(_ failpoint.Value) {
+		gset, _ = gtid.ParserGTID("mysql", "")
+		failpoint.Return(gset, nil)
+	})
 	// setup a TCP binlog reader (because no relay can be used when upgrading).
 	syncCfg := r.syncerCfg
 	// always use a new random serverID
@@ -1068,11 +1072,6 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 		return nil, terror.Annotate(err, "fail to get random server id when relay adjust gtid")
 	}
 	syncCfg.ServerID = randomServerID
-	failpoint.Inject("MockReturnEmptyGTID", func(_ failpoint.Value) {
-		gset, _ = gtid.ParserGTID("mysql", "")
-		failpoint.Return(gset, nil)
-	})
-
 	tcpReader := binlogReader.NewTCPReader(syncCfg)
 	resultGs, err := binlogReader.GetPreviousGTIDFromGTIDSet(ctx, tcpReader, gset)
 	if err != nil {
