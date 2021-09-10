@@ -363,27 +363,27 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 func (cp *RemoteCheckPoint) SaveTablePoint(table *filter.Table, point binlog.Location, ti *model.TableInfo) {
 	cp.Lock()
 	defer cp.Unlock()
-	cp.saveTablePoint(table.Schema, table.Name, point, ti)
+	cp.saveTablePoint(table, point, ti)
 }
 
 // saveTablePoint saves single table's checkpoint without mutex.Lock.
-func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, location binlog.Location, ti *model.TableInfo) {
+func (cp *RemoteCheckPoint) saveTablePoint(sourceTable *filter.Table, location binlog.Location, ti *model.TableInfo) {
 	if binlog.CompareLocation(cp.globalPoint.location, location, cp.cfg.EnableGTID) > 0 {
 		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", location, cp.globalPoint))
 	}
 
 	// we save table checkpoint while we meet DDL or DML
-	cp.logCtx.L().Debug("save table checkpoint", zap.Stringer("location", location), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
-	mSchema, ok := cp.points[sourceSchema]
+	cp.logCtx.L().Debug("save table checkpoint", zap.Stringer("location", location), zap.Stringer("table", sourceTable))
+	mSchema, ok := cp.points[sourceTable.Schema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
-		cp.points[sourceSchema] = mSchema
+		cp.points[sourceTable.Schema] = mSchema
 	}
-	point, ok := mSchema[sourceTable]
+	point, ok := mSchema[sourceTable.Name]
 	if !ok {
-		mSchema[sourceTable] = newBinlogPoint(location, binlog.NewLocation(cp.cfg.Flavor), ti, nil, cp.cfg.EnableGTID)
+		mSchema[sourceTable.Name] = newBinlogPoint(location, binlog.NewLocation(cp.cfg.Flavor), ti, nil, cp.cfg.EnableGTID)
 	} else if err := point.save(location, ti); err != nil {
-		cp.logCtx.L().Error("fail to save table point", zap.String("schema", sourceSchema), zap.String("table", sourceTable), log.ShortError(err))
+		cp.logCtx.L().Error("fail to save table point", zap.Stringer("table", sourceTable), log.ShortError(err))
 	}
 }
 
