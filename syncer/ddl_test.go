@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
@@ -417,6 +418,8 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 	}
 
 	for _, ca := range cases {
+		server := conn.InitInMemoryMysqlDBIn3306()
+		go server.Start()
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, s.cfg)
 		c.Assert(err, IsNil)
 		syncer := NewSyncer(s.cfg, nil)
@@ -460,6 +463,7 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		c.Assert(sqls[0], Equals, newSQL)
 		tableName := &filter.Table{Schema: "test", Name: ca.ghostname}
 		c.Assert(tables, DeepEquals, map[string]*filter.Table{tableName.String(): tableName})
+		server.Close()
 	}
 }
 

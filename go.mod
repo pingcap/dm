@@ -8,15 +8,16 @@ require (
 	github.com/coreos/go-semver v0.3.0
 	github.com/deepmap/oapi-codegen v1.8.2
 	github.com/docker/go-units v0.4.0
+	github.com/dolthub/go-mysql-server v0.10.0
 	github.com/dustin/go-humanize v1.0.0
 	github.com/getkin/kin-openapi v0.66.0
 	github.com/go-mysql-org/go-mysql v1.1.3-0.20210705101833-83965e516929
-	github.com/go-sql-driver/mysql v1.5.0
+	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gogo/gateway v1.1.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.3.4
-	github.com/google/uuid v1.1.1
+	github.com/google/uuid v1.2.0
 	github.com/grpc-ecosystem/grpc-gateway v1.14.3
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/labstack/echo/v4 v4.4.0
