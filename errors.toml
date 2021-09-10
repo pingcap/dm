@@ -784,6 +784,12 @@ description = ""
 workaround = "Please check the upstream settings like privileges, RDS settings to read data from SHOW MASTER STATUS."
 tags = ["upstream", "medium"]
 
+[error.DM-binlog-op-11126]
+message = "upstream didn't log enough columns in binlog"
+description = ""
+workaround = "Please check if session `binlog_row_image` variable is not FULL, restart task to the location from where FULL binlog_row_image is used."
+tags = ["upstream", "high"]
+
 [error.DM-config-20001]
 message = "checking item %s is not supported\n%s"
 description = ""
