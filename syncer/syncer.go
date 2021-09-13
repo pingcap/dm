@@ -2434,7 +2434,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	// handle one-schema change DDL
 	for _, sql := range sqls {
 		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		sqlDDL, tableNames, stmt, handleErr := s.routeDDL(parser.New(), usedSchema, sql)
+		sqlDDL, tables, stmt, handleErr := s.routeDDL(parser.New(), usedSchema, sql)
 		if handleErr != nil {
 			return handleErr
 		}
@@ -2446,7 +2446,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 		// DDL is sequentially synchronized in this syncer's main process goroutine
 		// ignore DDL that is older or same as table checkpoint, to avoid sync again for already synced DDLs
-		if s.checkpoint.IsOlderThanTablePoint(tableNames[0][0], *ec.currentLocation, true) {
+		if s.checkpoint.IsOlderThanTablePoint(tables[0][0], *ec.currentLocation, true) {
 			ec.tctx.L().Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation))
 			continue
 		}
@@ -2455,18 +2455,18 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		if s.cfg.ShardMode == config.ShardPessimistic {
 			switch stmt.(type) {
 			case *ast.DropDatabaseStmt:
-				err = s.dropSchemaInSharding(ec.tctx, tableNames[0][0].Schema)
+				err = s.dropSchemaInSharding(ec.tctx, tables[0][0].Schema)
 				if err != nil {
 					return err
 				}
 				continue
 			case *ast.DropTableStmt:
-				sourceTableID := utils.GenTableID(tableNames[0][0])
-				err = s.sgk.LeaveGroup(tableNames[1][0], []string{sourceTableID})
+				sourceTableID := utils.GenTableID(tables[0][0])
+				err = s.sgk.LeaveGroup(tables[1][0], []string{sourceTableID})
 				if err != nil {
 					return err
 				}
-				err = s.checkpoint.DeleteTablePoint(ec.tctx, tableNames[0][0])
+				err = s.checkpoint.DeleteTablePoint(ec.tctx, tables[0][0])
 				if err != nil {
 					return err
 				}
@@ -2479,11 +2479,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			// in sharding mode, we only support to do one ddl in one event
 			if ddlInfo == nil {
 				ddlInfo = &shardingDDLInfo{
-					name:       tableNames[0][0].String(),
-					tableNames: tableNames,
-					stmt:       stmt,
+					name:   tables[0][0].String(),
+					tables: tables,
+					stmt:   stmt,
 				}
-			} else if ddlInfo.name != tableNames[0][0].String() {
+			} else if ddlInfo.name != tables[0][0].String() {
 				return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
 			}
 		} else if s.cfg.ShardMode == config.ShardOptimistic {
@@ -2497,10 +2497,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 
 		needHandleDDLs = append(needHandleDDLs, sqlDDL)
-		needTrackDDLs = append(needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tableNames: tableNames})
+		needTrackDDLs = append(needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tables: tables})
 		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
 		//       we should use a better mechanism to combine these operations
-		recordSourceTbls(sourceTbls, stmt, tableNames[0][0])
+		recordSourceTbls(sourceTbls, stmt, tables[0][0])
 	}
 
 	ec.tctx.L().Info("prepare to handle ddls", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("location", ec.currentLocation))
@@ -2561,7 +2561,7 @@ func (s *Syncer) handleQueryEventNoSharding(
 
 	// run trackDDL before add ddl job to make sure checkpoint can be flushed
 	for _, td := range needTrackDDLs {
-		if err := s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+		if err := s.trackDDL(usedSchema, td.rawSQL, td.tables, td.stmt, &ec); err != nil {
 			return err
 		}
 	}
@@ -2619,7 +2619,7 @@ func (s *Syncer) handleQueryEventPessimistic(
 		synced             bool
 		active             bool
 		remain             int
-		sourceTableID      = utils.GenTableID(ddlInfo.tableNames[0][0])
+		sourceTableID      = utils.GenTableID(ddlInfo.tables[0][0])
 		usedSchema         = string(ev.Schema)
 	)
 	// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
@@ -2632,13 +2632,13 @@ func (s *Syncer) handleQueryEventPessimistic(
 		// for CREATE DATABASE, we do nothing. when CREATE TABLE under this DATABASE, sharding groups will be added
 	case *ast.CreateTableStmt:
 		// for CREATE TABLE, we add it to group
-		needShardingHandle, group, synced, remain, err = s.sgk.AddGroup(ddlInfo.tableNames[1][0], []string{sourceTableID}, nil, true)
+		needShardingHandle, group, synced, remain, err = s.sgk.AddGroup(ddlInfo.tables[1][0], []string{sourceTableID}, nil, true)
 		if err != nil {
 			return err
 		}
 		annotate = "add table to shard group"
 	default:
-		needShardingHandle, group, synced, active, remain, err = s.sgk.TrySync(ddlInfo.tableNames[0][0], ddlInfo.tableNames[1][0], *startLocation, *ec.currentLocation, needHandleDDLs)
+		needShardingHandle, group, synced, active, remain, err = s.sgk.TrySync(ddlInfo.tables[0][0], ddlInfo.tables[1][0], *startLocation, *ec.currentLocation, needHandleDDLs)
 		if err != nil {
 			return err
 		}
@@ -2661,14 +2661,14 @@ func (s *Syncer) handleQueryEventPessimistic(
 	})
 
 	for _, td := range needTrackDDLs {
-		if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+		if err = s.trackDDL(usedSchema, td.rawSQL, td.tables, td.stmt, &ec); err != nil {
 			return err
 		}
 	}
 
 	if needShardingHandle {
-		metrics.UnsyncedTableGauge.WithLabelValues(s.cfg.Name, ddlInfo.tableNames[1][0].String(), s.cfg.SourceID).Set(float64(remain))
-		err = s.safeMode.IncrForTable(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
+		metrics.UnsyncedTableGauge.WithLabelValues(s.cfg.Name, ddlInfo.tables[1][0].String(), s.cfg.SourceID).Set(float64(remain))
+		err = s.safeMode.IncrForTable(ec.tctx, ddlInfo.tables[1][0].Schema, ddlInfo.tables[1][0].Name) // try enable safe-mode when starting syncing for sharding group
 		if err != nil {
 			return err
 		}
@@ -2677,14 +2677,14 @@ func (s *Syncer) handleQueryEventPessimistic(
 		// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing
 		// NOTE: when last sharding DDL executed, all this checkpoints will be flushed in the same txn
 		ec.tctx.L().Info("save table checkpoint for source", zap.String("event", "query"), zap.String("sourceTableID", sourceTableID), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-		s.saveTablePoint(ddlInfo.tableNames[0][0], *ec.currentLocation)
+		s.saveTablePoint(ddlInfo.tables[0][0], *ec.currentLocation)
 		if !synced {
 			ec.tctx.L().Info("source shard group is not synced", zap.String("event", "query"), zap.String("sourceTableID", sourceTableID), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
 			return nil
 		}
 
 		ec.tctx.L().Info("source shard group is synced", zap.String("event", "query"), zap.String("sourceTableID", sourceTableID), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-		err = s.safeMode.DescForTable(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try disable safe-mode after sharding group synced
+		err = s.safeMode.DescForTable(ec.tctx, ddlInfo.tables[1][0].Schema, ddlInfo.tables[1][0].Name) // try disable safe-mode after sharding group synced
 		if err != nil {
 			return err
 		}
@@ -2697,14 +2697,14 @@ func (s *Syncer) handleQueryEventPessimistic(
 			return terror.ErrSyncerUnitFirstEndPosNotFound.Generate(sourceTableID)
 		}
 
-		allResolved, err2 := s.sgk.ResolveShardingDDL(ddlInfo.tableNames[1][0])
+		allResolved, err2 := s.sgk.ResolveShardingDDL(ddlInfo.tables[1][0])
 		if err2 != nil {
 			return err2
 		}
 		*ec.shardingReSyncCh <- &ShardingReSync{
 			currLocation:   *firstEndLocation,
 			latestLocation: *ec.currentLocation,
-			targetTable:    ddlInfo.tableNames[1][0],
+			targetTable:    ddlInfo.tables[1][0],
 			allResolved:    allResolved,
 		}
 
@@ -2715,7 +2715,7 @@ func (s *Syncer) handleQueryEventPessimistic(
 		// we should add another config item to differ, and do not save DDLInfo, and not wait for ddlExecInfo
 
 		// construct & send shard DDL info into etcd, DM-master will handle it.
-		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, needHandleDDLs)
+		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tables[1][0].Schema, ddlInfo.tables[1][0].Name, needHandleDDLs)
 		rev, err2 := s.pessimist.PutInfo(ec.tctx.Ctx, shardInfo)
 		if err2 != nil {
 			return err2
@@ -2737,7 +2737,7 @@ func (s *Syncer) handleQueryEventPessimistic(
 				utils.OsExit(1)
 			})
 			failpoint.Inject("SequenceShardSyncedExecutionExit", func() {
-				group := s.sgk.Group(ddlInfo.tableNames[1][0])
+				group := s.sgk.Group(ddlInfo.tables[1][0])
 				if group != nil {
 					// exit in the first round sequence sharding DDL only
 					if group.meta.ActiveIdx() == 1 {
@@ -2779,7 +2779,7 @@ func (s *Syncer) handleQueryEventPessimistic(
 	}
 
 	if len(onlineDDLTableNames) > 0 {
-		err = s.clearOnlineDDL(ec.tctx, ddlInfo.tableNames[1][0])
+		err = s.clearOnlineDDL(ec.tctx, ddlInfo.tables[1][0])
 		if err != nil {
 			return err
 		}

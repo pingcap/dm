@@ -30,9 +30,9 @@ import (
 
 // trackedDDL keeps data needed for schema tracker.
 type trackedDDL struct {
-	rawSQL     string
-	stmt       ast.StmtNode
-	tableNames [][]*filter.Table
+	rawSQL string
+	stmt   ast.StmtNode
+	tables [][]*filter.Table
 }
 
 // initOptimisticShardDDL initializes the shard DDL support in the optimistic mode.
@@ -110,11 +110,11 @@ func (s *Syncer) handleQueryEventOptimistic(
 
 	for _, td := range needTrackDDLs {
 		// check whether do shard DDL for multi upstream tables.
-		if upTable != nil && upTable.String() != "``.``" && upTable.String() != td.tableNames[0][0].String() {
+		if upTable != nil && upTable.String() != "``.``" && upTable.String() != td.tables[0][0].String() {
 			return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
 		}
-		upTable = td.tableNames[0][0]
-		downTable = td.tableNames[1][0]
+		upTable = td.tables[0][0]
+		downTable = td.tables[1][0]
 	}
 
 	if !isDBDDL {
@@ -127,7 +127,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 	}
 
 	for _, td := range needTrackDDLs {
-		if err = s.trackDDL(string(ev.Schema), td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+		if err = s.trackDDL(string(ev.Schema), td.rawSQL, td.tables, td.stmt, &ec); err != nil {
 			return err
 		}
 		if !isDBDDL {
@@ -204,9 +204,9 @@ func (s *Syncer) handleQueryEventOptimistic(
 	})
 
 	ddlInfo := &shardingDDLInfo{
-		name:       needTrackDDLs[0].tableNames[0][0].String(),
-		tableNames: needTrackDDLs[0].tableNames,
-		stmt:       needTrackDDLs[0].stmt,
+		name:   needTrackDDLs[0].tables[0][0].String(),
+		tables: needTrackDDLs[0].tables,
+		stmt:   needTrackDDLs[0].stmt,
 	}
 	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, nil, originSQL, ec.header)
 	err = s.addJobFunc(job)

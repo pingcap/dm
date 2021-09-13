@@ -176,7 +176,7 @@ func (s *Syncer) splitAndFilterDDL(
 	return statements, tableMap, nil
 }
 
-// routeDDL will rename table names in DDL.
+// routeDDL will rename tables in DDL.
 func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (string, [][]*filter.Table, ast.StmtNode, error) {
 	stmt, err := p.ParseOneStmt(sql, "", "")
 	if err != nil {
@@ -310,7 +310,7 @@ func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *filter.Tabl
 }
 
 type shardingDDLInfo struct {
-	name       string
-	tableNames [][]*filter.Table
-	stmt       ast.StmtNode
+	name   string
+	tables [][]*filter.Table
+	stmt   ast.StmtNode
 }
