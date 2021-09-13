@@ -134,9 +134,9 @@ func newDDLJob(qec *queryEventContext) *job {
 		}
 		j.sourceTbl = sourceTbl
 	} else {
-		j.sourceTbl = map[string][]string{qec.ddlInfo.tableNames[0][0].Schema: {qec.ddlInfo.tableNames[0][0].Name}}
-		j.targetSchema = qec.ddlInfo.tableNames[1][0].Schema
-		j.targetTable = qec.ddlInfo.tableNames[1][0].Name
+		j.sourceTbl = map[string][]string{qec.ddlInfo.tables[0][0].Schema: {qec.ddlInfo.tables[0][0].Name}}
+		j.targetSchema = qec.ddlInfo.tables[1][0].Schema
+		j.targetTable = qec.ddlInfo.tables[1][0].Name
 	}
 
 	return j

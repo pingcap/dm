@@ -69,7 +69,7 @@ func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string
 	for _, table := range tables {
 		action, err := s.binlogFilter.Filter(table.Schema, table.Name, et, sql)
 		if err != nil {
-			return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip query %s on `%s`.`%s`", sql, table.Schema, table.Name)
+			return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip query %s on `%v`", sql, table)
 		}
 
 		if action == bf.Ignore {
@@ -80,19 +80,20 @@ func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string
 	return false, nil
 }
 
-func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication.EventType) (bool, error) {
-	if filter.IsSystemSchema(schema) {
+func (s *Syncer) skipDMLEvent(table *filter.Table, eventType replication.EventType) (bool, error) {
+	schemaName, tableName := table.Schema, table.Name
+	if filter.IsSystemSchema(schemaName) {
 		return true, nil
 	}
 
-	tbs := []*filter.Table{{Schema: schema, Name: table}}
+	tbs := []*filter.Table{table}
 	tbs = s.baList.Apply(tbs)
 	if len(tbs) == 0 {
 		return true, nil
 	}
 	// filter ghost table
 	if s.onlineDDL != nil {
-		tp := s.onlineDDL.TableType(table)
+		tp := s.onlineDDL.TableType(tableName)
 		if tp != onlineddl.RealTable {
 			return true, nil
 		}
@@ -114,9 +115,9 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 		return false, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
 	}
 
-	action, err := s.binlogFilter.Filter(schema, table, et, "")
+	action, err := s.binlogFilter.Filter(schemaName, tableName, et, "")
 	if err != nil {
-		return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip row event %s on `%s`.`%s`", eventType, schema, table)
+		return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip row event %s on `%v`", eventType, table)
 	}
 
 	return action == bf.Ignore, nil

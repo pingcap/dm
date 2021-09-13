@@ -29,9 +29,9 @@ import (
 
 // trackedDDL keeps data needed for schema tracker.
 type trackedDDL struct {
-	rawSQL     string
-	stmt       ast.StmtNode
-	tableNames [][]*filter.Table
+	rawSQL string
+	stmt   ast.StmtNode
+	tables [][]*filter.Table
 }
 
 // initOptimisticShardDDL initializes the shard DDL support in the optimistic mode.
@@ -44,10 +44,13 @@ func (s *Syncer) initOptimisticShardDDL(ctx context.Context) error {
 
 	// convert according to router rules.
 	// downstream-schema -> downstream-table -> upstream-schema -> upstream-table.
+	// TODO: refine to downstream-ID -> upstream-ID
 	mapper := make(map[string]map[string]map[string]map[string]struct{})
 	for upSchema, UpTables := range sourceTables {
 		for _, upTable := range UpTables {
-			downSchema, downTable := s.renameShardingSchema(upSchema, upTable)
+			up := &filter.Table{Schema: upSchema, Name: upTable}
+			down := s.renameShardingSchema(up)
+			downSchema, downTable := down.Schema, down.Name
 			if _, ok := mapper[downSchema]; !ok {
 				mapper[downSchema] = make(map[string]map[string]map[string]struct{})
 			}
@@ -75,10 +78,8 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	})
 
 	var (
-		upSchema   string
-		upTable    string
-		downSchema string
-		downTable  string
+		upTable   *filter.Table
+		downTable *filter.Table
 
 		isDBDDL  bool
 		tiBefore *model.TableInfo
@@ -104,19 +105,16 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 
 	for _, td := range needTrackDDLs {
 		// check whether do shard DDL for multi upstream tables.
-		if upSchema != "" && upSchema != td.tableNames[0][0].Schema &&
-			upTable != "" && upTable != td.tableNames[0][0].Name {
+		if upTable != nil && upTable.String() != "``" && upTable.String() != td.tables[0][0].String() {
 			return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(qec.originSQL)
 		}
-		upSchema = td.tableNames[0][0].Schema
-		upTable = td.tableNames[0][0].Name
-		downSchema = td.tableNames[1][0].Schema
-		downTable = td.tableNames[1][0].Name
+		upTable = td.tables[0][0]
+		downTable = td.tables[1][0]
 	}
 
 	if !isDBDDL {
 		if _, ok := needTrackDDLs[0].stmt.(*ast.CreateTableStmt); !ok {
-			tiBefore, err = s.getTable(qec.tctx, upSchema, upTable, downSchema, downTable)
+			tiBefore, err = s.getTable(qec.tctx, upTable, downTable)
 			if err != nil {
 				return err
 			}
@@ -124,11 +122,11 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	}
 
 	for _, td := range needTrackDDLs {
-		if err = s.trackDDL(qec.ddlSchema, td.rawSQL, td.tableNames, td.stmt, qec.eventContext); err != nil {
+		if err = s.trackDDL(qec.ddlSchema, td.rawSQL, td.tables, td.stmt, qec.eventContext); err != nil {
 			return err
 		}
 		if !isDBDDL {
-			tiAfter, err = s.getTable(qec.tctx, upSchema, upTable, downSchema, downTable)
+			tiAfter, err = s.getTable(qec.tctx, upTable, downTable)
 			if err != nil {
 				return err
 			}
@@ -139,7 +137,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	// in optimistic mode, don't `saveTablePoint` before execute DDL,
 	// because it has no `UnresolvedTables` to prevent the flush of this checkpoint.
 
-	info := s.optimist.ConstructInfo(upSchema, upTable, downSchema, downTable, needHandleDDLs, tiBefore, tisAfter)
+	info := s.optimist.ConstructInfo(upTable.Schema, upTable.Name, downTable.Schema, downTable.Name, needHandleDDLs, tiBefore, tisAfter)
 
 	var (
 		rev    int64
@@ -200,9 +198,9 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	})
 
 	qec.ddlInfo = &shardingDDLInfo{
-		name:       needTrackDDLs[0].tableNames[0][0].String(),
-		tableNames: needTrackDDLs[0].tableNames,
-		stmt:       needTrackDDLs[0].stmt,
+		name:   needTrackDDLs[0].tables[0][0].String(),
+		tables: needTrackDDLs[0].tables,
+		stmt:   needTrackDDLs[0].stmt,
 	}
 	job := newDDLJob(qec)
 	err = s.addJobFunc(job)
@@ -235,15 +233,15 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 }
 
 // trackInitTableInfoOptimistic tries to get the initial table info (before modified by other tables) and track it in optimistic shard mode.
-func (s *Syncer) trackInitTableInfoOptimistic(origSchema, origTable, renamedSchema, renamedTable string) (*model.TableInfo, error) {
-	ti, err := s.optimist.GetTableInfo(renamedSchema, renamedTable)
+func (s *Syncer) trackInitTableInfoOptimistic(origTable, renamedTable *filter.Table) (*model.TableInfo, error) {
+	ti, err := s.optimist.GetTableInfo(renamedTable.Schema, renamedTable.Name)
 	if err != nil {
-		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origSchema, origTable)
+		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origTable)
 	}
 	if ti != nil {
-		err = s.schemaTracker.CreateTableIfNotExists(origSchema, origTable, ti)
+		err = s.schemaTracker.CreateTableIfNotExists(origTable, ti)
 		if err != nil {
-			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origSchema, origTable)
+			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origTable)
 		}
 	}
 	return ti, nil

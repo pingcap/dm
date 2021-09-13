@@ -89,7 +89,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 			if len(schema2) > 0 {
 				schema = schema2
 			}
-			ignore, err2 := s.skipDMLEvent(schema, table, replication.QUERY_EVENT)
+			ignore, err2 := s.skipDMLEvent(&filter.Table{Schema: schema, Name: table}, replication.QUERY_EVENT)
 			if err2 == nil && ignore {
 				return parseDDLResult{
 					stmt:   nil,
@@ -123,33 +123,33 @@ func (s *Syncer) splitAndFilterDDL(
 	p *parser.Parser,
 	stmt ast.StmtNode,
 	schema string,
-) (sqls []string, tables map[string]*filter.Table, err error) {
+) (sqls []string, tableMap map[string]*filter.Table, err error) {
 	sqls, err = parserpkg.SplitDDL(stmt, schema)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	statements := make([]string, 0, len(sqls))
-	tables = make(map[string]*filter.Table)
+	tableMap = make(map[string]*filter.Table)
 	for _, sql := range sqls {
 		stmt2, err2 := p.ParseOneStmt(sql, "", "")
 		if err2 != nil {
 			return nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err2.Error()), "ddl %s", sql)
 		}
 
-		tableNames, err2 := parserpkg.FetchDDLTableNames(schema, stmt2, s.SourceTableNamesFlavor)
+		tables, err2 := parserpkg.FetchDDLTables(schema, stmt2, s.SourceTableNamesFlavor)
 		if err2 != nil {
 			return nil, nil, err2
 		}
 
 		// get real tableNames before apply block-allow list
 		if s.onlineDDL != nil {
-			for _, names := range tableNames {
-				names.Name = s.onlineDDL.RealName(names.Name)
+			for _, table := range tables {
+				table.Name = s.onlineDDL.RealName(table.Name)
 			}
 		}
 
-		shouldSkip, err2 := s.skipQuery(tableNames, stmt2, sql)
+		shouldSkip, err2 := s.skipQuery(tables, stmt2, sql)
 		if err2 != nil {
 			return nil, nil, err2
 		}
@@ -166,38 +166,34 @@ func (s *Syncer) splitAndFilterDDL(
 		}
 
 		if tableName != nil {
-			tables[tableName.String()] = tableName
+			tableMap[tableName.String()] = tableName
 		}
 
 		statements = append(statements, ss...)
 	}
-	return statements, tables, nil
+	return statements, tableMap, nil
 }
 
-// routeDDL will rename table names in DDL.
+// routeDDL will rename tables in DDL.
 func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (string, [][]*filter.Table, ast.StmtNode, error) {
 	stmt, err := p.ParseOneStmt(sql, "", "")
 	if err != nil {
 		return "", nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
-	tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt, s.SourceTableNamesFlavor)
+	tables, err := parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
 		return "", nil, nil, err
 	}
 
-	targetTableNames := make([]*filter.Table, 0, len(tableNames))
-	for i := range tableNames {
-		schema, table := s.renameShardingSchema(tableNames[i].Schema, tableNames[i].Name)
-		tableName := &filter.Table{
-			Schema: schema,
-			Name:   table,
-		}
-		targetTableNames = append(targetTableNames, tableName)
+	targetTables := make([]*filter.Table, 0, len(tables))
+	for i := range tables {
+		renamedTable := s.renameShardingSchema(tables[i])
+		targetTables = append(targetTables, renamedTable)
 	}
 
-	ddl, err := parserpkg.RenameDDLTable(stmt, targetTableNames)
-	return ddl, [][]*filter.Table{tableNames, targetTableNames}, stmt, err
+	ddl, err := parserpkg.RenameDDLTable(stmt, targetTables)
+	return ddl, [][]*filter.Table{tables, targetTables}, stmt, err
 }
 
 // handleOnlineDDL checks if the input `sql` is came from online DDL tools.
@@ -208,12 +204,12 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 		return []string{sql}, nil, nil
 	}
 
-	tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt, s.SourceTableNamesFlavor)
+	tables, err := parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	sqls, err := s.onlineDDL.Apply(tctx, tableNames, sql, stmt)
+	sqls, err := s.onlineDDL.Apply(tctx, tables, sql, stmt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -234,7 +230,7 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 	sqls = sqls[:end]
 
 	// tableNames[1:] is the real table name
-	targetTables := tableNames[1:2]
+	targetTables := tables[1:2]
 	for i := range sqls {
 		stmt, err := p.ParseOneStmt(sqls[i], "", "")
 		if err != nil {
@@ -246,7 +242,7 @@ func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schem
 			return nil, nil, err
 		}
 	}
-	return sqls, tableNames[0], nil
+	return sqls, tables[0], nil
 }
 
 func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema string) error {
@@ -283,8 +279,8 @@ func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema strin
 		for _, table := range tables {
 			// refine clear them later if failed
 			// now it doesn't have problems
-			if err1 := s.checkpoint.DeleteTablePoint(tctx, table.Schema, table.Name); err1 != nil {
-				s.tctx.L().Error("fail to delete checkpoint", zap.String("schema", table.Schema), zap.String("table", table.Name))
+			if err1 := s.checkpoint.DeleteTablePoint(tctx, table); err1 != nil {
+				s.tctx.L().Error("fail to delete checkpoint", zap.Stringer("table", table))
 			}
 		}
 	}
@@ -312,7 +308,7 @@ func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *filter.Tabl
 }
 
 type shardingDDLInfo struct {
-	name       string
-	tableNames [][]*filter.Table
-	stmt       ast.StmtNode
+	name   string
+	tables [][]*filter.Table
+	stmt   ast.StmtNode
 }
