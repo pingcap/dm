@@ -162,11 +162,9 @@ type Syncer struct {
 
 	closed atomic.Bool
 
-	start    time.Time
-	lastTime struct {
-		sync.RWMutex
-		t time.Time
-	}
+	start    atomic.Time
+	lastTime atomic.Time
+
 	// safeMode is used to track if we need to generate dml with safe-mode
 	// For each binlog event, we will set the current value into eventContext because
 	// the status of this track may change over time.
@@ -1691,10 +1689,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}()
 
-	s.start = time.Now()
-	s.lastTime.Lock()
-	s.lastTime.t = s.start
-	s.lastTime.Unlock()
+	now := time.Now()
+	s.start.Store(now)
+	s.lastTime.Store(now)
 
 	tryReSync := true
 
@@ -2231,6 +2228,10 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	if err != nil {
 		return err
 	}
+	if err2 := checkLogColumns(ev.SkippedColumns); err2 != nil {
+		return err2
+	}
+
 	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(ti, rows)
 	if err != nil {
 		return err

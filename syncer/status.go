@@ -27,8 +27,7 @@ import (
 	"github.com/pingcap/dm/syncer/metrics"
 )
 
-// Status implements Unit.Status
-// it returns status, but does not calc status.
+// Status implements Unit.Status.
 func (s *Syncer) Status(sourceStatus *binlog.SourceStatus) interface{} {
 	syncerLocation := s.checkpoint.FlushedGlobalPoint()
 	st := &pb.SyncStatus{
@@ -95,10 +94,8 @@ func (s *Syncer) printStatus(sourceStatus *binlog.SourceStatus) {
 		return
 	}
 	now := time.Now()
-	s.lastTime.RLock()
-	seconds := now.Unix() - s.lastTime.t.Unix()
-	s.lastTime.RUnlock()
-	totalSeconds := now.Unix() - s.start.Unix()
+	seconds := now.Unix() - s.lastTime.Load().Unix()
+	totalSeconds := now.Unix() - s.start.Load().Unix()
 	last := s.lastCount.Load()
 	total := s.count.Load()
 
@@ -106,7 +103,7 @@ func (s *Syncer) printStatus(sourceStatus *binlog.SourceStatus) {
 	lastBinlogSize := s.lastBinlogSizeCount.Load()
 
 	tps, totalTps := int64(0), int64(0)
-	if seconds > 0 {
+	if seconds > 0 && totalSeconds > 0 {
 		tps = (total - last) / seconds
 		totalTps = total / totalSeconds
 
@@ -149,9 +146,7 @@ func (s *Syncer) printStatus(sourceStatus *binlog.SourceStatus) {
 
 	s.lastCount.Store(total)
 	s.lastBinlogSizeCount.Store(totalBinlogSize)
-	s.lastTime.Lock()
-	s.lastTime.t = time.Now()
-	s.lastTime.Unlock()
+	s.lastTime.Store(time.Now())
 	s.totalTps.Store(totalTps)
 	s.tps.Store(tps)
 }

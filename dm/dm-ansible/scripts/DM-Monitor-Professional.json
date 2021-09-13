@@ -57,7 +57,7 @@
   "panels": [
     {
       "cacheTimeout": null,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -215,7 +215,7 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -230,7 +230,7 @@
           "cacheTimeout": null,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": "${DS_TEST-CLUSTER}",
           "decimals": 1,
           "description": "The data import process percentage of Dumpling. The value is an estimated value and may exceed less than 100%.",
           "fieldConfig": {
@@ -334,7 +334,7 @@
           "cacheTimeout": null,
           "dashLength": 10,
           "dashes": false,
-          "datasource": null,
+          "datasource": "${DS_TEST-CLUSTER}",
           "description": "The data import process percentage of Loader. The value range is 0% ~ 100%",
           "fieldConfig": {
             "defaults": {},
@@ -1377,7 +1377,7 @@
     },
     {
       "collapsed": false,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -1504,7 +1504,7 @@
       "cacheTimeout": null,
       "dashLength": 10,
       "dashes": false,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "decimals": 1,
       "description": "The predicted remaining time it takes Syncer to be completely synchronized with the master (in seconds)",
       "fieldConfig": {
@@ -4316,7 +4316,7 @@
     },
     {
       "collapsed": false,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -5589,7 +5589,7 @@
     },
     {
       "collapsed": false,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -6187,7 +6187,7 @@
     },
     {
       "collapsed": false,
-      "datasource": null,
+      "datasource": "${DS_TEST-CLUSTER}",
       "gridPos": {
         "h": 1,
         "w": 24,
