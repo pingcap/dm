@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -40,8 +39,7 @@ import (
 var _ = Suite(&testDDLSuite{})
 
 type testDDLSuite struct {
-	cfg             *config.SubTaskConfig
-	eventsGenerator *event.Generator
+	cfg *config.SubTaskConfig
 }
 
 func (s *testDDLSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.Parser, error) {
