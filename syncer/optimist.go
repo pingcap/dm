@@ -190,11 +190,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	// updated needHandleDDLs to DDLs received from DM-master.
 	needHandleDDLs = op.DDLs
 
-	s.tctx.L().Info("start to handle ddls in optimistic shard mode",
-		zap.String("event", "query"),
-		zap.Strings("ddls", needHandleDDLs),
-		zap.String("raw statement", originSQL),
-		log.WrapStringerField("location", qec.currentLocation))
+	s.tctx.L().Info("start to handle ddls in optimistic shard mode", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))
 
 	// interrupted after track DDL and before execute DDL.
 	failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
@@ -204,12 +200,12 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		}
 	})
 
-	ddlInfo := &shardingDDLInfo{
+	qec.ddlInfo = &shardingDDLInfo{
 		name:       needTrackDDLs[0].tableNames[0][0].String(),
 		tableNames: needTrackDDLs[0].tableNames,
 		stmt:       needTrackDDLs[0].stmt,
 	}
-	job := newDDLJob(ddlInfo, needHandleDDLs, *qec.lastLocation, *qec.startLocation, *qec.currentLocation, nil, originSQL, qec.header)
+	job := newDDLJob(qec)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
@@ -235,11 +231,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		}
 	}
 
-	s.tctx.L().Info("finish to handle ddls in optimistic shard mode",
-		zap.String("event", "query"),
-		zap.Strings("ddls", needHandleDDLs),
-		zap.String("raw statement", originSQL),
-		log.WrapStringerField("location", qec.currentLocation))
+	s.tctx.L().Info("finish to handle ddls in optimistic shard mode", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))
 	return nil
 }
 

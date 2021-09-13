@@ -37,8 +37,6 @@ type parseDDLResult struct {
 }
 
 func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (result parseDDLResult, err error) {
-	sql = utils.TrimCtrlChars(sql)
-
 	// check skip before parse (used to skip some un-supported DDLs)
 	ignore, err := s.skipQuery(nil, nil, sql)
 	if err != nil {

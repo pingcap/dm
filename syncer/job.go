@@ -109,27 +109,22 @@ func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, 
 // newDDL job is used to create a new ddl job
 // when cfg.ShardMode == "", ddlInfo == nil，sourceTbls != nil, we use sourceTbls to record ddl affected tables.
 // when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
-func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation, cmdLocation binlog.Location,
-	sourceTbls map[string]map[string]struct{}, originSQL string, eventHeader *replication.EventHeader) *job {
+func newDDLJob(qec *queryEventContext) *job {
 	j := &job{
 		tp:        ddl,
-		ddls:      ddls,
-		originSQL: originSQL,
+		ddls:      qec.needHandleDDLs,
+		originSQL: qec.originSQL,
 
-		location:        location,
-		startLocation:   startLocation,
-		currentLocation: cmdLocation,
-		eventHeader:     eventHeader,
+		location:        *qec.lastLocation,
+		startLocation:   *qec.startLocation,
+		currentLocation: *qec.currentLocation,
+		eventHeader:     qec.header,
 		jobAddTime:      time.Now(),
 	}
 
-	if ddlInfo != nil {
-		j.sourceTbl = map[string][]string{ddlInfo.tableNames[0][0].Schema: {ddlInfo.tableNames[0][0].Name}}
-		j.targetSchema = ddlInfo.tableNames[1][0].Schema
-		j.targetTable = ddlInfo.tableNames[1][0].Name
-	} else if sourceTbls != nil {
-		sourceTbl := make(map[string][]string, len(sourceTbls))
-		for schema, tbMap := range sourceTbls {
+	if len(qec.sourceTbls) != 0 {
+		sourceTbl := make(map[string][]string, len(qec.sourceTbls))
+		for schema, tbMap := range qec.sourceTbls {
 			if len(tbMap) > 0 {
 				sourceTbl[schema] = make([]string, 0, len(tbMap))
 			}
@@ -138,6 +133,10 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation,
 			}
 		}
 		j.sourceTbl = sourceTbl
+	} else {
+		j.sourceTbl = map[string][]string{qec.ddlInfo.tableNames[0][0].Schema: {qec.ddlInfo.tableNames[0][0].Name}}
+		j.targetSchema = qec.ddlInfo.tableNames[1][0].Schema
+		j.targetTable = qec.ddlInfo.tableNames[1][0].Name
 	}
 
 	return j
