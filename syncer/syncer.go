@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -333,7 +334,17 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 
 	if s.cfg.OnlineDDL {
-		s.onlineDDL, err = onlineddl.NewRealOnlinePlugin(tctx, s.cfg)
+		shadowReg, err := regexp.Compile(fmt.Sprintf(`%s%s`,
+			strings.Join(s.cfg.ShadowTableRule, "$|"), "$"))
+		if err != nil {
+			return err
+		}
+		trashReg, err := regexp.Compile(fmt.Sprintf(`%s%s`,
+			strings.Join(s.cfg.TrashTableRule, "$|"), "$"))
+		if err != nil {
+			return err
+		}
+		s.onlineDDL, err = onlineddl.NewRealOnlinePlugin(tctx, s.cfg, shadowReg, trashReg)
 		if err != nil {
 			return err
 		}

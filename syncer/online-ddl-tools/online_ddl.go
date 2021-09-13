@@ -380,13 +380,17 @@ func (s *Storage) CheckAndUpdate(
 // (_*).*_old ghost trash table
 // we don't support `--new-table-name` flag.
 type RealOnlinePlugin struct {
-	storage *Storage
+	storage   *Storage
+	shadowReg *regexp.Regexp
+	trashReg  *regexp.Regexp
 }
 
 // NewRealOnlinePlugin returns real online plugin.
-func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
+func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig, shadowReg, trashReg *regexp.Regexp) (OnlinePlugin, error) {
 	r := &RealOnlinePlugin{
-		storage: NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
+		storage:   NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
+		shadowReg: shadowReg,
+		trashReg:  trashReg,
 	}
 
 	return r, r.storage.Init(tctx)
@@ -489,29 +493,13 @@ func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) 
 func (r *RealOnlinePlugin) TableType(table string) TableType {
 	// 5 is _ _gho/ghc/del or _ _old/new
 	if len(table) > 5 && strings.HasPrefix(table, "_") {
-		shadowSuffix := strings.Split(r.storage.cfg.ShadowTableRule, ";")
-		for _, shadow := range shadowSuffix {
-			regex, _ := regexp.Compile(fmt.Sprintf(`%s$`, shadow))
-			if regex.MatchString(table) {
-				return GhostTable
-			}
+		if r.shadowReg.MatchString(table) {
+			return GhostTable
 		}
 
-		trashSuffix := strings.Split(r.storage.cfg.TrashTableRule, ";")
-		for _, trash := range trashSuffix {
-			regex, _ := regexp.Compile(fmt.Sprintf(`%s$`, trash))
-			if regex.MatchString(table) {
-				return TrashTable
-			}
+		if r.trashReg.MatchString(table) {
+			return TrashTable
 		}
-
-		//if strings.HasSuffix(table, "_gho") || strings.HasSuffix(table, "_new") {
-		//	return GhostTable
-		//}
-		//
-		//if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") || strings.HasSuffix(table, "_old") {
-		//	return TrashTable
-		//}
 	}
 	return RealTable
 }

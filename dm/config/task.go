@@ -303,8 +303,8 @@ type TaskConfig struct {
 	// deprecated
 	OnlineDDLScheme string `yaml:"online-ddl-scheme" toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 	// pt/gh-ost name rule,support regex
-	ShadowTableRule string `yaml:"shadow-table-rule" toml:"shadow-table-rule" json:"shadow-table-rule"`
-	TrashTableRule  string `yaml:"trash-table-rule" toml:"trash-table-rule" json:"trash-table-rule"`
+	ShadowTableRule []string `yaml:"shadow-table-rule" toml:"shadow-table-rule" json:"shadow-table-rule"`
+	TrashTableRule  []string `yaml:"trash-table-rule" toml:"trash-table-rule" json:"trash-table-rule"`
 
 	Routes         map[string]*router.TableRule   `yaml:"routes" toml:"routes" json:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters" toml:"filters" json:"filters"`

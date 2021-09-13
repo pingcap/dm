@@ -138,8 +138,8 @@ type SubTaskConfig struct {
 	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
 	// pt/gh-ost name rule,support regex
-	ShadowTableRule string `yaml:"shadow-table-rule" toml:"shadow-table-rule" json:"shadow-table-rule"`
-	TrashTableRule  string `yaml:"trash-table-rule" toml:"trash-table-rule" json:"trash-table-rule"`
+	ShadowTableRule []string `yaml:"shadow-table-rule" toml:"shadow-table-rule" json:"shadow-table-rule"`
+	TrashTableRule  []string `yaml:"trash-table-rule" toml:"trash-table-rule" json:"trash-table-rule"`
 
 	// handle schema/table name mode, and only for schema/table name/pattern
 	// if case insensitive, we would convert schema/table name/pattern to lower case
@@ -278,12 +278,12 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)
 	}
 
-	if c.ShadowTableRule == "" {
-		c.ShadowTableRule = "_gho;_new"
+	if len(c.ShadowTableRule) == 0 {
+		c.ShadowTableRule = []string{"_gho", "_new"}
 	}
 
-	if c.TrashTableRule == "" {
-		c.TrashTableRule = "_ghc;_del;_old"
+	if len(c.TrashTableRule) == 0 {
+		c.TrashTableRule = []string{"_ghc", "_del", "_old"}
 	}
 
 	if c.MetaSchema == "" {
