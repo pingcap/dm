@@ -110,7 +110,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 
 	for _, td := range needTrackDDLs {
 		// check whether do shard DDL for multi upstream tables.
-		if upTable != nil && upTable.String() != "``.``" && upTable.String() != td.tables[0][0].String() {
+		if upTable != nil && upTable.String() != "``" && upTable.String() != td.tables[0][0].String() {
 			return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
 		}
 		upTable = td.tables[0][0]
