@@ -496,12 +496,12 @@ func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, 
 	return nil, nil
 }
 
-func (m mockOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) error {
-	k := schema + table
-	if _, ok := m.toFinish[k]; !ok {
+func (m mockOnlinePlugin) Finish(tctx *tcontext.Context, table *filter.Table) error {
+	tableID := utils.GenTableID(table)
+	if _, ok := m.toFinish[tableID]; !ok {
 		return errors.New("finish table not found")
 	}
-	delete(m.toFinish, k)
+	delete(m.toFinish, tableID)
 	return nil
 }
 

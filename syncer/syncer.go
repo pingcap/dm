@@ -2595,9 +2595,9 @@ func (s *Syncer) handleQueryEventNoSharding(
 
 	for _, table := range onlineDDLTableNames {
 		ec.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.String("schema", table.Schema), zap.String("table", table.Name))
-		err2 := s.onlineDDL.Finish(ec.tctx, table.Schema, table.Name)
+		err2 := s.onlineDDL.Finish(ec.tctx, table)
 		if err2 != nil {
-			return terror.Annotatef(err2, "finish online ddl on %s.%s", table.Schema, table.Name)
+			return terror.Annotatef(err2, "finish online ddl on %v", table)
 		}
 	}
 
@@ -2669,7 +2669,7 @@ func (s *Syncer) handleQueryEventPessimistic(
 
 	if needShardingHandle {
 		metrics.UnsyncedTableGauge.WithLabelValues(s.cfg.Name, ddlInfo.tables[1][0].String(), s.cfg.SourceID).Set(float64(remain))
-		err = s.safeMode.IncrForTable(ec.tctx, ddlInfo.tables[1][0].Schema, ddlInfo.tables[1][0].Name) // try enable safe-mode when starting syncing for sharding group
+		err = s.safeMode.IncrForTable(ec.tctx, ddlInfo.tables[1][0]) // try enable safe-mode when starting syncing for sharding group
 		if err != nil {
 			return err
 		}
@@ -2685,7 +2685,7 @@ func (s *Syncer) handleQueryEventPessimistic(
 		}
 
 		ec.tctx.L().Info("source shard group is synced", zap.String("event", "query"), zap.String("sourceTableID", sourceTableID), zap.Stringer("start location", startLocation), log.WrapStringerField("end location", ec.currentLocation))
-		err = s.safeMode.DescForTable(ec.tctx, ddlInfo.tables[1][0].Schema, ddlInfo.tables[1][0].Name) // try disable safe-mode after sharding group synced
+		err = s.safeMode.DescForTable(ec.tctx, ddlInfo.tables[1][0]) // try disable safe-mode after sharding group synced
 		if err != nil {
 			return err
 		}

@@ -14,13 +14,14 @@
 package mode
 
 import (
-	"fmt"
 	"sync"
 
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 )
 
 // SafeMode controls whether enable safe-mode through a mechanism similar to reference-count
@@ -47,26 +48,26 @@ func (m *SafeMode) Add(tctx *tcontext.Context, n int32) error {
 
 // IncrForTable tries to add 1 on the count if the table not added before
 // can only be desc with DescForTable.
-func (m *SafeMode) IncrForTable(tctx *tcontext.Context, schema, table string) error {
-	key := key(schema, table)
+func (m *SafeMode) IncrForTable(tctx *tcontext.Context, table *filter.Table) error {
+	tableID := utils.GenTableID(table)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.tables[key]; !ok {
-		m.tables[key] = struct{}{}
+	if _, ok := m.tables[tableID]; !ok {
+		m.tables[tableID] = struct{}{}
 		return m.setCount(tctx, m.count+1)
 	}
 	return nil
 }
 
 // DescForTable tries to add -1 on the count if the table added before.
-func (m *SafeMode) DescForTable(tctx *tcontext.Context, schema, table string) error {
-	key := key(schema, table)
+func (m *SafeMode) DescForTable(tctx *tcontext.Context, table *filter.Table) error {
+	tableID := utils.GenTableID(table)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.tables[key]; ok {
-		delete(m.tables, key)
+	if _, ok := m.tables[tableID]; ok {
+		delete(m.tables, tableID)
 		return m.setCount(tctx, m.count-1)
 	}
 	return nil
@@ -99,11 +100,4 @@ func (m *SafeMode) setCount(tctx *tcontext.Context, n int32) error {
 	m.count = n
 	tctx.L().Info("change count", zap.Int32("previous count", prev), zap.Int32("new count", m.count))
 	return nil
-}
-
-func key(schema, table string) string {
-	if len(table) > 0 {
-		return fmt.Sprintf("`%s`.`%s`", schema, table)
-	}
-	return fmt.Sprintf("`%s`", schema)
 }

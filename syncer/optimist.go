@@ -225,9 +225,9 @@ func (s *Syncer) handleQueryEventOptimistic(
 		s.tctx.L().Info("finish online ddl and clear online ddl metadata in optimistic shard mode", zap.String("event", "query"),
 			zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query),
 			zap.String("schema", table.Schema), zap.String("table", table.Name))
-		err = s.onlineDDL.Finish(ec.tctx, table.Schema, table.Name)
+		err = s.onlineDDL.Finish(ec.tctx, table)
 		if err != nil {
-			return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
+			return terror.Annotatef(err, "finish online ddl on %v", table)
 		}
 	}
 
