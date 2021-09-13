@@ -17,6 +17,7 @@ import (
 	"context"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
@@ -92,7 +93,7 @@ create table t (
 		c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
 		c.Assert(schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
 
-		ti, err := schemaTracker.GetTable(db, tbl)
+		ti, err := schemaTracker.GetTable(&filter.Table{Schema: db, Name: tbl})
 		c.Assert(err, IsNil)
 
 		exprConfig := []*config.ExpressionFilter{
@@ -346,7 +347,7 @@ create table t (
 		c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
 		c.Assert(schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
 
-		ti, err := schemaTracker.GetTable(db, tbl)
+		ti, err := schemaTracker.GetTable(&filter.Table{Schema: db, Name: tbl})
 		c.Assert(err, IsNil)
 
 		exprConfig := []*config.ExpressionFilter{
@@ -390,7 +391,7 @@ create table t (
 	c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
 	c.Assert(schemaTracker.Exec(ctx, db, tableStr), IsNil)
 
-	ti, err := schemaTracker.GetTable(db, tbl)
+	ti, err := schemaTracker.GetTable(&filter.Table{Schema: db, Name: tbl})
 	c.Assert(err, IsNil)
 
 	exprConfig := []*config.ExpressionFilter{
