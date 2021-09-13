@@ -84,7 +84,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 			return "", terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, table)
 		}
 
-		s.exprFilterGroup.ResetExprs(req.Schema, req.Table)
+		s.exprFilterGroup.ResetExprs(table)
 
 		if !req.Flush && !req.Sync {
 			break

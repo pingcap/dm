@@ -303,7 +303,7 @@ create table t (
 			},
 		}
 		g := NewExprFilterGroup(exprConfig)
-		exprs, err := g.GetInsertExprs(dbName, tblName, ti)
+		exprs, err := g.GetInsertExprs(table, ti)
 		c.Assert(err, IsNil)
 		c.Assert(exprs, HasLen, 1)
 		expr := exprs[0]
@@ -561,7 +561,7 @@ create table t (
 			},
 		}
 		g := NewExprFilterGroup(exprConfig)
-		exprs, err := g.GetInsertExprs(dbName, tblName, ti)
+		exprs, err := g.GetInsertExprs(table, ti)
 		c.Assert(err, IsNil)
 		c.Assert(exprs, HasLen, 1)
 		expr := exprs[0]
@@ -609,7 +609,7 @@ create table t (
 		},
 	}
 	g := NewExprFilterGroup(exprConfig)
-	exprs, err := g.GetInsertExprs(dbName, tblName, ti)
+	exprs, err := g.GetInsertExprs(table, ti)
 	c.Assert(err, IsNil)
 	c.Assert(exprs, HasLen, 1)
 	expr := exprs[0]
