@@ -692,8 +692,8 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 }
 
-func (s *Syncer) getTable(tctx *tcontext.Context, origTable, targetTable *filter.Table) (*model.TableInfo, error) {
-	ti, err := s.schemaTracker.GetTable(origTable)
+func (s *Syncer) getTableInfo(tctx *tcontext.Context, origTable, targetTable *filter.Table) (*model.TableInfo, error) {
+	ti, err := s.schemaTracker.GetTableInfo(origTable)
 	if err == nil {
 		return ti, nil
 	}
@@ -730,7 +730,7 @@ func (s *Syncer) getTable(tctx *tcontext.Context, origTable, targetTable *filter
 		}
 	}
 
-	ti, err = s.schemaTracker.GetTable(origTable)
+	ti, err = s.schemaTracker.GetTableInfo(origTable)
 	if err != nil {
 		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origTable)
 	}
@@ -879,7 +879,7 @@ func (s *Syncer) checkWait(job *job) bool {
 }
 
 func (s *Syncer) saveTablePoint(table *filter.Table, location binlog.Location) {
-	ti, err := s.schemaTracker.GetTable(table)
+	ti, err := s.schemaTracker.GetTableInfo(table)
 	if err != nil && table.Name != "" {
 		s.tctx.L().DPanic("table info missing from schema tracker",
 			zap.Stringer("table", table),
@@ -2220,11 +2220,11 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	// TODO(csuzhangxc): check performance of `getTable` from schema tracker.
-	ti, err := s.getTable(ec.tctx, originTable, targetTable)
+	tableInfo, err := s.getTableInfo(ec.tctx, originTable, targetTable)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
-	rows, err := s.mappingDML(originTable.Schema, originTable.Name, ti, ev.Rows)
+	rows, err := s.mappingDML(originTable.Schema, originTable.Name, tableInfo, ev.Rows)
 	if err != nil {
 		return err
 	}
@@ -2232,7 +2232,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return err2
 	}
 
-	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(ti, rows)
+	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(tableInfo, rows)
 	if err != nil {
 		return err
 	}
@@ -2250,12 +2250,12 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		data:              prunedRows,
 		originalData:      rows,
 		columns:           prunedColumns,
-		originalTableInfo: ti,
+		originalTableInfo: tableInfo,
 	}
 
 	switch ec.header.EventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originTable, ti)
+		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
@@ -2269,7 +2269,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originTable, ti)
+		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
@@ -2283,7 +2283,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originTable, ti)
+		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
@@ -2862,7 +2862,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		}
 	}
 	for i := 0; i < shouldTableExistNum; i++ {
-		if _, err := s.getTable(ec.tctx, srcTables[i], targetTables[i]); err != nil {
+		if _, err := s.getTableInfo(ec.tctx, srcTables[i], targetTables[i]); err != nil {
 			return err
 		}
 	}
@@ -2876,14 +2876,14 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		if err := s.schemaTracker.CreateSchemaIfNotExists(srcTables[i].Schema); err != nil {
 			return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, srcTables[i].Schema)
 		}
-		if _, err := s.getTable(ec.tctx, srcTables[i], targetTables[i]); err != nil {
+		if _, err := s.getTableInfo(ec.tctx, srcTables[i], targetTables[i]); err != nil {
 			return err
 		}
 	}
 
 	if tryFetchDownstreamTable {
 		// ignore table not exists error, just try to fetch table from downstream.
-		_, _ = s.getTable(ec.tctx, srcTables[0], targetTables[0])
+		_, _ = s.getTableInfo(ec.tctx, srcTables[0], targetTables[0])
 	}
 
 	if shouldExecDDLOnSchemaTracker {

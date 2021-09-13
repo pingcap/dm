@@ -170,7 +170,7 @@ func (tr *Tracker) Exec(ctx context.Context, db string, sql string) error {
 }
 
 // GetTable returns the schema associated with the table.
-func (tr *Tracker) GetTable(table *filter.Table) (*model.TableInfo, error) {
+func (tr *Tracker) GetTableInfo(table *filter.Table) (*model.TableInfo, error) {
 	dbName := model.NewCIStr(table.Schema)
 	tableName := model.NewCIStr(table.Name)
 	t, err := tr.dom.InfoSchema().TableByName(dbName, tableName)

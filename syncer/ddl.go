@@ -86,12 +86,12 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 		}, nil
 	case ast.DMLNode:
 		// if DML can be ignored, we do not report an error
-		schema2, table, err2 := tableNameForDML(node)
+		table, err2 := tableNameForDML(node)
 		if err2 == nil {
-			if len(schema2) > 0 {
-				schema = schema2
+			if len(table.Schema) == 0 {
+				table.Schema = schema
 			}
-			ignore, err2 := s.skipDMLEvent(&filter.Table{Schema: schema, Name: table}, replication.QUERY_EVENT)
+			ignore, err2 := s.skipDMLEvent(table, replication.QUERY_EVENT)
 			if err2 == nil && ignore {
 				return parseDDLResult{
 					stmt:   nil,

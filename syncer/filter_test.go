@@ -292,7 +292,7 @@ create table t (
 		c.Assert(schemaTracker.CreateSchemaIfNotExists(dbName), IsNil)
 		c.Assert(schemaTracker.Exec(ctx, dbName, ca.tableStr), IsNil)
 
-		ti, err := schemaTracker.GetTable(table)
+		ti, err := schemaTracker.GetTableInfo(table)
 		c.Assert(err, IsNil)
 
 		exprConfig := []*config.ExpressionFilter{
@@ -550,7 +550,7 @@ create table t (
 		c.Assert(schemaTracker.CreateSchemaIfNotExists(dbName), IsNil)
 		c.Assert(schemaTracker.Exec(ctx, dbName, ca.tableStr), IsNil)
 
-		ti, err := schemaTracker.GetTable(table)
+		ti, err := schemaTracker.GetTableInfo(table)
 		c.Assert(err, IsNil)
 
 		exprConfig := []*config.ExpressionFilter{
@@ -598,7 +598,7 @@ create table t (
 	c.Assert(schemaTracker.CreateSchemaIfNotExists(dbName), IsNil)
 	c.Assert(schemaTracker.Exec(ctx, dbName, tableStr), IsNil)
 
-	ti, err := schemaTracker.GetTable(table)
+	ti, err := schemaTracker.GetTableInfo(table)
 	c.Assert(err, IsNil)
 
 	exprConfig := []*config.ExpressionFilter{

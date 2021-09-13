@@ -90,7 +90,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 			break
 		}
 
-		ti, err := s.schemaTracker.GetTable(table)
+		ti, err := s.schemaTracker.GetTableInfo(table)
 		if err != nil {
 			return "", err
 		}

@@ -119,7 +119,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 
 	if !isDBDDL {
 		if _, ok := needTrackDDLs[0].stmt.(*ast.CreateTableStmt); !ok {
-			tiBefore, err = s.getTable(ec.tctx, upTable, downTable)
+			tiBefore, err = s.getTableInfo(ec.tctx, upTable, downTable)
 			if err != nil {
 				return err
 			}
@@ -131,7 +131,7 @@ func (s *Syncer) handleQueryEventOptimistic(
 			return err
 		}
 		if !isDBDDL {
-			tiAfter, err = s.getTable(ec.tctx, upTable, downTable)
+			tiAfter, err = s.getTableInfo(ec.tctx, upTable, downTable)
 			if err != nil {
 				return err
 			}
