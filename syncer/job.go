@@ -122,7 +122,7 @@ func newDDLJob(qec *queryEventContext) *job {
 		jobAddTime:      time.Now(),
 	}
 
-	if len(qec.sourceTbls) != 0 {
+	if qec.sourceTbls != nil && len(qec.sourceTbls) != 0 {
 		sourceTbl := make(map[string][]string, len(qec.sourceTbls))
 		for schema, tbMap := range qec.sourceTbls {
 			if len(tbMap) > 0 {

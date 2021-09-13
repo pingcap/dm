@@ -2352,12 +2352,15 @@ func (qec *queryEventContext) String() string {
 	if qec.lastLocation != nil {
 		lastLocation = qec.lastLocation.String()
 	}
-	var needHandleDDLs string
+	var needHandleDDLs, shardingReSync string
 	if qec.needHandleDDLs != nil {
 		needHandleDDLs = strings.Join(qec.needHandleDDLs, ",")
 	}
+	if qec.shardingReSync != nil {
+		shardingReSync = qec.shardingReSync.String()
+	}
 	return fmt.Sprintf("{schema: %s, originSQL: %s, startLocation: %s, currentLocation: %s, lastLocation: %s, re-sync: %s, needHandleDDLs: %s}",
-		qec.ddlSchema, qec.originSQL, startLocation, currentLocation, lastLocation, qec.shardingReSync.String(), needHandleDDLs)
+		qec.ddlSchema, qec.originSQL, startLocation, currentLocation, lastLocation, shardingReSync, needHandleDDLs)
 }
 
 func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, originSQL string) (err error) {
