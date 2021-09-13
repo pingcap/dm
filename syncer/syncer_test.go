@@ -1699,7 +1699,7 @@ func (s *Syncer) mockFinishJob(jobs []*expectJob) {
 	for _, job := range jobs {
 		switch job.tp {
 		case ddl, insert, update, del, flush:
-			s.addCount(true, "test", job.tp, 1, "", "")
+			s.addCount(true, "test", job.tp, 1, &filter.Table{})
 		}
 	}
 }
@@ -1709,7 +1709,7 @@ func (s *Syncer) addJobToMemory(job *job) error {
 
 	switch job.tp {
 	case ddl, insert, update, del, flush:
-		s.addCount(false, "test", job.tp, 1, "", "")
+		s.addCount(false, "test", job.tp, 1, &filter.Table{})
 		testJobs.Lock()
 		testJobs.jobs = append(testJobs.jobs, job)
 		testJobs.Unlock()
@@ -1722,7 +1722,7 @@ func (s *Syncer) addJobToMemory(job *job) error {
 	case ddl:
 		s.saveGlobalPoint(job.location)
 		s.checkpoint.(*RemoteCheckPoint).globalPoint.flush()
-		for sourceSchema, tbs := range job.sourceTbl {
+		for sourceSchema, tbs := range job.sourceTbls {
 			if len(sourceSchema) == 0 {
 				continue
 			}
@@ -1731,9 +1731,9 @@ func (s *Syncer) addJobToMemory(job *job) error {
 				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable].flush()
 			}
 		}
-		s.resetShardingGroup(job.targetSchema, job.targetTable)
+		s.resetShardingGroup(job.targetTable)
 	case insert, update, del:
-		for sourceSchema, tbs := range job.sourceTbl {
+		for sourceSchema, tbs := range job.sourceTbls {
 			if len(sourceSchema) == 0 {
 				continue
 			}

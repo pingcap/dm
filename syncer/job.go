@@ -20,6 +20,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 )
 
 type opType byte
@@ -64,9 +65,8 @@ type job struct {
 	// ddl in ShardOptimistic and ShardPessimistic will only affect one table at one time but for normal node
 	// we don't have this limit. So we should update multi tables in normal mode.
 	// sql example: drop table `s1`.`t1`, `s2`.`t2`.
-	sourceTbl       map[string][]string
-	targetSchema    string
-	targetTable     string
+	sourceTbls      map[string][]string
+	targetTable     *filter.Table
 	sql             string
 	args            []interface{}
 	key             string
@@ -86,17 +86,16 @@ func (j *job) String() string {
 	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.startLocation, j.currentLocation)
 }
 
-func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{},
+func newDMLJob(tp opType, sql string, sourceTable, targetTable *filter.Table, args []interface{},
 	key string, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader) *job {
 	return &job{
-		tp:           tp,
-		sourceTbl:    map[string][]string{sourceSchema: {sourceTable}},
-		targetSchema: targetSchema,
-		targetTable:  targetTable,
-		sql:          sql,
-		args:         args,
-		key:          key,
-		retry:        true,
+		tp:          tp,
+		sourceTbls:  map[string][]string{sourceTable.Schema: {sourceTable.Name}},
+		targetTable: targetTable,
+		sql:         sql,
+		args:        args,
+		key:         key,
+		retry:       true,
 
 		location:        location,
 		startLocation:   startLocation,
@@ -124,20 +123,18 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation,
 	}
 
 	if ddlInfo != nil {
-		j.sourceTbl = map[string][]string{ddlInfo.tables[0][0].Schema: {ddlInfo.tables[0][0].Name}}
-		j.targetSchema = ddlInfo.tables[1][0].Schema
-		j.targetTable = ddlInfo.tables[1][0].Name
+		j.sourceTbls = map[string][]string{ddlInfo.tables[0][0].Schema: {ddlInfo.tables[0][0].Name}}
+		j.targetTable = ddlInfo.tables[1][0]
 	} else if sourceTbls != nil {
-		sourceTbl := make(map[string][]string, len(sourceTbls))
+		j.sourceTbls = make(map[string][]string, len(sourceTbls))
 		for schema, tbMap := range sourceTbls {
 			if len(tbMap) > 0 {
-				sourceTbl[schema] = make([]string, 0, len(tbMap))
+				j.sourceTbls[schema] = make([]string, 0, len(tbMap))
 			}
 			for name := range tbMap {
-				sourceTbl[schema] = append(sourceTbl[schema], name)
+				j.sourceTbls[schema] = append(j.sourceTbls[schema], name)
 			}
 		}
-		j.sourceTbl = sourceTbl
 	}
 
 	return j
