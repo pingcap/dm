@@ -195,10 +195,7 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	if sourceCfg == nil {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
 	}
-	resp := openapi.SourceStatus{
-		EnableRelay: sourceCfg.EnableRelay,
-		SourceName:  sourceCfg.SourceID,
-	}
+	resp := openapi.SourceStatus{SourceName: sourceCfg.SourceID}
 	worker := s.scheduler.GetWorkerBySource(sourceName)
 	// current this source not bound to any worker
 	if worker == nil {
