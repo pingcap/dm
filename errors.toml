@@ -2885,7 +2885,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-schema-tracker-44003]
-message = "failed to create table for `%s`.`%s` in schema tracker"
+message = "failed to create table for %v in schema tracker"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -2897,7 +2897,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-schema-tracker-44005]
-message = "cannot get table info for `%s`.`%s` from schema tracker"
+message = "cannot get table info for %v from schema tracker"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -2909,13 +2909,13 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-schema-tracker-44007]
-message = "cannot fetch downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker"
+message = "cannot fetch downstream table schema of %v to initialize upstream schema %v in schema tracker"
 description = ""
 workaround = ""
 tags = ["downstream", "medium"]
 
 [error.DM-schema-tracker-44008]
-message = "cannot parse downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker"
+message = "cannot parse downstream table schema of %v to initialize upstream schema %v in schema tracker"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -2933,7 +2933,7 @@ workaround = ""
 tags = ["internal", "medium"]
 
 [error.DM-schema-tracker-44011]
-message = "failed to drop table for `%s`.`%s` in schema tracker"
+message = "failed to drop table for %v in schema tracker"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
