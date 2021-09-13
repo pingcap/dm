@@ -88,7 +88,6 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 
 		needHandleDDLs = qec.needHandleDDLs
 		needTrackDDLs  = qec.needTrackDDLs
-		originSQL      = qec.originSQL
 	)
 
 	err = s.execError.Load()
@@ -107,7 +106,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		// check whether do shard DDL for multi upstream tables.
 		if upSchema != "" && upSchema != td.tableNames[0][0].Schema &&
 			upTable != "" && upTable != td.tableNames[0][0].Name {
-			return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(originSQL)
+			return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(qec.originSQL)
 		}
 		upSchema = td.tableNames[0][0].Schema
 		upTable = td.tableNames[0][0].Name
@@ -222,7 +221,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		s.tctx.L().Info("finish online ddl and clear online ddl metadata in optimistic shard mode",
 			zap.String("event", "query"),
 			zap.Strings("ddls", needHandleDDLs),
-			zap.String("raw statement", originSQL),
+			zap.String("raw statement", qec.originSQL),
 			zap.String("schema", table.Schema),
 			zap.String("table", table.Name))
 		err = s.onlineDDL.Finish(qec.tctx, table.Schema, table.Name)

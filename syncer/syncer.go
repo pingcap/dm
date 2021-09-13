@@ -2402,7 +2402,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			return s.recordSkipSQLsLocation(qec.eventContext)
 		}
 
-		stmts, err2 := parserpkg.Parse(qec.p, originSQL, "", "")
+		stmts, err2 := parserpkg.Parse(qec.p, qec.originSQL, "", "")
 		if err2 != nil {
 			qec.tctx.L().Info("failed to parse a filtered SQL for online DDL", zap.String("SQL", qec.originSQL))
 		}
