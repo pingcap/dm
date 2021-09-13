@@ -926,8 +926,8 @@ func (s *Scheduler) GetTaskNameListBySourceName(sourceName string) []string {
 	var taskNameList []string
 	s.subTaskCfgs.Range(func(k, v interface{}) bool {
 		task := k.(string)
-		subtaskCFGMap := v.(map[string]config.SubTaskConfig)
-		if _, ok := subtaskCFGMap[sourceName]; ok {
+		subtaskCfgMap := v.(map[string]config.SubTaskConfig)
+		if _, ok := subtaskCfgMap[sourceName]; ok {
 			taskNameList = append(taskNameList, task)
 		}
 		return true

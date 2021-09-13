@@ -39,7 +39,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var openAPITestSuite = check.Suite(&openAPISuite{})
+var openAPITestSuite = check.SerialSuites(&openAPISuite{})
 
 // some data for test.
 var (
@@ -267,15 +267,11 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 		w := s.scheduler.GetWorkerBySource(source1.SourceName)
 		return w != nil
 	}), check.IsTrue)
-	// mock worker rpc
-	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-	workerReq := &workerrpc.Request{
-		Type:        workerrpc.CmdQueryStatus,
-		QueryStatus: &pb.QueryStatusRequest{Name: ""},
-	}
-	mockWorkerClientForOpenAPI(mockWorkerClient, "", source1.SourceName, workerName1, workerReq)
-	s.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
 
+	// mock worker get status relay not started
+	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+	mockRelayQueryStatus(mockWorkerClient, source1.SourceName, workerName1, pb.Stage_InvalidStage)
+	s.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
 	// get source status again,source should be bounded by worker1
 	result3 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
 	c.Assert(result3.Code(), check.Equals, http.StatusOK)
@@ -283,11 +279,9 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	err = result3.UnmarshalBodyToObject(&resultSourceStatus1)
 	c.Assert(err, check.IsNil)
 	c.Assert(resultSourceStatus1.WorkerName, check.Equals, workerName1) // worker1 is bound
-	c.Assert(resultSourceStatus1.EnableRelay, check.Equals, true)
+	c.Assert(resultSourceStatus1.EnableRelay, check.Equals, false)
 
 	// mock start relay
-	startRelayReq := pb.OperateRelayRequest{}
-	mockWorkerClientForOpenAPI(mockWorkerClient, "", source1.SourceName, workerName1, startRelayReq)
 	startRelayURL := fmt.Sprintf("%s/start-relay", source1URL)
 	openAPIStartRelayReq := openapi.StartRelayRequest{WorkerName: workerName1}
 	result4 := testutil.NewRequest().Patch(startRelayURL).WithJsonBody(openAPIStartRelayReq).Go(t.testT, s.echo)
@@ -295,6 +289,9 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	c.Assert(result4.Code(), check.Equals, http.StatusOK)
 
 	// get source status again, relay status should not be nil
+	mockWorkerClient = pbmock.NewMockWorkerClient(ctrl)
+	mockRelayQueryStatus(mockWorkerClient, source1.SourceName, workerName1, pb.Stage_Running)
+	s.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
 	result5 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
 	c.Assert(result5.Code(), check.Equals, http.StatusOK)
 	var resultSourceStatus2 openapi.SourceStatus
@@ -309,86 +306,20 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	c.Assert(result6.Code(), check.Equals, http.StatusOK)
 }
 
-func mockWorkerClientForOpenAPI(
-	mockWorkerClient *pbmock.MockWorkerClient, taskName, sourceName, workerName string, masterReq interface{}) {
-	var expect pb.Stage
-	switch req := masterReq.(type) {
-	case *pb.StartTaskRequest, *pb.UpdateTaskRequest:
-		expect = pb.Stage_Running
-	case *pb.OperateTaskRequest:
-		switch req.Op {
-		case pb.TaskOp_Resume:
-			expect = pb.Stage_Running
-		case pb.TaskOp_Pause:
-			expect = pb.Stage_Paused
-		case pb.TaskOp_Stop:
-			expect = pb.Stage_Stopped
-		}
-	case *pb.OperateWorkerRelayRequest:
-		switch req.Op {
-		case pb.RelayOp_ResumeRelay:
-			expect = pb.Stage_Running
-		case pb.RelayOp_PauseRelay:
-			expect = pb.Stage_Paused
-		case pb.RelayOp_StopRelay:
-			expect = pb.Stage_Stopped
-		}
-	default:
-		expect = pb.Stage_Running
-	}
+func mockRelayQueryStatus(
+	mockWorkerClient *pbmock.MockWorkerClient, sourceName, workerName string, stage pb.Stage) {
 	queryResp := &pb.QueryStatusResponse{
 		Result: true,
 		SourceStatus: &pb.SourceStatus{
-			Worker:      workerName,
-			Source:      sourceName,
-			RelayStatus: &pb.RelayStatus{Stage: expect},
-		},
-		SubTaskStatus: []*pb.SubTaskStatus{
-			{
-				Stage: expect,
-				Name:  taskName,
-				Status: &pb.SubTaskStatus_Sync{
-					Sync: &pb.SyncStatus{
-						TotalEvents:         0,
-						TotalTps:            0,
-						RecentTps:           0,
-						MasterBinlog:        "",
-						MasterBinlogGtid:    "",
-						SyncerBinlog:        "",
-						SyncerBinlogGtid:    "",
-						BlockingDDLs:        nil,
-						UnresolvedGroups:    nil,
-						Synced:              false,
-						BinlogType:          "",
-						SecondsBehindMaster: 0,
-					},
-				},
-			},
+			Worker: workerName,
+			Source: sourceName,
 		},
 	}
-
-	switch masterReq.(type) {
-	case *pb.StartTaskRequest, *pb.UpdateTaskRequest, *pb.OperateTaskRequest:
-		queryResp.SubTaskStatus = []*pb.SubTaskStatus{{}}
-		if expect == pb.Stage_Stopped {
-			queryResp.SubTaskStatus[0].Status = &pb.SubTaskStatus_Msg{
-				Msg: fmt.Sprintf("no sub task with name %s has started", taskName),
-			}
-		} else {
-			queryResp.SubTaskStatus[0].Name = taskName
-			queryResp.SubTaskStatus[0].Stage = expect
-		}
-	case *pb.OperateWorkerRelayRequest:
-		queryResp.SourceStatus = &pb.SourceStatus{
-			RelayStatus: &pb.RelayStatus{Stage: expect},
-			Worker:      workerName,
-		}
+	if stage == pb.Stage_Running {
+		queryResp.SourceStatus.RelayStatus = &pb.RelayStatus{Stage: stage}
 	}
-
 	mockWorkerClient.EXPECT().QueryStatus(
 		gomock.Any(),
-		&pb.QueryStatusRequest{
-			Name: taskName,
-		},
+		&pb.QueryStatusRequest{Name: ""},
 	).Return(queryResp, nil).MaxTimes(maxRetryNum)
 }
