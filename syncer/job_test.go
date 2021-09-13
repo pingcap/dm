@@ -67,7 +67,7 @@ func (t *testJobSuite) TestJobTypeString(c *C) {
 
 func (t *testJobSuite) TestJob(c *C) {
 	ddlInfo := &shardingDDLInfo{
-		tableNames: [][]*filter.Table{
+		tables: [][]*filter.Table{
 			{
 				{
 					Schema: "test1",
