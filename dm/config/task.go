@@ -302,6 +302,9 @@ type TaskConfig struct {
 	OnlineDDL bool `yaml:"online-ddl" toml:"online-ddl" json:"online-ddl"`
 	// deprecated
 	OnlineDDLScheme string `yaml:"online-ddl-scheme" toml:"online-ddl-scheme" json:"online-ddl-scheme"`
+	// pt/gh-ost name rule,support regex
+	ShadowTableRule string `yaml:"shadow-table-rule" toml:"shadow-table-rule" json:"shadow-table-rule"`
+	TrashTableRule  string `yaml:"trash-table-rule" toml:"trash-table-rule" json:"trash-table-rule"`
 
 	Routes         map[string]*router.TableRule   `yaml:"routes" toml:"routes" json:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters" toml:"filters" json:"filters"`
@@ -696,6 +699,8 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.IsSharding = c.IsSharding
 		cfg.ShardMode = c.ShardMode
 		cfg.OnlineDDL = c.OnlineDDL
+		cfg.TrashTableRule = c.TrashTableRule
+		cfg.ShadowTableRule = c.ShadowTableRule
 		cfg.IgnoreCheckingItems = c.IgnoreCheckingItems
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode

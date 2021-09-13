@@ -5,7 +5,7 @@ LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.GitBranch=$(shell git rev-parse -
 LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.GoVersion=$(shell go version)"
 
 CURDIR   := $(shell pwd)
-GO       := GO111MODULE=on go
+GO       := GO111MODULE=on GOOS=linux GOARCH=amd64 go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test -gcflags="all=-N -l"
 PACKAGE_NAME := github.com/pingcap/dm
@@ -84,21 +84,29 @@ tools_setup:
 	@echo "setup tools"
 	@cd tools && make
 
+install_test_python_dep:
+	@echo "install python requirments for test"
+	sudo pip install -r tests/requirements.txt
+
 generate_proto: tools_setup
 	./generate-dm.sh
 
 generate_mock: tools_setup
 	./tests/generate-mock.sh
 
+generate_openapi: tools_setup
+	@echo "generate_openapi"
+	tools/bin/oapi-codegen --config=openapi/spec/server-gen-cfg.yaml openapi/spec/dm.yaml
+	tools/bin/oapi-codegen --config=openapi/spec/types-gen-cfg.yaml openapi/spec/dm.yaml
+
 test: unit_test integration_test
 
 define run_unit_test
 	@echo "running unit test for packages:" $(1)
-	bash -x ./tests/wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
 	$(FAILPOINT_ENABLE)
 	@export log_level=error; \
-	$(GOTEST)  -timeout 2m -covermode=atomic -coverprofile="$(TEST_DIR)/cov.$(2).out" $(TEST_RACE_FLAG) $(1) \
+	$(GOTEST)  -timeout 5m -covermode=atomic -coverprofile="$(TEST_DIR)/cov.$(2).out" $(TEST_RACE_FLAG) $(1) \
 	|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 endef
@@ -172,6 +180,15 @@ dm_integration_test_build: tools_setup
 	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-syncer.test github.com/pingcap/dm/cmd/dm-syncer \
+		|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(FAILPOINT_DISABLE)
+	tests/prepare_tools.sh
+
+dm_integration_test_build_master: tools_setup
+	$(FAILPOINT_ENABLE)
+	$(GOTEST) -ldflags '$(LDFLAGS)' -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 	tests/prepare_tools.sh

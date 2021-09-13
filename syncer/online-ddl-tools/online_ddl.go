@@ -16,6 +16,7 @@ package onlineddl
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -488,13 +489,29 @@ func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) 
 func (r *RealOnlinePlugin) TableType(table string) TableType {
 	// 5 is _ _gho/ghc/del or _ _old/new
 	if len(table) > 5 && strings.HasPrefix(table, "_") {
-		if strings.HasSuffix(table, "_gho") || strings.HasSuffix(table, "_new") {
-			return GhostTable
+		shadowSuffix := strings.Split(r.storage.cfg.ShadowTableRule, ";")
+		for _, shadow := range shadowSuffix {
+			regex, _ := regexp.Compile(fmt.Sprintf(`%s$`, shadow))
+			if regex.MatchString(table) {
+				return GhostTable
+			}
 		}
 
-		if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") || strings.HasSuffix(table, "_old") {
-			return TrashTable
+		trashSuffix := strings.Split(r.storage.cfg.TrashTableRule, ";")
+		for _, trash := range trashSuffix {
+			regex, _ := regexp.Compile(fmt.Sprintf(`%s$`, trash))
+			if regex.MatchString(table) {
+				return TrashTable
+			}
 		}
+
+		//if strings.HasSuffix(table, "_gho") || strings.HasSuffix(table, "_new") {
+		//	return GhostTable
+		//}
+		//
+		//if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") || strings.HasSuffix(table, "_old") {
+		//	return TrashTable
+		//}
 	}
 	return RealTable
 }
