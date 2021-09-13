@@ -110,6 +110,24 @@ def get_source_status_success(source_name):
     print("get_source_status_success resp=", resp.json())
 
 
+def get_source_status_success_with_relay(source_name):
+    url = API_ENDPOINT + "/" + source_name + "/status"
+    resp = requests.get(url=url)
+    assert resp.status_code == 200
+    res = resp.json()
+    assert res["relay_status"] is not None
+    print("get_source_status_success_with_relay resp=", res)
+
+
+def get_source_status_success_no_relay(source_name):
+    url = API_ENDPOINT + "/" + source_name + "/status"
+    resp = requests.get(url=url)
+    assert resp.status_code == 200
+    res = resp.json()
+    assert res.get("relay_status") is None
+    print("get_source_status_success_no_relay resp=", res)
+
+
 def stop_relay_failed(source_name, worker_name):
     url = API_ENDPOINT + "/" + source_name + "/stop-relay"
     req = {
@@ -142,6 +160,8 @@ if __name__ == "__main__":
         "start_relay_success": start_relay_success,
         "get_source_status_failed": get_source_status_failed,
         "get_source_status_success": get_source_status_success,
+        "get_source_status_success_with_relay": get_source_status_success_with_relay,
+        "get_source_status_success_no_relay": get_source_status_success_no_relay,
         "stop_relay_failed": stop_relay_failed,
         "stop_relay_success": stop_relay_success,
     }
