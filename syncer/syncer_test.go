@@ -92,11 +92,8 @@ const (
 )
 
 type testSyncerSuite struct {
-	db              *sql.DB
 	cfg             *config.SubTaskConfig
 	eventsGenerator *event.Generator
-	syncer          *replication.BinlogSyncer
-	streamer        *replication.BinlogStreamer
 }
 
 type MockStreamer struct {
@@ -1774,28 +1771,3 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 // 		}
 // 	}
 // }
-
-func (s *testSyncerSuite) resetBinlogSyncer(c *C) {
-	cfg := replication.BinlogSyncerConfig{
-		ServerID:       s.cfg.ServerID,
-		Flavor:         "mysql",
-		Host:           s.cfg.From.Host,
-		Port:           uint16(s.cfg.From.Port),
-		User:           s.cfg.From.User,
-		Password:       s.cfg.From.Password,
-		UseDecimal:     false,
-		VerifyChecksum: true,
-	}
-	cfg.TimestampStringLocation = time.UTC
-
-	if s.syncer != nil {
-		s.syncer.Close()
-	}
-
-	pos, _, err := utils.GetMasterStatus(context.Background(), s.db, "mysql")
-	c.Assert(err, IsNil)
-
-	s.syncer = replication.NewBinlogSyncer(cfg)
-	s.streamer, err = s.syncer.StartSync(pos)
-	c.Assert(err, IsNil)
-}

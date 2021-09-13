@@ -15,10 +15,12 @@ package syncer
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -35,7 +37,21 @@ import (
 	"go.uber.org/zap"
 )
 
-func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
+var _ = Suite(&testDDLSuite{})
+
+type testDDLSuite struct {
+	cfg             *config.SubTaskConfig
+	eventsGenerator *event.Generator
+}
+
+func (s *testDDLSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.Parser, error) {
+	mock.ExpectQuery("SHOW VARIABLES LIKE").
+		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
+	return utils.GetParser(context.Background(), db)
+}
+
+func (s *testDDLSuite) TestAnsiQuotes(c *C) {
 	ansiQuotesCases := []string{
 		"create database `test`",
 		"create table `test`.`test`(id int)",
@@ -61,7 +77,7 @@ func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestDDLWithDashComments(c *C) {
+func (s *testDDLSuite) TestDDLWithDashComments(c *C) {
 	sql := `--
 -- this is a comment.
 --
@@ -77,7 +93,7 @@ CREATE TABLE test.test_table_with_c (id int);
 	c.Assert(err, IsNil)
 }
 
-func (s *testSyncerSuite) TestCommentQuote(c *C) {
+func (s *testDDLSuite) TestCommentQuote(c *C) {
 	sql := "ALTER TABLE schemadb.ep_edu_course_message_auto_reply MODIFY answer JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容';"
 	expectedSQL := "ALTER TABLE `schemadb`.`ep_edu_course_message_auto_reply` MODIFY COLUMN `answer` JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容'"
 
@@ -100,7 +116,7 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	c.Assert(sqls[0], Equals, expectedSQL)
 }
 
-func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
+func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 	// duplicate with pkg/parser
 	sqls := []string{
 		"create schema `s1`",
@@ -226,7 +242,7 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
+func (s *testDDLSuite) TestParseDDLSQL(c *C) {
 	cases := []struct {
 		sql      string
 		schema   string
@@ -354,7 +370,7 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
+func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 	testCases := []struct {
 		sql      string
 		expected string
@@ -393,7 +409,7 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
+func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	cases := []struct {
 		onlineType string
 		trashName  string
@@ -416,10 +432,13 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 	ec := eventContext{
 		tctx: tctx,
 	}
-
+	dbDFG := config.GetDBConfigFromEnv()
 	for _, ca := range cases {
-		server := conn.InitInMemoryMysqlDBIn3306()
-		go server.Start()
+		fakeMysqlServer := conn.NewMemoryMysqlServer(dbDFG.Host, dbDFG.User, dbDFG.Password, dbDFG.Port)
+		go func() {
+			c.Assert(fakeMysqlServer.Start(), IsNil)
+		}()
+
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, s.cfg)
 		c.Assert(err, IsNil)
 		syncer := NewSyncer(s.cfg, nil)
@@ -463,11 +482,11 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		c.Assert(sqls[0], Equals, newSQL)
 		tableName := &filter.Table{Schema: "test", Name: ca.ghostname}
 		c.Assert(tables, DeepEquals, map[string]*filter.Table{tableName.String(): tableName})
-		server.Close()
+		fakeMysqlServer.Close()
 	}
 }
 
-func (s *testSyncerSuite) TestDropSchemaInSharding(c *C) {
+func (s *testDDLSuite) TestDropSchemaInSharding(c *C) {
 	var (
 		targetTable = &filter.Table{
 			Schema: "target_db",
