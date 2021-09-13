@@ -65,6 +65,7 @@ function test_relay() {
 
 	# get source status success
 	openapi_source_check "get_source_status_success" "mysql-01"
+	openapi_source_check "get_source_status_success_with_relay" "mysql-01"
 
 	# stop relay failed: not pass worker name
 	openapi_source_check "stop_relay_failed" "mysql-01" "no-worker"
@@ -77,6 +78,8 @@ function test_relay() {
 		"\"result\": true" 2 \
 		"\"worker\": \"worker1\"" 1 \
 		"\"relayStatus\": null" 1
+
+	openapi_source_check "get_source_status_success_no_relay" "mysql-01"
 
 	# delete source success
 	openapi_source_check "delete_source_success" "mysql-01"
