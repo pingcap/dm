@@ -221,7 +221,7 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 }
 
 func (t *openAPISuite) TestRelayAPI(c *check.C) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
@@ -242,20 +242,19 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	// check http status code
 	c.Assert(result.Code(), check.Equals, http.StatusCreated)
 
-	source1URL := fmt.Sprintf("%s/%s", baseURL, source1.SourceName)
-
 	// get source status
 	source1StatusURL := fmt.Sprintf("%s/%s/status", baseURL, source1.SourceName)
 	result2 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
 	c.Assert(result2.Code(), check.Equals, http.StatusOK)
-	var resultSourceStatus openapi.SourceStatus
-	err := result2.UnmarshalBodyToObject(&resultSourceStatus)
-	c.Assert(err, check.IsNil)
-	c.Assert(resultSourceStatus.SourceName, check.Equals, source1.SourceName)
-	c.Assert(resultSourceStatus.WorkerName, check.Equals, "") // no worker bound
 
-	// add mock worker
-	// start workers, the unbounded sources should be bounded
+	var getSourceStatusResponse openapi.GetSourceStatusResponse
+	err := result2.UnmarshalBodyToObject(&getSourceStatusResponse)
+	c.Assert(err, check.IsNil)
+	c.Assert(getSourceStatusResponse.Data[0].SourceName, check.Equals, source1.SourceName)
+	c.Assert(getSourceStatusResponse.Data[0].WorkerName, check.Equals, "") // no worker bound
+	c.Assert(getSourceStatusResponse.Total, check.Equals, 1)
+
+	// add mock worker the unbounded sources should be bounded
 	ctx1, cancel1 := context.WithCancel(ctx)
 	defer cancel1()
 	workerName1 := "worker1"
@@ -277,16 +276,17 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	// get source status again,source should be bounded by worker1,but relay not started
 	result3 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
 	c.Assert(result3.Code(), check.Equals, http.StatusOK)
-	var resultSourceStatus1 openapi.SourceStatus
-	err = result3.UnmarshalBodyToObject(&resultSourceStatus1)
+	var getSourceStatusResponse2 openapi.GetSourceStatusResponse
+	err = result3.UnmarshalBodyToObject(&getSourceStatusResponse2)
 	c.Assert(err, check.IsNil)
-	c.Assert(resultSourceStatus1.WorkerName, check.Equals, workerName1) // worker1 is bound
-	c.Assert(resultSourceStatus1.EnableRelay, check.Equals, false)
-	c.Assert(resultSourceStatus1.RelayStatus, check.IsNil)
+	c.Assert(getSourceStatusResponse2.Data[0].SourceName, check.Equals, source1.SourceName)
+	c.Assert(getSourceStatusResponse2.Data[0].WorkerName, check.Equals, workerName1) // worker1 is bound
+	c.Assert(getSourceStatusResponse2.Data[0].RelayStatus, check.IsNil)              // not start relay
+	c.Assert(getSourceStatusResponse2.Total, check.Equals, 1)                        // no worker bound
 
 	// start relay
-	startRelayURL := fmt.Sprintf("%s/start-relay", source1URL)
-	openAPIStartRelayReq := openapi.StartRelayRequest{WorkerName: workerName1}
+	startRelayURL := fmt.Sprintf("%s/%s/start-relay", baseURL, source1.SourceName)
+	openAPIStartRelayReq := openapi.StartRelayRequest{WorkerNameList: []string{workerName1}}
 	result4 := testutil.NewRequest().Patch(startRelayURL).WithJsonBody(openAPIStartRelayReq).Go(t.testT, s.echo)
 	// check http status code
 	c.Assert(result4.Code(), check.Equals, http.StatusOK)
@@ -299,15 +299,15 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	// get source status again, relay status should not be nil
 	result5 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
 	c.Assert(result5.Code(), check.Equals, http.StatusOK)
-	var resultSourceStatus2 openapi.SourceStatus
-	err = result5.UnmarshalBodyToObject(&resultSourceStatus2)
+	var getSourceStatusResponse3 openapi.GetSourceStatusResponse
+	err = result5.UnmarshalBodyToObject(&getSourceStatusResponse3)
 	c.Assert(err, check.IsNil)
-	c.Assert(resultSourceStatus2.RelayStatus.Stage, check.Equals, pb.Stage_Running.String())
+	c.Assert(getSourceStatusResponse3.Data[0].RelayStatus.Stage, check.Equals, pb.Stage_Running.String())
 
 	// test stop relay
-	stopRelayURL := fmt.Sprintf("%s/stop-relay", source1URL)
-	workerNameReq := openapi.WorkerNameRequest{WorkerName: workerName1}
-	result6 := testutil.NewRequest().Patch(stopRelayURL).WithJsonBody(workerNameReq).Go(t.testT, s.echo)
+	stopRelayURL := fmt.Sprintf("%s/%s/stop-relay", baseURL, source1.SourceName)
+	stopRelayReq := openapi.StopRelayRequest{WorkerNameList: []string{workerName1}}
+	result6 := testutil.NewRequest().Patch(stopRelayURL).WithJsonBody(stopRelayReq).Go(t.testT, s.echo)
 	c.Assert(result6.Code(), check.Equals, http.StatusOK)
 
 	// mock worker get status relay already stopped
@@ -317,12 +317,14 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	// get source status again,source
 	result7 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
 	c.Assert(result7.Code(), check.Equals, http.StatusOK)
-	var resultSourceStatus3 openapi.SourceStatus
-	err = result7.UnmarshalBodyToObject(&resultSourceStatus3)
+
+	var getSourceStatusResponse4 openapi.GetSourceStatusResponse
+	err = result7.UnmarshalBodyToObject(&getSourceStatusResponse4)
 	c.Assert(err, check.IsNil)
-	c.Assert(resultSourceStatus3.WorkerName, check.Equals, workerName1) // worker1 is bound
-	c.Assert(resultSourceStatus3.EnableRelay, check.Equals, false)
-	c.Assert(resultSourceStatus1.RelayStatus, check.IsNil)
+	c.Assert(getSourceStatusResponse4.Data[0].SourceName, check.Equals, source1.SourceName)
+	c.Assert(getSourceStatusResponse4.Data[0].WorkerName, check.Equals, workerName1) // worker1 is bound
+	c.Assert(getSourceStatusResponse4.Data[0].RelayStatus, check.IsNil)              // not start relay
+	c.Assert(getSourceStatusResponse4.Total, check.Equals, 1)                        // no worker bound
 	cancel()
 }
 

@@ -50,6 +50,12 @@ type GetSourceListResponse struct {
 	Total int      `json:"total"`
 }
 
+// GetSourceStatusResponse defines model for GetSourceStatusResponse.
+type GetSourceStatusResponse struct {
+	Data  []SourceStatus `json:"data"`
+	Total int            `json:"total"`
+}
+
 // GetTaskListResponse defines model for GetTaskListResponse.
 type GetTaskListResponse struct {
 	Data  []Task `json:"data"`
@@ -142,6 +148,9 @@ type Source struct {
 	// source port
 	Port int `json:"port"`
 
+	// relay log cleanup policy configuration
+	Purge *Purge `json:"purge,omitempty"`
+
 	// data source ssl configuration, the field will be hidden when getting the data source configuration from the interface
 	Security *Security `json:"security"`
 
@@ -154,9 +163,6 @@ type Source struct {
 
 // source status
 type SourceStatus struct {
-	// whether to enable relay log function
-	EnableRelay bool `json:"enable_relay"`
-
 	// status of relay log
 	RelayStatus *RelayStatus `json:"relay_status,omitempty"`
 
@@ -169,9 +175,6 @@ type SourceStatus struct {
 
 // action to open a relay request
 type StartRelayRequest struct {
-	// relay log cleanup policy configuration
-	Purge *Purge `json:"purge,omitempty"`
-
 	// starting GTID of the upstream binlog
 	RelayBinlogGtid *string `json:"relay_binlog_gtid"`
 
@@ -181,8 +184,14 @@ type StartRelayRequest struct {
 	// the directory where the relay log is stored
 	RelayDir *string `json:"relay_dir"`
 
-	// worker name
-	WorkerName string `json:"worker_name"`
+	// worker name list
+	WorkerNameList WorkerNameList `json:"worker_name_list"`
+}
+
+// action to open a relay request
+type StopRelayRequest struct {
+	// worker name list
+	WorkerNameList WorkerNameList `json:"worker_name_list"`
 }
 
 // SubTaskStatus defines model for SubTaskStatus.
@@ -372,11 +381,8 @@ type TaskTargetDataBase struct {
 	User string `json:"user"`
 }
 
-// requests related to workers
-type WorkerNameRequest struct {
-	// worker name
-	WorkerName string `json:"worker_name"`
-}
+// worker name list
+type WorkerNameList []string
 
 // DMAPICreateSourceJSONBody defines parameters for DMAPICreateSource.
 type DMAPICreateSourceJSONBody Source
@@ -385,7 +391,7 @@ type DMAPICreateSourceJSONBody Source
 type DMAPIStartRelayJSONBody StartRelayRequest
 
 // DMAPIStopRelayJSONBody defines parameters for DMAPIStopRelay.
-type DMAPIStopRelayJSONBody WorkerNameRequest
+type DMAPIStopRelayJSONBody StopRelayRequest
 
 // DMAPIStartTaskJSONBody defines parameters for DMAPIStartTask.
 type DMAPIStartTaskJSONBody CreateTaskRequest

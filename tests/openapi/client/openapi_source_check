@@ -79,7 +79,7 @@ def delete_source_failed(source_name):
 def start_relay_failed(source_name, worker_name):
     url = API_ENDPOINT + "/" + source_name + "/start-relay"
     req = {
-        "worker_name": worker_name,
+        "worker_name_list": [worker_name],
     }
     resp = requests.patch(url=url, json=req)
     assert resp.status_code == 400
@@ -89,7 +89,7 @@ def start_relay_failed(source_name, worker_name):
 def start_relay_success(source_name, worker_name):
     url = API_ENDPOINT + "/" + source_name + "/start-relay"
     req = {
-        "worker_name": worker_name,
+        "worker_name_list": [worker_name],
         "purge": {"interval": 3600, "expires": 0, "remain_space": 15},
     }
     resp = requests.patch(url=url, json=req)
@@ -103,35 +103,36 @@ def get_source_status_failed(source_name):
     print("get_source_status_failed resp=", resp.json())
 
 
-def get_source_status_success(source_name):
+def get_source_status_success(source_name, status_count=1):
     url = API_ENDPOINT + "/" + source_name + "/status"
     resp = requests.get(url=url)
     assert resp.status_code == 200
+    assert status_count == resp.json()["total"]
     print("get_source_status_success resp=", resp.json())
 
 
-def get_source_status_success_with_relay(source_name):
+def get_source_status_success_with_relay(source_name, source_idx=0):
     url = API_ENDPOINT + "/" + source_name + "/status"
     resp = requests.get(url=url)
     assert resp.status_code == 200
     res = resp.json()
-    assert res["relay_status"] is not None
+    assert res["data"][source_idx]["relay_status"] is not None
     print("get_source_status_success_with_relay resp=", res)
 
 
-def get_source_status_success_no_relay(source_name):
+def get_source_status_success_no_relay(source_name, source_idx=0):
     url = API_ENDPOINT + "/" + source_name + "/status"
     resp = requests.get(url=url)
     assert resp.status_code == 200
     res = resp.json()
-    assert res.get("relay_status") is None
+    assert res["data"][source_idx].get("relay_status") is None
     print("get_source_status_success_no_relay resp=", res)
 
 
 def stop_relay_failed(source_name, worker_name):
     url = API_ENDPOINT + "/" + source_name + "/stop-relay"
     req = {
-        "worker_name": worker_name,
+        "worker_name_list": [worker_name],
     }
     resp = requests.patch(url=url, json=req)
     assert resp.status_code == 400
@@ -141,7 +142,7 @@ def stop_relay_failed(source_name, worker_name):
 def stop_relay_success(source_name, worker_name):
     url = API_ENDPOINT + "/" + source_name + "/stop-relay"
     req = {
-        "worker_name": worker_name,
+        "worker_name_list": [worker_name],
     }
     resp = requests.patch(url=url, json=req)
     assert resp.status_code == 200
