@@ -2547,7 +2547,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		qec.needTrackDDLs = append(qec.needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tables: tables})
 		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
 		//       we should use a better mechanism to combine these operations
-		if !s.cfg.IsSharding {
+		if s.cfg.ShardMode == "" {
 			recordSourceTbls(qec.sourceTbls, stmt, tables[0][0])
 		}
 	}
