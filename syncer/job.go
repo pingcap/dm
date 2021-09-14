@@ -161,8 +161,9 @@ func newXIDJob(location, startLocation, currentLocation binlog.Location) *job {
 
 func newFlushJob() *job {
 	return &job{
-		tp:         flush,
-		jobAddTime: time.Now(),
+		tp:          flush,
+		targetTable: &filter.Table{},
+		jobAddTime:  time.Now(),
 	}
 }
 
