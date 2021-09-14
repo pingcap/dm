@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	// nolint:staticcheck
 	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"

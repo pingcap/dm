@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"sort"
 
-	// nolint:staticcheck
 	"github.com/golang/protobuf/jsonpb"
 	"go.uber.org/zap"
 

@@ -14,7 +14,6 @@
 package v1workermeta
 
 import (
-	// nolint:staticcheck
 	"github.com/golang/protobuf/proto"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
