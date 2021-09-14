@@ -25,8 +25,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/master/workerrpc"
-	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -157,36 +155,22 @@ func (s *Server) DMAPIStartRelay(ctx echo.Context, sourceName string) error {
 		sourceCfg.RelayDir = *req.RelayDir
 		needUpdate = true
 	}
-	if purge := req.Purge; purge != nil {
-		if purge.Expires != nil && sourceCfg.Purge.Expires != *purge.Expires {
-			sourceCfg.Purge.Expires = *purge.Expires
-			needUpdate = true
-		}
-		if purge.Interval != nil && sourceCfg.Purge.Interval != *purge.Interval {
-			sourceCfg.Purge.Interval = *purge.Interval
-			needUpdate = true
-		}
-		if purge.RemainSpace != nil && sourceCfg.Purge.RemainSpace != *purge.RemainSpace {
-			sourceCfg.Purge.RemainSpace = *purge.RemainSpace
-			needUpdate = true
-		}
-	}
 	if needUpdate {
 		// update current source relay config before start relay
 		if err := s.scheduler.UpdateSourceCfg(sourceCfg); err != nil {
 			return err
 		}
 	}
-	return s.scheduler.StartRelay(sourceName, []string{req.WorkerName})
+	return s.scheduler.StartRelay(sourceName, req.WorkerNameList)
 }
 
 // DMAPIStopRelay url is:(DELETE /api/v1/sources/{source-id}/relay).
 func (s *Server) DMAPIStopRelay(ctx echo.Context, sourceName string) error {
-	var req openapi.WorkerNameRequest
+	var req openapi.StopRelayRequest
 	if err := ctx.Bind(&req); err != nil {
 		return err
 	}
-	return s.scheduler.StopRelay(sourceName, []string{req.WorkerName})
+	return s.scheduler.StopRelay(sourceName, req.WorkerNameList)
 }
 
 // DMAPIGetSourceStatus url is:(GET /api/v1/sources/{source-id}/status).
@@ -195,39 +179,41 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	if sourceCfg == nil {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
 	}
-	resp := openapi.SourceStatus{SourceName: sourceCfg.SourceID}
+	var resp openapi.GetSourceStatusResponse
 	worker := s.scheduler.GetWorkerBySource(sourceName)
 	// current this source not bound to any worker
 	if worker == nil {
+		resp.Data = append(resp.Data, openapi.SourceStatus{SourceName: sourceName})
+		resp.Total = len(resp.Data)
 		return ctx.JSON(http.StatusOK, resp)
 	}
-	resp.WorkerName = worker.BaseInfo().Name
 	// get status from worker
-	workerReq := &workerrpc.Request{Type: workerrpc.CmdQueryStatus, QueryStatus: &pb.QueryStatusRequest{Name: ""}}
-	workerResp, err := worker.SendRequest(ctx.Request().Context(), workerReq, s.cfg.RPCTimeout)
-	if err != nil {
-		return terror.ErrOpenAPICommonError.New(err.Error())
-	}
-	if workerResp.QueryStatus == nil {
-		// this should not happen unless the rpc in the worker server has been modified
-		return terror.ErrOpenAPICommonError.New("worker's query-status response is nil")
-	}
-	statusResp := workerResp.QueryStatus
-	if !statusResp.Result {
-		return terror.ErrOpenAPICommonError.New(statusResp.Msg)
-	}
-	relayStatus := statusResp.SourceStatus.GetRelayStatus()
-	if relayStatus != nil {
-		resp.EnableRelay = true
-		resp.RelayStatus = &openapi.RelayStatus{
-			MasterBinlog:       relayStatus.MasterBinlog,
-			MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
-			RelayBinlogGtid:    relayStatus.RelayBinlogGtid,
-			RelayCatchUpMaster: relayStatus.RelayCatchUpMaster,
-			RelayDir:           relayStatus.RelaySubDir,
-			Stage:              relayStatus.Stage.String(),
+	workerRespList := s.getStatusFromWorkers(ctx.Request().Context(), []string{sourceName}, "", true)
+	for _, workerStatus := range workerRespList {
+		if workerStatus == nil {
+			// this should not happen unless the rpc in the worker server has been modified
+			return terror.ErrOpenAPICommonError.New("worker's query-status response is nil")
 		}
+		if !workerStatus.Result {
+			return terror.ErrOpenAPICommonError.New(workerStatus.Msg)
+		}
+		sourceStatus := openapi.SourceStatus{
+			SourceName: sourceName,
+			WorkerName: workerStatus.SourceStatus.Worker,
+		}
+		if relayStatus := workerStatus.SourceStatus.GetRelayStatus(); relayStatus != nil {
+			sourceStatus.RelayStatus = &openapi.RelayStatus{
+				MasterBinlog:       relayStatus.MasterBinlog,
+				MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
+				RelayBinlogGtid:    relayStatus.RelayBinlogGtid,
+				RelayCatchUpMaster: relayStatus.RelayCatchUpMaster,
+				RelayDir:           relayStatus.RelaySubDir,
+				Stage:              relayStatus.Stage.String(),
+			}
+		}
+		resp.Data = append(resp.Data, sourceStatus)
 	}
+	resp.Total = len(resp.Data)
 	return ctx.JSON(http.StatusOK, resp)
 }
 
@@ -279,6 +265,11 @@ func sourceCfgToModel(cfg *config.SourceConfig) openapi.Source {
 		Port:       cfg.From.Port,
 		SourceName: cfg.SourceID,
 		User:       cfg.From.User,
+		Purge: &openapi.Purge{
+			Expires:     &cfg.Purge.Expires,
+			Interval:    &cfg.Purge.Interval,
+			RemainSpace: &cfg.Purge.RemainSpace,
+		},
 	}
 	if cfg.From.Security != nil {
 		// NOTE we don't return security content here, because we don't want to expose it to the user.
@@ -312,5 +303,16 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 	cfg.From = from
 	cfg.EnableGTID = source.EnableGtid
 	cfg.SourceID = source.SourceName
+	if purge := source.Purge; purge != nil {
+		if purge.Expires != nil {
+			cfg.Purge.Expires = *purge.Expires
+		}
+		if purge.Interval != nil {
+			cfg.Purge.Interval = *purge.Interval
+		}
+		if purge.RemainSpace != nil {
+			cfg.Purge.RemainSpace = *purge.RemainSpace
+		}
+	}
 	return cfg
 }

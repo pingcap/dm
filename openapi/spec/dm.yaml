@@ -118,7 +118,7 @@ paths:
           content:
             "application/json":
               schema:
-                $ref: "#/components/schemas/SourceStatus"
+                $ref: "#/components/schemas/GetSourceStatusResponse"
         "400":
           description: "failed"
           content:
@@ -173,7 +173,7 @@ paths:
         content:
           "application/json":
             schema:
-              $ref: "#/components/schemas/WorkerNameRequest"
+              $ref: "#/components/schemas/StopRelayRequest"
       responses:
         "200":
           description: "success"
@@ -366,10 +366,8 @@ components:
       description: action to open a relay request
       type: object
       properties:
-        worker_name:
-          type: string
-          example: "worker-1"
-          description: "worker name"
+        worker_name_list:
+          $ref:  "#/components/schemas/WorkerNameList"
         relay_binlog_name:
           type: string
           example: "mysql-bin.000002"
@@ -385,20 +383,22 @@ components:
           default: "./relay_log"
           description: "the directory where the relay log is stored"
           nullable: true
-        purge:
-          $ref: "#/components/schemas/Purge"
       required:
-        - "worker_name"
-    WorkerNameRequest:
-      description: requests related to workers
+        - "worker_name_list"
+    StopRelayRequest:
+      description: action to open a relay request
       type: object
       properties:
-        worker_name:
-          type: string
-          example: "worker-1"
-          description: "worker name"
+        worker_name_list:
+          $ref:  "#/components/schemas/WorkerNameList"
       required:
-        - "worker_name"
+        - "worker_name_list"
+    WorkerNameList:
+      description: worker name list
+      type: array
+      items:
+        type: string
+        example: "worker-1"
     SourceStatus:
       description: "source status"
       type: object
@@ -411,17 +411,11 @@ components:
           type: string
           example: "worker-1"
           description: "The worker currently bound to the source"
-        enable_relay:
-          type: boolean
-          example: false
-          default: false
-          description: "whether to enable relay log function"
         relay_status:
           $ref: "#/components/schemas/RelayStatus"
       required:
         - "source_name"
         - "worker_name"
-        - "enable_relay"
     Source:
       type: object
       description: "source"
@@ -459,6 +453,8 @@ components:
           nullable: false
         security:
           $ref: "#/components/schemas/Security"
+        purge:
+          $ref: "#/components/schemas/Purge"
       required:
         - "source_name"
         - "host"
@@ -898,6 +894,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SubTaskStatus"
+      required:
+        - "total"
+        - "data"
+    GetSourceStatusResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourceStatus"
       required:
         - "total"
         - "data"
