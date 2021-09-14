@@ -87,8 +87,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		tisAfter []*model.TableInfo
 		err      error
 
-		needHandleDDLs = qec.needHandleDDLs
-		needTrackDDLs  = qec.needTrackDDLs
+		needTrackDDLs = qec.needTrackDDLs
 	)
 
 	err = s.execError.Load()
@@ -137,7 +136,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	// in optimistic mode, don't `saveTablePoint` before execute DDL,
 	// because it has no `UnresolvedTables` to prevent the flush of this checkpoint.
 
-	info := s.optimist.ConstructInfo(upTable.Schema, upTable.Name, downTable.Schema, downTable.Name, needHandleDDLs, tiBefore, tisAfter)
+	info := s.optimist.ConstructInfo(upTable.Schema, upTable.Name, downTable.Schema, downTable.Name, qec.needHandleDDLs, tiBefore, tisAfter)
 
 	var (
 		rev    int64
@@ -147,7 +146,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	switch needTrackDDLs[0].stmt.(type) {
 	case *ast.CreateDatabaseStmt, *ast.AlterDatabaseStmt:
 		// need to execute the DDL to the downstream, but do not do the coordination with DM-master.
-		op.DDLs = needHandleDDLs
+		op.DDLs = qec.needHandleDDLs
 		skipOp = true
 	case *ast.DropDatabaseStmt:
 		skipOp = true
@@ -181,11 +180,11 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	}
 
 	if op.ConflictStage == optimism.ConflictDetected {
-		return terror.ErrSyncerShardDDLConflict.Generate(needHandleDDLs, op.ConflictMsg)
+		return terror.ErrSyncerShardDDLConflict.Generate(qec.needHandleDDLs, op.ConflictMsg)
 	}
 
 	// updated needHandleDDLs to DDLs received from DM-master.
-	needHandleDDLs = op.DDLs
+	qec.needHandleDDLs = op.DDLs
 
 	s.tctx.L().Info("start to handle ddls in optimistic shard mode", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))
 
@@ -218,7 +217,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	for _, table := range qec.onlineDDLTables {
 		s.tctx.L().Info("finish online ddl and clear online ddl metadata in optimistic shard mode",
 			zap.String("event", "query"),
-			zap.Strings("ddls", needHandleDDLs),
+			zap.Strings("ddls", qec.needHandleDDLs),
 			zap.String("raw statement", qec.originSQL),
 			zap.String("schema", table.Schema),
 			zap.String("table", table.Name))

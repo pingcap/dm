@@ -2372,7 +2372,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	qec := &queryEventContext{
 		eventContext:    &ec,
 		ddlSchema:       string(ev.Schema),
-		originSQL:       utils.TrimCtrlChars(originSQL), // Will TrimCtrlChars affect code?
+		originSQL:       utils.TrimCtrlChars(originSQL),
 		splitedDDLs:     make([]string, 0),
 		appliedDDLs:     make([]string, 0),
 		sourceTbls:      make(map[string]map[string]struct{}),
