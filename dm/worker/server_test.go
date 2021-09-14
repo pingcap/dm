@@ -64,12 +64,12 @@ func (t *testServer) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 
 	getMinLocForSubTaskFunc = getFakeLocForSubTask
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCFGFromETCD", `return(true)`), IsNil)
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD", `return(true)`), IsNil)
 }
 
 func (t *testServer) TearDownSuite(c *C) {
 	getMinLocForSubTaskFunc = getMinLocForSubTask
-	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCFGFromETCD"), IsNil)
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD"), IsNil)
 }
 
 func createMockETCD(dir string, host string) (*embed.Etcd, error) {

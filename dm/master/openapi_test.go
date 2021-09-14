@@ -87,7 +87,6 @@ func setupServer(ctx context.Context, c *check.C) *Server {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return s1.election.IsLeader()
 	}), check.IsTrue)
-
 	return s1
 }
 
@@ -153,14 +152,14 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 
 	baseURL := "/api/v1/sources"
 
-	dbCFG := config.GetDBConfigFromEnv()
+	dbCfg := config.GetDBConfigFromEnv()
 	source1 := openapi.Source{
 		SourceName: source1Name,
 		EnableGtid: false,
-		Host:       dbCFG.Host,
-		Password:   dbCFG.Password,
-		Port:       dbCFG.Port,
-		User:       dbCFG.User,
+		Host:       dbCfg.Host,
+		Password:   dbCfg.Password,
+		Port:       dbCfg.Port,
+		User:       dbCfg.User,
 	}
 	result := testutil.NewRequest().Post(baseURL).WithJsonBody(source1).Go(t.testT, s.echo)
 	// check http status code
