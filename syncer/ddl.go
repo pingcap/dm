@@ -183,19 +183,19 @@ func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (string, [][]*fi
 		return "", nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
-	tables, err := parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
+	sourceTables, err := parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
 		return "", nil, nil, err
 	}
 
-	targetTables := make([]*filter.Table, 0, len(tables))
-	for i := range tables {
-		renamedTable := s.renameShardingSchema(tables[i])
+	targetTables := make([]*filter.Table, 0, len(sourceTables))
+	for i := range sourceTables {
+		renamedTable := s.renameShardingSchema(sourceTables[i])
 		targetTables = append(targetTables, renamedTable)
 	}
 
 	ddl, err := parserpkg.RenameDDLTable(stmt, targetTables)
-	return ddl, [][]*filter.Table{tables, targetTables}, stmt, err
+	return ddl, [][]*filter.Table{sourceTables, targetTables}, stmt, err
 }
 
 // handleOnlineDDL checks if the input `sql` is came from online DDL tools.

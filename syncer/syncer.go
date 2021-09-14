@@ -2225,7 +2225,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
-	rows, err := s.mappingDML(originTable.Schema, originTable.Name, tableInfo, ev.Rows)
+	rows, err := s.mappingDML(originTable, tableInfo, ev.Rows)
 	if err != nil {
 		return err
 	}
@@ -2246,8 +2246,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	)
 
 	param := &genDMLParam{
-		schema:            targetTable.Schema,
-		table:             targetTable.Name,
+		tableID:           utils.GenTableID(targetTable),
 		data:              prunedRows,
 		originalData:      rows,
 		columns:           prunedColumns,
