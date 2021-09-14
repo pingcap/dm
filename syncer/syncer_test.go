@@ -930,8 +930,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				prunedColumns, prunedRows, err2 := pruneGeneratedColumnDML(ti, ev.Rows)
 				c.Assert(err2, IsNil)
 				param := &genDMLParam{
-					schema:            table.Schema,
-					table:             table.Name,
+					tableID:           utils.GenTableID(table),
 					data:              prunedRows,
 					originalData:      ev.Rows,
 					columns:           prunedColumns,
