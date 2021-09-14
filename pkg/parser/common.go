@@ -74,12 +74,12 @@ func (tne *tableNameExtractor) Leave(in ast.Node) (ast.Node, bool) {
 	return in, true
 }
 
-// FetchDDLTableNames returns tableNames in ddl the result contains many tableName.
+// FetchDDLTables returns tableNames in ddl the result contains many tableName.
 // Because we use visitor pattern, first tableName is always upper-most table in ast
 // specifically, for `create table like` DDL, result contains [sourceTableName, sourceRefTableName]
 // for rename table ddl, result contains [old1, new1, old1, new1, old2, new2, old3, new3, ...] because of TiDB parser
 // for other DDL, order of tableName is the node visit order.
-func FetchDDLTableNames(schema string, stmt ast.StmtNode, flavor utils.LowerCaseTableNamesFlavor) ([]*filter.Table, error) {
+func FetchDDLTables(schema string, stmt ast.StmtNode, flavor utils.LowerCaseTableNamesFlavor) ([]*filter.Table, error) {
 	switch stmt.(type) {
 	case ast.DDLNode:
 	default:
@@ -137,9 +137,9 @@ func (v *tableRenameVisitor) Leave(in ast.Node) (ast.Node, bool) {
 }
 
 // RenameDDLTable renames table names in ddl by given `targetTableNames`
-// argument `targetTableNames` is same with return value of FetchDDLTableNames
+// argument `targetTables` is same with return value of FetchDDLTables
 // returned DDL is formatted like StringSingleQuotes, KeyWordUppercase and NameBackQuotes.
-func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string, error) {
+func RenameDDLTable(stmt ast.StmtNode, targetTables []*filter.Table) (string, error) {
 	switch stmt.(type) {
 	case ast.DDLNode:
 	default:
@@ -148,18 +148,18 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 
 	switch v := stmt.(type) {
 	case *ast.AlterDatabaseStmt:
-		v.Name = targetTableNames[0].Schema
+		v.Name = targetTables[0].Schema
 	case *ast.CreateDatabaseStmt:
-		v.Name = targetTableNames[0].Schema
+		v.Name = targetTables[0].Schema
 	case *ast.DropDatabaseStmt:
-		v.Name = targetTableNames[0].Schema
+		v.Name = targetTables[0].Schema
 	default:
 		visitor := &tableRenameVisitor{
-			targetNames: targetTableNames,
+			targetNames: targetTables,
 		}
 		stmt.Accept(visitor)
 		if visitor.hasErr {
-			return "", terror.ErrRewriteSQL.Generate(stmt, targetTableNames)
+			return "", terror.ErrRewriteSQL.Generate(stmt, targetTables)
 		}
 	}
 
