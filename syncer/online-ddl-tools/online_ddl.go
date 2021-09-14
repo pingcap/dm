@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strings"
 	"sync"
 
 	"github.com/pingcap/failpoint"
@@ -492,23 +491,26 @@ func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) 
 // TableType implements interface.
 func (r *RealOnlinePlugin) TableType(table string) TableType {
 	// 5 is _ _gho/ghc/del or _ _old/new
-	if len(table) > 5 && strings.HasPrefix(table, "_") {
-		if r.shadowReg.MatchString(table) {
-			return GhostTable
-		}
+	if r.shadowReg.MatchString(table) {
+		return GhostTable
+	}
 
-		if r.trashReg.MatchString(table) {
-			return TrashTable
-		}
+	if r.trashReg.MatchString(table) {
+		return TrashTable
 	}
 	return RealTable
 }
 
 // RealName implements interface.
 func (r *RealOnlinePlugin) RealName(table string) string {
-	tp := r.TableType(table)
-	if tp == GhostTable || tp == TrashTable {
-		table = table[1 : len(table)-4]
+	shadowRes := r.shadowReg.FindStringSubmatch(table)
+	if len(shadowRes) > 1 {
+		return shadowRes[1]
+	}
+
+	trashRes := r.trashReg.FindStringSubmatch(table)
+	if len(trashRes) > 1 {
+		return trashRes[1]
 	}
 	return table
 }

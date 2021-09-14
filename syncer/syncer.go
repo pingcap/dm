@@ -334,13 +334,11 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 
 	if s.cfg.OnlineDDL {
-		shadowReg, err := regexp.Compile(fmt.Sprintf(`%s%s`,
-			strings.Join(s.cfg.ShadowTableRule, "$|"), "$"))
+		shadowReg, err := regexp.Compile(fmt.Sprintf(`^_(.+)(?:%s)$`, strings.Join(s.cfg.ShadowTableRule, "|")))
 		if err != nil {
 			return err
 		}
-		trashReg, err := regexp.Compile(fmt.Sprintf(`%s%s`,
-			strings.Join(s.cfg.TrashTableRule, "$|"), "$"))
+		trashReg, err := regexp.Compile(fmt.Sprintf(`^_(.+)(?:%s)$`, strings.Join(s.cfg.TrashTableRule, "|")))
 		if err != nil {
 			return err
 		}
