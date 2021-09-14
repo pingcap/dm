@@ -203,13 +203,14 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	}
 	resp.WorkerName = worker.BaseInfo().Name
 	// get status from worker
-	workerReq := &workerrpc.Request{
-		Type:        workerrpc.CmdQueryStatus,
-		QueryStatus: &pb.QueryStatusRequest{Name: ""},
-	}
+	workerReq := &workerrpc.Request{Type: workerrpc.CmdQueryStatus, QueryStatus: &pb.QueryStatusRequest{Name: ""}}
 	workerResp, err := worker.SendRequest(ctx.Request().Context(), workerReq, s.cfg.RPCTimeout)
 	if err != nil {
 		return terror.ErrOpenAPICommonError.New(err.Error())
+	}
+	if workerResp.QueryStatus == nil {
+		// this should not happen unless the  rpc in the worker server has been modified
+		return terror.ErrOpenAPICommonError.New("worker's query-status response is nil")
 	}
 	statusResp := workerResp.QueryStatus
 	if !statusResp.Result {

@@ -274,11 +274,11 @@ func (w *SourceWorker) EnableRelay() (err error) {
 		return nil
 	}
 
-	needGetSourceCFGFromETCD := true
-	failpoint.Inject("MockGetSourceCFGFromETCD", func(_ failpoint.Value) {
-		needGetSourceCFGFromETCD = false
+	needGetSourceCfgFromETCD := true
+	failpoint.Inject("MockGetSourceCfgFromETCD", func(_ failpoint.Value) {
+		needGetSourceCfgFromETCD = false
 	})
-	if needGetSourceCFGFromETCD {
+	if needGetSourceCfgFromETCD {
 		// we need update worker source config from etcd first
 		// because the configuration of the relay part of the data source may be changed via scheduler.UpdateSourceCfg
 		sourceCfg, _, err2 := ha.GetRelayConfig(w.etcdClient, w.name)

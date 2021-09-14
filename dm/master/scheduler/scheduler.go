@@ -360,13 +360,13 @@ func (s *Scheduler) UpdateSourceCfg(cfg *config.SourceConfig) error {
 }
 
 // currently the source cfg can only update relay-log related parts.
-func checkSourceCfgCanUpdated(oldCFG, newCFG *config.SourceConfig) bool {
-	newCFGClone := newCFG.Clone()
-	newCFGClone.RelayBinLogName = oldCFG.RelayBinLogName
-	newCFGClone.RelayBinlogGTID = oldCFG.RelayBinlogGTID
-	newCFGClone.RelayDir = oldCFG.RelayDir
-	newCFGClone.Purge = oldCFG.Purge
-	return newCFGClone.String() == oldCFG.String()
+func checkSourceCfgCanUpdated(oldCfg, newCfg *config.SourceConfig) bool {
+	newCfgClone := newCfg.Clone()
+	newCfgClone.RelayBinLogName = oldCfg.RelayBinLogName
+	newCfgClone.RelayBinlogGTID = oldCfg.RelayBinlogGTID
+	newCfgClone.RelayDir = oldCfg.RelayDir
+	newCfgClone.Purge = oldCfg.Purge
+	return newCfgClone.String() == oldCfg.String()
 }
 
 // RemoveSourceCfg removes the upstream source config in the cluster.
