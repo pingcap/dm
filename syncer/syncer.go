@@ -1317,7 +1317,7 @@ func (s *Syncer) syncDML(
 		for dbSchema, tableM := range tpCnt {
 			for dbTable, tpM := range tableM {
 				for tpName, cnt := range tpM {
-					s.addCount(true, queueBucket, tpName, cnt, &filter.Table{dbSchema, dbTable})
+					s.addCount(true, queueBucket, tpName, cnt, &filter.Table{Schema: dbSchema, Name: dbTable})
 				}
 			}
 		}
