@@ -92,7 +92,7 @@ func setupServer(ctx context.Context, c *check.C) *Server {
 }
 
 func (t *openAPISuite) TestRedirectRequestToLeader(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// create a new cluster
@@ -142,10 +142,11 @@ func (t *openAPISuite) TestRedirectRequestToLeader(c *check.C) {
 	// list source not from leader will get a redirect
 	result2 := testutil.NewRequest().Get(baseURL).Go(t.testT, s2.echo)
 	c.Assert(result2.Code(), check.Equals, http.StatusTemporaryRedirect)
+	cancel()
 }
 
 func (t *openAPISuite) TestSourceAPI(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s := setupServer(ctx, c)
 	defer s.Close()
@@ -217,10 +218,11 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resultListSource2.Data, check.HasLen, 0)
 	c.Assert(resultListSource2.Total, check.Equals, 0)
+	cancel()
 }
 
 func (t *openAPISuite) TestRelayAPI(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
@@ -322,6 +324,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	c.Assert(resultSourceStatus3.WorkerName, check.Equals, workerName1) // worker1 is bound
 	c.Assert(resultSourceStatus3.EnableRelay, check.Equals, false)
 	c.Assert(resultSourceStatus1.RelayStatus, check.IsNil)
+	cancel()
 }
 
 func mockRelayQueryStatus(
