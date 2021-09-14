@@ -209,7 +209,7 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 		return terror.ErrOpenAPICommonError.New(err.Error())
 	}
 	if workerResp.QueryStatus == nil {
-		// this should not happen unless the  rpc in the worker server has been modified
+		// this should not happen unless the rpc in the worker server has been modified
 		return terror.ErrOpenAPICommonError.New("worker's query-status response is nil")
 	}
 	statusResp := workerResp.QueryStatus
