@@ -107,8 +107,8 @@ func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, 
 }
 
 // newDDL job is used to create a new ddl job
-// when cfg.ShardMode == "", ddlInfo == nil，sourceTbls != nil, we use sourceTbls to record ddl affected tables.
-// when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
+// when cfg.ShardMode == ShardOptimistic || ShardPessimistic, len(qec.sourceTbls) == 0.
+// when cfg.ShardMode == "", len(sourceTbls) != 0, we use sourceTbls to record ddl affected tables.
 func newDDLJob(qec *queryEventContext) *job {
 	j := &job{
 		tp:        ddl,
@@ -122,7 +122,7 @@ func newDDLJob(qec *queryEventContext) *job {
 		jobAddTime:      time.Now(),
 	}
 
-	if qec.sourceTbls != nil && len(qec.sourceTbls) != 0 {
+	if len(qec.sourceTbls) != 0 {
 		sourceTbl := make(map[string][]string, len(qec.sourceTbls))
 		for schema, tbMap := range qec.sourceTbls {
 			if len(tbMap) > 0 {
@@ -133,7 +133,7 @@ func newDDLJob(qec *queryEventContext) *job {
 			}
 		}
 		j.sourceTbl = sourceTbl
-	} else {
+	} else if qec.ddlInfo != nil && len(qec.ddlInfo.tables) >= 2 {
 		j.sourceTbl = map[string][]string{qec.ddlInfo.tables[0][0].Schema: {qec.ddlInfo.tables[0][0].Name}}
 		j.targetSchema = qec.ddlInfo.tables[1][0].Schema
 		j.targetTable = qec.ddlInfo.tables[1][0].Name
