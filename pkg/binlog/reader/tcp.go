@@ -27,6 +27,8 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/failpoint"
+
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
@@ -79,6 +81,11 @@ func (r *TCPReader) StartSyncByPos(pos gmysql.Position) error {
 		return terror.ErrRelayReaderNotStateNew.Generate(r.stage, common.StageNew)
 	}
 
+	failpoint.Inject("MockTCPReaderStartSyncByPos", func() {
+		r.stage = common.StagePrepared
+		failpoint.Return(nil)
+	})
+
 	streamer, err := r.syncer.StartSync(pos)
 	if err != nil {
 		return terror.ErrRelayTCPReaderStartSync.Delegate(err, pos)
@@ -102,6 +109,11 @@ func (r *TCPReader) StartSyncByGTID(gSet gtid.Set) error {
 		return terror.ErrRelayTCPReaderNilGTID.Generate()
 	}
 
+	failpoint.Inject("MockTCPReaderStartSyncByGTID", func() {
+		r.stage = common.StagePrepared
+		failpoint.Return(nil)
+	})
+
 	streamer, err := r.syncer.StartSyncGTID(gSet.Origin())
 	if err != nil {
 		return terror.ErrRelayTCPReaderStartSyncGTID.Delegate(err, gSet)
@@ -120,6 +132,11 @@ func (r *TCPReader) Close() error {
 	if r.stage != common.StagePrepared {
 		return terror.ErrRelayReaderStateCannotClose.Generate(r.stage, common.StagePrepared)
 	}
+
+	failpoint.Inject("MockTCPReaderClose", func() {
+		r.stage = common.StageClosed
+		failpoint.Return(nil)
+	})
 
 	defer r.syncer.Close()
 	connID := r.syncer.LastConnectionID()
@@ -167,6 +184,10 @@ func (r *TCPReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, err
 		return nil, terror.ErrRelayReaderNeedStart.Generate(r.stage, common.StagePrepared)
 	}
 
+	failpoint.Inject("MockTCPReaderGetEvent", func() {
+		failpoint.Return(nil, nil)
+	})
+
 	ev, err := r.streamer.GetEvent(ctx)
 	return ev, terror.ErrRelayTCPReaderGetEvent.Delegate(err)
 }
@@ -177,6 +198,13 @@ func (r *TCPReader) Status() interface{} {
 	stage := r.stage
 	r.mu.RUnlock()
 
+	failpoint.Inject("MockTCPReaderStatus", func() {
+		status := &TCPReaderStatus{
+			Stage:  stage.String(),
+			ConnID: uint32(1),
+		}
+		failpoint.Return(status)
+	})
 	var connID uint32
 	if stage != common.StageNew {
 		connID = r.syncer.LastConnectionID()
