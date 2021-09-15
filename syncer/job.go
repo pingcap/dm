@@ -65,7 +65,7 @@ type job struct {
 	// ddl in ShardOptimistic and ShardPessimistic will only affect one table at one time but for normal node
 	// we don't have this limit. So we should update multi tables in normal mode.
 	// sql example: drop table `s1`.`t1`, `s2`.`t2`.
-	sourceTbls      map[string][]string
+	sourceTbls      map[string][]*filter.Table
 	targetTable     *filter.Table
 	sql             string
 	args            []interface{}
@@ -90,7 +90,7 @@ func newDMLJob(tp opType, sql string, sourceTable, targetTable *filter.Table, ar
 	key string, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader) *job {
 	return &job{
 		tp:          tp,
-		sourceTbls:  map[string][]string{sourceTable.Schema: {sourceTable.Name}},
+		sourceTbls:  map[string][]*filter.Table{sourceTable.Schema: {sourceTable}},
 		targetTable: targetTable,
 		sql:         sql,
 		args:        args,
@@ -123,17 +123,17 @@ func newDDLJob(qec *queryEventContext) *job {
 	}
 
 	if len(qec.sourceTbls) != 0 {
-		j.sourceTbls = make(map[string][]string, len(qec.sourceTbls))
+		j.sourceTbls = make(map[string][]*filter.Table, len(qec.sourceTbls))
 		for schema, tbMap := range qec.sourceTbls {
 			if len(tbMap) > 0 {
-				j.sourceTbls[schema] = make([]string, 0, len(tbMap))
+				j.sourceTbls[schema] = make([]*filter.Table, 0, len(tbMap))
 			}
 			for name := range tbMap {
-				j.sourceTbls[schema] = append(j.sourceTbls[schema], name)
+				j.sourceTbls[schema] = append(j.sourceTbls[schema], &filter.Table{Schema: schema, Name: name})
 			}
 		}
 	} else if qec.ddlInfo != nil && len(qec.ddlInfo.tables) >= 2 {
-		j.sourceTbls = map[string][]string{qec.ddlInfo.tables[0][0].Schema: {qec.ddlInfo.tables[0][0].Name}}
+		j.sourceTbls = map[string][]*filter.Table{qec.ddlInfo.tables[0][0].Schema: {qec.ddlInfo.tables[0][0]}}
 		j.targetTable = qec.ddlInfo.tables[1][0]
 	}
 

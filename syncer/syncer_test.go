@@ -1726,8 +1726,8 @@ func (s *Syncer) addJobToMemory(job *job) error {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(&filter.Table{Schema: sourceSchema, Name: sourceTable}, job.location)
-				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable].flush()
+				s.saveTablePoint(sourceTable, job.location)
+				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable.Name].flush()
 			}
 		}
 		s.resetShardingGroup(job.targetTable)
@@ -1737,8 +1737,8 @@ func (s *Syncer) addJobToMemory(job *job) error {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(&filter.Table{Schema: sourceSchema, Name: sourceTable}, job.currentLocation)
-				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable].flush()
+				s.saveTablePoint(sourceTable, job.currentLocation)
+				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable.Name].flush()
 			}
 		}
 	}

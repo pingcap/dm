@@ -32,7 +32,7 @@ import (
 
 // genDMLParam stores pruned columns, data as well as the original columns, data, index.
 type genDMLParam struct {
-	tableID           string
+	tableID           string              // as a key in map like `schema`.`table`
 	safeMode          bool                // only used in update
 	data              [][]interface{}     // pruned data
 	originalData      [][]interface{}     // all data
