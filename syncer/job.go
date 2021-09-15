@@ -110,9 +110,10 @@ func newDMLJob(tp opType, sql string, sourceTable, targetTable *filter.Table, ar
 // when cfg.ShardMode == "", len(sourceTbls) != 0, we use sourceTbls to record ddl affected tables.
 func newDDLJob(qec *queryEventContext) *job {
 	j := &job{
-		tp:        ddl,
-		ddls:      qec.needHandleDDLs,
-		originSQL: qec.originSQL,
+		tp:          ddl,
+		targetTable: &filter.Table{},
+		ddls:        qec.needHandleDDLs,
+		originSQL:   qec.originSQL,
 
 		location:        *qec.lastLocation,
 		startLocation:   *qec.startLocation,
