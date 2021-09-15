@@ -285,7 +285,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	c.Assert(getSourceStatusResponse2.Data[0].SourceName, check.Equals, source1.SourceName)
 	c.Assert(getSourceStatusResponse2.Data[0].WorkerName, check.Equals, workerName1) // worker1 is bound
 	c.Assert(getSourceStatusResponse2.Data[0].RelayStatus, check.IsNil)              // not start relay
-	c.Assert(getSourceStatusResponse2.Total, check.Equals, 1)                        // no worker bound
+	c.Assert(getSourceStatusResponse2.Total, check.Equals, 1)
 
 	// start relay
 	startRelayURL := fmt.Sprintf("%s/%s/start-relay", baseURL, source1.SourceName)
@@ -320,6 +320,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	err = result6.UnmarshalBodyToObject(&getSourceStatusResponse4)
 	c.Assert(err, check.IsNil)
 	c.Assert(*getSourceStatusResponse4.Data[0].ErrorMsg, check.Equals, "some error happened")
+	c.Assert(*&getSourceStatusResponse4.Data[0].WorkerName, check.Equals, workerName1)
 
 	// test stop relay
 	stopRelayURL := fmt.Sprintf("%s/%s/stop-relay", baseURL, source1.SourceName)
@@ -344,7 +345,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	c.Assert(getSourceStatusResponse5.Data[0].SourceName, check.Equals, source1.SourceName)
 	c.Assert(getSourceStatusResponse5.Data[0].WorkerName, check.Equals, workerName1) // worker1 is bound
 	c.Assert(getSourceStatusResponse5.Data[0].RelayStatus, check.IsNil)              // not start relay
-	c.Assert(getSourceStatusResponse5.Total, check.Equals, 1)                        // no worker bound
+	c.Assert(getSourceStatusResponse5.Total, check.Equals, 1)
 	cancel()
 }
 
