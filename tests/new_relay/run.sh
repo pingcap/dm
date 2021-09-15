@@ -10,7 +10,7 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 API_VERSION="v1alpha1"
 
-function run_kill_dump_connection() {
+function test_kill_dump_connection() {
 	cleanup_data $TEST_NAME
 	cleanup_process
 
@@ -50,9 +50,6 @@ function run_kill_dump_connection() {
 }
 
 function run() {
-
-	run_kill_dump_connection
-
 	export GO_FAILPOINTS="github.com/pingcap/dm/relay/ReportRelayLogSpaceInBackground=return(1)"
 
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -201,6 +198,8 @@ function run() {
 		"\"result\": true" 2
 
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	test_kill_dump_connection
 }
 
 cleanup_data $TEST_NAME
