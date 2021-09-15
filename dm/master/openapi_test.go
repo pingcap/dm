@@ -320,7 +320,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	err = result6.UnmarshalBodyToObject(&getSourceStatusResponse4)
 	c.Assert(err, check.IsNil)
 	c.Assert(*getSourceStatusResponse4.Data[0].ErrorMsg, check.Equals, "some error happened")
-	c.Assert(*&getSourceStatusResponse4.Data[0].WorkerName, check.Equals, workerName1)
+	c.Assert(getSourceStatusResponse4.Data[0].WorkerName, check.Equals, workerName1)
 
 	// test stop relay
 	stopRelayURL := fmt.Sprintf("%s/%s/stop-relay", baseURL, source1.SourceName)
