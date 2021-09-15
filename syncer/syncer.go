@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -346,7 +347,25 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 
 	if s.cfg.OnlineDDL {
-		s.onlineDDL, err = onlineddl.NewRealOnlinePlugin(tctx, s.cfg)
+		var (
+			shadowRegs []*regexp.Regexp
+			trashRegs  []*regexp.Regexp
+		)
+		for _, sg := range s.cfg.ShadowTableRule {
+			shadowReg, err := regexp.Compile(sg)
+			if err != nil {
+				return err
+			}
+			shadowRegs = append(shadowRegs, shadowReg)
+		}
+		for _, tg := range s.cfg.TrashTableRule {
+			trashReg, err := regexp.Compile(tg)
+			if err != nil {
+				return err
+			}
+			trashRegs = append(trashRegs, trashReg)
+		}
+		s.onlineDDL, err = onlineddl.NewRealOnlinePlugin(tctx, s.cfg, shadowRegs, trashRegs)
 		if err != nil {
 			return err
 		}

@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -192,6 +193,11 @@ type SubTaskConfig struct {
 	IsSharding bool   `toml:"is-sharding" json:"is-sharding"`
 	ShardMode  string `toml:"shard-mode" json:"shard-mode"`
 	OnlineDDL  bool   `toml:"online-ddl" json:"online-ddl"`
+
+	// pt/gh-ost name rule,support regex
+	ShadowTableRule []string `yaml:"shadow-table-rule" toml:"shadow-table-rule" json:"shadow-table-rule"`
+	TrashTableRule  []string `yaml:"trash-table-rule" toml:"trash-table-rule" json:"trash-table-rule"`
+
 	// deprecated
 	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
@@ -336,6 +342,54 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	} else if c.OnlineDDLScheme == PT || c.OnlineDDLScheme == GHOST {
 		c.OnlineDDL = true
 		log.L().Warn("'online-ddl-scheme' will be deprecated soon. Recommend that use online-ddl instead of online-ddl-scheme.")
+	}
+
+	if len(c.ShadowTableRule) == 0 {
+		c.ShadowTableRule = []string{"^_(.+)_(?:new|gho)$"}
+	} else {
+		var shadowTableRule []string
+		for _, r := range c.ShadowTableRule {
+			if !strings.HasPrefix(r, "^") {
+				r = "^" + r
+			}
+
+			if !strings.HasSuffix(r, "$") {
+				r = r + "$"
+			}
+
+			p, err := regexp.Compile(r)
+			if err != nil {
+				return err
+			}
+			if p.NumSubexp() != 1 {
+				return terror.Annotate(err, "'shadow-table-rule' regex pattern isn't contains exactly one submatch")
+			}
+			shadowTableRule = append(shadowTableRule, r)
+		}
+		c.ShadowTableRule = shadowTableRule
+	}
+
+	if len(c.TrashTableRule) == 0 {
+		c.TrashTableRule = []string{"^_(.+)_(?:ghc|del|old)$"}
+	} else {
+		var trashTableRule []string
+		for _, r := range c.TrashTableRule {
+			if !strings.HasPrefix(r, "^") {
+				r = "^" + r
+			}
+
+			if !strings.HasSuffix(r, "$") {
+				r = r + "$"
+			}
+			p, err := regexp.Compile(r)
+			if err != nil {
+				return err
+			}
+			if p.NumSubexp() != 1 {
+				return terror.Annotate(err, "'trash-table-rule' regex pattern isn't contains exactly one submatch")
+			}
+		}
+		c.TrashTableRule = trashTableRule
 	}
 
 	if c.MetaSchema == "" {

@@ -300,6 +300,10 @@ type TaskConfig struct {
 	MySQLInstances []*MySQLInstance `yaml:"mysql-instances" toml:"mysql-instances" json:"mysql-instances"`
 
 	OnlineDDL bool `yaml:"online-ddl" toml:"online-ddl" json:"online-ddl"`
+	// pt/gh-ost name rule,support regex
+	ShadowTableRule []string `yaml:"shadow-table-rule" toml:"shadow-table-rule" json:"shadow-table-rule"`
+	TrashTableRule  []string `yaml:"trash-table-rule" toml:"trash-table-rule" json:"trash-table-rule"`
+
 	// deprecated
 	OnlineDDLScheme string `yaml:"online-ddl-scheme" toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
@@ -701,6 +705,8 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.IsSharding = c.IsSharding
 		cfg.ShardMode = c.ShardMode
 		cfg.OnlineDDL = c.OnlineDDL
+		cfg.TrashTableRule = c.TrashTableRule
+		cfg.ShadowTableRule = c.ShadowTableRule
 		cfg.IgnoreCheckingItems = c.IgnoreCheckingItems
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
