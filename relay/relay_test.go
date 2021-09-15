@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
@@ -538,15 +539,20 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	c.Assert(err, IsNil)
 
 	mockGetServerUUID(mockDB)
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/relay/MockAdjustGTIDReturnEmptyGTID", "return()"), IsNil)
+	mockGetRandomServerID(mockDB)
+	//  mock AddGSetWithPurged
+	mockDB.ExpectQuery("select @@GLOBAL.gtid_purged").WillReturnRows(sqlmock.NewRows([]string{"@@GLOBAL.gtid_purged"}).AddRow(""))
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/binlog/reader/MockGetEmptyPreviousGTIDFromGTIDSet", "return()"), IsNil)
 	//nolint:errcheck
-	defer failpoint.Disable("github.com/pingcap/dm/relay/MockAdjustGTIDReturnEmptyGTID")
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/binlog/reader/MockGetEmptyPreviousGTIDFromGTIDSet")
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid001 := fmt.Sprintf("%s.000001", uuid)
 	t.verifyMetadata(c, r, uuid001, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, emptyGTID.String(), []string{uuid001})
 
 	// re-setup meta again, often happen when connecting a server behind a VIP.
 	mockGetServerUUID(mockDB)
+	mockGetRandomServerID(mockDB)
+	mockDB.ExpectQuery("select @@GLOBAL.gtid_purged").WillReturnRows(sqlmock.NewRows([]string{"@@GLOBAL.gtid_purged"}).AddRow(""))
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid002 := fmt.Sprintf("%s.000002", uuid)
 	t.verifyMetadata(c, r, uuid002, minCheckpoint, emptyGTID.String(), []string{uuid001, uuid002})
@@ -555,11 +561,15 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	r.cfg.BinlogGTID = "24ecd093-8cec-11e9-aa0d-0242ac170002:1-50,24ecd093-8cec-11e9-aa0d-0242ac170003:1-50"
 	r.cfg.UUIDSuffix = 2
 	mockGetServerUUID(mockDB)
+	mockGetRandomServerID(mockDB)
+	mockDB.ExpectQuery("select @@GLOBAL.gtid_purged").WillReturnRows(sqlmock.NewRows([]string{"@@GLOBAL.gtid_purged"}).AddRow(""))
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	t.verifyMetadata(c, r, uuid002, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, emptyGTID.String(), []string{uuid002})
 
 	// re-setup meta again, often happen when connecting a server behind a VIP.
 	mockGetServerUUID(mockDB)
+	mockGetRandomServerID(mockDB)
+	mockDB.ExpectQuery("select @@GLOBAL.gtid_purged").WillReturnRows(sqlmock.NewRows([]string{"@@GLOBAL.gtid_purged"}).AddRow(""))
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid003 := fmt.Sprintf("%s.000003", uuid)
 	t.verifyMetadata(c, r, uuid003, minCheckpoint, emptyGTID.String(), []string{uuid002, uuid003})

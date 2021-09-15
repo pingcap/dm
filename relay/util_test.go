@@ -66,3 +66,11 @@ func mockGetServerUUID(mockDB sqlmock.Sqlmock) {
 	mockDB.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'server_uuid'").WithArgs().
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("server_uuid", "12e57f06-f360-11eb-8235-585cc2bc66c9"))
 }
+
+func mockGetRandomServerID(mockDB sqlmock.Sqlmock) {
+	rows := sqlmock.NewRows([]string{"Server_id", "Host", "Port", "Master_id", "Slave_UUID"})
+	rows.AddRow("2", "127.0.0.1", "3307", "1", "uuid2")
+	mockDB.ExpectQuery("SHOW SLAVE HOSTS").WillReturnRows(rows)
+	mockDB.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'server_id'").WillReturnRows(
+		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("server_id", "1"))
+}
