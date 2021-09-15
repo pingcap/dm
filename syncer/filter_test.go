@@ -278,30 +278,34 @@ create table t (
 	}
 
 	var (
-		ctx = context.Background()
-		db  = "test"
-		tbl = "t"
+		ctx     = context.Background()
+		dbName  = "test"
+		tblName = "t"
+		table   = &filter.Table{
+			Schema: dbName,
+			Name:   tblName,
+		}
 	)
 	c.Assert(log.InitLogger(&log.Config{Level: "debug"}), IsNil)
 
 	for _, ca := range cases {
 		schemaTracker, err := schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
 		c.Assert(err, IsNil)
-		c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
-		c.Assert(schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
+		c.Assert(schemaTracker.CreateSchemaIfNotExists(dbName), IsNil)
+		c.Assert(schemaTracker.Exec(ctx, dbName, ca.tableStr), IsNil)
 
-		ti, err := schemaTracker.GetTable(db, tbl)
+		ti, err := schemaTracker.GetTable(table)
 		c.Assert(err, IsNil)
 
 		exprConfig := []*config.ExpressionFilter{
 			{
-				Schema:          db,
-				Table:           tbl,
+				Schema:          dbName,
+				Table:           tblName,
 				InsertValueExpr: ca.exprStr,
 			},
 		}
 		g := NewExprFilterGroup(exprConfig)
-		exprs, err := g.GetInsertExprs(db, tbl, ti)
+		exprs, err := g.GetInsertExprs(dbName, tblName, ti)
 		c.Assert(err, IsNil)
 		c.Assert(exprs, HasLen, 1)
 		expr := exprs[0]
@@ -531,9 +535,13 @@ create table t (
 	}
 
 	var (
-		ctx = context.Background()
-		db  = "test"
-		tbl = "t"
+		ctx     = context.Background()
+		dbName  = "test"
+		tblName = "t"
+		table   = &filter.Table{
+			Schema: dbName,
+			Name:   tblName,
+		}
 	)
 	c.Assert(log.InitLogger(&log.Config{Level: "debug"}), IsNil)
 
@@ -541,21 +549,21 @@ create table t (
 		c.Log(ca.tableStr)
 		schemaTracker, err := schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
 		c.Assert(err, IsNil)
-		c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
-		c.Assert(schemaTracker.Exec(ctx, db, ca.tableStr), IsNil)
+		c.Assert(schemaTracker.CreateSchemaIfNotExists(dbName), IsNil)
+		c.Assert(schemaTracker.Exec(ctx, dbName, ca.tableStr), IsNil)
 
-		ti, err := schemaTracker.GetTable(db, tbl)
+		ti, err := schemaTracker.GetTable(table)
 		c.Assert(err, IsNil)
 
 		exprConfig := []*config.ExpressionFilter{
 			{
-				Schema:          db,
-				Table:           tbl,
+				Schema:          dbName,
+				Table:           tblName,
 				InsertValueExpr: ca.exprStr,
 			},
 		}
 		g := NewExprFilterGroup(exprConfig)
-		exprs, err := g.GetInsertExprs(db, tbl, ti)
+		exprs, err := g.GetInsertExprs(dbName, tblName, ti)
 		c.Assert(err, IsNil)
 		c.Assert(exprs, HasLen, 1)
 		expr := exprs[0]
@@ -574,9 +582,13 @@ create table t (
 
 func (s *testFilterSuite) TestExpressionContainsNonExistColumn(c *C) {
 	var (
-		ctx      = context.Background()
-		db       = "test"
-		tbl      = "t"
+		ctx     = context.Background()
+		dbName  = "test"
+		tblName = "t"
+		table   = &filter.Table{
+			Schema: dbName,
+			Name:   tblName,
+		}
 		tableStr = `
 create table t (
 	c varchar(20)
@@ -585,21 +597,21 @@ create table t (
 	)
 	schemaTracker, err := schema.NewTracker(ctx, "unit-test", defaultTestSessionCfg, s.baseConn)
 	c.Assert(err, IsNil)
-	c.Assert(schemaTracker.CreateSchemaIfNotExists(db), IsNil)
-	c.Assert(schemaTracker.Exec(ctx, db, tableStr), IsNil)
+	c.Assert(schemaTracker.CreateSchemaIfNotExists(dbName), IsNil)
+	c.Assert(schemaTracker.Exec(ctx, dbName, tableStr), IsNil)
 
-	ti, err := schemaTracker.GetTable(db, tbl)
+	ti, err := schemaTracker.GetTable(table)
 	c.Assert(err, IsNil)
 
 	exprConfig := []*config.ExpressionFilter{
 		{
-			Schema:          db,
-			Table:           tbl,
+			Schema:          dbName,
+			Table:           tblName,
 			InsertValueExpr: exprStr,
 		},
 	}
 	g := NewExprFilterGroup(exprConfig)
-	exprs, err := g.GetInsertExprs(db, tbl, ti)
+	exprs, err := g.GetInsertExprs(dbName, tblName, ti)
 	c.Assert(err, IsNil)
 	c.Assert(exprs, HasLen, 1)
 	expr := exprs[0]

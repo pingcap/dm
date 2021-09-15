@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 
@@ -124,7 +125,7 @@ func (m *MockUnit) Update(_ *config.SubTaskConfig) error {
 	return m.errUpdate
 }
 
-func (m *MockUnit) Status() interface{} {
+func (m *MockUnit) Status(_ *binlog.SourceStatus) interface{} {
 	switch m.typ {
 	case pb.UnitType_Check:
 		return &pb.CheckStatus{}
@@ -399,11 +400,6 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
 	c.Assert(st.Result().Errors, HasLen, 0)
 
-	st.Close()
-	c.Assert(st.CurrUnit(), Equals, mockLoader)
-	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
-	c.Assert(st.Result().Errors, HasLen, 0)
-
 	st.Run(pb.Stage_Finished)
 	c.Assert(st.CurrUnit(), Equals, mockLoader)
 	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
@@ -453,19 +449,7 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 		return []unit.Unit{mockDumper, mockLoader}
 	}
 
-	// close again
-	st.Close()
-	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
-	c.Assert(st.CurrUnit(), Equals, nil)
-	c.Assert(st.Result(), IsNil)
-
 	st.Run(pb.Stage_Finished)
-	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
-	c.Assert(st.CurrUnit(), Equals, nil)
-	c.Assert(st.Result(), IsNil)
-
-	// close again
-	st.Close()
 	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
 	c.Assert(st.CurrUnit(), Equals, nil)
 	c.Assert(st.Result(), IsNil)
@@ -481,7 +465,7 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	w := &Worker{
+	w := &SourceWorker{
 		ctx: ctx,
 		// loadStatus relay MetaBinlog must be greater
 		relayHolder: NewDummyRelayHolderWithRelayBinlog(config.NewSourceConfig(), relayHolderBinlog),
@@ -513,6 +497,7 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
 
 	st = NewSubTaskWithStage(cfg, pb.Stage_Paused, nil, "worker")
+	st.units = []unit.Unit{mockLoader, mockSyncer}
 	st.prevUnit = mockLoader
 	st.currUnit = mockSyncer
 
@@ -522,8 +507,9 @@ func (t *testSubTask) TestSubtaskFastQuit(c *C) {
 		close(finished)
 	}()
 
-	time.Sleep(time.Second)
-	c.Assert(st.Stage(), Equals, pb.Stage_Running)
+	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
+		return st.Stage() == pb.Stage_Running
+	}), IsTrue)
 	// test Close
 	st.Close()
 	select {

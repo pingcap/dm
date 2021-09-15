@@ -115,23 +115,19 @@ func (s *Syncer) routeDDL(qec *queryEventContext, sql string) (string, [][]*filt
 		return "", nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
-	tableNames, err := parserpkg.FetchDDLTableNames(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
+	tables, err := parserpkg.FetchDDLTables(qec.schema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
 		return "", nil, nil, err
 	}
 
-	targetTableNames := make([]*filter.Table, 0, len(tableNames))
-	for i := range tableNames {
-		schema, table := s.renameShardingSchema(tableNames[i].Schema, tableNames[i].Name)
-		tableName := &filter.Table{
-			Schema: schema,
-			Name:   table,
-		}
-		targetTableNames = append(targetTableNames, tableName)
+	targetTables := make([]*filter.Table, 0, len(tables))
+	for i := range tables {
+		renamedTable := s.renameShardingSchema(tables[i])
+		targetTables = append(targetTables, renamedTable)
 	}
 
-	ddl, err := parserpkg.RenameDDLTable(stmt, targetTableNames)
-	return ddl, [][]*filter.Table{tableNames, targetTableNames}, stmt, err
+	ddl, err := parserpkg.RenameDDLTable(stmt, targetTables)
+	return ddl, [][]*filter.Table{tables, targetTables}, stmt, err
 }
 
 // handleOnlineDDL checks if the input `sql` is came from online DDL tools.
@@ -211,8 +207,8 @@ func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema strin
 		for _, table := range tables {
 			// refine clear them later if failed
 			// now it doesn't have problems
-			if err1 := s.checkpoint.DeleteTablePoint(tctx, table.Schema, table.Name); err1 != nil {
-				s.tctx.L().Error("fail to delete checkpoint", zap.String("schema", table.Schema), zap.String("table", table.Name))
+			if err1 := s.checkpoint.DeleteTablePoint(tctx, table); err1 != nil {
+				s.tctx.L().Error("fail to delete checkpoint", zap.Stringer("table", table))
 			}
 		}
 	}
@@ -240,7 +236,7 @@ func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *filter.Tabl
 }
 
 type shardingDDLInfo struct {
-	name       string
-	tableNames [][]*filter.Table
-	stmt       ast.StmtNode
+	name   string
+	tables [][]*filter.Table
+	stmt   ast.StmtNode
 }

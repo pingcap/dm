@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/google/uuid"
 	. "github.com/pingcap/check"
@@ -105,36 +104,4 @@ func (s *testDBSuite) TestGetServerUnixTS(c *C) {
 	id, err := utils.GetServerUnixTS(context.Background(), s.db)
 	c.Assert(err, IsNil)
 	c.Assert(id, Greater, int64(0))
-}
-
-func (s *testDBSuite) TestBinaryLogs(c *C) {
-	ctx := context.Background()
-	files, err := getBinaryLogs(ctx, s.db)
-	c.Assert(err, IsNil)
-	c.Assert(files, Not(HasLen), 0)
-
-	fileNum := len(files)
-	pos := mysql.Position{
-		Name: files[fileNum-1].name,
-		Pos:  0,
-	}
-
-	remainingSize, err := countBinaryLogsSize(ctx, pos, s.db)
-	c.Assert(err, IsNil)
-	c.Assert(remainingSize, Equals, files[fileNum-1].size)
-
-	_, err = s.db.Exec("FLUSH BINARY LOGS")
-	c.Assert(err, IsNil)
-	files, err = getBinaryLogs(ctx, s.db)
-	c.Assert(err, IsNil)
-	c.Assert(files, HasLen, fileNum+1)
-
-	pos = mysql.Position{
-		Name: files[fileNum].name,
-		Pos:  0,
-	}
-
-	remainingSize, err = countBinaryLogsSize(ctx, pos, s.db)
-	c.Assert(err, IsNil)
-	c.Assert(remainingSize, Equals, files[fileNum].size)
 }
