@@ -2197,7 +2197,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 	// ENDTODO
 
-	ignore, err := s.filterRowsEvent(&filter.Table{Schema: originSchema, Name: originTable}, ec.header.EventType)
+	ignore, err := s.filterRowsEvent(originTable, ec.header.EventType)
 	if err != nil {
 		return err
 	}
@@ -2368,18 +2368,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		*ec.lastLocation = *ec.currentLocation
 		return nil
 	}
-	qec := &queryEventContext{
-		eventContext:        ec,
-		ddlSchema:           string(ev.Schema),
-		originSQL:           utils.TrimCtrlChars(originSQL), // Will TrimCtrlChars affect code?
-		splitedDDLs:         make([]string, 0),
-		appliedDDLs:         make([]string, 0),
-		routedDDLs:          make([]string, 0),
-		needHandleDDLs:      make([]string, 0),
-		needTrackDDLs:       make([]trackedDDL, 0),
-		sourceTbls:          make(map[string]map[string]struct{}),
-		onlineDDLTableNames: make(map[string]*filter.Table),
-	}
 
 	qec := &queryEventContext{
 		eventContext:    &ec,
@@ -2494,7 +2482,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	// handle one-schema change DDL
 	for _, sql := range qec.appliedDDLs {
 		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		sqlDDL, tables, stmt, handleErr := s.routeDDL(qec.p, qec.ddlSchema, sql)
+		sqlDDL, tables, stmt, handleErr := s.routeDDL(qec, sql)
 		if handleErr != nil {
 			return handleErr
 		}

@@ -88,7 +88,7 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	stmt, err := parser.ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestCommentQuote")))
-	ec := eventContext{
+	ec := &eventContext{
 		tctx: tctx,
 	}
 	qec := &queryEventContext{
@@ -208,7 +208,7 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 	c.Assert(err, IsNil)
 
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveDDLSQL")))
-	ec := eventContext{
+	ec := &eventContext{
 		tctx: tctx,
 	}
 
@@ -363,7 +363,7 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveGeneratedColumnSQL")))
 	for _, tc := range testCases {
 		qec := &queryEventContext{
-			eventContext: eventContext{
+			eventContext: &eventContext{
 				tctx: tctx,
 			},
 			appliedDDLs: make([]string, 0),
@@ -401,7 +401,7 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		},
 	}
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveOnlineDDL")))
-	ec := eventContext{
+	ec := &eventContext{
 		tctx: tctx,
 	}
 
@@ -415,11 +415,11 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		// TODO: change to a loop
 		// real table
 		qec := &queryEventContext{
-			eventContext:        ec,
-			ddlSchema:           "test",
-			appliedDDLs:         make([]string, 0),
-			onlineDDLTableNames: make(map[string]*filter.Table),
-			p:                   parser.New(),
+			eventContext:    ec,
+			ddlSchema:       "test",
+			appliedDDLs:     make([]string, 0),
+			onlineDDLTables: make(map[string]*filter.Table),
+			p:               parser.New(),
 		}
 		sql := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
 		stmt, err := qec.p.ParseOneStmt(sql, "", "")
@@ -433,11 +433,11 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 
 		// trash table
 		qec = &queryEventContext{
-			eventContext:        ec,
-			ddlSchema:           "test",
-			appliedDDLs:         make([]string, 0),
-			onlineDDLTableNames: make(map[string]*filter.Table),
-			p:                   parser.New(),
+			eventContext:    ec,
+			ddlSchema:       "test",
+			appliedDDLs:     make([]string, 0),
+			onlineDDLTables: make(map[string]*filter.Table),
+			p:               parser.New(),
 		}
 		sql = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `test`.`%s` (`n` INT)", ca.trashName)
 		stmt, err = qec.p.ParseOneStmt(sql, "", "")
@@ -450,11 +450,11 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 
 		// ghost table
 		qec = &queryEventContext{
-			eventContext:        ec,
-			ddlSchema:           "test",
-			appliedDDLs:         make([]string, 0),
-			onlineDDLTableNames: make(map[string]*filter.Table),
-			p:                   parser.New(),
+			eventContext:    ec,
+			ddlSchema:       "test",
+			appliedDDLs:     make([]string, 0),
+			onlineDDLTables: make(map[string]*filter.Table),
+			p:               parser.New(),
 		}
 		sql = fmt.Sprintf("ALTER TABLE `test`.`%s` ADD COLUMN `n` INT", ca.ghostname)
 		newSQL := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"

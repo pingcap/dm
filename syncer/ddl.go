@@ -56,7 +56,7 @@ func (s *Syncer) preprocessDDL(qec *queryEventContext) error {
 			return terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 		}
 
-		tableNames, err2 := parserpkg.FetchDDLTableNames(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
+		tableNames, err2 := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
 		if err != nil {
 			return err
 		}
@@ -102,7 +102,7 @@ func (s *Syncer) preprocessDDL(qec *queryEventContext) error {
 
 		qec.appliedDDLs = append(qec.appliedDDLs, ss...)
 	}
-	if len(qec.onlineDDLTableNames) > 1 {
+	if len(qec.onlineDDLTables) > 1 {
 		return terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(qec.originSQL)
 	}
 	return nil
@@ -115,7 +115,7 @@ func (s *Syncer) routeDDL(qec *queryEventContext, sql string) (string, [][]*filt
 		return "", nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
-	tables, err := parserpkg.FetchDDLTables(qec.schema, stmt, s.SourceTableNamesFlavor)
+	tables, err := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -169,7 +169,7 @@ func (s *Syncer) handleOnlineDDL(qec *queryEventContext, tableNames []*filter.Ta
 		}
 		renamedSqls = append(renamedSqls, sql)
 	}
-	qec.onlineDDLTableNames[sourceTable.String()] = sourceTable
+	qec.onlineDDLTables[sourceTable.String()] = sourceTable
 	return renamedSqls, nil
 }
 

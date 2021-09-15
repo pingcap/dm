@@ -1496,7 +1496,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		testTbl2 = "test_tbl2"
 		ec       = &eventContext{tctx: tcontext.Background()}
 		qec      = &queryEventContext{
-			eventContext: *ec,
+			eventContext: ec,
 			ddlSchema:    testDB,
 			p:            parser.New(),
 		}
@@ -1613,7 +1613,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.BinlogEvent, p *parser.Parser, res [][]bool) {
 	i := 0
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "checkEventWithTableResult")))
-	ec := eventContext{
+	ec := &eventContext{
 		tctx: tctx,
 	}
 	for _, e := range allEvents {
