@@ -47,8 +47,8 @@ func binlogTypeToString(binlogType BinlogType) string {
 	}
 }
 
-// tableNameForDML gets table name from INSERT/UPDATE/DELETE statement.
-func tableNameForDML(dml ast.DMLNode) (*filter.Table, error) {
+// getTableByDML gets table from INSERT/UPDATE/DELETE statement.
+func getTableByDML(dml ast.DMLNode) (*filter.Table, error) {
 	switch stmt := dml.(type) {
 	case *ast.InsertStmt:
 		if stmt.Table == nil || stmt.Table.TableRefs == nil || stmt.Table.TableRefs.Left == nil {

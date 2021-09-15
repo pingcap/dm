@@ -26,7 +26,7 @@ var _ = Suite(&testUtilSuite{})
 
 type testUtilSuite struct{}
 
-func (t *testUtilSuite) TestTableNameForDML(c *C) {
+func (t *testUtilSuite) TestGetTableByDML(c *C) {
 	cases := []struct {
 		sql      string
 		schema   string
@@ -77,7 +77,7 @@ func (t *testUtilSuite) TestTableNameForDML(c *C) {
 		c.Assert(err, IsNil)
 		dml, ok := stmt.(ast.DMLNode)
 		c.Assert(ok, IsTrue)
-		table, err := tableNameForDML(dml)
+		table, err := getTableByDML(dml)
 		if cs.hasError {
 			c.Assert(err, NotNil)
 		} else {

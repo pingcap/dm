@@ -86,7 +86,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 		}, nil
 	case ast.DMLNode:
 		// if DML can be ignored, we do not report an error
-		table, err2 := tableNameForDML(node)
+		table, err2 := getTableByDML(node)
 		if err2 == nil {
 			if len(table.Schema) == 0 {
 				table.Schema = schema
