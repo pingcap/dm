@@ -365,7 +365,6 @@ func checkSourceCfgCanUpdated(oldCfg, newCfg *config.SourceConfig) bool {
 	newCfgClone.RelayBinLogName = oldCfg.RelayBinLogName
 	newCfgClone.RelayBinlogGTID = oldCfg.RelayBinlogGTID
 	newCfgClone.RelayDir = oldCfg.RelayDir
-	newCfgClone.Purge = oldCfg.Purge
 	return newCfgClone.String() == oldCfg.String()
 }
 
