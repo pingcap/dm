@@ -262,7 +262,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
 
 	// update source config when task already started will failed
-	c.Assert(s.UpdateSourceCfg(sourceCfg1), ErrorMatches, "*.need to operate has existing tasks.*")
+	c.Assert(terror.ErrSchedulerSourceOpTaskExist.Equal(s.UpdateSourceCfg(sourceCfg1)), IsTrue)
 
 	// try start a task with two sources, some sources not bound.
 	c.Assert(terror.ErrSchedulerSourcesUnbound.Equal(s.AddSubTasks(false, subtaskCfg21, subtaskCfg22)), IsTrue)

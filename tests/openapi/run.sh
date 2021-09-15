@@ -56,7 +56,6 @@ function test_relay() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status -s mysql-01" \
-		"\"result\": true" 2 \
 		"\"worker\": \"worker1\"" 1 \
 		"\"relayCatchUpMaster\": true" 1
 
@@ -75,7 +74,6 @@ function test_relay() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status -s mysql-01" \
-		"\"result\": true" 2 \
 		"\"worker\": \"worker1\"" 1 \
 		"\"relayStatus\": null" 1
 
@@ -85,6 +83,11 @@ function test_relay() {
 	openapi_source_check "get_source_status_success" "mysql-01" 2            # have two source status
 	openapi_source_check "get_source_status_success_with_relay" "mysql-01" 0 # check worker1 relay status
 	openapi_source_check "get_source_status_success_with_relay" "mysql-01" 1 # check worker2 relay status
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s mysql-01" \
+		"\"worker\": \"worker1\"" 1 \
+		"\"worker\": \"worker2\"" 1
 
 	# stop relay on two worker success
 	openapi_source_check "stop_relay_success" "mysql-01" "worker1"
@@ -100,7 +103,7 @@ function test_relay() {
 }
 
 function run() {
-	make install_test_python_dep
+	# make install_test_python_dep
 
 	# run dm-master1
 	run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
@@ -115,7 +118,7 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-	test_source
+	# test_source
 	test_relay
 }
 
