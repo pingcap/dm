@@ -163,6 +163,9 @@ type Source struct {
 
 // source status
 type SourceStatus struct {
+	// error message when something wrong
+	ErrorMsg *string `json:"error_msg,omitempty"`
+
 	// status of relay log
 	RelayStatus *RelayStatus `json:"relay_status,omitempty"`
 

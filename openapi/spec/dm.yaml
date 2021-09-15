@@ -413,6 +413,9 @@ components:
           description: "The worker currently bound to the source"
         relay_status:
           $ref: "#/components/schemas/RelayStatus"
+        error_msg:
+          type: string
+          description: "error message when something wrong"
       required:
         - "source_name"
         - "worker_name"

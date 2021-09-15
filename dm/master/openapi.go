@@ -194,10 +194,13 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 			// this should not happen unless the rpc in the worker server has been modified
 			return terror.ErrOpenAPICommonError.New("worker's query-status response is nil")
 		}
+		sourceStatus := openapi.SourceStatus{SourceName: sourceName}
 		if !workerStatus.Result {
-			return terror.ErrOpenAPICommonError.New(workerStatus.Msg)
+			sourceStatus.ErrorMsg = &workerStatus.Msg
+			resp.Data = append(resp.Data, sourceStatus)
+			continue
 		}
-		sourceStatus := openapi.SourceStatus{SourceName: sourceName, WorkerName: workerStatus.SourceStatus.Worker}
+		sourceStatus.WorkerName = workerStatus.SourceStatus.Worker
 		if relayStatus := workerStatus.SourceStatus.GetRelayStatus(); relayStatus != nil {
 			sourceStatus.RelayStatus = &openapi.RelayStatus{
 				MasterBinlog:       relayStatus.MasterBinlog,

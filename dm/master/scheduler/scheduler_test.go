@@ -175,12 +175,12 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	// update with invalid SourceID
 	fake := newCfg.Clone()
 	fake.SourceID = "not a source id"
-	c.Assert(s.UpdateSourceCfg(fake), ErrorMatches, "*.not exists.*")
+	c.Assert(terror.ErrSchedulerSourceCfgNotExist.Equal(s.UpdateSourceCfg(fake)), IsTrue)
 
 	// update field not related to relay-log will failed
 	fake2 := newCfg.Clone()
 	fake2.AutoFixGTID = !fake2.AutoFixGTID
-	c.Assert(s.UpdateSourceCfg(fake2), ErrorMatches, ".*source can only update relay-log related parts for now.*")
+	c.Assert(terror.ErrSchedulerSourceCfgUpdate.Equal(s.UpdateSourceCfg(fake2)), IsTrue)
 
 	// one unbound source exist (because no free worker).
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})

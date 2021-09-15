@@ -175,7 +175,7 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 	c.Assert(resultSource.Password, check.Equals, source1.Password)
 	c.Assert(resultSource.EnableGtid, check.Equals, source1.EnableGtid)
 	c.Assert(resultSource.SourceName, check.Equals, source1.SourceName)
-	c.Assert(resultSource.Purge.Interval, check.DeepEquals, source1.Purge.Interval)
+	c.Assert(*resultSource.Purge.Interval, check.Equals, *source1.Purge.Interval)
 
 	// create source with same name will failed
 	source2 := source1
@@ -293,12 +293,14 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	result4 := testutil.NewRequest().Patch(startRelayURL).WithJsonBody(openAPIStartRelayReq).Go(t.testT, s.echo)
 	// check http status code
 	c.Assert(result4.Code(), check.Equals, http.StatusOK)
+	relayWorkers, err := s.scheduler.GetRelayWorkers(source1Name)
+	c.Assert(err, check.IsNil)
+	c.Assert(relayWorkers, check.HasLen, 1)
 
 	// mock worker get status relay started
 	mockWorkerClient = pbmock.NewMockWorkerClient(ctrl)
 	mockRelayQueryStatus(mockWorkerClient, source1.SourceName, workerName1, pb.Stage_Running)
 	s.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
-
 	// get source status again, relay status should not be nil
 	result5 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
 	c.Assert(result5.Code(), check.Equals, http.StatusOK)
@@ -307,30 +309,46 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(getSourceStatusResponse3.Data[0].RelayStatus.Stage, check.Equals, pb.Stage_Running.String())
 
+	// mock worker get status meet error
+	mockWorkerClient = pbmock.NewMockWorkerClient(ctrl)
+	mockRelayQueryStatus(mockWorkerClient, source1.SourceName, workerName1, pb.Stage_Paused)
+	s.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
+	// get source status again, error message should not be nil
+	result6 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
+	c.Assert(result6.Code(), check.Equals, http.StatusOK)
+	var getSourceStatusResponse4 openapi.GetSourceStatusResponse
+	err = result6.UnmarshalBodyToObject(&getSourceStatusResponse4)
+	c.Assert(err, check.IsNil)
+	c.Assert(*getSourceStatusResponse4.Data[0].ErrorMsg, check.Equals, "some error happened")
+
 	// test stop relay
 	stopRelayURL := fmt.Sprintf("%s/%s/stop-relay", baseURL, source1.SourceName)
 	stopRelayReq := openapi.StopRelayRequest{WorkerNameList: []string{workerName1}}
-	result6 := testutil.NewRequest().Patch(stopRelayURL).WithJsonBody(stopRelayReq).Go(t.testT, s.echo)
-	c.Assert(result6.Code(), check.Equals, http.StatusOK)
+	result7 := testutil.NewRequest().Patch(stopRelayURL).WithJsonBody(stopRelayReq).Go(t.testT, s.echo)
+	c.Assert(result7.Code(), check.Equals, http.StatusOK)
+	relayWorkers, err = s.scheduler.GetRelayWorkers(source1Name)
+	c.Assert(err, check.IsNil)
+	c.Assert(relayWorkers, check.HasLen, 0)
 
 	// mock worker get status relay already stopped
 	mockWorkerClient = pbmock.NewMockWorkerClient(ctrl)
 	mockRelayQueryStatus(mockWorkerClient, source1.SourceName, workerName1, pb.Stage_InvalidStage)
 	s.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
 	// get source status again,source
-	result7 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
-	c.Assert(result7.Code(), check.Equals, http.StatusOK)
+	result8 := testutil.NewRequest().Get(source1StatusURL).Go(t.testT, s.echo)
+	c.Assert(result8.Code(), check.Equals, http.StatusOK)
 
-	var getSourceStatusResponse4 openapi.GetSourceStatusResponse
-	err = result7.UnmarshalBodyToObject(&getSourceStatusResponse4)
+	var getSourceStatusResponse5 openapi.GetSourceStatusResponse
+	err = result8.UnmarshalBodyToObject(&getSourceStatusResponse5)
 	c.Assert(err, check.IsNil)
-	c.Assert(getSourceStatusResponse4.Data[0].SourceName, check.Equals, source1.SourceName)
-	c.Assert(getSourceStatusResponse4.Data[0].WorkerName, check.Equals, workerName1) // worker1 is bound
-	c.Assert(getSourceStatusResponse4.Data[0].RelayStatus, check.IsNil)              // not start relay
-	c.Assert(getSourceStatusResponse4.Total, check.Equals, 1)                        // no worker bound
+	c.Assert(getSourceStatusResponse5.Data[0].SourceName, check.Equals, source1.SourceName)
+	c.Assert(getSourceStatusResponse5.Data[0].WorkerName, check.Equals, workerName1) // worker1 is bound
+	c.Assert(getSourceStatusResponse5.Data[0].RelayStatus, check.IsNil)              // not start relay
+	c.Assert(getSourceStatusResponse5.Total, check.Equals, 1)                        // no worker bound
 	cancel()
 }
 
+// nolint:unparam
 func mockRelayQueryStatus(
 	mockWorkerClient *pbmock.MockWorkerClient, sourceName, workerName string, stage pb.Stage) {
 	queryResp := &pb.QueryStatusResponse{
@@ -342,6 +360,10 @@ func mockRelayQueryStatus(
 	}
 	if stage == pb.Stage_Running {
 		queryResp.SourceStatus.RelayStatus = &pb.RelayStatus{Stage: stage}
+	}
+	if stage == pb.Stage_Paused {
+		queryResp.Result = false
+		queryResp.Msg = "some error happened"
 	}
 	mockWorkerClient.EXPECT().QueryStatus(
 		gomock.Any(),
