@@ -103,7 +103,7 @@ function test_relay() {
 }
 
 function run() {
-	# make install_test_python_dep
+	make install_test_python_dep
 
 	# run dm-master1
 	run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
@@ -118,7 +118,7 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-	# test_source
+	test_source
 	test_relay
 }
 
