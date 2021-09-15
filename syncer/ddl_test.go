@@ -497,7 +497,7 @@ func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, 
 }
 
 func (m mockOnlinePlugin) Finish(tctx *tcontext.Context, table *filter.Table) error {
-	tableID := utils.GenTableID(table)
+	tableID := table.Schema + table.Name
 	if _, ok := m.toFinish[tableID]; !ok {
 		return errors.New("finish table not found")
 	}

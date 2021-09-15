@@ -2632,8 +2632,7 @@ func (s *Syncer) handleQueryEventNoSharding(qec *queryEventContext) error {
 			zap.String("event", "query"),
 			zap.Strings("ddls", qec.needHandleDDLs),
 			zap.String("raw statement", qec.originSQL),
-			zap.String("schema", table.Schema),
-			zap.String("table", table.Name))
+			zap.Stringer("table", table))
 		err2 := s.onlineDDL.Finish(qec.tctx, table)
 		if err2 != nil {
 			return terror.Annotatef(err2, "finish online ddl on %v", table)

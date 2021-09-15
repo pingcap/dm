@@ -219,8 +219,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 			zap.String("event", "query"),
 			zap.Strings("ddls", qec.needHandleDDLs),
 			zap.String("raw statement", qec.originSQL),
-			zap.String("schema", table.Schema),
-			zap.String("table", table.Name))
+			zap.Stringer("table", table))
 		err = s.onlineDDL.Finish(qec.tctx, table)
 		if err != nil {
 			return terror.Annotatef(err, "finish online ddl on %v", table)
