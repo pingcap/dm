@@ -81,6 +81,15 @@ function test_relay() {
 
 	openapi_source_check "get_source_status_success_no_relay" "mysql-01"
 
+	openapi_source_check "start_relay_success_with_two_worker" "mysql-01" "worker1" "worker2"
+	openapi_source_check "get_source_status_success" "mysql-01" 2            # have two source status
+	openapi_source_check "get_source_status_success_with_relay" "mysql-01" 0 # check worker1 relay status
+	openapi_source_check "get_source_status_success_with_relay" "mysql-01" 1 # check worker2 relay status
+
+	# stop relay on two worker success
+	openapi_source_check "stop_relay_success" "mysql-01" "worker1"
+	openapi_source_check "stop_relay_success" "mysql-01" "worker2"
+
 	# delete source success
 	openapi_source_check "delete_source_success" "mysql-01"
 
@@ -106,7 +115,7 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-	# test_source
+	test_source
 	test_relay
 }
 

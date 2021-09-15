@@ -363,7 +363,7 @@ components:
         - "relay_catch_up_master"
         - "stage"
     StartRelayRequest:
-      description: action to open a relay request
+      description: action to start a relay request
       type: object
       properties:
         worker_name_list:
@@ -386,7 +386,7 @@ components:
       required:
         - "worker_name_list"
     StopRelayRequest:
-      description: action to open a relay request
+      description: action to stop a relay request
       type: object
       properties:
         worker_name_list:

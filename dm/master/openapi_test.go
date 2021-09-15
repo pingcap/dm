@@ -153,6 +153,7 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 	baseURL := "/api/v1/sources"
 
 	dbCfg := config.GetDBConfigFromEnv()
+	purgeInterVal := int64(10)
 	source1 := openapi.Source{
 		SourceName: source1Name,
 		EnableGtid: false,
@@ -160,6 +161,7 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 		Password:   dbCfg.Password,
 		Port:       dbCfg.Port,
 		User:       dbCfg.User,
+		Purge:      &openapi.Purge{Interval: &purgeInterVal},
 	}
 	result := testutil.NewRequest().Post(baseURL).WithJsonBody(source1).Go(t.testT, s.echo)
 	// check http status code
@@ -173,6 +175,7 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 	c.Assert(resultSource.Password, check.Equals, source1.Password)
 	c.Assert(resultSource.EnableGtid, check.Equals, source1.EnableGtid)
 	c.Assert(resultSource.SourceName, check.Equals, source1.SourceName)
+	c.Assert(resultSource.Purge.Interval, check.DeepEquals, source1.Purge.Interval)
 
 	// create source with same name will failed
 	source2 := source1
@@ -221,7 +224,7 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 }
 
 func (t *openAPISuite) TestRelayAPI(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()

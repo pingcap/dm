@@ -173,7 +173,7 @@ type SourceStatus struct {
 	WorkerName string `json:"worker_name"`
 }
 
-// action to open a relay request
+// action to start a relay request
 type StartRelayRequest struct {
 	// starting GTID of the upstream binlog
 	RelayBinlogGtid *string `json:"relay_binlog_gtid"`
@@ -188,7 +188,7 @@ type StartRelayRequest struct {
 	WorkerNameList WorkerNameList `json:"worker_name_list"`
 }
 
-// action to open a relay request
+// action to stop a relay request
 type StopRelayRequest struct {
 	// worker name list
 	WorkerNameList WorkerNameList `json:"worker_name_list"`
