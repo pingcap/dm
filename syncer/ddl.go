@@ -310,7 +310,5 @@ func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *filter.Tabl
 type shardingDDLInfo struct {
 	name   string
 	tables [][]*filter.Table
-	// sourceTables []*filter.Table
-	// targetTable  *filter.Table
-	stmt ast.StmtNode
+	stmt   ast.StmtNode
 }
