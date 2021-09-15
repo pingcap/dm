@@ -6,7 +6,17 @@ cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
+function check_dashboard_datasource() {
+	echo "check dashboard datasource"
+	check_grafana_dashboard_datasource "dm/dm-ansible/scripts/DM-Monitor-Standard.json"
+	check_grafana_dashboard_datasource "dm/dm-ansible/scripts/DM-Monitor-Professional.json"
+	echo "check dashboard datasource success"
+}
+
 function run() {
+
+	check_dashboard_datasource
+
 	# add changeTickerInterval to keep metric from updating to zero too quickly when there is no work in the queue.
 	inject_points=(
 		"github.com/pingcap/dm/syncer/BlockDDLJob=return(1)"
