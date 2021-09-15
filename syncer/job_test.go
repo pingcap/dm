@@ -84,6 +84,12 @@ func (t *testJobSuite) TestJob(c *C) {
 	table := &filter.Table{Schema: "test", Name: "t1"}
 	location := binlog.NewLocation("")
 	ec := &eventContext{startLocation: &location, currentLocation: &location, lastLocation: &location}
+	qec := &queryEventContext{
+		eventContext:   ec,
+		originSQL:      "create database test",
+		needHandleDDLs: []string{"create database test"},
+		ddlInfo:        ddlInfo,
+	}
 	testCases := []struct {
 		job    *job
 		jobStr string
@@ -92,7 +98,7 @@ func (t *testJobSuite) TestJob(c *C) {
 			newDMLJob(insert, "insert into test.t1 values(?)", table, table, []interface{}{1}, "1", location, location, location, ec.header),
 			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: 1, ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
-			newDDLJob(ddlInfo, []string{"create database test"}, binlog.NewLocation(""), binlog.NewLocation(""), binlog.NewLocation(""), nil, "create database test", ec.header),
+			newDDLJob(qec),
 			"tp: ddl, sql: , args: [], key: , ddls: [create database test], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newXIDJob(binlog.NewLocation(""), binlog.NewLocation(""), binlog.NewLocation("")),

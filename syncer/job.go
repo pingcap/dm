@@ -106,28 +106,24 @@ func newDMLJob(tp opType, sql string, sourceTable, targetTable *filter.Table, ar
 }
 
 // newDDL job is used to create a new ddl job
-// when cfg.ShardMode == "", ddlInfo == nil，sourceTbls != nil, we use sourceTbls to record ddl affected tables.
-// when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
-func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation, cmdLocation binlog.Location,
-	sourceTbls map[string]map[string]struct{}, originSQL string, eventHeader *replication.EventHeader) *job {
+// when cfg.ShardMode == ShardOptimistic || ShardPessimistic, len(qec.sourceTbls) == 0.
+// when cfg.ShardMode == "", len(sourceTbls) != 0, we use sourceTbls to record ddl affected tables.
+func newDDLJob(qec *queryEventContext) *job {
 	j := &job{
 		tp:        ddl,
-		ddls:      ddls,
-		originSQL: originSQL,
+		ddls:      qec.needHandleDDLs,
+		originSQL: qec.originSQL,
 
-		location:        location,
-		startLocation:   startLocation,
-		currentLocation: cmdLocation,
-		eventHeader:     eventHeader,
+		location:        *qec.lastLocation,
+		startLocation:   *qec.startLocation,
+		currentLocation: *qec.currentLocation,
+		eventHeader:     qec.header,
 		jobAddTime:      time.Now(),
 	}
 
-	if ddlInfo != nil {
-		j.sourceTbls = map[string][]string{ddlInfo.tables[0][0].Schema: {ddlInfo.tables[0][0].Name}}
-		j.targetTable = ddlInfo.tables[1][0]
-	} else if sourceTbls != nil {
-		j.sourceTbls = make(map[string][]string, len(sourceTbls))
-		for schema, tbMap := range sourceTbls {
+	if len(qec.sourceTbls) != 0 {
+		j.sourceTbls = make(map[string][]string, len(qec.sourceTbls))
+		for schema, tbMap := range qec.sourceTbls {
 			if len(tbMap) > 0 {
 				j.sourceTbls[schema] = make([]string, 0, len(tbMap))
 			}
@@ -135,6 +131,9 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation,
 				j.sourceTbls[schema] = append(j.sourceTbls[schema], name)
 			}
 		}
+	} else if qec.ddlInfo != nil && len(qec.ddlInfo.tables) >= 2 {
+		j.sourceTbls = map[string][]string{qec.ddlInfo.tables[0][0].Schema: {qec.ddlInfo.tables[0][0].Name}}
+		j.targetTable = qec.ddlInfo.tables[1][0]
 	}
 
 	return j
