@@ -96,20 +96,21 @@ func (c *Causality) runCausality() {
 
 		startTime := time.Now()
 		if j.tp != flush {
+			keys := j.dmlParam.identifyKeys()
 			// detectConflict before add
-			if c.detectConflict(j.keys) {
-				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", j.keys))
+			if c.detectConflict(keys) {
+				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", keys))
 				c.causalityCh <- newCausalityJob()
 				c.reset()
 			}
-			c.add(j.keys)
+			c.add(keys)
 
 			var key string
-			if len(j.keys) > 0 {
-				key = j.keys[0]
+			if len(keys) > 0 {
+				key = keys[0]
 			}
-			j.key = c.get(key)
-			c.logger.Debug("key for keys", zap.String("key", j.key), zap.Strings("keys", j.keys))
+			j.dmlParam.key = c.get(key)
+			c.logger.Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 		} else {
 			c.reset()
 		}

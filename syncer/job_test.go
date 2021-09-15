@@ -89,20 +89,20 @@ func (t *testJobSuite) TestJob(c *C) {
 		jobStr string
 	}{
 		{
-			newDMLJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, []string{"1"}, location, location, location, ec.header),
-			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: , ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
+			newDMLJob(insert, "test", "t1", "test", "t1", nil, location, location, location, ec.header),
+			"tp: insert, ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newDDLJob(ddlInfo, []string{"create database test"}, binlog.NewLocation(""), binlog.NewLocation(""), binlog.NewLocation(""), nil, "create database test", ec.header),
-			"tp: ddl, sql: , args: [], key: , ddls: [create database test], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
+			"tp: ddl, ddls: [create database test], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newXIDJob(binlog.NewLocation(""), binlog.NewLocation(""), binlog.NewLocation("")),
-			"tp: xid, sql: , args: [], key: , ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
+			"tp: xid, ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newFlushJob(),
-			"tp: flush, sql: , args: [], key: , ddls: [], last_location: position: (, 0), gtid-set: , start_location: position: (, 0), gtid-set: , current_location: position: (, 0), gtid-set: ",
+			"tp: flush, ddls: [], last_location: position: (, 0), gtid-set: , start_location: position: (, 0), gtid-set: , current_location: position: (, 0), gtid-set: ",
 		}, {
 			newSkipJob(ec),
-			"tp: skip, sql: , args: [], key: , ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 0), gtid-set: , current_location: position: (, 0), gtid-set: ",
+			"tp: skip, ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 0), gtid-set: , current_location: position: (, 0), gtid-set: ",
 		},
 	}
 

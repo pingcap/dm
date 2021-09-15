@@ -144,9 +144,26 @@ func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job, clearFunc func())
 
 		queries := make([]string, 0, len(jobs))
 		args := make([][]interface{}, 0, len(jobs))
+		var query string
+		var arg []interface{}
 		for _, j := range jobs {
-			queries = append(queries, j.sql)
-			args = append(args, j.args)
+			// nolint:gocritic
+			if j.dmlParam.safeMode && j.dmlParam.op == update {
+				query, arg = j.dmlParam.genDeleteSQL()
+				queries = append(queries, query)
+				args = append(args, arg)
+				query, arg = j.dmlParam.genReplaceSQL()
+				queries = append(queries, query)
+				args = append(args, arg)
+			} else if j.dmlParam.safeMode && j.dmlParam.op == insert {
+				query, arg = j.dmlParam.genReplaceSQL()
+				queries = append(queries, query)
+				args = append(args, arg)
+			} else {
+				query, arg = j.dmlParam.genSQL()
+				queries = append(queries, query)
+				args = append(args, arg)
+			}
 		}
 		failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
 			t := v.(int)
@@ -183,7 +200,7 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 				}
 				return
 			}
-			if j.tp != flush && j.tp != conflict && len(j.sql) > 0 {
+			if j.tp != flush && j.tp != conflict {
 				if len(jobs) == 0 {
 					// set job TS when received first job of this batch.
 					w.lagFunc(j, workerJobIdx)
@@ -272,10 +289,10 @@ func (w *DMLWorker) runCausalityDMLWorker(causalityCh chan *job) {
 				w.causalityWg.Wait()
 			}
 		} else {
-			queueBucket := int(utils.GenHashKey(j.key)) % w.workerCount
+			queueBucket := int(utils.GenHashKey(j.dmlParam.key)) % w.workerCount
 			w.addCountFunc(false, queueBucketMapping[queueBucket], j.tp, 1, j.targetSchema, j.targetTable)
 			startTime := time.Now()
-			w.logger.Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.key))
+			w.logger.Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.dmlParam.key))
 			causalityJobChs[queueBucket] <- j
 			metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[queueBucket], w.source).Observe(time.Since(startTime).Seconds())
 		}

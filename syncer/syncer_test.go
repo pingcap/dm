@@ -927,10 +927,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				var ti *model.TableInfo
 				ti, err = syncer.getTable(tcontext.Background(), schemaName, tableName, schemaName, tableName)
 				c.Assert(err, IsNil)
-				var (
-					sqls []string
-					args [][]interface{}
-				)
+				var dmlParam []*DMLParam
 
 				prunedColumns, prunedRows, err2 := pruneGeneratedColumnDML(ti, ev.Rows)
 				c.Assert(err2, IsNil)
@@ -944,21 +941,24 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				}
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-					sqls, _, args, err = syncer.genInsertSQLs(param, nil)
+					dmlParam, err = syncer.genAndFilterInsertDMLParams(param, nil)
 					c.Assert(err, IsNil)
-					c.Assert(sqls[0], Equals, testCase.expected[idx])
-					c.Assert(args[0], DeepEquals, testCase.args[idx])
+					sql, arg := dmlParam[0].genSQL()
+					c.Assert(sql, Equals, testCase.expected[idx])
+					c.Assert(arg, DeepEquals, testCase.args[idx])
 				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 					// test with sql_mode = false only
-					sqls, _, args, err = syncer.genUpdateSQLs(param, nil, nil)
+					dmlParam, err = syncer.genAndFilterUpdateDMLParams(param, nil, nil)
 					c.Assert(err, IsNil)
-					c.Assert(sqls[0], Equals, testCase.expected[idx])
-					c.Assert(args[0], DeepEquals, testCase.args[idx])
+					sql, arg := dmlParam[0].genSQL()
+					c.Assert(sql, Equals, testCase.expected[idx])
+					c.Assert(arg, DeepEquals, testCase.args[idx])
 				case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-					sqls, _, args, err = syncer.genDeleteSQLs(param, nil)
+					dmlParam, err = syncer.genAndFilterDeleteDMLParams(param, nil)
 					c.Assert(err, IsNil)
-					c.Assert(sqls[0], Equals, testCase.expected[idx])
-					c.Assert(args[0], DeepEquals, testCase.args[idx])
+					sql, arg := dmlParam[0].genSQL()
+					c.Assert(sql, Equals, testCase.expected[idx])
+					c.Assert(arg, DeepEquals, testCase.args[idx])
 				}
 				idx++
 			default:
@@ -1108,7 +1108,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			nil,
 		}, {
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
+			"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int64(580981944116838401), "a"},
 		}, {
 			flush,
@@ -1120,7 +1120,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			nil,
 		}, {
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
+			"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int64(580981944116838402), "b"},
 		}, {
 			del,
@@ -1129,13 +1129,8 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		}, {
 			// in the first minute, safe mode is true, will split update to delete + replace
 			update,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int64(580981944116838402)},
-		}, {
-			// in the first minute, safe mode is true, will split update to delete + replace
-			update,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int64(580981944116838401), "b"},
+			"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1",
+			[]interface{}{int64(580981944116838401), "b", int64(580981944116838402)},
 		}, {
 			flush,
 			"",
@@ -1361,7 +1356,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 			nil,
 		}, {
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
+			"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
 			[]interface{}{int32(1), "a"},
 		}, {
 			del,
@@ -1369,12 +1364,8 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 			[]interface{}{int32(1)},
 		}, {
 			update,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(2)},
-		}, {
-			update,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(1), "b"},
+			"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1",
+			[]interface{}{int32(1), "b", int32(2)},
 		}, {
 			// start from this event, location passes safeModeExitLocation and safe mode should exit
 			insert,
@@ -1632,14 +1623,13 @@ type expectJob struct {
 func checkJobs(c *C, jobs []*job, expectJobs []*expectJob) {
 	c.Assert(len(jobs), Equals, len(expectJobs), Commentf("jobs = %q", jobs))
 	for i, job := range jobs {
-		c.Log(i, job.tp, job.ddls, job.sql, job.args)
-
 		c.Assert(job.tp, Equals, expectJobs[i].tp)
 		if job.tp == ddl {
 			c.Assert(job.ddls[0], Equals, expectJobs[i].sqlInJob)
-		} else {
-			c.Assert(job.sql, Equals, expectJobs[i].sqlInJob)
-			c.Assert(job.args, DeepEquals, expectJobs[i].args)
+		} else if job.tp == insert || job.tp == update || job.tp == del {
+			sql, args := job.dmlParam.genSQL()
+			c.Assert(sql, Equals, expectJobs[i].sqlInJob)
+			c.Assert(args, DeepEquals, expectJobs[i].args)
 		}
 	}
 }

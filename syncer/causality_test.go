@@ -61,38 +61,36 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	causality := newCausality(1024, "task", "source", &logger)
 	causalityCh := causality.run(jobCh)
 	testCases := []struct {
-		op   opType
-		vals [][]interface{}
+		op      opType
+		oldVals []interface{}
+		vals    []interface{}
 	}{
 		{
 			op:   insert,
-			vals: [][]interface{}{{1, 2}},
+			vals: []interface{}{1, 2},
 		},
 		{
 			op:   insert,
-			vals: [][]interface{}{{2, 3}},
+			vals: []interface{}{2, 3},
 		},
 		{
-			op:   update,
-			vals: [][]interface{}{{2, 3}, {3, 4}},
+			op:      update,
+			oldVals: []interface{}{2, 3},
+			vals:    []interface{}{3, 4},
 		},
 		{
 			op:   del,
-			vals: [][]interface{}{{1, 2}},
+			vals: []interface{}{1, 2},
 		},
 		{
 			op:   insert,
-			vals: [][]interface{}{{1, 3}},
+			vals: []interface{}{1, 3},
 		},
 	}
 	results := []opType{insert, insert, update, del, conflict, insert}
 
 	for _, tc := range testCases {
-		var keys []string
-		for _, val := range tc.vals {
-			keys = append(keys, genMultipleKeys(ti, val, "tb")...)
-		}
-		job := newDMLJob(tc.op, "", "", "", "", "", nil, keys, location, location, location, nil)
+		job := newDMLJob(tc.op, "", "", "", "", newDMLParam(tc.op, false, "", "", tc.oldVals, tc.vals, tc.oldVals, tc.vals, ti.Columns, ti), location, location, location, nil)
 		jobCh <- job
 	}
 

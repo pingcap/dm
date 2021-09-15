@@ -49,28 +49,19 @@ func extractValueFromData(data []interface{}, columns []*model.ColumnInfo) []int
 	return value
 }
 
-func (s *Syncer) genInsertSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
+func (s *Syncer) genAndFilterInsertDMLParams(param *genDMLParam, filterExprs []expression.Expression) ([]*DMLParam, error) {
 	var (
-		qualifiedName   = dbutil.TableName(param.schema, param.table)
 		dataSeq         = param.data
 		originalDataSeq = param.originalData
 		columns         = param.columns
 		ti              = param.originalTableInfo
-		sqls            = make([]string, 0, len(dataSeq))
-		keys            = make([][]string, 0, len(dataSeq))
-		values          = make([][]interface{}, 0, len(dataSeq))
+		dmlParams       = make([]*DMLParam, 0, len(dataSeq))
 	)
-
-	insertOrReplace := "INSERT INTO"
-	if param.safeMode {
-		insertOrReplace = "REPLACE INTO"
-	}
-	sql := genInsertReplace(insertOrReplace, qualifiedName, columns)
 
 RowLoop:
 	for dataIdx, data := range dataSeq {
 		if len(data) != len(columns) {
-			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(data))
+			return nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(data))
 		}
 
 		value := extractValueFromData(data, columns)
@@ -82,7 +73,7 @@ RowLoop:
 		for _, expr := range filterExprs {
 			skip, err := SkipDMLByExpression(originalValue, expr, ti.Columns)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, err
 			}
 			if skip {
 				s.filteredInsert.Add(1)
@@ -90,36 +81,24 @@ RowLoop:
 			}
 		}
 
-		ks := genMultipleKeys(ti, originalValue, qualifiedName)
-		sqls = append(sqls, sql)
-		values = append(values, value)
-		keys = append(keys, ks)
+		dmlParams = append(dmlParams, newDMLParam(insert, param.safeMode, param.schema, param.table, nil, value, nil, originalValue, columns, ti))
 	}
 
-	return sqls, keys, values, nil
+	return dmlParams, nil
 }
 
-func (s *Syncer) genUpdateSQLs(
+func (s *Syncer) genAndFilterUpdateDMLParams(
 	param *genDMLParam,
 	oldValueFilters []expression.Expression,
 	newValueFilters []expression.Expression,
-) ([]string, [][]string, [][]interface{}, error) {
+) ([]*DMLParam, error) {
 	var (
-		qualifiedName       = dbutil.TableName(param.schema, param.table)
-		data                = param.data
-		originalData        = param.originalData
-		columns             = param.columns
-		ti                  = param.originalTableInfo
-		defaultIndexColumns = findFitIndex(ti)
-		replaceSQL          string // `REPLACE INTO` SQL
-		sqls                = make([]string, 0, len(data)/2)
-		keys                = make([][]string, 0, len(data)/2)
-		values              = make([][]interface{}, 0, len(data)/2)
+		data         = param.data
+		originalData = param.originalData
+		columns      = param.columns
+		ti           = param.originalTableInfo
+		dmlParams    = make([]*DMLParam, 0, len(data)/2)
 	)
-
-	if param.safeMode {
-		replaceSQL = genInsertReplace("REPLACE INTO", qualifiedName, columns)
-	}
 
 RowLoop:
 	for i := 0; i < len(data); i += 2 {
@@ -129,11 +108,11 @@ RowLoop:
 		oriChangedData := originalData[i+1]
 
 		if len(oldData) != len(changedData) {
-			return nil, nil, nil, terror.ErrSyncerUnitDMLOldNewValueMismatch.Generate(len(oldData), len(changedData))
+			return nil, terror.ErrSyncerUnitDMLOldNewValueMismatch.Generate(len(oldData), len(changedData))
 		}
 
 		if len(oldData) != len(columns) {
-			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(oldData))
+			return nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(oldData))
 		}
 
 		oldValues := extractValueFromData(oldData, columns)
@@ -153,11 +132,11 @@ RowLoop:
 			oldExpr, newExpr := oldValueFilters[j], newValueFilters[j]
 			skip1, err := SkipDMLByExpression(oriOldValues, oldExpr, ti.Columns)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, err
 			}
 			skip2, err := SkipDMLByExpression(oriChangedValues, newExpr, ti.Columns)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, err
 			}
 			if skip1 && skip2 {
 				s.filteredUpdate.Add(1)
@@ -166,73 +145,23 @@ RowLoop:
 			}
 		}
 
-		if defaultIndexColumns == nil {
-			defaultIndexColumns = getAvailableIndexColumn(ti, oriOldValues)
-		}
-
-		ks := genMultipleKeys(ti, oriOldValues, qualifiedName)
-		ks = append(ks, genMultipleKeys(ti, oriChangedValues, qualifiedName)...)
-
-		if param.safeMode {
-			// generate delete sql from old data
-			sql, value := genDeleteSQL(qualifiedName, oriOldValues, ti.Columns, defaultIndexColumns)
-			sqls = append(sqls, sql)
-			values = append(values, value)
-			keys = append(keys, ks)
-			// generate replace sql from new data
-			sqls = append(sqls, replaceSQL)
-			values = append(values, changedValues)
-			keys = append(keys, ks)
-			continue
-		}
-
-		// NOTE: move these variables outer of `for` if needed (to reuse).
-		updateColumns := make([]*model.ColumnInfo, 0, indexColumnsCount(defaultIndexColumns))
-		updateValues := make([]interface{}, 0, indexColumnsCount(defaultIndexColumns))
-		for j := range oldValues {
-			updateColumns = append(updateColumns, columns[j])
-			updateValues = append(updateValues, changedValues[j])
-		}
-
-		// ignore no changed sql
-		if len(updateColumns) == 0 {
-			continue
-		}
-
-		value := make([]interface{}, 0, len(oldData))
-		value = append(value, updateValues...)
-
-		whereColumns, whereValues := ti.Columns, oriOldValues
-		if defaultIndexColumns != nil {
-			whereColumns, whereValues = getColumnData(ti.Columns, defaultIndexColumns, oriOldValues)
-		}
-
-		value = append(value, whereValues...)
-
-		sql := genUpdateSQL(qualifiedName, updateColumns, whereColumns, whereValues)
-		sqls = append(sqls, sql)
-		values = append(values, value)
-		keys = append(keys, ks)
+		dmlParams = append(dmlParams, newDMLParam(update, param.safeMode, param.schema, param.table, oldValues, changedValues, oriOldValues, oriChangedValues, columns, ti))
 	}
 
-	return sqls, keys, values, nil
+	return dmlParams, nil
 }
 
-func (s *Syncer) genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
+func (s *Syncer) genAndFilterDeleteDMLParams(param *genDMLParam, filterExprs []expression.Expression) ([]*DMLParam, error) {
 	var (
-		qualifiedName       = dbutil.TableName(param.schema, param.table)
-		dataSeq             = param.originalData
-		ti                  = param.originalTableInfo
-		defaultIndexColumns = findFitIndex(ti)
-		sqls                = make([]string, 0, len(dataSeq))
-		keys                = make([][]string, 0, len(dataSeq))
-		values              = make([][]interface{}, 0, len(dataSeq))
+		dataSeq   = param.originalData
+		ti        = param.originalTableInfo
+		dmlParams = make([]*DMLParam, 0, len(dataSeq))
 	)
 
 RowLoop:
 	for _, data := range dataSeq {
 		if len(data) != len(ti.Columns) {
-			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(ti.Columns), len(data))
+			return nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(ti.Columns), len(data))
 		}
 
 		value := extractValueFromData(data, ti.Columns)
@@ -240,101 +169,17 @@ RowLoop:
 		for _, expr := range filterExprs {
 			skip, err := SkipDMLByExpression(value, expr, ti.Columns)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, err
 			}
 			if skip {
 				s.filteredDelete.Add(1)
 				continue RowLoop
 			}
 		}
-
-		if defaultIndexColumns == nil {
-			defaultIndexColumns = getAvailableIndexColumn(ti, value)
-		}
-		ks := genMultipleKeys(ti, value, qualifiedName)
-
-		sql, value := genDeleteSQL(qualifiedName, value, ti.Columns, defaultIndexColumns)
-		sqls = append(sqls, sql)
-		values = append(values, value)
-		keys = append(keys, ks)
+		dmlParams = append(dmlParams, newDMLParam(del, param.safeMode, param.schema, param.table, value, nil, value, nil, ti.Columns, ti))
 	}
 
-	return sqls, keys, values, nil
-}
-
-// genInsertReplace generates a DML for `INSERT INTO` or `REPLCATE INTO`.
-// the returned SQL with placeholders for `VALUES`.
-func genInsertReplace(op, table string, columns []*model.ColumnInfo) string {
-	// NOTE: use sync.Pool to hold the builder if needed later.
-	var buf strings.Builder
-	buf.Grow(256)
-	buf.WriteString(op)
-	buf.WriteString(" " + table + " (")
-	for i, column := range columns {
-		if i != len(columns)-1 {
-			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`,")
-		} else {
-			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`)")
-		}
-	}
-	buf.WriteString(" VALUES (")
-
-	// placeholders
-	for i := range columns {
-		if i != len(columns)-1 {
-			buf.WriteString("?,")
-		} else {
-			buf.WriteString("?)")
-		}
-	}
-	return buf.String()
-}
-
-// genUpdateSQL generates a `UPDATE` SQL with `SET` and `WHERE`.
-func genUpdateSQL(table string, updateColumns, whereColumns []*model.ColumnInfo, whereValues []interface{}) string {
-	var buf strings.Builder
-	buf.Grow(2048)
-	buf.WriteString("UPDATE ")
-	buf.WriteString(table)
-	buf.WriteString(" SET ")
-
-	for i, column := range updateColumns {
-		if i == len(updateColumns)-1 {
-			fmt.Fprintf(&buf, "`%s` = ?", strings.ReplaceAll(column.Name.O, "`", "``"))
-		} else {
-			fmt.Fprintf(&buf, "`%s` = ?, ", strings.ReplaceAll(column.Name.O, "`", "``"))
-		}
-	}
-
-	buf.WriteString(" WHERE ")
-	genWhere(&buf, whereColumns, whereValues)
-	buf.WriteString(" LIMIT 1")
-	return buf.String()
-}
-
-// genDeleteSQL generates a `DELETE FROM` SQL with `WHERE`.
-func genDeleteSQL(table string, value []interface{}, columns []*model.ColumnInfo, indexColumns *model.IndexInfo) (string, []interface{}) {
-	whereColumns, whereValues := columns, value
-	if indexColumns != nil {
-		whereColumns, whereValues = getColumnData(columns, indexColumns, value)
-	}
-
-	var buf strings.Builder
-	buf.Grow(1024)
-	buf.WriteString("DELETE FROM ")
-	buf.WriteString(table)
-	buf.WriteString(" WHERE ")
-	genWhere(&buf, whereColumns, whereValues)
-	buf.WriteString(" LIMIT 1")
-
-	return buf.String(), whereValues
-}
-
-func indexColumnsCount(index *model.IndexInfo) int {
-	if index == nil {
-		return 0
-	}
-	return len(index.Columns)
+	return dmlParams, nil
 }
 
 func castUnsigned(data interface{}, ft *types.FieldType) interface{} {
@@ -412,62 +257,6 @@ func columnValue(value interface{}, ft *types.FieldType) string {
 	return data
 }
 
-func genKeyList(table string, columns []*model.ColumnInfo, dataSeq []interface{}) string {
-	var buf strings.Builder
-	for i, data := range dataSeq {
-		if data == nil {
-			log.L().Debug("ignore null value", zap.String("column", columns[i].Name.O), zap.String("table", table))
-			continue // ignore `null` value.
-		}
-		// one column key looks like:`column_val.column_name.`
-		buf.WriteString(columnValue(data, &columns[i].FieldType))
-		buf.WriteString(".")
-		buf.WriteString(columns[i].Name.String())
-		buf.WriteString(".")
-	}
-	if buf.Len() == 0 {
-		log.L().Debug("all value are nil, no key generated", zap.String("table", table))
-		return "" // all values are `null`.
-	}
-	buf.WriteString(table)
-	return buf.String()
-}
-
-func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []string {
-	multipleKeys := make([]string, 0, len(ti.Indices)+1)
-	if ti.PKIsHandle {
-		if pk := ti.GetPkColInfo(); pk != nil {
-			cols := []*model.ColumnInfo{pk}
-			vals := []interface{}{value[pk.Offset]}
-			multipleKeys = append(multipleKeys, genKeyList(table, cols, vals))
-		}
-	}
-
-	for _, indexCols := range ti.Indices {
-		// PK also has a true Unique
-		if !indexCols.Unique {
-			continue
-		}
-		cols, vals := getColumnData(ti.Columns, indexCols, value)
-		key := genKeyList(table, cols, vals)
-		if len(key) > 0 { // ignore `null` value.
-			multipleKeys = append(multipleKeys, key)
-			// TODO: break here? one unique index is enough?
-		} else {
-			log.L().Debug("ignore empty key", zap.String("table", table))
-		}
-	}
-
-	if len(multipleKeys) == 0 {
-		// use table name as key if no key generated (no PK/UK),
-		// no concurrence for rows in the same table.
-		log.L().Debug("use table name as the key", zap.String("table", table))
-		multipleKeys = append(multipleKeys, table)
-	}
-
-	return multipleKeys
-}
-
 func findFitIndex(ti *model.TableInfo) *model.IndexInfo {
 	for _, idx := range ti.Indices {
 		if idx.Primary {
@@ -539,21 +328,6 @@ func getColumnData(columns []*model.ColumnInfo, indexColumns *model.IndexInfo, d
 	return cols, values
 }
 
-func genWhere(buf *strings.Builder, columns []*model.ColumnInfo, data []interface{}) {
-	for i, col := range columns {
-		if i != 0 {
-			buf.WriteString(" AND ")
-		}
-		buf.WriteByte('`')
-		buf.WriteString(strings.ReplaceAll(col.Name.O, "`", "``"))
-		if data[i] == nil {
-			buf.WriteString("` IS ?")
-		} else {
-			buf.WriteString("` = ?")
-		}
-	}
-}
-
 func (s *Syncer) mappingDML(schema, table string, ti *model.TableInfo, data [][]interface{}) ([][]interface{}, error) {
 	if s.columnMapping == nil {
 		return data, nil
@@ -618,4 +392,310 @@ func pruneGeneratedColumnDML(ti *model.TableInfo, data [][]interface{}) ([]*mode
 		rows = append(rows, value)
 	}
 	return cols, rows, nil
+}
+
+// DMLParam stores param for DML.
+type DMLParam struct {
+	schema          string
+	table           string
+	op              opType
+	oldValues       []interface{} // for update SQL
+	values          []interface{}
+	columns         []*model.ColumnInfo
+	ti              *model.TableInfo
+	originOldValues []interface{} // use to gen `WHERE` for update SQL
+	originValues    []interface{} // use to gen `WHERE` for update/delete SQL
+	safeMode        bool
+	key             string // use to detect causality
+}
+
+func newDMLParam(op opType, safeMode bool, schema, table string, oldValues, values, originOldValues, originValues []interface{}, columns []*model.ColumnInfo, ti *model.TableInfo) *DMLParam {
+	return &DMLParam{
+		op:              op,
+		safeMode:        safeMode,
+		schema:          schema,
+		table:           table,
+		oldValues:       oldValues,
+		values:          values,
+		columns:         columns,
+		ti:              ti,
+		originOldValues: originOldValues,
+		originValues:    originValues,
+	}
+}
+
+// qualifiedName returns `dbName`.`tbName` for a DML.
+func (dmlParam *DMLParam) qualifiedName() string {
+	return dbutil.TableName(dmlParam.schema, dmlParam.table)
+}
+
+// identifyColumns gets unique not null columns.
+func (dmlParam *DMLParam) identifyColumns() []string {
+	if defaultIndexColumns := findFitIndex(dmlParam.ti); defaultIndexColumns != nil {
+		columns := make([]string, 0, len(defaultIndexColumns.Columns))
+		for _, column := range defaultIndexColumns.Columns {
+			columns = append(columns, column.Name.O)
+		}
+		return columns
+	}
+	return nil
+}
+
+// identifyValues gets values of unique not null columns.
+func (dmlParam *DMLParam) identifyValues() []interface{} {
+	if defaultIndexColumns := findFitIndex(dmlParam.ti); defaultIndexColumns != nil {
+		values := make([]interface{}, 0, len(defaultIndexColumns.Columns))
+		for _, column := range defaultIndexColumns.Columns {
+			values = append(values, dmlParam.values[column.Offset])
+		}
+		return values
+	}
+	return nil
+}
+
+// // oldIdentifyValues gets old values of unique not null columns.
+// func (dmlParam *DMLParam) oldIdentifyValues() []interface{} {
+// 	if defaultIndexColumns := findFitIndex(dmlParam.ti); defaultIndexColumns != nil {
+// 		values := make([]interface{}, 0, len(defaultIndexColumns.Columns))
+// 		for _, column := range defaultIndexColumns.Columns {
+// 			values = append(values, dmlParam.oldValues[column.Offset])
+// 		}
+// 		return values
+// 	}
+// 	return nil
+// }
+
+// identifyKey use identifyValues to gen key.
+// This is used for compacted.
+// PK or (UK + NOT NULL).
+func (dmlParam *DMLParam) identifyKey() string {
+	return genKey(dmlParam.identifyValues())
+}
+
+// identifyKeys gens keys by unique not null value.
+// This is used for causality.
+// PK or (UK + NOT NULL) or (UK + NULL + NO NULL VALUE).
+func (dmlParam *DMLParam) identifyKeys() []string {
+	var keys []string
+	if dmlParam.originOldValues != nil {
+		keys = append(keys, genMultipleKeys(dmlParam.ti, dmlParam.originOldValues, dmlParam.qualifiedName())...)
+	}
+	if dmlParam.originValues != nil {
+		keys = append(keys, genMultipleKeys(dmlParam.ti, dmlParam.originValues, dmlParam.qualifiedName())...)
+	}
+	return keys
+}
+
+// // oldIdentifyKey use oldIdentifyValues to gen key.
+// func (dmlParam *DMLParam) oldIdentifyKey() string {
+// 	return genKey(dmlParam.oldIdentifyValues())
+// }
+
+// whereColumnsAndValues gets columns and values of unique column with not null value.
+func (dmlParam *DMLParam) whereColumnsAndValues() ([]string, []interface{}) {
+	columns, values := dmlParam.ti.Columns, dmlParam.originOldValues
+
+	defaultIndexColumns := findFitIndex(dmlParam.ti)
+	if defaultIndexColumns == nil {
+		defaultIndexColumns = getAvailableIndexColumn(dmlParam.ti, dmlParam.originOldValues)
+	}
+	if defaultIndexColumns != nil {
+		columns, values = getColumnData(dmlParam.ti.Columns, defaultIndexColumns, dmlParam.originOldValues)
+	}
+
+	columnNames := make([]string, 0, len(columns))
+	for _, column := range columns {
+		columnNames = append(columnNames, column.Name.O)
+	}
+	return columnNames, values
+}
+
+// genKey gens key by values e.g. "a.1.b".
+func genKey(values []interface{}) string {
+	builder := new(strings.Builder)
+	for i, v := range values {
+		if i != 0 {
+			builder.WriteString(".")
+		}
+		fmt.Fprintf(builder, "%v", v)
+	}
+
+	return builder.String()
+}
+
+func genKeyList(table string, columns []*model.ColumnInfo, dataSeq []interface{}) string {
+	var buf strings.Builder
+	for i, data := range dataSeq {
+		if data == nil {
+			log.L().Debug("ignore null value", zap.String("column", columns[i].Name.O), zap.String("table", table))
+			continue // ignore `null` value.
+		}
+		// one column key looks like:`column_val.column_name.`
+		buf.WriteString(columnValue(data, &columns[i].FieldType))
+		buf.WriteString(".")
+		buf.WriteString(columns[i].Name.O)
+		buf.WriteString(".")
+	}
+	if buf.Len() == 0 {
+		log.L().Debug("all value are nil, no key generated", zap.String("table", table))
+		return "" // all values are `null`.
+	}
+	buf.WriteString(table)
+	return buf.String()
+}
+
+func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []string {
+	multipleKeys := make([]string, 0, len(ti.Indices)+1)
+	if ti.PKIsHandle {
+		if pk := ti.GetPkColInfo(); pk != nil {
+			cols := []*model.ColumnInfo{pk}
+			vals := []interface{}{value[pk.Offset]}
+			multipleKeys = append(multipleKeys, genKeyList(table, cols, vals))
+		}
+	}
+
+	for _, indexCols := range ti.Indices {
+		// PK also has a true Unique
+		if !indexCols.Unique {
+			continue
+		}
+		cols, vals := getColumnData(ti.Columns, indexCols, value)
+		key := genKeyList(table, cols, vals)
+		if len(key) > 0 { // ignore `null` value.
+			multipleKeys = append(multipleKeys, key)
+			// TODO: break here? one unique index is enough?
+		} else {
+			log.L().Debug("ignore empty key", zap.String("table", table))
+		}
+	}
+
+	if len(multipleKeys) == 0 {
+		// use table name as key if no key generated (no PK/UK),
+		// no concurrence for rows in the same table.
+		log.L().Debug("use table name as the key", zap.String("table", table))
+		multipleKeys = append(multipleKeys, table)
+	}
+
+	return multipleKeys
+}
+
+// // updateIdentify check whether a update sql update its identify keys.
+// func (dmlParam *DMLParam) updateIdentify() bool {
+// 	if len(dmlParam.oldValues) == 0 {
+// 		return false
+// 	}
+//
+// 	values := dmlParam.identifyValues()
+// 	oldValues := dmlParam.oldIdentifyValues()
+//
+// 	for i := 0; i < len(values); i++ {
+// 		if values[i] != oldValues[i] {
+// 			return true
+// 		}
+// 	}
+//
+// 	return false
+// }
+
+func (dmlParam *DMLParam) genWhere(buf *strings.Builder) []interface{} {
+	whereColumns, whereValues := dmlParam.whereColumnsAndValues()
+
+	for i, col := range whereColumns {
+		if i != 0 {
+			buf.WriteString(" AND ")
+		}
+		buf.WriteByte('`')
+		buf.WriteString(strings.ReplaceAll(col, "`", "``"))
+		if whereValues[i] == nil {
+			buf.WriteString("` IS ?")
+		} else {
+			buf.WriteString("` = ?")
+		}
+	}
+	return whereValues
+}
+
+// genDeleteSQL generates a `UPDATE` SQL with `WHERE`.
+func (dmlParam *DMLParam) genUpdateSQL() (string, []interface{}) {
+	var buf strings.Builder
+	buf.Grow(2048)
+	buf.WriteString("UPDATE ")
+	buf.WriteString(dmlParam.qualifiedName())
+	buf.WriteString(" SET ")
+
+	for i, column := range dmlParam.columns {
+		if i == len(dmlParam.columns)-1 {
+			fmt.Fprintf(&buf, "`%s` = ?", strings.ReplaceAll(column.Name.O, "`", "``"))
+		} else {
+			fmt.Fprintf(&buf, "`%s` = ?, ", strings.ReplaceAll(column.Name.O, "`", "``"))
+		}
+	}
+
+	buf.WriteString(" WHERE ")
+	whereArgs := dmlParam.genWhere(&buf)
+	buf.WriteString(" LIMIT 1")
+
+	args := dmlParam.values
+	args = append(args, whereArgs...)
+	return buf.String(), args
+}
+
+// genDeleteSQL generates a `DELETE FROM` SQL with `WHERE`.
+func (dmlParam *DMLParam) genDeleteSQL() (string, []interface{}) {
+	var buf strings.Builder
+	buf.Grow(1024)
+	buf.WriteString("DELETE FROM ")
+	buf.WriteString(dmlParam.qualifiedName())
+	buf.WriteString(" WHERE ")
+	whereArgs := dmlParam.genWhere(&buf)
+	buf.WriteString(" LIMIT 1")
+
+	return buf.String(), whereArgs
+}
+
+func (dmlParam *DMLParam) genInsertReplaceSQL(op string) (string, []interface{}) {
+	var buf strings.Builder
+	buf.Grow(256)
+	buf.WriteString(op)
+	buf.WriteString(" " + dmlParam.qualifiedName() + " (")
+	for i, column := range dmlParam.columns {
+		if i != len(dmlParam.columns)-1 {
+			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`,")
+		} else {
+			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`)")
+		}
+	}
+	buf.WriteString(" VALUES (")
+
+	// placeholders
+	for i := range dmlParam.columns {
+		if i != len(dmlParam.columns)-1 {
+			buf.WriteString("?,")
+		} else {
+			buf.WriteString("?)")
+		}
+	}
+	return buf.String(), dmlParam.values
+}
+
+// genInsertSQL generates a DML for `INSERT INTO`.
+func (dmlParam *DMLParam) genInsertSQL() (string, []interface{}) {
+	return dmlParam.genInsertReplaceSQL("INSERT INTO")
+}
+
+// genReplaceSQL generates a DML for `REPLACE INTO`.
+func (dmlParam *DMLParam) genReplaceSQL() (string, []interface{}) {
+	return dmlParam.genInsertReplaceSQL("REPLACE INTO")
+}
+
+func (dmlParam *DMLParam) genSQL() (sql string, args []interface{}) {
+	switch dmlParam.op {
+	case insert:
+		return dmlParam.genInsertSQL()
+	case update:
+		return dmlParam.genUpdateSQL()
+	case del:
+		return dmlParam.genDeleteSQL()
+	}
+	return
 }

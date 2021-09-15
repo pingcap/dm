@@ -70,10 +70,7 @@ type job struct {
 	sourceTbl       map[string][]string
 	targetSchema    string
 	targetTable     string
-	sql             string
-	args            []interface{}
-	key             string
-	keys            []string
+	dmlParam        *DMLParam
 	retry           bool
 	location        binlog.Location // location of last received (ROTATE / QUERY / XID) event, for global/table checkpoint
 	startLocation   binlog.Location // start location of the sql in binlog, for handle_error
@@ -85,23 +82,25 @@ type job struct {
 	jobAddTime  time.Time // job commit time
 }
 
-func (j *job) String() string {
-	// only output some important information, maybe useful in execution.
-	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.startLocation, j.currentLocation)
+func (j *job) clone() *job {
+	newJob := &job{}
+	*newJob = *j
+	return newJob
 }
 
-func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{},
-	keys []string, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader) *job {
-	return &job{
-		tp:           tp,
-		sourceTbl:    map[string][]string{sourceSchema: {sourceTable}},
-		targetSchema: targetSchema,
-		targetTable:  targetTable,
-		sql:          sql,
-		args:         args,
-		keys:         keys,
-		retry:        true,
+func (j *job) String() string {
+	// only output some important information, maybe useful in execution.
+	return fmt.Sprintf("tp: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.ddls, j.location, j.startLocation, j.currentLocation)
+}
 
+func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable string, dmlParam *DMLParam, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader) *job {
+	return &job{
+		tp:              tp,
+		sourceTbl:       map[string][]string{sourceSchema: {sourceTable}},
+		targetSchema:    targetSchema,
+		targetTable:     targetTable,
+		dmlParam:        dmlParam,
+		retry:           true,
 		location:        location,
 		startLocation:   startLocation,
 		currentLocation: cmdLocation,

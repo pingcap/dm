@@ -2080,10 +2080,8 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	var (
-		sqls    []string
-		keys    [][]string
-		args    [][]interface{}
-		jobType opType
+		dmlParams []*DMLParam
+		jobType   opType
 	)
 
 	param := &genDMLParam{
@@ -2103,7 +2101,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode
-		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
+		dmlParams, err = s.genAndFilterInsertDMLParams(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen insert sqls failed, originSchema: %s, originTable: %s, schema: %s, table: %s", originSchema, originTable, schemaName, tableName)
 		}
@@ -2117,7 +2115,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode
-		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
+		dmlParams, err = s.genAndFilterUpdateDMLParams(param, oldExprFilter, newExprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen update sqls failed, originSchema: %s, originTable: %s, schema: %s, table: %s", originSchema, originTable, schemaName, tableName)
 		}
@@ -2130,7 +2128,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err2
 		}
 
-		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
+		dmlParams, err = s.genAndFilterDeleteDMLParams(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen delete sqls failed, originSchema: %s, originTable: %s, schema: %s, table: %s", originSchema, originTable, schemaName, tableName)
 		}
@@ -2143,17 +2141,8 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	startTime := time.Now()
-	for i := range sqls {
-		var arg []interface{}
-		var key []string
-		if args != nil {
-			arg = args[i]
-		}
-		if keys != nil {
-			key = keys[i]
-		}
-
-		job := newDMLJob(jobType, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
+	for i := range dmlParams {
+		job := newDMLJob(jobType, originSchema, originTable, schemaName, tableName, dmlParams[i], *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err
