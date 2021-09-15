@@ -152,6 +152,7 @@ type Syncer struct {
 	isTransactionEnd    bool
 	waitTransactionLock sync.Mutex
 
+	compactor *Compactor
 	causality *Causality
 	dmlWorker *DMLWorker
 
@@ -246,6 +247,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.binlogSizeCount.Store(0)
 	syncer.lastCount.Store(0)
 	syncer.count.Store(0)
+	syncer.compactor = newCompactor(cfg.WorkerCount*cfg.QueueSize, cfg.WorkerCount*cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
 	syncer.causality = newCausality(cfg.WorkerCount*cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
 	syncer.dmlWorker = newDMLWorker(cfg.Batch, cfg.WorkerCount, cfg.QueueSize, &logger, cfg.Name, cfg.SourceID, cfg.WorkerName, syncer.successFunc, syncer.fatalFunc, syncer.updateReplicationJobTS, syncer.addCount)
 	syncer.done = nil
@@ -1305,9 +1307,9 @@ func (s *Syncer) syncDML(tctx *tcontext.Context) {
 		s.tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
 	})
 
-	// TODO: add compactor
-	causalityCh := s.causality.run(s.dmlJobCh)
-	flushCount, flushCh := s.dmlWorker.run(tctx, s.toDBConns, causalityCh)
+	compactedCh, nonCompactedCh, drainCh := s.compactor.run(s.dmlJobCh)
+	causalityCh := s.causality.run(nonCompactedCh)
+	flushCount, flushCh := s.dmlWorker.run(tctx, s.toDBConns,compactedCh,drainCh, causalityCh)
 
 	// wait all worker flushed
 	// use counter is enough since we only add new flush job after previous flush job done

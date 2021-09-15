@@ -54,6 +54,8 @@ type DMLWorker struct {
 	addCountFunc func(bool, string, opType, int64, string, string)
 
 	// channel
+	compactedCh chan map[opType][]*job
+	drainCh     chan struct{}
 	causalityCh chan *job
 	flushCh     chan *job
 }
@@ -81,9 +83,11 @@ func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, 
 }
 
 // run runs dml workers, return worker count and flush job channel.
-func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, causalityCh chan *job) (int, chan *job) {
+func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, compactedCh chan map[opType][]*job, drainCh chan struct{}, nonCompactedCh chan *job, causalityCh chan *job) (int, chan *job) {
 	w.tctx = tctx
 	w.toDBConns = toDBConns
+	w.compactedCh = compactedCh
+	w.drainCh = drainCh
 	w.causalityCh = causalityCh
 	w.flushCh = make(chan *job)
 

@@ -14,6 +14,8 @@
 package syncer
 
 import (
+	"sync"
+
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -38,13 +40,8 @@ type Compactor struct {
 	source string
 }
 
-// RunCompactor creates a new Compactor and run.
-func RunCompactor(chanSize, bufferSize int, task, source string, in chan *job, pLogger *log.Logger) *Compactor {
+func newCompactor(chanSize, bufferSize int, task, source string, pLogger *log.Logger) *Compactor {
 	compactor := &Compactor{
-		compactedCh:     make(chan map[opType][]*job),
-		nonCompactedCh:  make(chan *job, chanSize),
-		drainCh:         make(chan struct{}, 10),
-		in:              in,
 		chanSize:        chanSize,
 		bufferSize:      bufferSize,
 		logger:          pLogger.WithFields(zap.String("component", "compactor")),
@@ -52,11 +49,31 @@ func RunCompactor(chanSize, bufferSize int, task, source string, in chan *job, p
 		task:            task,
 		source:          source,
 	}
-	go compactor.run()
 	return compactor
 }
 
-func (c *Compactor) run() {
+func (c *Compactor) run(in chan *job) (chan map[opType][]*job, chan *job, chan struct{}) {
+	c.in = in
+	c.compactedCh = make(chan map[opType][]*job)
+	c.nonCompactedCh = make(chan *job, c.chanSize)
+	c.drainCh = make(chan struct{})
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.runCompactor()
+	}()
+
+	go func() {
+		defer c.close()
+		wg.Wait()
+	}()
+	return c.compactedCh, c.nonCompactedCh, c.drainCh
+}
+
+func (c *Compactor) runCompactor() {
 	defer c.close()
 
 	for {
