@@ -170,12 +170,12 @@ if __name__ == "__main__":
         "start_relay_failed": start_relay_failed,
         "start_relay_success": start_relay_success,
         "start_relay_success_with_two_worker": start_relay_success_with_two_worker,
+        "stop_relay_failed": stop_relay_failed,
+        "stop_relay_success": stop_relay_success,
         "get_source_status_failed": get_source_status_failed,
         "get_source_status_success": get_source_status_success,
         "get_source_status_success_with_relay": get_source_status_success_with_relay,
         "get_source_status_success_no_relay": get_source_status_success_no_relay,
-        "stop_relay_failed": stop_relay_failed,
-        "stop_relay_success": stop_relay_success,
     }
 
     func = FUNC_MAP[sys.argv[1]]
