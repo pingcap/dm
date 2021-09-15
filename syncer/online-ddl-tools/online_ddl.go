@@ -379,17 +379,17 @@ func (s *Storage) CheckAndUpdate(
 // (_*).*_old ghost trash table
 // we don't support `--new-table-name` flag.
 type RealOnlinePlugin struct {
-	storage   *Storage
-	shadowReg *regexp.Regexp
-	trashReg  *regexp.Regexp
+	storage    *Storage
+	shadowRegs []*regexp.Regexp
+	trashRegs  []*regexp.Regexp
 }
 
 // NewRealOnlinePlugin returns real online plugin.
-func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig, shadowReg, trashReg *regexp.Regexp) (OnlinePlugin, error) {
+func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig, shadowRegs, trashRegs []*regexp.Regexp) (OnlinePlugin, error) {
 	r := &RealOnlinePlugin{
-		storage:   NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
-		shadowReg: shadowReg,
-		trashReg:  trashReg,
+		storage:    NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
+		shadowRegs: shadowRegs,
+		trashRegs:  trashRegs,
 	}
 
 	return r, r.storage.Init(tctx)
@@ -491,26 +491,34 @@ func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) 
 // TableType implements interface.
 func (r *RealOnlinePlugin) TableType(table string) TableType {
 	// 5 is _ _gho/ghc/del or _ _old/new
-	if r.shadowReg.MatchString(table) {
-		return GhostTable
+	for _, shadowReg := range r.shadowRegs {
+		if shadowReg.MatchString(table) {
+			return GhostTable
+		}
 	}
 
-	if r.trashReg.MatchString(table) {
-		return TrashTable
+	for _, trashReg := range r.trashRegs {
+		if trashReg.MatchString(table) {
+			return TrashTable
+		}
 	}
 	return RealTable
 }
 
 // RealName implements interface.
 func (r *RealOnlinePlugin) RealName(table string) string {
-	shadowRes := r.shadowReg.FindStringSubmatch(table)
-	if len(shadowRes) > 1 {
-		return shadowRes[1]
+	for _, shadowReg := range r.shadowRegs {
+		shadowRes := shadowReg.FindStringSubmatch(table)
+		if len(shadowRes) > 1 {
+			return shadowRes[1]
+		}
 	}
 
-	trashRes := r.trashReg.FindStringSubmatch(table)
-	if len(trashRes) > 1 {
-		return trashRes[1]
+	for _, trashReg := range r.trashRegs {
+		trashRes := trashReg.FindStringSubmatch(table)
+		if len(trashRes) > 1 {
+			return trashRes[1]
+		}
 	}
 	return table
 }

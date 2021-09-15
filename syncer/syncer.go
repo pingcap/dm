@@ -334,15 +334,26 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 
 	if s.cfg.OnlineDDL {
-		shadowReg, err := regexp.Compile(fmt.Sprintf(`^_(.+)(?:%s)$`, strings.Join(s.cfg.ShadowTableRule, "|")))
-		if err != nil {
-			return err
+		var (
+			shadowRegs []*regexp.Regexp
+			trashRegs  []*regexp.Regexp
+		)
+		for _, sg := range s.cfg.ShadowTableRule {
+			shadowReg, err := regexp.Compile(sg)
+			if err != nil {
+				return err
+			}
+			shadowRegs = append(shadowRegs, shadowReg)
 		}
-		trashReg, err := regexp.Compile(fmt.Sprintf(`^_(.+)(?:%s)$`, strings.Join(s.cfg.TrashTableRule, "|")))
-		if err != nil {
-			return err
+		for _, tg := range s.cfg.TrashTableRule {
+			trashReg, err := regexp.Compile(tg)
+			if err != nil {
+				return err
+			}
+			trashRegs = append(trashRegs, trashReg)
 		}
-		s.onlineDDL, err = onlineddl.NewRealOnlinePlugin(tctx, s.cfg, shadowReg, trashReg)
+
+		s.onlineDDL, err = onlineddl.NewRealOnlinePlugin(tctx, s.cfg, shadowRegs, trashRegs)
 		if err != nil {
 			return err
 		}

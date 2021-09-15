@@ -279,11 +279,11 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	}
 
 	if len(c.ShadowTableRule) == 0 {
-		c.ShadowTableRule = []string{"_gho", "_new"}
+		c.ShadowTableRule = []string{"^_(.+)_(?:new|gho)$"}
 	}
 
 	if len(c.TrashTableRule) == 0 {
-		c.TrashTableRule = []string{"_ghc", "_del", "_old"}
+		c.TrashTableRule = []string{"^_(.+)_(?:ghc|del|old)$"}
 	}
 
 	if c.MetaSchema == "" {
