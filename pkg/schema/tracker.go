@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	tidbConfig "github.com/pingcap/tidb/config"
@@ -29,6 +30,7 @@ import (
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/session"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/store/mockstore"
 	"go.uber.org/zap"
 
@@ -40,8 +42,6 @@ import (
 const (
 	// TiDBClusteredIndex is the variable name for clustered index.
 	TiDBClusteredIndex = "tidb_enable_clustered_index"
-	// TiDBChangeColumnType is the variable name for column type changing.
-	TiDBChangeColumnType = "tidb_enable_change_column_type"
 )
 
 var (
@@ -49,8 +49,7 @@ var (
 	// we always using OFF tidb_enable_clustered_index unless user set it in config.
 	downstreamVars    = []string{"sql_mode", "tidb_skip_utf8_check"}
 	defaultGlobalVars = map[string]string{
-		TiDBClusteredIndex:   "OFF",
-		TiDBChangeColumnType: "ON", // NOTE The default value of tidb_enable_change_column_type was changed to ON after the release of TiDB 5.1.
+		TiDBClusteredIndex: "OFF",
 	}
 )
 
@@ -132,13 +131,18 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 	}
 
 	for k, v := range sessionCfg {
-		err = se.GetSessionVars().SetSystemVar(k, v)
+		err = se.GetSessionVars().SetSystemVarWithRelaxedValidation(k, v)
 		if err != nil {
+			// when user set some unsupported variable, we just ignore it
+			if terror.ErrorEqual(err, variable.ErrUnknownSystemVar) {
+				log.L().Warn("can not set this variable", zap.Error(err))
+				continue
+			}
 			return nil, err
 		}
 	}
 	for k, v := range globalVarsToSet {
-		err = se.GetSessionVars().SetSystemVar(k, v)
+		err = se.GetSessionVars().SetSystemVarWithRelaxedValidation(k, v)
 		if err != nil {
 			return nil, err
 		}
