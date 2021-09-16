@@ -197,10 +197,7 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 		sourceStatus := openapi.SourceStatus{SourceName: sourceName, WorkerName: workerStatus.SourceStatus.Worker}
 		if !workerStatus.Result {
 			sourceStatus.ErrorMsg = &workerStatus.Msg
-			resp.Data = append(resp.Data, sourceStatus)
-			continue
-		}
-		if relayStatus := workerStatus.SourceStatus.GetRelayStatus(); relayStatus != nil {
+		} else if relayStatus := workerStatus.SourceStatus.GetRelayStatus(); relayStatus != nil {
 			sourceStatus.RelayStatus = &openapi.RelayStatus{
 				MasterBinlog:       relayStatus.MasterBinlog,
 				MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
