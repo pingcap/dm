@@ -60,10 +60,6 @@ func (s *testFilterSuite) TestFilterQueryEvent(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(skipped, IsTrue)
 
-	type smallCase struct {
-		sql     string
-		skipped bool
-	}
 	// test binlog filter
 	filterRules := []*bf.BinlogEventRule{
 		{

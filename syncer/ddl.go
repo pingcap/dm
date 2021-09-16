@@ -56,14 +56,14 @@ func (s *Syncer) preprocessDDL(qec *queryEventContext) error {
 			return terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 		}
 
-		tableNames, err2 := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
+		tables, err2 := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
 		if err != nil {
 			return err
 		}
 
 		// get real tableNames before apply block-allow list
 		realTables := []*filter.Table{}
-		for _, table := range tableNames {
+		for _, table := range tables {
 			var realName string
 			if s.onlineDDL != nil {
 				realName = s.onlineDDL.RealName(table.Name)
@@ -85,7 +85,9 @@ func (s *Syncer) preprocessDDL(qec *queryEventContext) error {
 			qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", qec.ddlSchema))
 			if s.onlineDDL != nil {
 				// nolint:errcheck
-				s.onlineDDL.Apply(qec.tctx, tableNames, "", stmt)
+				// when skip ddl, apply empty ddl for onlineDDL
+				// otherwise it cause an error once meet the rename ddl of onlineDDL
+				s.onlineDDL.Apply(qec.tctx, tables, "", stmt)
 			}
 			continue
 		}
@@ -95,7 +97,7 @@ func (s *Syncer) preprocessDDL(qec *queryEventContext) error {
 		}
 
 		// filter and store ghost table ddl, transform online ddl
-		ss, err := s.handleOnlineDDL(qec, tableNames, sql, stmt)
+		ss, err := s.handleOnlineDDL(qec, tables, sql, stmt)
 		if err != nil {
 			return err
 		}
