@@ -83,6 +83,8 @@ function run() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
 	check_log_contain_with_retry 'recover relay writer' $WORK_DIR/worker2/log/dm-worker.log
+    truncate -s 0 $WORK_DIR/worker2/log/dm-worker.log
+
 	run_sql_source1 'insert into sharding22.t1 values(16, "l", 16, 16, 16);'
 	run_sql_source2 'insert into sharding22.t1 values(17, "m", 17, 17, 17);'
 
@@ -113,22 +115,21 @@ function run() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status -s $SOURCE_ID2" \
-		"flush local meta" 1 \
-		"no such file or directory" 1 \
-		"there aren't any data under relay log directory" 1
-	#	"\"stage\": \"Running\"" 2
+		"\"stage\": \"Running\"" 2
 
-	#	run_sql_source1 'insert into sharding22.t1 values(22, "s", 22, 22, 22, 22);'
-	#	run_sql_source2 'insert into sharding22.t1 values(23, "s", 23, 23, 23, 23);'
-	#
-	#	# use sync_diff_inspector to check data now!
-	#	echo "check sync diff for the increment replication"
-	#	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-	#
-	#	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-	#		"query-status test" \
-	#		"\"stage\": \"Running\"" 3 \
-	#		"\"unit\": \"Sync\"" 2
+	check_log_contain_with_retry 'will try purge whole relay dir for new relay log' $WORK_DIR/worker2/log/dm-worker.log
+
+	run_sql_source1 'insert into sharding22.t1 values(22, "s", 22, 22, 22, 22);'
+	run_sql_source2 'insert into sharding22.t1 values(23, "s", 23, 23, 23, 23);'
+
+	# use sync_diff_inspector to check data now!
+	echo "check sync diff for the increment replication"
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status test" \
+		"\"stage\": \"Running\"" 3 \
+		"\"unit\": \"Sync\"" 2
 }
 
 cleanup_data db_target
