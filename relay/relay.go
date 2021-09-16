@@ -252,7 +252,7 @@ func (r *Relay) process(ctx context.Context) error {
 
 			uuid, _, err3 := utils.ParseSuffixForUUID(uuidWithSuffix)
 			if err3 != nil {
-				r.logger.Error("parse suffix for UUID when relay meta oudated", zap.String("UUID", uuidWithSuffix), zap.Error(err))
+				r.logger.Error("parse suffix for UUID when relay meta outdated", zap.String("UUID", uuidWithSuffix), zap.Error(err))
 				return err3
 			}
 
