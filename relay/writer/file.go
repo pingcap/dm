@@ -22,6 +22,7 @@ import (
 
 	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -409,6 +410,12 @@ func (w *FileWriter) doRecovering(ctx context.Context) (RecoverResult, error) {
 		return RecoverResult{}, terror.Annotatef(err, "get latest pos/GTID set from %s", filename)
 	}
 
+	// mock file truncated by recover
+	failpoint.Inject("MockRecoverRelayWriter", func() {
+		w.logger.Info("mock recover relay writer")
+		failpoint.Goto("bypass")
+	})
+
 	// in most cases, we think the file is fine, so compare the size is simpler.
 	if fs.Size() == latestPos {
 		return RecoverResult{
@@ -419,6 +426,8 @@ func (w *FileWriter) doRecovering(ctx context.Context) (RecoverResult, error) {
 	} else if fs.Size() < latestPos {
 		return RecoverResult{}, terror.ErrRelayWriterLatestPosGTFileSize.Generate(latestPos, fs.Size())
 	}
+
+	failpoint.Label("bypass")
 
 	// truncate the file
 	f, err := os.OpenFile(filename, os.O_WRONLY, 0o644)
