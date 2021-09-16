@@ -412,7 +412,7 @@ func (w *FileWriter) doRecovering(ctx context.Context) (RecoverResult, error) {
 
 	// mock file truncated by recover
 	failpoint.Inject("MockRecoverRelayWriter", func() {
-		w.logger.Info("recover relay writer")
+		w.logger.Info("mock recover relay writer")
 		failpoint.Goto("bypass")
 	})
 

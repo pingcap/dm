@@ -82,7 +82,7 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-	check_log_contain_with_retry 'recover relay writer' $WORK_DIR/worker2/log/dm-worker.log
+	check_log_contain_with_retry 'mock recover relay writer' $WORK_DIR/worker2/log/dm-worker.log
 	truncate -s 0 $WORK_DIR/worker2/log/dm-worker.log
 
 	run_sql_source1 'insert into sharding22.t1 values(16, "l", 16, 16, 16);'
