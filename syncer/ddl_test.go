@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -416,8 +417,22 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		tctx: tctx,
 	}
 
+	var (
+		shadowRegs []*regexp.Regexp
+		trashRegs  []*regexp.Regexp
+	)
+	for _, sg := range s.cfg.ShadowTableRule {
+		shadowReg := regexp.MustCompile(sg)
+
+		shadowRegs = append(shadowRegs, shadowReg)
+	}
+	for _, tg := range s.cfg.TrashTableRule {
+		trashReg := regexp.MustCompile(tg)
+		trashRegs = append(trashRegs, trashReg)
+	}
+
 	for _, ca := range cases {
-		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, s.cfg)
+		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, s.cfg, shadowRegs, trashRegs)
 		c.Assert(err, IsNil)
 		syncer := NewSyncer(s.cfg, nil)
 		syncer.onlineDDL = plugin

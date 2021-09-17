@@ -630,6 +630,8 @@ const (
 	codeSchedulerRelayWorkersWrongRelay
 	codeSchedulerSourceOpRelayExist
 	codeSchedulerLatchInUse
+	codeConfigOnlineDDLInvalidRegex
+	codeConfigOnlineDDLRegexCompile
 )
 
 // dmctl error code.
@@ -1265,4 +1267,11 @@ var (
 
 	// default error.
 	ErrNotSet = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")
+
+	// ddl regex
+	ErrConfigOnlineDDLInvalidRegex = New(codeConfigOnlineDDLInvalidRegex, ClassConfig, ScopeInternal, LevelHigh,
+		"''%s' regex pattern %s isn't contains exactly one submatch", "Please check if params is correctly in the configuration file.")
+
+	ErrConfigOnlineDDLRegexCompile = New(codeConfigOnlineDDLRegexCompile, ClassConfig, ScopeInternal, LevelHigh,
+		"''%s' regex pattern %s compile falied", "Please check if params is correctly in the configuration file.")
 )

@@ -2,6 +2,8 @@ name: test
 task-mode: all
 is-sharding: true
 shard-mode: pessimistic
+shadow-table-rule: ["_(.+)_(?:new|gho)"]
+trash-table-rule: ["_(.+)_(?:ghc|del|old)"]
 ignore-checking-items: []
 meta-schema: dm_meta
 enable-heartbeat: false
