@@ -920,7 +920,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 					Name:   string(ev.Table.Table),
 				}
 				var ti *model.TableInfo
-				ti, err = syncer.getTable(tcontext.Background(), table, table)
+				ti, err = syncer.getTableInfo(tcontext.Background(), table, table)
 				c.Assert(err, IsNil)
 				var (
 					sqls []string
@@ -930,8 +930,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				prunedColumns, prunedRows, err2 := pruneGeneratedColumnDML(ti, ev.Rows)
 				c.Assert(err2, IsNil)
 				param := &genDMLParam{
-					schema:            table.Schema,
-					table:             table.Name,
+					tableID:           utils.GenTableID(table),
 					data:              prunedRows,
 					originalData:      ev.Rows,
 					columns:           prunedColumns,
@@ -1699,7 +1698,7 @@ func (s *Syncer) mockFinishJob(jobs []*expectJob) {
 	for _, job := range jobs {
 		switch job.tp {
 		case ddl, insert, update, del, flush:
-			s.addCount(true, "test", job.tp, 1, "", "")
+			s.addCount(true, "test", job.tp, 1, &filter.Table{})
 		}
 	}
 }
@@ -1709,7 +1708,7 @@ func (s *Syncer) addJobToMemory(job *job) error {
 
 	switch job.tp {
 	case ddl, insert, update, del, flush:
-		s.addCount(false, "test", job.tp, 1, "", "")
+		s.addCount(false, "test", job.tp, 1, &filter.Table{})
 		testJobs.Lock()
 		testJobs.jobs = append(testJobs.jobs, job)
 		testJobs.Unlock()
@@ -1722,24 +1721,24 @@ func (s *Syncer) addJobToMemory(job *job) error {
 	case ddl:
 		s.saveGlobalPoint(job.location)
 		s.checkpoint.(*RemoteCheckPoint).globalPoint.flush()
-		for sourceSchema, tbs := range job.sourceTbl {
+		for sourceSchema, tbs := range job.sourceTbls {
 			if len(sourceSchema) == 0 {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(&filter.Table{Schema: sourceSchema, Name: sourceTable}, job.location)
-				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable].flush()
+				s.saveTablePoint(sourceTable, job.location)
+				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable.Name].flush()
 			}
 		}
-		s.resetShardingGroup(job.targetSchema, job.targetTable)
+		s.resetShardingGroup(job.targetTable)
 	case insert, update, del:
-		for sourceSchema, tbs := range job.sourceTbl {
+		for sourceSchema, tbs := range job.sourceTbls {
 			if len(sourceSchema) == 0 {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(&filter.Table{Schema: sourceSchema, Name: sourceTable}, job.currentLocation)
-				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable].flush()
+				s.saveTablePoint(sourceTable, job.currentLocation)
+				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable.Name].flush()
 			}
 		}
 	}
@@ -1792,11 +1791,11 @@ func (s *testSyncerSuite) TestTrackDownstreamTableWontOverwrite(c *C) {
 
 	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(upTable.Schema), IsNil)
 	c.Assert(syncer.schemaTracker.Exec(ctx, "test", createTableSQL), IsNil)
-	ti, err := syncer.getTable(tctx, upTable, downTable)
+	ti, err := syncer.getTableInfo(tctx, upTable, downTable)
 	c.Assert(err, IsNil)
 	c.Assert(ti.Columns, HasLen, 2)
 	c.Assert(syncer.trackTableInfoFromDownstream(tctx, upTable, downTable), IsNil)
-	newTi, err := syncer.getTable(tctx, upTable, downTable)
+	newTi, err := syncer.getTableInfo(tctx, upTable, downTable)
 	c.Assert(err, IsNil)
 	c.Assert(newTi, DeepEquals, ti)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
@@ -1832,14 +1831,14 @@ func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 
 	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(schemaName), IsNil)
 	c.Assert(syncer.trackTableInfoFromDownstream(tctx, table, table), IsNil)
-	ti, err := syncer.getTable(tctx, table, table)
+	ti, err := syncer.getTableInfo(tctx, table, table)
 	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
 	c.Assert(syncer.schemaTracker.DropTable(table), IsNil)
 	sql := "create table tbl (c bigint primary key);"
 	c.Assert(syncer.schemaTracker.Exec(ctx, schemaName, sql), IsNil)
-	ti2, err := syncer.getTable(tctx, table, table)
+	ti2, err := syncer.getTableInfo(tctx, table, table)
 	c.Assert(err, IsNil)
 
 	ti.ID = ti2.ID
@@ -1868,14 +1867,14 @@ func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 
 	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(schemaName), IsNil)
 	c.Assert(syncer.trackTableInfoFromDownstream(tctx, table, table), IsNil)
-	ti, err = syncer.getTable(tctx, table, table)
+	ti, err = syncer.getTableInfo(tctx, table, table)
 	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
 	c.Assert(syncer.schemaTracker.DropTable(table), IsNil)
 	sql = "create table tbl (c bigint primary key auto_random);"
 	c.Assert(syncer.schemaTracker.Exec(ctx, schemaName, sql), IsNil)
-	ti2, err = syncer.getTable(tctx, table, table)
+	ti2, err = syncer.getTableInfo(tctx, table, table)
 	c.Assert(err, IsNil)
 
 	ti.ID = ti2.ID
