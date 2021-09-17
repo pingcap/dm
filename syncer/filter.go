@@ -98,7 +98,7 @@ func (s *Syncer) filterOneEvent(table *filter.Table, et bf.EventType, sql string
 	}
 	action, err := s.binlogFilter.Filter(table.Schema, table.Name, et, sql)
 	if err != nil {
-		return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip event %s on `%s`.`%s`", et, table.Schema, table.Name)
+		return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip event %s on %v", et, table)
 	}
 	return action == bf.Ignore, nil
 }
