@@ -18,9 +18,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pingcap/tidb/util/logutil"
+
 	"github.com/pingcap/errors"
 	pclog "github.com/pingcap/log"
-	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -104,11 +105,7 @@ var (
 
 // InitLogger initializes DM's and also the TiDB library's loggers.
 func InitLogger(cfg *Config) error {
-	err := logutil.InitLogger(&logutil.LogConfig{Config: pclog.Config{Level: cfg.Level}})
-	if err != nil {
-		return terror.ErrInitLoggerFail.Delegate(err)
-	}
-
+	// init DM logger
 	logger, props, err := pclog.InitLogger(&pclog.Config{
 		Level:  cfg.Level,
 		Format: cfg.Format,
@@ -128,7 +125,14 @@ func InitLogger(cfg *Config) error {
 	appLogger = Logger{logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))}
 	appLevel = props.Level
 	appProps = props
-
+	// init and set tidb slow query logger to stdout if log level is debug
+	if cfg.Level == "debug" {
+		slowQueryLogger := zap.NewExample()
+		slowQueryLogger = slowQueryLogger.With(zap.String("component", "slow query logger"))
+		logutil.SlowQueryLogger = slowQueryLogger
+	} else {
+		logutil.SlowQueryLogger = zap.NewNop()
+	}
 	return nil
 }
 
