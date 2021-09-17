@@ -133,7 +133,6 @@ func (s *testFilterSuite) TestFilterRowsEvent(c *C) {
 		},
 	}
 	for _, ca := range cases {
-
 		skipped, err2 := syncer.filterRowsEvent(ca.table, ca.eventType)
 		c.Assert(err2, IsNil)
 		c.Assert(skipped, Equals, ca.expectSkipped)
