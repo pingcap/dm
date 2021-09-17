@@ -71,13 +71,21 @@ function run() {
 	check_port_offline $WORKER1_PORT 20
 	sleep 2
 
-	# dm-worker1 panics
-	err_cnt=$(grep "panic" $WORK_DIR/worker1/log/stdout.log | wc -l)
-	# there may be more panic
-	if [ $err_cnt -lt 2 ]; then
-		echo "dm-worker1 doesn't panic again, panic count ${err_cnt}"
-		exit 2
-	fi
+  for ((k=0;k<10;k++)); do
+    # dm-worker1 panics
+    err_cnt=$(grep "panic" $WORK_DIR/worker1/log/stdout.log | wc -l)
+    # there may be more panic
+    if [ $err_cnt -lt 2 ]; then
+      echo "dm-worker1 doesn't panic again, panic count ${err_cnt}"
+      if [ $k -eq 9 ]; then
+        echo "panic check failed 10 times, will exit now"
+        exit 2
+      fi
+    else
+      break
+    fi
+   	sleep 2
+  done
 
 	echo "restart dm-workers with errros to pause"
 	# paused with injected error
