@@ -168,9 +168,11 @@ func (t *openAPISuite) TestRedirectRequestToLeader(c *check.C) {
 
 func (t *openAPISuite) TestSourceAPI(c *check.C) {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	s := setupServer(ctx, c)
-	defer s.Close()
+	defer func() {
+		cancel()
+		s.Close()
+	}()
 
 	baseURL := "/api/v1/sources"
 
@@ -247,11 +249,13 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 
 func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ctrl := gomock.NewController(c)
-	defer ctrl.Finish()
 	s := setupServer(ctx, c)
-	defer s.Close()
+	ctrl := gomock.NewController(c)
+	defer func() {
+		cancel()
+		s.Close()
+		defer ctrl.Finish()
+	}()
 
 	baseURL := "/api/v1/sources"
 
@@ -373,13 +377,13 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 
 func (t *openAPISuite) TestTaskAPI(c *check.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
 	s := setupServer(ctx, c)
-	defer s.Close()
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/MockSkipAdjustTargetDB", `return(true)`), check.IsNil)
 	checker.CheckSyncConfigFunc = mockCheckSyncConfig
 	defer func() {
 		checker.CheckSyncConfigFunc = checker.CheckSyncConfig
+		cancel()
+		s.Close()
 	}()
 
 	dbCfg := config.GetDBConfigFromEnv()
@@ -437,7 +441,6 @@ func (t *openAPISuite) TestTaskAPI(c *check.C) {
 	c.Assert(result3.Code(), check.Equals, http.StatusNoContent)
 	subTaskM = s.scheduler.GetSubTaskCfgsByTask(taskName)
 	c.Assert(len(subTaskM) == 0, check.IsTrue)
-	cancel()
 	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/master/MockSkipAdjustTargetDB"), check.IsNil)
 }
 
@@ -684,9 +687,11 @@ func genShardAndFilterTask() openapi.Task {
 
 func testNoShardTaskToSubTaskConfig(c *check.C) {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	s := setupServer(ctx, c)
-	defer s.Close()
+	defer func() {
+		cancel()
+		s.Close()
+	}()
 
 	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
 	c.Assert(err, check.IsNil)
@@ -742,14 +747,15 @@ func testNoShardTaskToSubTaskConfig(c *check.C) {
 	c.Assert(ba.DoTables, check.HasLen, 1)
 	c.Assert(ba.DoTables[0].Name, check.Equals, noShardSourceTable)
 	c.Assert(ba.DoTables[0].Schema, check.Equals, noShardSourceSchema)
-	cancel()
 }
 
 func testShardAndFilterTaskToSubTaskConfig(c *check.C) {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	s := setupServer(ctx, c)
-	defer s.Close()
+	defer func() {
+		cancel()
+		s.Close()
+	}()
 
 	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
 	c.Assert(err, check.IsNil)
@@ -867,7 +873,6 @@ func testShardAndFilterTaskToSubTaskConfig(c *check.C) {
 	c.Assert(ba.DoTables, check.HasLen, 1)
 	c.Assert(ba.DoTables[0].Name, check.Equals, shardSource2Table)
 	c.Assert(ba.DoTables[0].Schema, check.Equals, shardSource2Schema)
-	cancel()
 }
 
 func setupServer(ctx context.Context, c *check.C) *Server {
@@ -885,7 +890,7 @@ func setupServer(ctx context.Context, c *check.C) *Server {
 	c.Assert(s1.Start(ctx), check.IsNil)
 	// wait the first one become the leader
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return s1.election.IsLeader()
+		return s1.election.IsLeader() && s1.scheduler.Started()
 	}), check.IsTrue)
 	return s1
 }
