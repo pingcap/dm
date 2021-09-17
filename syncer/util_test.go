@@ -80,11 +80,12 @@ func (t *testUtilSuite) TestGetTableByDML(c *C) {
 		table, err := getTableByDML(dml)
 		if cs.hasError {
 			c.Assert(err, NotNil)
+			c.Assert(table, IsNil)
 		} else {
 			c.Assert(err, IsNil)
+			c.Assert(table.Schema, Equals, cs.schema)
+			c.Assert(table.Name, Equals, cs.table)
 		}
-		c.Assert(table.Schema, Equals, cs.schema)
-		c.Assert(table.Name, Equals, cs.table)
 	}
 }
 
