@@ -208,14 +208,17 @@ type SubTaskConfig struct {
 	ServerID   uint32 `toml:"server-id" json:"server-id"`
 	Flavor     string `toml:"flavor" json:"flavor"`
 	MetaSchema string `toml:"meta-schema" json:"meta-schema"`
-	// deprecated start
-	HeartbeatUpdateInterval int  `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
-	HeartbeatReportInterval int  `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
-	EnableHeartbeat         bool `toml:"enable-heartbeat" json:"enable-heartbeat"`
-	// deprecated end
-	Meta *Meta `toml:"meta" json:"meta"`
+	// deprecated
+	HeartbeatUpdateInterval int `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
+	// deprecated
+	HeartbeatReportInterval int `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
+	// deprecated
+	EnableHeartbeat bool `toml:"enable-heartbeat" json:"enable-heartbeat"`
 	// deprecated
 	Timezone string `toml:"timezone" json:"timezone"`
+
+	Meta *Meta `toml:"meta" json:"meta"`
+
 	// RelayDir get value from dm-worker config
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
 

@@ -413,10 +413,6 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "remove-active-realylog", Fn: s.removeActiveRelayLog})
 
-	if s.cfg.EnableHeartbeat {
-		log.L().Warn("heartbeat is deprecated, needn't set it anymore.")
-	}
-
 	s.reset()
 	return nil
 }
