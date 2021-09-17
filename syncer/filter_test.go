@@ -173,7 +173,6 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 			"",
 			true,
 		}, {
-
 			// test binlog filter
 			"drop table tx.test",
 			&filter.Table{Schema: "tx", Name: "test"},
