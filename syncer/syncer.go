@@ -2454,15 +2454,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	// TODO: save stmt, tableName to avoid parse the sql to get them again
 	qec.p = parser.New()
 	for _, sql := range qec.splitedDDLs {
-		sqls, err := s.processSplitedDDL(qec, sql)
-		if err != nil {
-			return err
+		sqls, err2 := s.processSplitedDDL(qec, sql)
+		if err2 != nil {
+			qec.tctx.L().Error("fail to split statement", zap.String("event", "query"), zap.Stringer("queryEventContext", qec), log.ShortError(err2))
+			return err2
 		}
 		qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
-	}
-	if err != nil {
-		qec.tctx.L().Error("fail to split statement", zap.String("event", "query"), zap.Stringer("queryEventContext", qec), log.ShortError(err))
-		return err
 	}
 	qec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.Strings("appliedDDLs", qec.appliedDDLs), zap.Stringer("queryEventContext", qec))
 
