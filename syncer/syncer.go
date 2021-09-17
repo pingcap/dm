@@ -2487,14 +2487,14 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	// handle one-schema change DDL
 	for _, sql := range qec.appliedDDLs {
 		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		stmt, err := qec.p.ParseOneStmt(sql, "", "")
-		if err != nil {
-			return terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
+		stmt, err2 := qec.p.ParseOneStmt(sql, "", "")
+		if err2 != nil {
+			return terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err2.Error()), "ddl %s", sql)
 		}
 
-		originTables, err := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
-		if err != nil {
-			return err
+		originTables, err2 := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
+		if err2 != nil {
+			return err2
 		}
 
 		routedTables := make([]*filter.Table, 0, len(originTables))
@@ -2503,9 +2503,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			routedTables = append(routedTables, routedTable)
 		}
 
-		sqlDDL, err := parserpkg.RenameDDLTable(stmt, routedTables)
-		if err != nil {
-			return err
+		sqlDDL, err2 := parserpkg.RenameDDLTable(stmt, routedTables)
+		if err2 != nil {
+			return err2
 		}
 
 		if len(sqlDDL) == 0 {
