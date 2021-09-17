@@ -15,6 +15,23 @@ function prepare_database() {
 	run_sql 'CREATE DATABASE openapi;' $MYSQL_PORT2 $MYSQL_PASSWORD2
 }
 
+function init_noshard_data() {
+
+	run_sql "CREATE TABLE openapi.t1(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql "CREATE TABLE openapi.t2(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT2 $MYSQL_PASSWORD2
+
+	run_sql "INSERT INTO openapi.t1(i,j) VALUES (1, 2);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql "INSERT INTO openapi.t2(i,j) VALUES (3, 4);" $MYSQL_PORT2 $MYSQL_PASSWORD2
+}
+
+function init_shard_data() {
+	run_sql "CREATE TABLE openapi.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql "CREATE TABLE openapi.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT2 $MYSQL_PASSWORD2
+
+	run_sql "INSERT INTO openapi.t(i,j) VALUES (1, 2);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql "INSERT INTO openapi.t(i,j) VALUES (3, 4);" $MYSQL_PORT2 $MYSQL_PASSWORD2
+}
+
 function test_source() {
 	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>START TEST OPENAPI: SOURCE"
 	prepare_database
@@ -102,6 +119,106 @@ function test_relay() {
 
 }
 
+function test_shard_task() {
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>START TEST OPENAPI: SHARD TASK"
+	prepare_database
+
+	task_name="test-shard"
+
+	# create source succesfully
+	openapi_source_check "create_source1_success"
+	openapi_source_check "list_source_success" 1
+	# get source status success
+	# openapi_source_check "get_source_status_success" "mysql-01"
+
+	# create source succesfully
+	openapi_source_check "create_source2_success"
+	# get source list success
+	openapi_source_check "list_source_success" 2
+	# get source status success
+	# openapi_source_check "get_source_status_success" "mysql-02"
+
+	# start task success: not vaild task create request
+	openapi_task_check "start_task_failed"
+
+	# start shard task success
+	openapi_task_check "start_shard_task_success"
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status $task_name" \
+		"\"stage\": \"Running\"" 2
+
+	init_shard_data
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	# test binlog event filter, this delete will ignored in source-1
+	run_sql "DELETE FROM openapi.t;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_tidb_with_retry "select count(1) from openapi.t;" "count(1): 2"
+
+	# test binlog event filter, this ddl will ignored in source-2
+	run_sql "alter table openapi.t add column aaa int;" $MYSQL_PORT2 $MYSQL_PASSWORD2
+	# ddl will be ignored, so no ddl locks and the task will work normally.
+	run_sql "INSERT INTO openapi.t(i,j) VALUES (5, 5);" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_tidb_with_retry "select count(1) from openapi.t;" "count(1): 3"
+
+	# stop task success
+	openapi_task_check "stop_task_success" "$task_name"
+
+	# stop task failed
+	openapi_task_check "stop_task_failed" "$task_name"
+
+	# delete source success
+	openapi_source_check "delete_source_success" "mysql-01"
+	openapi_source_check "delete_source_success" "mysql-02"
+	openapi_source_check "list_source_success" 0
+	run_sql_tidb "DROP DATABASE if exists openapi;"
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: SHARD TASK SUCCESS"
+
+}
+
+function test_noshard_task() {
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>START TEST OPENAPI: NO SHARD TASK"
+	prepare_database
+
+	task_name="test-no-shard"
+
+	# create source succesfully
+	openapi_source_check "create_source1_success"
+	openapi_source_check "list_source_success" 1
+	# get source status success
+	# openapi_source_check "get_source_status_success" "mysql-01"
+
+	# create source succesfully
+	openapi_source_check "create_source2_success"
+	# get source list success
+	openapi_source_check "list_source_success" 2
+	# get source status success
+	# openapi_source_check "get_source_status_success" "mysql-02"
+
+	# start task success: not vaild task create request
+	openapi_task_check "start_task_failed"
+
+	# start no shard task success
+	openapi_task_check "start_noshard_task_success"
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status $task_name" \
+		"\"stage\": \"Running\"" 2
+
+	init_noshard_data
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	# stop task success
+	openapi_task_check "stop_task_success" "$task_name"
+
+	# delete source success
+	openapi_source_check "delete_source_success" "mysql-01"
+	openapi_source_check "delete_source_success" "mysql-02"
+	openapi_source_check "list_source_success" 0
+	run_sql_tidb "DROP DATABASE if exists openapi;"
+	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: NO SHARD TASK SUCCESS"
+}
+
 function run() {
 	make install_test_python_dep
 
@@ -120,6 +237,9 @@ function run() {
 
 	test_source
 	test_relay
+
+	test_shard_task
+	test_noshard_task
 }
 
 cleanup_data openapi

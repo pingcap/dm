@@ -16,6 +16,7 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -24,7 +25,14 @@ import (
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
 
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
+
+	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -215,12 +223,70 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 
 // DMAPIStartTask url is:(POST /api/v1/tasks).
 func (s *Server) DMAPIStartTask(ctx echo.Context) error {
-	return nil
+	var req openapi.CreateTaskRequest
+	if err := ctx.Bind(&req); err != nil {
+		return err
+	}
+	task := req.Task
+	adjustModelTask(&task)
+	// prepare target db config
+	newCtx := ctx.Request().Context()
+	toDBCfg, err := getAndAdjustTaskTargetDBCfg(newCtx, &task)
+	if err != nil {
+		return err
+	}
+	// generate sub task config list
+	subTaskConfigList, err := s.modelToSubTaskConfigList(toDBCfg, &task)
+	if err != nil {
+		return err
+	}
+	// check subtask config
+	subTaskConfigPList := make([]*config.SubTaskConfig, len(subTaskConfigList))
+	for i := range subTaskConfigList {
+		subTaskConfigPList[i] = &subTaskConfigList[i]
+	}
+	if err = checker.CheckSyncConfigFunc(newCtx, subTaskConfigPList,
+		common.DefaultErrorCnt, common.DefaultWarnCnt); err != nil {
+		return terror.WithClass(err, terror.ClassDMMaster)
+	}
+	// end all pre-check, start to create task
+	var (
+		latched = false
+		release scheduler.ReleaseFunc
+	)
+	if req.RemoveMeta {
+		// use same latch for remove-meta and start-task
+		release, err = s.scheduler.AcquireSubtaskLatch(task.Name)
+		if err != nil {
+			return terror.ErrSchedulerLatchInUse.Generate("RemoveMeta", task.Name)
+		}
+		defer release()
+		latched = true
+		err = s.removeMetaData(newCtx, task.Name, *task.MetaSchema, toDBCfg)
+		if err != nil {
+			return terror.Annotate(err, "while removing metadata")
+		}
+	}
+	err = s.scheduler.AddSubTasks(latched, subTaskConfigList...)
+	if err != nil {
+		return err
+	}
+	if release != nil {
+		release()
+	}
+	return ctx.JSON(http.StatusCreated, task)
 }
 
 // DMAPIDeleteTask url is:(DELETE /api/v1/tasks).
 func (s *Server) DMAPIDeleteTask(ctx echo.Context, taskName string) error {
-	return nil
+	sourceList := s.getTaskResources(taskName)
+	if len(sourceList) == 0 {
+		return terror.ErrSchedulerTaskNotExist.Generate(taskName)
+	}
+	if err := s.scheduler.RemoveSubTasks(taskName, sourceList...); err != nil {
+		return err
+	}
+	return ctx.NoContent(http.StatusNoContent)
 }
 
 // DMAPIGetTaskList url is:(GET /api/v1/tasks).
@@ -270,9 +336,7 @@ func sourceCfgToModel(cfg *config.SourceConfig) openapi.Source {
 	if cfg.From.Security != nil {
 		// NOTE we don't return security content here, because we don't want to expose it to the user.
 		var certAllowedCn []string
-		for _, cn := range cfg.From.Security.CertAllowedCN {
-			certAllowedCn = append(certAllowedCn, cn)
-		}
+		certAllowedCn = append(certAllowedCn, cfg.From.Security.CertAllowedCN...)
 		source.Security = &openapi.Security{CertAllowedCn: &certAllowedCn}
 	}
 	return source
@@ -311,4 +375,202 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 		}
 	}
 	return cfg
+}
+
+func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openapi.Task) ([]config.SubTaskConfig, error) {
+	// prepare source db config source name -> source config
+	sourceCfgMap := make(map[string]*config.SourceConfig)
+	for _, cfg := range task.SourceConfig.SourceConf {
+		if sourceCfg := s.scheduler.GetSourceCfgByID(cfg.SourceName); sourceCfg != nil {
+			sourceCfgMap[cfg.SourceName] = sourceCfg
+		} else {
+			return nil, terror.ErrOpenAPITaskSourceNotFound.Generatef("source name=%s", cfg.SourceName)
+		}
+	}
+	// source name -> meta config
+	sourceDBMetaMap := make(map[string]*config.Meta)
+	for _, cfg := range task.SourceConfig.SourceConf {
+		// check if need to set source meta
+		var needAddMeta bool
+		meta := &config.Meta{}
+		if cfg.BinlogGtid != nil {
+			meta.BinLogGTID = *cfg.BinlogGtid
+			needAddMeta = true
+		}
+		if cfg.BinlogName != nil {
+			meta.BinLogName = *cfg.BinlogName
+			needAddMeta = true
+		}
+		if cfg.BinlogPos != nil {
+			pos := uint32(*cfg.BinlogPos)
+			meta.BinLogPos = pos
+			needAddMeta = true
+		}
+		if needAddMeta {
+			sourceDBMetaMap[cfg.SourceName] = meta
+		}
+	}
+	// source name -> migrate rule list
+	tableMigrateRuleMap := make(map[string][]openapi.TaskTableMigrateRule)
+	for _, rule := range task.TableMigrateRule {
+		if _, ok := tableMigrateRuleMap[rule.Source.SourceName]; !ok {
+			tableMigrateRuleMap[rule.Source.SourceName] = []openapi.TaskTableMigrateRule{rule}
+		} else {
+			tableMigrateRuleMap[rule.Source.SourceName] = append(tableMigrateRuleMap[rule.Source.SourceName], rule)
+		}
+	}
+	// rule name -> rule template
+	eventFilterTemplateMap := make(map[string]bf.BinlogEventRule)
+	if task.EventFilterRule != nil {
+		for _, rule := range *task.EventFilterRule {
+			ruleT := bf.BinlogEventRule{Action: bf.Ignore}
+			if rule.IgnoreEvent != nil {
+				events := make([]bf.EventType, len(*rule.IgnoreEvent))
+				for i, eventStr := range *rule.IgnoreEvent {
+					events[i] = bf.EventType(eventStr)
+				}
+				ruleT.Events = events
+			}
+			if rule.IgnoreSql != nil {
+				ruleT.SQLPattern = *rule.IgnoreSql
+			}
+			eventFilterTemplateMap[rule.RuleName] = ruleT
+		}
+	}
+	// start to generate sub task configs
+	subTaskCfgList := make([]config.SubTaskConfig, len(task.SourceConfig.SourceConf))
+	for i, sourceCfg := range task.SourceConfig.SourceConf {
+		subTaskCfg := config.NewSubTaskConfig()
+		// set task name and mode
+		subTaskCfg.Name = task.Name
+		subTaskCfg.Mode = string(task.TaskMode)
+		// set task meta
+		subTaskCfg.MetaFile = *task.MetaSchema
+		if meta, ok := sourceDBMetaMap[sourceCfg.SourceName]; ok {
+			subTaskCfg.Meta = meta
+		}
+		// set shard config
+		if task.ShardMode != nil {
+			subTaskCfg.IsSharding = true
+			mode := *task.ShardMode
+			subTaskCfg.ShardMode = string(mode)
+		} else {
+			subTaskCfg.IsSharding = false
+		}
+		// set online ddl pulgin config
+		subTaskCfg.OnlineDDL = task.EnhanceOnlineSchemaChange
+		// set case sensitive from source
+		subTaskCfg.CaseSensitive = sourceCfgMap[sourceCfg.SourceName].CaseSensitive
+		// set source db config
+		subTaskCfg.SourceID = sourceCfg.SourceName
+		subTaskCfg.From = sourceCfgMap[sourceCfg.SourceName].From
+		// set target db config
+		subTaskCfg.To = *toDBCfg.Clone()
+		// TODO set meet error policy
+		// TODO ExprFilter
+		// set full unit config
+		subTaskCfg.MydumperConfig = config.DefaultMydumperConfig()
+		subTaskCfg.LoaderConfig = config.DefaultLoaderConfig()
+		if fullCfg := task.SourceConfig.FullMigrateConf; fullCfg != nil {
+			if fullCfg.ExportThreads != nil {
+				subTaskCfg.MydumperConfig.Threads = *fullCfg.ExportThreads
+			}
+			if fullCfg.DataDir != nil {
+				subTaskCfg.LoaderConfig.Dir = *fullCfg.DataDir
+			}
+		}
+		// set incremental config
+		subTaskCfg.SyncerConfig = config.DefaultSyncerConfig()
+		if incrCfg := task.SourceConfig.IncrMigrateConf; incrCfg != nil {
+			if incrCfg.ReplThreads != nil {
+				subTaskCfg.SyncerConfig.WorkerCount = *incrCfg.ReplThreads
+			}
+			if incrCfg.ReplBatch != nil {
+				subTaskCfg.SyncerConfig.Batch = *incrCfg.ReplBatch
+			}
+		}
+		// set route , blockAllowList, filter config
+		doDBs := []string{}
+		doTables := []*filter.Table{}
+		routeRules := []*router.TableRule{}
+		filterRules := []*bf.BinlogEventRule{}
+		for _, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
+			// route
+			routeRules = append(routeRules, &router.TableRule{
+				SchemaPattern: rule.Source.Schema,
+				TablePattern:  rule.Source.Table,
+				TargetSchema:  rule.Target.Schema,
+				TargetTable:   rule.Target.Table,
+			})
+			// filter
+			if rule.EventFilterName != nil {
+				for _, name := range *rule.EventFilterName {
+					filterRule, ok := eventFilterTemplateMap[name] // NOTE: this return a cpoied value
+					if !ok {
+						return nil, terror.ErrOpenAPICommonError.Generatef("filter rule name=%s not found", name)
+					}
+					filterRule.SchemaPattern = rule.Source.Schema
+					filterRule.TablePattern = rule.Source.Table
+					filterRules = append(filterRules, &filterRule)
+				}
+			}
+			// BlockAllowList
+			doDBs = append(doDBs, rule.Source.Schema)
+			doTables = append(doTables, &filter.Table{
+				Schema: rule.Source.Schema,
+				Name:   rule.Source.Table,
+			})
+		}
+		subTaskCfg.RouteRules = routeRules
+		subTaskCfg.FilterRules = filterRules
+		subTaskCfg.BAList = &filter.Rules{DoDBs: doDBs, DoTables: doTables}
+		// adjust sub task config
+		if err := subTaskCfg.Adjust(true); err != nil {
+			return nil, terror.Annotatef(err, "source name=%s", sourceCfg.SourceName)
+		}
+		// pre-check filter rules
+		_, err := bf.NewBinlogEvent(subTaskCfg.CaseSensitive, subTaskCfg.FilterRules)
+		if err != nil {
+			return nil, terror.ErrConfigBinlogEventFilter.Delegate(err)
+		}
+		subTaskCfgList[i] = *subTaskCfg
+	}
+	return subTaskCfgList, nil
+}
+
+func adjustModelTask(task *openapi.Task) {
+	defaultMetaSchema := "dm_meta"
+	if task.MetaSchema == nil {
+		task.MetaSchema = &defaultMetaSchema
+	}
+	// check some not implemented features
+	if task.OnDuplication != openapi.TaskOnDuplicationError {
+		log.L().Warn("now on duplication is currently only implemented at the error level")
+		task.OnDuplication = openapi.TaskOnDuplicationError
+	}
+}
+
+func getAndAdjustTaskTargetDBCfg(ctx context.Context, task *openapi.Task) (*config.DBConfig, error) {
+	toDBCfg := &config.DBConfig{
+		Host:     task.TargetConfig.Host,
+		Port:     task.TargetConfig.Port,
+		User:     task.TargetConfig.User,
+		Password: task.TargetConfig.Password,
+	}
+	if task.TargetConfig.Security != nil {
+		var certAllowedCn []string
+		if task.TargetConfig.Security.CertAllowedCn != nil {
+			certAllowedCn = append(certAllowedCn, *task.TargetConfig.Security.CertAllowedCn...)
+		}
+		toDBCfg.Security = &config.Security{
+			SSLCABytes:    []byte(task.TargetConfig.Security.SslCaContent),
+			SSLKEYBytes:   []byte(task.TargetConfig.Security.SslKeyContent),
+			SSLCertBytes:  []byte(task.TargetConfig.Security.SslCertContent),
+			CertAllowedCN: certAllowedCn,
+		}
+	}
+	if adjustDBErr := adjustTargetDB(ctx, toDBCfg); adjustDBErr != nil {
+		return nil, terror.WithClass(adjustDBErr, terror.ClassDMMaster)
+	}
+	return toDBCfg, nil
 }
