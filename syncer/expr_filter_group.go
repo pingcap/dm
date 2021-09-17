@@ -3,6 +3,7 @@ package syncer
 import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/util/chunk"
@@ -62,106 +63,106 @@ func NewExprFilterGroup(exprConfig []*config.ExpressionFilter) *ExprFilterGroup 
 
 // GetInsertExprs returns the expression filters for given table to filter INSERT events.
 // This function will lazy calculate expressions if not initialized.
-func (g *ExprFilterGroup) GetInsertExprs(db, table string, ti *model.TableInfo) ([]expression.Expression, error) {
-	key := dbutil.TableName(db, table)
+func (g *ExprFilterGroup) GetInsertExprs(table *filter.Table, ti *model.TableInfo) ([]expression.Expression, error) {
+	tableID := utils.GenTableID(table)
 
-	if ret, ok := g.insertExprs[key]; ok {
+	if ret, ok := g.insertExprs[tableID]; ok {
 		return ret, nil
 	}
-	if _, ok := g.hasInsertFilter[key]; !ok {
+	if _, ok := g.hasInsertFilter[tableID]; !ok {
 		return nil, nil
 	}
 
-	for _, c := range g.configs[key] {
+	for _, c := range g.configs[tableID] {
 		if c.InsertValueExpr != "" {
 			expr, err2 := getSimpleExprOfTable(c.InsertValueExpr, ti)
 			if err2 != nil {
 				// TODO: terror
 				return nil, err2
 			}
-			g.insertExprs[key] = append(g.insertExprs[key], expr)
+			g.insertExprs[tableID] = append(g.insertExprs[tableID], expr)
 		}
 	}
-	return g.insertExprs[key], nil
+	return g.insertExprs[tableID], nil
 }
 
 // GetUpdateExprs returns two lists of expression filters for given table, to filter UPDATE events by old values and new
 // values respectively. The two lists should have same length, and the corresponding expressions is AND logic.
 // This function will lazy calculate expressions if not initialized.
-func (g *ExprFilterGroup) GetUpdateExprs(db, table string, ti *model.TableInfo) ([]expression.Expression, []expression.Expression, error) {
-	key := dbutil.TableName(db, table)
+func (g *ExprFilterGroup) GetUpdateExprs(table *filter.Table, ti *model.TableInfo) ([]expression.Expression, []expression.Expression, error) {
+	tableID := utils.GenTableID(table)
 
-	retOld, ok1 := g.updateOldExprs[key]
-	retNew, ok2 := g.updateNewExprs[key]
+	retOld, ok1 := g.updateOldExprs[tableID]
+	retNew, ok2 := g.updateNewExprs[tableID]
 	if ok1 || ok2 {
 		return retOld, retNew, nil
 	}
 
-	if _, ok := g.hasUpdateOldFilter[key]; ok {
-		for _, c := range g.configs[key] {
+	if _, ok := g.hasUpdateOldFilter[tableID]; ok {
+		for _, c := range g.configs[tableID] {
 			if c.UpdateOldValueExpr != "" {
 				expr, err := getSimpleExprOfTable(c.UpdateOldValueExpr, ti)
 				if err != nil {
 					// TODO: terror
 					return nil, nil, err
 				}
-				g.updateOldExprs[key] = append(g.updateOldExprs[key], expr)
+				g.updateOldExprs[tableID] = append(g.updateOldExprs[tableID], expr)
 			} else {
-				g.updateOldExprs[key] = append(g.updateOldExprs[key], expression.NewOne())
+				g.updateOldExprs[tableID] = append(g.updateOldExprs[tableID], expression.NewOne())
 			}
 		}
 	}
 
-	if _, ok := g.hasUpdateNewFilter[key]; ok {
-		for _, c := range g.configs[key] {
+	if _, ok := g.hasUpdateNewFilter[tableID]; ok {
+		for _, c := range g.configs[tableID] {
 			if c.UpdateNewValueExpr != "" {
 				expr, err := getSimpleExprOfTable(c.UpdateNewValueExpr, ti)
 				if err != nil {
 					// TODO: terror
 					return nil, nil, err
 				}
-				g.updateNewExprs[key] = append(g.updateNewExprs[key], expr)
+				g.updateNewExprs[tableID] = append(g.updateNewExprs[tableID], expr)
 			} else {
-				g.updateNewExprs[key] = append(g.updateNewExprs[key], expression.NewOne())
+				g.updateNewExprs[tableID] = append(g.updateNewExprs[tableID], expression.NewOne())
 			}
 		}
 	}
 
-	return g.updateOldExprs[key], g.updateNewExprs[key], nil
+	return g.updateOldExprs[tableID], g.updateNewExprs[tableID], nil
 }
 
 // GetDeleteExprs returns the expression filters for given table to filter DELETE events.
 // This function will lazy calculate expressions if not initialized.
-func (g *ExprFilterGroup) GetDeleteExprs(db, table string, ti *model.TableInfo) ([]expression.Expression, error) {
-	key := dbutil.TableName(db, table)
+func (g *ExprFilterGroup) GetDeleteExprs(table *filter.Table, ti *model.TableInfo) ([]expression.Expression, error) {
+	tableID := utils.GenTableID(table)
 
-	if ret, ok := g.deleteExprs[key]; ok {
+	if ret, ok := g.deleteExprs[tableID]; ok {
 		return ret, nil
 	}
-	if _, ok := g.hasDeleteFilter[key]; !ok {
+	if _, ok := g.hasDeleteFilter[tableID]; !ok {
 		return nil, nil
 	}
 
-	for _, c := range g.configs[key] {
+	for _, c := range g.configs[tableID] {
 		if c.DeleteValueExpr != "" {
 			expr, err2 := getSimpleExprOfTable(c.DeleteValueExpr, ti)
 			if err2 != nil {
 				// TODO: terror
 				return nil, err2
 			}
-			g.deleteExprs[key] = append(g.deleteExprs[key], expr)
+			g.deleteExprs[tableID] = append(g.deleteExprs[tableID], expr)
 		}
 	}
-	return g.deleteExprs[key], nil
+	return g.deleteExprs[tableID], nil
 }
 
 // ResetExprs deletes the expressions generated before. This should be called after table structure changed.
-func (g *ExprFilterGroup) ResetExprs(db, table string) {
-	key := dbutil.TableName(db, table)
-	delete(g.insertExprs, key)
-	delete(g.updateOldExprs, key)
-	delete(g.updateNewExprs, key)
-	delete(g.deleteExprs, key)
+func (g *ExprFilterGroup) ResetExprs(table *filter.Table) {
+	tableID := utils.GenTableID(table)
+	delete(g.insertExprs, tableID)
+	delete(g.updateOldExprs, tableID)
+	delete(g.updateNewExprs, tableID)
+	delete(g.deleteExprs, tableID)
 }
 
 // SkipDMLByExpression returns true when given row matches the expr, which means this row should be skipped.
