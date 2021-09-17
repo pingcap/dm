@@ -390,14 +390,14 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 	cases := []struct {
 		needNew   bool
 		sql       string
-		expectSql string
+		expectSQL string
 	}{
 		// ghost
 		// real table
 		{
 			needNew:   true,
 			sql:       "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
-			expectSql: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+			expectSQL: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
 		},
 		// trash table
 		{
@@ -412,14 +412,14 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		{
 			needNew:   false,
 			sql:       "RENAME TABLE `test`.`_t1_gho` TO `test`.`t1`",
-			expectSql: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+			expectSQL: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
 		},
 		// pt
 		// real table
 		{
 			needNew:   true,
 			sql:       "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
-			expectSql: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+			expectSQL: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
 		},
 		// trash table
 		{
@@ -434,7 +434,7 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		{
 			needNew:   false,
 			sql:       "RENAME TABLE `test`.`_t1_new` TO `test`.`t1`",
-			expectSql: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+			expectSQL: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
 		},
 	}
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveOnlineDDL")))
@@ -472,8 +472,8 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 			qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
 		}
 		c.Assert(qec.appliedDDLs, HasLen, 1)
-		if len(ca.expectSql) != 0 {
-			c.Assert(qec.appliedDDLs[0], Equals, ca.expectSql)
+		if len(ca.expectSQL) != 0 {
+			c.Assert(qec.appliedDDLs[0], Equals, ca.expectSQL)
 		}
 	}
 }
