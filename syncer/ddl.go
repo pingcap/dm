@@ -192,10 +192,10 @@ func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *filter.Tabl
 	tables := group.Tables()
 
 	for _, table := range tables {
-		s.tctx.L().Info("finish online ddl", zap.String("schema", table.Schema), zap.String("table", table.Name))
-		err := s.onlineDDL.Finish(tctx, table.Schema, table.Name)
+		s.tctx.L().Info("finish online ddl", zap.Stringer("table", table))
+		err := s.onlineDDL.Finish(tctx, table)
 		if err != nil {
-			return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
+			return terror.Annotatef(err, "finish online ddl on %v", table)
 		}
 	}
 

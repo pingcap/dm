@@ -113,7 +113,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 
 	if !isDBDDL {
 		if _, ok := needTrackDDLs[0].stmt.(*ast.CreateTableStmt); !ok {
-			tiBefore, err = s.getTable(qec.tctx, upTable, downTable)
+			tiBefore, err = s.getTableInfo(qec.tctx, upTable, downTable)
 			if err != nil {
 				return err
 			}
@@ -125,7 +125,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 			return err
 		}
 		if !isDBDDL {
-			tiAfter, err = s.getTable(qec.tctx, upTable, downTable)
+			tiAfter, err = s.getTableInfo(qec.tctx, upTable, downTable)
 			if err != nil {
 				return err
 			}
@@ -218,9 +218,8 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		zap.String("event", "query"),
 		zap.Strings("ddls", qec.needHandleDDLs),
 		zap.String("raw statement", qec.originSQL),
-		zap.String("schema", qec.onlineDDLTable.Schema),
-		zap.String("table", qec.onlineDDLTable.Name))
-	err = s.onlineDDL.Finish(qec.tctx, qec.onlineDDLTable.Schema, qec.onlineDDLTable.Name)
+		zap.Stringer("table", qec.onlineDDLTable))
+	err = s.onlineDDL.Finish(qec.tctx, qec.onlineDDLTable)
 	if err != nil {
 		return terror.Annotatef(err, "finish online ddl on %s.%s", qec.onlineDDLTable.Schema, qec.onlineDDLTable.Name)
 	}
