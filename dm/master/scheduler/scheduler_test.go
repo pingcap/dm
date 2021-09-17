@@ -51,6 +51,7 @@ const (
 var (
 	etcdTestCli      *clientv3.Client
 	etcdErrCompacted = v3rpc.ErrCompacted
+	testRelayDir     = "./test_relay_dir"
 )
 
 func TestScheduler(t *testing.T) {
@@ -135,6 +136,7 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 
 	// not started scheduler can't do anything.
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSourceCfg(sourceCfg1)), IsTrue)
+	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.UpdateSourceCfg(sourceCfg1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveSourceCfg(sourceID1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSubTasks(false, subtaskCfg1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveSubTasks(taskName1, sourceID1)), IsTrue)
@@ -163,6 +165,23 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	c.Assert(terror.ErrSchedulerSourceCfgExist.Equal(s.AddSourceCfg(sourceCfg1)), IsTrue) // can't add multiple times.
 	// the source config added.
 	t.sourceCfgExist(c, s, sourceCfg1)
+
+	// update source cfg
+	sourceCfg1.RelayDir = testRelayDir
+	c.Assert(s.UpdateSourceCfg(sourceCfg1), IsNil)
+	newCfg := s.GetSourceCfgByID(sourceID1)
+	c.Assert(newCfg.RelayDir, Equals, testRelayDir)
+
+	// update with invalid SourceID
+	fake := newCfg.Clone()
+	fake.SourceID = "not a source id"
+	c.Assert(terror.ErrSchedulerSourceCfgNotExist.Equal(s.UpdateSourceCfg(fake)), IsTrue)
+
+	// update field not related to relay-log will failed
+	fake2 := newCfg.Clone()
+	fake2.AutoFixGTID = !fake2.AutoFixGTID
+	c.Assert(terror.ErrSchedulerSourceCfgUpdate.Equal(s.UpdateSourceCfg(fake2)), IsTrue)
+
 	// one unbound source exist (because no free worker).
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 	rebuildScheduler(ctx)
@@ -241,6 +260,9 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	// subtask config and stage exist.
 	t.subTaskCfgExist(c, s, subtaskCfg1)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
+
+	// update source config when task already started will failed
+	c.Assert(terror.ErrSchedulerSourceOpTaskExist.Equal(s.UpdateSourceCfg(sourceCfg1)), IsTrue)
 
 	// try start a task with two sources, some sources not bound.
 	c.Assert(terror.ErrSchedulerSourcesUnbound.Equal(s.AddSubTasks(false, subtaskCfg21, subtaskCfg22)), IsTrue)
