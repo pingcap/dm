@@ -25,11 +25,13 @@ import (
 	"github.com/deepmap/oapi-codegen/pkg/testutil"
 	"github.com/golang/mock/gomock"
 	"github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
 	filter "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/tikv/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
 
+	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
@@ -108,26 +110,6 @@ func (t *openAPISuite) SetUpTest(c *check.C) {
 	t.workerClients = make(map[string]workerrpc.Client)
 
 	c.Assert(ha.ClearTestInfoOperation(t.etcdTestCli), check.IsNil)
-}
-
-func setupServer(ctx context.Context, c *check.C) *Server {
-	// create a new cluster
-	cfg1 := NewConfig()
-	c.Assert(cfg1.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
-	cfg1.Name = "dm-master-1"
-	cfg1.DataDir = c.MkDir()
-	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
-	cfg1.PeerUrls = tempurl.Alloc()
-	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
-	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
-
-	s1 := NewServer(cfg1)
-	c.Assert(s1.Start(ctx), check.IsNil)
-	// wait the first one become the leader
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return s1.election.IsLeader()
-	}), check.IsTrue)
-	return s1
 }
 
 func (t *openAPISuite) TestRedirectRequestToLeader(c *check.C) {
@@ -389,34 +371,16 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	cancel()
 }
 
-// nolint:unparam
-func mockRelayQueryStatus(
-	mockWorkerClient *pbmock.MockWorkerClient, sourceName, workerName string, stage pb.Stage) {
-	queryResp := &pb.QueryStatusResponse{
-		Result: true,
-		SourceStatus: &pb.SourceStatus{
-			Worker: workerName,
-			Source: sourceName,
-		},
-	}
-	if stage == pb.Stage_Running {
-		queryResp.SourceStatus.RelayStatus = &pb.RelayStatus{Stage: stage}
-	}
-	if stage == pb.Stage_Paused {
-		queryResp.Result = false
-		queryResp.Msg = "some error happened"
-	}
-	mockWorkerClient.EXPECT().QueryStatus(
-		gomock.Any(),
-		&pb.QueryStatusRequest{Name: ""},
-	).Return(queryResp, nil).MaxTimes(maxRetryNum)
-}
-
 func (t *openAPISuite) TestTaskAPI(c *check.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	s := setupServer(ctx, c)
 	defer s.Close()
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/MockSkipAdjustTargetDB", `return(true)`), check.IsNil)
+	checker.CheckSyncConfigFunc = mockCheckSyncConfig
+	defer func() {
+		checker.CheckSyncConfigFunc = checker.CheckSyncConfig
+	}()
 
 	dbCfg := config.GetDBConfigFromEnv()
 	source1 := openapi.Source{
@@ -457,7 +421,7 @@ func (t *openAPISuite) TestTaskAPI(c *check.C) {
 	task.TargetConfig.User = dbCfg.User
 	task.TargetConfig.Password = dbCfg.Password
 
-	createTaskReq := openapi.CreateTaskRequest{RemoveMeta: true, Task: task}
+	createTaskReq := openapi.CreateTaskRequest{RemoveMeta: false, Task: task}
 	result2 := testutil.NewRequest().Post(taskURL).WithJsonBody(createTaskReq).Go(t.testT, s.echo)
 	c.Assert(result2.Code(), check.Equals, http.StatusCreated)
 	var createTaskResp openapi.Task
@@ -474,6 +438,7 @@ func (t *openAPISuite) TestTaskAPI(c *check.C) {
 	subTaskM = s.scheduler.GetSubTaskCfgsByTask(taskName)
 	c.Assert(len(subTaskM) == 0, check.IsTrue)
 	cancel()
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/master/MockSkipAdjustTargetDB"), check.IsNil)
 }
 
 func (t *openAPISuite) TestModelToSubTaskConfigList(c *check.C) {
@@ -721,7 +686,6 @@ func testNoShardTaskToSubTaskConfig(c *check.C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s := setupServer(ctx, c)
-	c.Assert(s.Start(ctx), check.IsNil)
 	defer s.Close()
 
 	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
@@ -729,14 +693,14 @@ func testNoShardTaskToSubTaskConfig(c *check.C) {
 	sourceCfg1.SourceID = source1Name
 	c.Assert(s.scheduler.AddSourceCfg(sourceCfg1), check.IsNil)
 	task := genNoShardTask()
-	todbCfg := &config.DBConfig{
+	toDBCfg := &config.DBConfig{
 		Host:     task.TargetConfig.Host,
 		Port:     task.TargetConfig.Port,
 		User:     task.TargetConfig.User,
 		Password: task.TargetConfig.Password,
 	}
 
-	subTaskConfigList, err := s.modelToSubTaskConfigList(todbCfg, &task)
+	subTaskConfigList, err := s.modelToSubTaskConfigList(toDBCfg, &task)
 	c.Assert(err, check.IsNil)
 	c.Assert(subTaskConfigList, check.HasLen, 1)
 	subTaskConfig := subTaskConfigList[0]
@@ -754,7 +718,7 @@ func testNoShardTaskToSubTaskConfig(c *check.C) {
 	// check from
 	c.Assert(subTaskConfig.From.Host, check.Equals, sourceCfg1.From.Host)
 	// check to
-	c.Assert(subTaskConfig.To.Host, check.Equals, todbCfg.Host)
+	c.Assert(subTaskConfig.To.Host, check.Equals, toDBCfg.Host)
 	// check dumpling loader syncer config
 	c.Assert(subTaskConfig.MydumperConfig.Threads, check.Equals, exportThreads)
 	c.Assert(subTaskConfig.LoaderConfig.Dir, check.Equals, fmt.Sprintf("%s.%s", dataDir, taskName))
@@ -778,7 +742,6 @@ func testNoShardTaskToSubTaskConfig(c *check.C) {
 	c.Assert(ba.DoTables, check.HasLen, 1)
 	c.Assert(ba.DoTables[0].Name, check.Equals, noShardSourceTable)
 	c.Assert(ba.DoTables[0].Schema, check.Equals, noShardSourceSchema)
-
 	cancel()
 }
 
@@ -786,7 +749,6 @@ func testShardAndFilterTaskToSubTaskConfig(c *check.C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s := setupServer(ctx, c)
-	c.Assert(s.Start(ctx), check.IsNil)
 	defer s.Close()
 
 	sourceCfg1, err := config.LoadFromFile(sourceSampleFile)
@@ -800,14 +762,14 @@ func testShardAndFilterTaskToSubTaskConfig(c *check.C) {
 	c.Assert(s.scheduler.AddSourceCfg(sourceCfg2), check.IsNil)
 
 	task := genShardAndFilterTask()
-	todbCfg := &config.DBConfig{
+	toDBCfg := &config.DBConfig{
 		Host:     task.TargetConfig.Host,
 		Port:     task.TargetConfig.Port,
 		User:     task.TargetConfig.User,
 		Password: task.TargetConfig.Password,
 	}
 
-	subTaskConfigList, err := s.modelToSubTaskConfigList(todbCfg, &task)
+	subTaskConfigList, err := s.modelToSubTaskConfigList(toDBCfg, &task)
 	c.Assert(err, check.IsNil)
 	c.Assert(subTaskConfigList, check.HasLen, 2)
 
@@ -830,7 +792,7 @@ func testShardAndFilterTaskToSubTaskConfig(c *check.C) {
 	// check from
 	c.Assert(subTask1Config.From.Host, check.Equals, sourceCfg1.From.Host)
 	// check to
-	c.Assert(subTask1Config.To.Host, check.Equals, todbCfg.Host)
+	c.Assert(subTask1Config.To.Host, check.Equals, toDBCfg.Host)
 	// check dumpling loader syncer config
 	c.Assert(subTask1Config.MydumperConfig.Threads, check.Equals, exportThreads)
 	c.Assert(subTask1Config.LoaderConfig.Dir, check.Equals, fmt.Sprintf("%s.%s", dataDir, taskName))
@@ -881,7 +843,7 @@ func testShardAndFilterTaskToSubTaskConfig(c *check.C) {
 	// check from
 	c.Assert(subTask2Config.From.Host, check.Equals, sourceCfg2.From.Host)
 	// check to
-	c.Assert(subTask2Config.To.Host, check.Equals, todbCfg.Host)
+	c.Assert(subTask2Config.To.Host, check.Equals, toDBCfg.Host)
 	// check dumpling loader syncer config
 	c.Assert(subTask2Config.MydumperConfig.Threads, check.Equals, exportThreads)
 	c.Assert(subTask2Config.LoaderConfig.Dir, check.Equals, fmt.Sprintf("%s.%s", dataDir, taskName))
@@ -906,4 +868,51 @@ func testShardAndFilterTaskToSubTaskConfig(c *check.C) {
 	c.Assert(ba.DoTables[0].Name, check.Equals, shardSource2Table)
 	c.Assert(ba.DoTables[0].Schema, check.Equals, shardSource2Schema)
 	cancel()
+}
+
+func setupServer(ctx context.Context, c *check.C) *Server {
+	// create a new cluster
+	cfg1 := NewConfig()
+	c.Assert(cfg1.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg1.Name = "dm-master-1"
+	cfg1.DataDir = c.MkDir()
+	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg1.PeerUrls = tempurl.Alloc()
+	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
+	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
+
+	s1 := NewServer(cfg1)
+	c.Assert(s1.Start(ctx), check.IsNil)
+	// wait the first one become the leader
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return s1.election.IsLeader()
+	}), check.IsTrue)
+	return s1
+}
+
+// nolint:unparam
+func mockRelayQueryStatus(
+	mockWorkerClient *pbmock.MockWorkerClient, sourceName, workerName string, stage pb.Stage) {
+	queryResp := &pb.QueryStatusResponse{
+		Result: true,
+		SourceStatus: &pb.SourceStatus{
+			Worker: workerName,
+			Source: sourceName,
+		},
+	}
+	if stage == pb.Stage_Running {
+		queryResp.SourceStatus.RelayStatus = &pb.RelayStatus{Stage: stage}
+	}
+	if stage == pb.Stage_Paused {
+		queryResp.Result = false
+		queryResp.Msg = "some error happened"
+	}
+	mockWorkerClient.EXPECT().QueryStatus(
+		gomock.Any(),
+		&pb.QueryStatusRequest{Name: ""},
+	).Return(queryResp, nil).MaxTimes(maxRetryNum)
+}
+
+func mockCheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig, errCnt, warnCnt int64) error {
+	return nil
 }
