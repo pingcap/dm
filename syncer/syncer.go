@@ -2410,12 +2410,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 	if node, ok := stmt.(ast.DMLNode); ok {
 		// if DML can be ignored, we do not report an error
-		schema, table, err2 := tableNameForDML(node)
+		table, err2 := getTableByDML(node)
 		if err2 == nil {
-			if len(schema) == 0 {
-				schema = qec.ddlSchema
+			if len(table.Schema) == 0 {
+				table.Schema = qec.ddlSchema
 			}
-			ignore, err2 := s.filterRowsEvent(&filter.Table{Schema: schema, Name: table}, replication.QUERY_EVENT)
+			ignore, err2 := s.filterRowsEvent(table, replication.QUERY_EVENT)
 			if err2 == nil && ignore {
 				return nil
 			}
