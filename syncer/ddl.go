@@ -38,7 +38,7 @@ type parseDDLResult struct {
 
 func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (result parseDDLResult, err error) {
 	// check skip before parse (used to skip some un-supported DDLs)
-	ignore, err := s.skipQuery(nil, nil, sql)
+	ignore, err := s.filterSQL(sql)
 	if err != nil {
 		return parseDDLResult{
 			stmt:   nil,
@@ -89,7 +89,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 			if len(schema2) > 0 {
 				schema = schema2
 			}
-			ignore, err2 := s.skipDMLEvent(&filter.Table{Schema: schema, Name: table}, replication.QUERY_EVENT)
+			ignore, err2 := s.filterRowsEvent(&filter.Table{Schema: schema, Name: table}, replication.QUERY_EVENT)
 			if err2 == nil && ignore {
 				return parseDDLResult{
 					stmt:   nil,
@@ -149,7 +149,7 @@ func (s *Syncer) splitAndFilterDDL(
 			}
 		}
 
-		shouldSkip, err2 := s.skipQuery(tables, stmt2, sql)
+		shouldSkip, err2 := s.filterQueryEvent(tables, stmt2, sql)
 		if err2 != nil {
 			return nil, nil, err2
 		}

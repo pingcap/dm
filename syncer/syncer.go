@@ -2197,7 +2197,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 	// ENDTODO
 
-	ignore, err := s.skipDMLEvent(originTable, ec.header.EventType)
+	ignore, err := s.filterRowsEvent(originTable, ec.header.EventType)
 	if err != nil {
 		return err
 	}

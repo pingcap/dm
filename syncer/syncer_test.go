@@ -310,7 +310,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
 
-		r, err := syncer.skipQuery(tables, stmt, query)
+		r, err := syncer.filterQueryEvent(tables, stmt, query)
 		c.Assert(err, IsNil)
 		c.Assert(r, Equals, cs.skip)
 	}
@@ -447,7 +447,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 
 		tables, err := parserpkg.FetchDDLTables(sql, stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
-		r, err := syncer.skipQuery(tables, stmt, sql)
+		r, err := syncer.filterQueryEvent(tables, stmt, sql)
 		c.Assert(err, IsNil)
 		c.Assert(r, Equals, res[i])
 		i++
@@ -638,7 +638,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 					Schema: string(ev.Table.Schema),
 					Name:   string(ev.Table.Table),
 				}
-				r, err := syncer.skipDMLEvent(table, e.Header.EventType)
+				r, err := syncer.filterRowsEvent(table, e.Header.EventType)
 				c.Assert(err, IsNil)
 				c.Assert(r, Equals, sql.skipped)
 			default:
@@ -1636,7 +1636,7 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 
 				tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
 				c.Assert(err, IsNil)
-				r, err := syncer.skipQuery(tables, stmt, sql)
+				r, err := syncer.filterQueryEvent(tables, stmt, sql)
 				c.Assert(err, IsNil)
 				c.Assert(r, Equals, res[i][j])
 			}
@@ -1645,7 +1645,7 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 				Schema: string(ev.Table.Schema),
 				Name:   string(ev.Table.Table),
 			}
-			r, err := syncer.skipDMLEvent(table, e.Header.EventType)
+			r, err := syncer.filterRowsEvent(table, e.Header.EventType)
 			c.Assert(err, IsNil)
 			c.Assert(r, Equals, res[i][0])
 		default:
@@ -2012,7 +2012,7 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 					Schema: string(ev.Table.Schema),
 					Name:   string(ev.Table.Table),
 				}
-				skip, err := syncer.skipDMLEvent(table, e.Header.EventType)
+				skip, err := syncer.filterRowsEvent(table, e.Header.EventType)
 				c.Assert(err, IsNil)
 				if skip {
 					continue
