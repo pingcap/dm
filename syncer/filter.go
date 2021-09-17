@@ -55,7 +55,14 @@ func (s *Syncer) filterRowsEvent(table *filter.Table, eventType replication.Even
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 		et = bf.DeleteEvent
 	default:
-		return false, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
+		filtered, err := s.filterOneEvent(table, bf.NullEvent, "")
+		if err != nil {
+			return false, err
+		} else if filtered {
+			return filtered, nil
+		} else {
+			return false, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
+		}
 	}
 	return s.filterOneEvent(table, et, "")
 }
