@@ -674,8 +674,8 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 }
 
-func (s *Syncer) getTable(tctx *tcontext.Context, origTable, targetTable *filter.Table) (*model.TableInfo, error) {
-	ti, err := s.schemaTracker.GetTable(origTable)
+func (s *Syncer) getTableInfo(tctx *tcontext.Context, origTable, targetTable *filter.Table) (*model.TableInfo, error) {
+	ti, err := s.schemaTracker.GetTableInfo(origTable)
 	if err == nil {
 		return ti, nil
 	}
@@ -712,7 +712,7 @@ func (s *Syncer) getTable(tctx *tcontext.Context, origTable, targetTable *filter
 		}
 	}
 
-	ti, err = s.schemaTracker.GetTable(origTable)
+	ti, err = s.schemaTracker.GetTableInfo(origTable)
 	if err != nil {
 		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origTable)
 	}
@@ -787,7 +787,7 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origTable,
 	return nil
 }
 
-func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64, targetSchema, targetTable string) {
+func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64, targetTable *filter.Table) {
 	m := metrics.AddedJobsTotal
 	if isFinished {
 		s.count.Add(n)
@@ -795,7 +795,7 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 	}
 	switch tp {
 	case insert, update, del, ddl, flush:
-		m.WithLabelValues(tp.String(), s.cfg.Name, queueBucket, s.cfg.SourceID, s.cfg.WorkerName, targetSchema, targetTable).Add(float64(n))
+		m.WithLabelValues(tp.String(), s.cfg.Name, queueBucket, s.cfg.SourceID, s.cfg.WorkerName, targetTable.Schema, targetTable.Name).Add(float64(n))
 	case skip, xid:
 		// ignore skip/xid jobs
 	default:
@@ -861,7 +861,7 @@ func (s *Syncer) checkWait(job *job) bool {
 }
 
 func (s *Syncer) saveTablePoint(table *filter.Table, location binlog.Location) {
-	ti, err := s.schemaTracker.GetTable(table)
+	ti, err := s.schemaTracker.GetTableInfo(table)
 	if err != nil && table.Name != "" {
 		s.tctx.L().DPanic("table info missing from schema tracker",
 			zap.Stringer("table", table),
@@ -941,7 +941,7 @@ func (s *Syncer) addJob(job *job) error {
 	case skip:
 		s.updateReplicationJobTS(job, skipJobIdx)
 	case flush:
-		s.addCount(false, adminQueueName, job.tp, 1, job.targetSchema, job.targetTable)
+		s.addCount(false, adminQueueName, job.tp, 1, job.targetTable)
 		// ugly code addJob and sync, refine it later
 		s.jobWg.Add(s.cfg.WorkerCount)
 		for i := 0; i < s.cfg.WorkerCount; i++ {
@@ -951,11 +951,11 @@ func (s *Syncer) addJob(job *job) error {
 			metrics.AddJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		}
 		s.jobWg.Wait()
-		s.addCount(true, adminQueueName, job.tp, 1, job.targetSchema, job.targetTable)
+		s.addCount(true, adminQueueName, job.tp, 1, job.targetTable)
 		return s.flushCheckPoints()
 	case ddl:
 		s.jobWg.Wait()
-		s.addCount(false, adminQueueName, job.tp, 1, job.targetSchema, job.targetTable)
+		s.addCount(false, adminQueueName, job.tp, 1, job.targetTable)
 		s.updateReplicationJobTS(job, ddlJobIdx)
 		s.jobWg.Add(1)
 		queueBucket = s.cfg.WorkerCount
@@ -965,7 +965,7 @@ func (s *Syncer) addJob(job *job) error {
 	case insert, update, del:
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
-		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1, job.targetSchema, job.targetTable)
+		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1, job.targetTable)
 		startTime := time.Now()
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
@@ -1011,24 +1011,24 @@ func (s *Syncer) addJob(job *job) error {
 		})
 		// only save checkpoint for DDL and XID (see above)
 		s.saveGlobalPoint(job.location)
-		for sourceSchema, tbs := range job.sourceTbl {
+		for sourceSchema, tbs := range job.sourceTbls {
 			if len(sourceSchema) == 0 {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(&filter.Table{Schema: sourceSchema, Name: sourceTable}, job.location)
+				s.saveTablePoint(sourceTable, job.location)
 			}
 		}
 		// reset sharding group after checkpoint saved
-		s.resetShardingGroup(job.targetSchema, job.targetTable)
+		s.resetShardingGroup(job.targetTable)
 	case insert, update, del:
 		// save job's current pos for DML events
-		for sourceSchema, tbs := range job.sourceTbl {
+		for sourceSchema, tbs := range job.sourceTbls {
 			if len(sourceSchema) == 0 {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(&filter.Table{Schema: sourceSchema, Name: sourceTable}, job.currentLocation)
+				s.saveTablePoint(sourceTable, job.currentLocation)
 			}
 		}
 	}
@@ -1056,10 +1056,10 @@ func (s *Syncer) saveGlobalPoint(globalLocation binlog.Location) {
 	s.checkpoint.SaveGlobalPoint(globalLocation)
 }
 
-func (s *Syncer) resetShardingGroup(schema, table string) {
+func (s *Syncer) resetShardingGroup(table *filter.Table) {
 	if s.cfg.ShardMode == config.ShardPessimistic {
 		// for DDL sharding group, reset group after checkpoint saved
-		group := s.sgk.Group(&filter.Table{Schema: schema, Name: table})
+		group := s.sgk.Group(table)
 		if group != nil {
 			group.Reset()
 		}
@@ -1250,7 +1250,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *dbconn.
 			continue
 		}
 		s.jobWg.Done()
-		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)), ddlJob.targetSchema, ddlJob.targetTable)
+		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)), ddlJob.targetTable)
 		// reset job TS when this ddl is finished.
 		s.updateReplicationJobTS(nil, ddlJobIdx)
 	}
@@ -1299,7 +1299,7 @@ func (s *Syncer) syncDML(
 		for dbSchema, tableM := range tpCnt {
 			for dbTable, tpM := range tableM {
 				for tpName, cnt := range tpM {
-					s.addCount(true, queueBucket, tpName, cnt, dbSchema, dbTable)
+					s.addCount(true, queueBucket, tpName, cnt, &filter.Table{Schema: dbSchema, Name: dbTable})
 				}
 			}
 		}
@@ -1401,13 +1401,14 @@ func (s *Syncer) syncDML(
 					s.updateReplicationJobTS(sqlJob, workerJobIdx)
 				}
 				jobs = append(jobs, sqlJob)
-				if _, ok := tpCnt[sqlJob.targetSchema]; !ok {
-					tpCnt[sqlJob.targetSchema] = make(map[string]map[opType]int64)
+				schemaName, tableName := sqlJob.targetTable.Schema, sqlJob.targetTable.Name
+				if _, ok := tpCnt[schemaName]; !ok {
+					tpCnt[schemaName] = make(map[string]map[opType]int64)
 				}
-				if _, ok := tpCnt[sqlJob.targetSchema][sqlJob.targetTable]; !ok {
-					tpCnt[sqlJob.targetSchema][sqlJob.targetTable] = make(map[opType]int64)
+				if _, ok := tpCnt[schemaName][tableName]; !ok {
+					tpCnt[schemaName][tableName] = make(map[opType]int64)
 				}
-				tpCnt[sqlJob.targetSchema][sqlJob.targetTable][sqlJob.tp]++
+				tpCnt[schemaName][tableName][sqlJob.tp]++
 			}
 
 			if idx >= count || sqlJob.tp == flush {
@@ -2196,11 +2197,11 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	// TODO(csuzhangxc): check performance of `getTable` from schema tracker.
-	ti, err := s.getTable(ec.tctx, originTable, targetTable)
+	tableInfo, err := s.getTableInfo(ec.tctx, originTable, targetTable)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
-	rows, err := s.mappingDML(originTable.Schema, originTable.Name, ti, ev.Rows)
+	rows, err := s.mappingDML(originTable, tableInfo, ev.Rows)
 	if err != nil {
 		return err
 	}
@@ -2208,7 +2209,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return err2
 	}
 
-	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(ti, rows)
+	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(tableInfo, rows)
 	if err != nil {
 		return err
 	}
@@ -2221,17 +2222,16 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	)
 
 	param := &genDMLParam{
-		schema:            targetTable.Schema,
-		table:             targetTable.Name,
+		tableID:           utils.GenTableID(targetTable),
 		data:              prunedRows,
 		originalData:      rows,
 		columns:           prunedColumns,
-		originalTableInfo: ti,
+		originalTableInfo: tableInfo,
 	}
 
 	switch ec.header.EventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originTable.Schema, originTable.Name, ti)
+		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
@@ -2245,7 +2245,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originTable.Schema, originTable.Name, ti)
+		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
@@ -2259,7 +2259,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originTable.Schema, originTable.Name, ti)
+		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
@@ -2286,7 +2286,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if keys != nil {
 			key = keys[i]
 		}
-		err = s.commitJob(jobType, originTable.Schema, originTable.Name, targetTable.Schema, targetTable.Name, sqls[i], arg, key, &ec)
+		err = s.commitJob(jobType, originTable, targetTable, sqls[i], arg, key, &ec)
 		if err != nil {
 			return err
 		}
@@ -2608,11 +2608,10 @@ func (s *Syncer) handleQueryEventNoSharding(qec *queryEventContext) error {
 			zap.String("event", "query"),
 			zap.Strings("ddls", qec.needHandleDDLs),
 			zap.String("raw statement", qec.originSQL),
-			zap.String("schema", table.Schema),
-			zap.String("table", table.Name))
-		err2 := s.onlineDDL.Finish(qec.tctx, table.Schema, table.Name)
+			zap.Stringer("table", table))
+		err2 := s.onlineDDL.Finish(qec.tctx, table)
 		if err2 != nil {
-			return terror.Annotatef(err2, "finish online ddl on %s.%s", table.Schema, table.Name)
+			return terror.Annotatef(err2, "finish online ddl on %v", table)
 		}
 	}
 
@@ -2691,7 +2690,7 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 
 	if needShardingHandle {
 		metrics.UnsyncedTableGauge.WithLabelValues(s.cfg.Name, ddlInfo.tables[1][0].String(), s.cfg.SourceID).Set(float64(remain))
-		err = s.safeMode.IncrForTable(qec.tctx, ddlInfo.tables[1][0].Schema, ddlInfo.tables[1][0].Name) // try enable safe-mode when starting syncing for sharding group
+		err = s.safeMode.IncrForTable(qec.tctx, ddlInfo.tables[1][0]) // try enable safe-mode when starting syncing for sharding group
 		if err != nil {
 			return err
 		}
@@ -2719,7 +2718,7 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 			zap.String("sourceTableID", sourceTableID),
 			zap.Stringer("start location", startLocation),
 			log.WrapStringerField("end location", currentLocation))
-		err = s.safeMode.DescForTable(qec.tctx, ddlInfo.tables[1][0].Schema, ddlInfo.tables[1][0].Name) // try disable safe-mode after sharding group synced
+		err = s.safeMode.DescForTable(qec.tctx, ddlInfo.tables[1][0]) // try disable safe-mode after sharding group synced
 		if err != nil {
 			return err
 		}
@@ -2904,7 +2903,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		}
 	}
 	for i := 0; i < shouldTableExistNum; i++ {
-		if _, err := s.getTable(ec.tctx, srcTables[i], targetTables[i]); err != nil {
+		if _, err := s.getTableInfo(ec.tctx, srcTables[i], targetTables[i]); err != nil {
 			return err
 		}
 	}
@@ -2918,14 +2917,14 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		if err := s.schemaTracker.CreateSchemaIfNotExists(srcTables[i].Schema); err != nil {
 			return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, srcTables[i].Schema)
 		}
-		if _, err := s.getTable(ec.tctx, srcTables[i], targetTables[i]); err != nil {
+		if _, err := s.getTableInfo(ec.tctx, srcTables[i], targetTables[i]); err != nil {
 			return err
 		}
 	}
 
 	if tryFetchDownstreamTable {
 		// ignore table not exists error, just try to fetch table from downstream.
-		_, _ = s.getTable(ec.tctx, srcTables[0], targetTables[0])
+		_, _ = s.getTableInfo(ec.tctx, srcTables[0], targetTables[0])
 	}
 
 	if shouldExecDDLOnSchemaTracker {
@@ -2933,13 +2932,13 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 			ec.tctx.L().Error("cannot track DDL", zap.String("schema", usedSchema), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
 			return terror.ErrSchemaTrackerCannotExecDDL.Delegate(err, sql)
 		}
-		s.exprFilterGroup.ResetExprs(srcTable.Schema, srcTable.Name)
+		s.exprFilterGroup.ResetExprs(srcTable)
 	}
 
 	return nil
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, ec *eventContext) error {
+func (s *Syncer) commitJob(tp opType, sourceTable, targetTable *filter.Table, sql string, args []interface{}, keys []string, ec *eventContext) error {
 	startTime := time.Now()
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
@@ -2948,7 +2947,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 	metrics.ConflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 
-	job := newDMLJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
+	job := newDMLJob(tp, sql, sourceTable, targetTable, args, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
 	return s.addJobFunc(job)
 }
 
