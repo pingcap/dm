@@ -43,118 +43,84 @@ func (s *Syncer) parseDDLSQL(qec *queryEventContext) (stmt ast.StmtNode, err err
 	return stmts[0], nil
 }
 
-// preprocessDDL preprocess ddl as follow step:
+// processSplitedDDL processes SplitedDDLddl as follow step:
 // 1. track ddl whatever skip it;
 // 2. skip sql by filterQueryEvent;
 // 3. apply online ddl if onlineDDL is not nil:
 //    * specially, if skip, apply empty string;
 // 4. handle online ddl SQL by handleOnlineDDL.
-func (s *Syncer) preprocessDDL(qec *queryEventContext) error {
-	for _, sql := range qec.splitedDDLs {
-		stmt, err := qec.p.ParseOneStmt(sql, "", "")
-		if err != nil {
-			return terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
-		}
-
-		tables, err2 := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
-		if err != nil {
-			return err
-		}
-
-		// get real tableNames before apply block-allow list
-		realTables := []*filter.Table{}
-		for _, table := range tables {
-			var realName string
-			if s.onlineDDL != nil {
-				realName = s.onlineDDL.RealName(table.Name)
-			} else {
-				realName = table.Name
-			}
-			realTables = append(realTables, &filter.Table{
-				Schema: table.Schema,
-				Name:   realName,
-			})
-		}
-
-		shouldSkip, err := s.filterQueryEvent(realTables, stmt, sql)
-		if err2 != nil {
-			return err
-		}
-		if shouldSkip {
-			metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
-			qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", qec.ddlSchema))
-			if s.onlineDDL != nil {
-				// nolint:errcheck
-				// when skip ddl, apply empty ddl for onlineDDL
-				// otherwise it cause an error once meet the rename ddl of onlineDDL
-				s.onlineDDL.Apply(qec.tctx, tables, "", stmt)
-			}
-			continue
-		}
-		if s.onlineDDL == nil {
-			qec.appliedDDLs = append(qec.appliedDDLs, sql)
-			continue
-		}
-
-		// filter and store ghost table ddl, transform online ddl
-		ss, err := s.handleOnlineDDL(qec, tables, sql, stmt)
-		if err != nil {
-			return err
-		}
-
-		qec.appliedDDLs = append(qec.appliedDDLs, ss...)
-	}
-	if len(qec.onlineDDLTables) > 1 {
-		return terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(qec.originSQL)
-	}
-	return nil
-}
-
-// routeDDL will rename table names in DDL.
-func (s *Syncer) routeDDL(qec *queryEventContext, sql string) (string, [][]*filter.Table, ast.StmtNode, error) {
+func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string, error) {
 	stmt, err := qec.p.ParseOneStmt(sql, "", "")
 	if err != nil {
-		return "", nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
+		return nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
-	tables, err := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
-	if err != nil {
-		return "", nil, nil, err
-	}
-
-	targetTables := make([]*filter.Table, 0, len(tables))
-	for i := range tables {
-		renamedTable := s.renameShardingSchema(tables[i])
-		targetTables = append(targetTables, renamedTable)
-	}
-
-	ddl, err := parserpkg.RenameDDLTable(stmt, targetTables)
-	return ddl, [][]*filter.Table{tables, targetTables}, stmt, err
-}
-
-// handleOnlineDDL checks if the input `sql` is came from online DDL tools.
-// If so, it will save actual DDL or return the actual DDL depending on online DDL types of `sql`.
-// If not, it returns original SQL.
-func (s *Syncer) handleOnlineDDL(qec *queryEventContext, tableNames []*filter.Table, sql string, stmt ast.StmtNode) ([]string, error) {
-	if s.onlineDDL == nil {
-		return []string{sql}, nil
-	}
-
-	sqls, err := s.onlineDDL.Apply(qec.tctx, tableNames, sql, stmt)
+	tables, err2 := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
 		return nil, err
 	}
 
-	// skip or origin sqls
-	if len(sqls) == 0 || (len(sqls) == 1 && sqls[0] == sql) {
-		return sqls, nil
+	// get real tableNames before apply block-allow list
+	realTables := make([]*filter.Table, 0, len(tables))
+	for _, table := range tables {
+		realName := table.Name
+		if s.onlineDDL != nil {
+			realName = s.onlineDDL.RealName(table.Name)
+		}
+		realTables = append(realTables, &filter.Table{
+			Schema: table.Schema,
+			Name:   realName,
+		})
 	}
 
-	renamedSqls := []string{}
-	sourceTable := tableNames[0]
-	// RenameDDLTable need []*filter.table
-	targetTables := tableNames[1:2]
-	// TODO(okJiang): seems to repeat with some logic in routeDDL
+	shouldSkip, err := s.filterQueryEvent(realTables, stmt, sql)
+	if err2 != nil {
+		return nil, err
+	}
+	if shouldSkip {
+		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
+		qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", qec.ddlSchema))
+		// when skip ddl, apply empty ddl for onlineDDL
+		// otherwise it cause an error once meet the rename ddl of onlineDDL
+		sql = ""
+	}
+
+	sqls := []string{sql}
+	if s.onlineDDL != nil {
+		// filter and save ghost table ddl
+		sqls, err = s.onlineDDL.Apply(qec.tctx, tables, sql, stmt)
+		if err != nil {
+			return nil, err
+		}
+		// len(sql) == 0: represent it should skip
+		// len(sqls) == 0: represent saved in onlineDDL.Storage
+		if len(sql) == 0 || len(sqls) == 0 {
+			return nil, nil
+		}
+		// sqls[0] == sql: represent this sql is not online DDL.
+		if sqls[0] == sql {
+			return sqls, nil
+		}
+		// In there, stmt must be a `RenameTableStmt`. See details in OnlinePlugin.Apply.
+		// So tables is [old1, new1], which new1 is the OnlinePlugin.RealTable. See details in FetchDDLTables.
+		// Rename ddl's table to RealTable.
+		sqls, err = s.renameOnlineDDLTable(qec, tables[1], sqls)
+		if err != nil {
+			return sqls, err
+		}
+		if qec.onlineDDLTable == nil {
+			qec.onlineDDLTable = tables[0]
+		} else if qec.onlineDDLTable.String() != tables[0].String() {
+			return nil, terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(qec.originSQL)
+		}
+	}
+	return sqls, nil
+}
+
+// renameOnlineDDLTable renames the given ddl sqls by given targetTable.
+func (s *Syncer) renameOnlineDDLTable(qec *queryEventContext, targetTable *filter.Table, sqls []string) ([]string, error) {
+	renamedSqls := make([]string, 0, len(sqls))
+	targetTables := []*filter.Table{targetTable}
 	for _, sql := range sqls {
 		// remove empty sqls which inserted because online DDL is filtered
 		if sql == "" {
@@ -171,7 +137,6 @@ func (s *Syncer) handleOnlineDDL(qec *queryEventContext, tableNames []*filter.Ta
 		}
 		renamedSqls = append(renamedSqls, sql)
 	}
-	qec.onlineDDLTables[sourceTable.String()] = sourceTable
 	return renamedSqls, nil
 }
 

@@ -49,7 +49,7 @@ func (s *Syncer) initOptimisticShardDDL(ctx context.Context) error {
 	for upSchema, UpTables := range sourceTables {
 		for _, upTable := range UpTables {
 			up := &filter.Table{Schema: upSchema, Name: upTable}
-			down := s.renameShardingSchema(up)
+			down := s.route(up)
 			downSchema, downTable := down.Schema, down.Name
 			if _, ok := mapper[downSchema]; !ok {
 				mapper[downSchema] = make(map[string]map[string]map[string]struct{})
@@ -214,17 +214,15 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		return nil
 	}
 
-	for _, table := range qec.onlineDDLTables {
-		s.tctx.L().Info("finish online ddl and clear online ddl metadata in optimistic shard mode",
-			zap.String("event", "query"),
-			zap.Strings("ddls", qec.needHandleDDLs),
-			zap.String("raw statement", qec.originSQL),
-			zap.String("schema", table.Schema),
-			zap.String("table", table.Name))
-		err = s.onlineDDL.Finish(qec.tctx, table.Schema, table.Name)
-		if err != nil {
-			return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
-		}
+	s.tctx.L().Info("finish online ddl and clear online ddl metadata in optimistic shard mode",
+		zap.String("event", "query"),
+		zap.Strings("ddls", qec.needHandleDDLs),
+		zap.String("raw statement", qec.originSQL),
+		zap.String("schema", qec.onlineDDLTable.Schema),
+		zap.String("table", qec.onlineDDLTable.Name))
+	err = s.onlineDDL.Finish(qec.tctx, qec.onlineDDLTable.Schema, qec.onlineDDLTable.Name)
+	if err != nil {
+		return terror.Annotatef(err, "finish online ddl on %s.%s", qec.onlineDDLTable.Schema, qec.onlineDDLTable.Name)
 	}
 
 	s.tctx.L().Info("finish to handle ddls in optimistic shard mode", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))

@@ -108,7 +108,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 				log.L().Warn("ignore --sync flag", zap.String("shard mode", s.cfg.ShardMode))
 				break
 			}
-			downTable := s.renameShardingSchema(table)
+			downTable := s.route(table)
 			// use new table info as tableInfoBefore, we can also use the origin table from schemaTracker
 			info := s.optimist.ConstructInfo(req.Database, req.Table, downTable.Schema, downTable.Name, []string{""}, ti, []*model.TableInfo{ti})
 			info.IgnoreConflict = true

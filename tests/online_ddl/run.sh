@@ -64,14 +64,14 @@ function run() {
 	run_sql_online_ddl "alter table gho_t3 add column c int comment '1  2
 3😊4';" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl gh-ost
 
-	run_sql_online_ddl "alter table pt_t1 add column c int comment '1  2
-3😊4';" $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl pt
-	run_sql_online_ddl "alter table pt_t2 add column c int comment '1  2
-3😊4';" $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl pt
-	run_sql_online_ddl "alter table pt_t2 add column c int comment '1  2
-3😊4';" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl pt
-	run_sql_online_ddl "alter table pt_t3 add column c int comment '1  2
-3😊4';" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl pt
+# 	run_sql_online_ddl "alter table pt_t1 add column c int comment '1  2
+# 3😊4';" $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl pt
+# 	run_sql_online_ddl "alter table pt_t2 add column c int comment '1  2
+# 3😊4';" $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl pt
+# 	run_sql_online_ddl "alter table pt_t2 add column c int comment '1  2
+# 3😊4';" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl pt
+# 	run_sql_online_ddl "alter table pt_t3 add column c int comment '1  2
+# 3😊4';" $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl pt
 
 	check_port_offline $WORKER2_PORT 10
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -79,27 +79,28 @@ function run() {
 
 	# imitate a DM task is started during the processing of online DDL tool
 	run_sql_source1 "rename /* gh-ost */ table online_ddl.gho_ignore to online_ddl._gho_ignore_del, online_ddl._gho_ignore_gho to online_ddl.gho_ignore;"
-	run_sql_source1 "rename table online_ddl.pt_ignore to online_ddl._pt_ignore_old, online_ddl._pt_ignore_new to online_ddl.pt_ignore;"
+	# run_sql_source1 "rename table online_ddl.pt_ignore to online_ddl._pt_ignore_old, online_ddl._pt_ignore_new to online_ddl.pt_ignore;"
 
 	run_sql_file_online_ddl $cur/data/gho.db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl gh-ost
 	run_sql_file_online_ddl $cur/data/gho.db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl gh-ost
-	run_sql_file_online_ddl $cur/data/pt.db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl pt
-	run_sql_file_online_ddl $cur/data/pt.db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl pt
+	# run_sql_file_online_ddl $cur/data/pt.db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl pt
+	# run_sql_file_online_ddl $cur/data/pt.db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl pt
 
 	for ((k = 0; k < 10; k++)); do
-		run_sql_tidb "show create table online_ddl.pt_t_target"
+		# run_sql_tidb "show create table online_ddl.pt_t_target"
+		run_sql_tidb "show create table online_ddl.gho_t_target"
 		check_contains "info_json" && break || true
 		sleep 1
 	done
 	check_contains "info_json"
 
 	run_sql_tidb "show create table online_ddl.gho_t_target"
-	run_sql_tidb "show create table online_ddl.pt_t_target"
+	# run_sql_tidb "show create table online_ddl.pt_t_target"
 	check_not_contains "KEY \`name\`"
 
 	# manually create index to pass check_sync_diff
 	run_sql_tidb "alter table online_ddl.gho_t_target add key name (name)"
-	run_sql_tidb "alter table online_ddl.pt_t_target add key name (name)"
+	# run_sql_tidb "alter table online_ddl.pt_t_target add key name (name)"
 
 	echo "use sync_diff_inspector to check increment data"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -126,8 +127,8 @@ function run() {
 
 	run_sql_file $cur/data/gho.db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_file $cur/data/gho.db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
-	run_sql_file $cur/data/pt.db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-	run_sql_file $cur/data/pt.db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+	# run_sql_file $cur/data/pt.db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	# run_sql_file $cur/data/pt.db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 	sleep 2
 
 	echo "use sync_diff_inspector to check increment2 data now!"

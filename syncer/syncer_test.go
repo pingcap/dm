@@ -1598,12 +1598,24 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	}
 
 	for _, ca := range cases {
-		ddlSQL, filter, stmt, err := syncer.routeDDL(qec, ca.sql)
+		stmt, err := qec.p.ParseOneStmt(ca.sql, "", "")
+		c.Assert(err, IsNil)
+
+		originTables, err := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, syncer.SourceTableNamesFlavor)
+		c.Assert(err, IsNil)
+
+		routedTables := make([]*filter.Table, 0, len(originTables))
+		for i := range originTables {
+			routedTable := syncer.route(originTables[i])
+			routedTables = append(routedTables, routedTable)
+		}
+
+		sqlDDL, err := parserpkg.RenameDDLTable(stmt, routedTables)
 		c.Assert(err, IsNil)
 
 		ca.callback()
 
-		c.Assert(syncer.trackDDL(testDB, ddlSQL, filter, stmt, ec), IsNil)
+		c.Assert(syncer.trackDDL(testDB, sqlDDL, [][]*filter.Table{originTables, routedTables}, stmt, ec), IsNil)
 		c.Assert(syncer.schemaTracker.Reset(), IsNil)
 		c.Assert(mock.ExpectationsWereMet(), IsNil)
 		c.Assert(checkPointMock.ExpectationsWereMet(), IsNil)
@@ -1633,8 +1645,11 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 			}
 			qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 			c.Assert(err, IsNil)
-			err = syncer.preprocessDDL(qec)
-			c.Assert(err, IsNil)
+			for _, sql := range qec.splitedDDLs {
+				sqls, err := syncer.processSplitedDDL(qec, sql)
+				c.Assert(err, IsNil)
+				qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+			}
 			if len(qec.appliedDDLs) == 0 {
 				c.Assert(res[i], HasLen, 1)
 				c.Assert(res[i][0], Equals, true)

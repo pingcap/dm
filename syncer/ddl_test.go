@@ -16,7 +16,6 @@ package syncer
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -96,12 +95,15 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 		ddlSchema:    "schemadb",
 		p:            parser,
 	}
-	qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
-	c.Assert(err, IsNil)
 
 	syncer := &Syncer{}
-	err = syncer.preprocessDDL(qec)
+	qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 	c.Assert(err, IsNil)
+	for _, sql := range qec.splitedDDLs {
+		sqls, err := syncer.processSplitedDDL(qec, sql)
+		c.Assert(err, IsNil)
+		qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+	}
 	c.Assert(len(qec.appliedDDLs), Equals, 1)
 	c.Assert(qec.appliedDDLs[0], Equals, expectedSQL)
 }
@@ -227,17 +229,13 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 
 		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		// c.Assert(targetSQLs[i], HasLen, len(qec.splitedDDLs))
-		err = syncer.preprocessDDL(qec)
-		c.Assert(err, IsNil)
+		for _, sql := range qec.splitedDDLs {
+			sqls, err := syncer.processSplitedDDL(qec, sql)
+			c.Assert(err, IsNil)
+			qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+		}
 		c.Assert(qec.appliedDDLs, DeepEquals, expectedSQLs[i])
 		c.Assert(targetSQLs[i], HasLen, len(qec.appliedDDLs))
-
-		for j, statement := range qec.appliedDDLs {
-			s, _, _, err := syncer.routeDDL(qec, statement)
-			c.Assert(err, IsNil)
-			c.Assert(s, Equals, targetSQLs[i][j])
-		}
 	}
 }
 
@@ -370,13 +368,18 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 			ddlSchema:   "test",
 			p:           parser,
 		}
-		stmt, err := parser.ParseOneStmt(tc.sql, "", "")
+		stmt, err := syncer.parseDDLSQL(qec)
 		c.Assert(err, IsNil)
+		_, ok := stmt.(ast.DDLNode)
+		c.Assert(ok, IsTrue)
 
 		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		err = syncer.preprocessDDL(qec)
-		c.Assert(err, IsNil)
+		for _, sql := range qec.splitedDDLs {
+			sqls, err := syncer.processSplitedDDL(qec, sql)
+			c.Assert(err, IsNil)
+			qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+		}
 
 		c.Assert(len(qec.appliedDDLs), Equals, 1)
 		c.Assert(qec.appliedDDLs[0], Equals, tc.expected)
@@ -385,19 +388,53 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 
 func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 	cases := []struct {
-		onlineType string
-		trashName  string
-		ghostname  string
+		needNew   bool
+		sql       string
+		expectSql string
 	}{
+		// ghost
+		// real table
 		{
-			config.GHOST,
-			"_t1_del",
-			"_t1_gho",
+			needNew:   true,
+			sql:       "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+			expectSql: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+		},
+		// trash table
+		{
+			needNew: true,
+			sql:     "CREATE TABLE IF NOT EXISTS `test`.`_t1_del` (`n` INT)",
+		},
+		// ghost table
+		{
+			needNew: true,
+			sql:     "ALTER TABLE `test`.`_t1_gho` ADD COLUMN `n` INT",
 		},
 		{
-			config.PT,
-			"_t1_old",
-			"_t1_new",
+			needNew:   false,
+			sql:       "RENAME TABLE `test`.`_t1_gho` TO `test`.`t1`",
+			expectSql: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+		},
+		// pt
+		// real table
+		{
+			needNew:   true,
+			sql:       "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+			expectSql: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+		},
+		// trash table
+		{
+			needNew: true,
+			sql:     "CREATE TABLE IF NOT EXISTS `test`.`_t1_old` (`n` INT)",
+		},
+		// ghost table
+		{
+			needNew: true,
+			sql:     "ALTER TABLE `test`.`_t1_new` ADD COLUMN `n` INT",
+		},
+		{
+			needNew:   false,
+			sql:       "RENAME TABLE `test`.`_t1_new` TO `test`.`t1`",
+			expectSql: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
 		},
 	}
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveOnlineDDL")))
@@ -405,75 +442,39 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		tctx: tctx,
 	}
 
+	var qec *queryEventContext
+	plugin, err := onlineddl.NewRealOnlinePlugin(tctx, s.cfg)
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(s.cfg, nil)
+	syncer.onlineDDL = plugin
+	c.Assert(plugin.Clear(tctx), IsNil)
+
+	// real table
 	for _, ca := range cases {
-		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, s.cfg)
-		c.Assert(err, IsNil)
-		syncer := NewSyncer(s.cfg, nil)
-		syncer.onlineDDL = plugin
-		c.Assert(plugin.Clear(tctx), IsNil)
-
-		// TODO: change to a loop
-		// real table
-		qec := &queryEventContext{
-			eventContext:    ec,
-			ddlSchema:       "test",
-			appliedDDLs:     make([]string, 0),
-			onlineDDLTables: make(map[string]*filter.Table),
-			p:               parser.New(),
+		if ca.needNew {
+			qec = &queryEventContext{
+				eventContext: ec,
+				ddlSchema:    "test",
+				appliedDDLs:  make([]string, 0),
+				p:            parser.New(),
+			}
 		}
-		sql := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
-		stmt, err := qec.p.ParseOneStmt(sql, "", "")
+		qec.originSQL = ca.sql
+		stmt, err := syncer.parseDDLSQL(qec)
 		c.Assert(err, IsNil)
+		_, ok := stmt.(ast.DDLNode)
+		c.Assert(ok, IsTrue)
 		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		err = syncer.preprocessDDL(qec)
-		c.Assert(err, IsNil)
+		for _, sql := range qec.splitedDDLs {
+			sqls, err := syncer.processSplitedDDL(qec, sql)
+			c.Assert(err, IsNil)
+			qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+		}
 		c.Assert(qec.appliedDDLs, HasLen, 1)
-		c.Assert(qec.appliedDDLs[0], Equals, sql)
-
-		// trash table
-		qec = &queryEventContext{
-			eventContext:    ec,
-			ddlSchema:       "test",
-			appliedDDLs:     make([]string, 0),
-			onlineDDLTables: make(map[string]*filter.Table),
-			p:               parser.New(),
+		if len(ca.expectSql) != 0 {
+			c.Assert(qec.appliedDDLs[0], Equals, ca.expectSql)
 		}
-		sql = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `test`.`%s` (`n` INT)", ca.trashName)
-		stmt, err = qec.p.ParseOneStmt(sql, "", "")
-		c.Assert(err, IsNil)
-		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
-		c.Assert(err, IsNil)
-		err = syncer.preprocessDDL(qec)
-		c.Assert(err, IsNil)
-		c.Assert(qec.appliedDDLs, HasLen, 0)
-
-		// ghost table
-		qec = &queryEventContext{
-			eventContext:    ec,
-			ddlSchema:       "test",
-			appliedDDLs:     make([]string, 0),
-			onlineDDLTables: make(map[string]*filter.Table),
-			p:               parser.New(),
-		}
-		sql = fmt.Sprintf("ALTER TABLE `test`.`%s` ADD COLUMN `n` INT", ca.ghostname)
-		newSQL := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
-		stmt, err = qec.p.ParseOneStmt(sql, "", "")
-		c.Assert(err, IsNil)
-		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
-		c.Assert(err, IsNil)
-		err = syncer.preprocessDDL(qec)
-		c.Assert(err, IsNil)
-		c.Assert(qec.appliedDDLs, HasLen, 0)
-		sql = fmt.Sprintf("RENAME TABLE `test`.`%s` TO `test`.`t1`", ca.ghostname)
-		stmt, err = qec.p.ParseOneStmt(sql, "", "")
-		c.Assert(err, IsNil)
-		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
-		c.Assert(err, IsNil)
-		err = syncer.preprocessDDL(qec)
-		c.Assert(err, IsNil)
-		c.Assert(qec.appliedDDLs, HasLen, 1)
-		c.Assert(qec.appliedDDLs[0], Equals, newSQL)
 	}
 }
 
