@@ -687,7 +687,7 @@ func (c *TaskConfig) adjust() error {
 		log.L().Warn("`remove-meta` in task config is deprecated, please use `start-task ... --remove-meta` instead")
 	}
 
-	if c.EnableHeartbeat || c.HeartbeatReportInterval != defaultUpdateInterval ||
+	if c.EnableHeartbeat || c.HeartbeatUpdateInterval != defaultUpdateInterval ||
 		c.HeartbeatReportInterval != defaultReportInterval {
 		c.EnableHeartbeat = false
 		log.L().Warn("heartbeat is deprecated, needn't set it anymore.")
