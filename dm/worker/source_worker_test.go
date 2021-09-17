@@ -121,10 +121,12 @@ func (t *testServer2) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 
 	getMinLocForSubTaskFunc = getFakeLocForSubTask
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD", `return(true)`), IsNil)
 }
 
 func (t *testServer2) TearDownSuite(c *C) {
 	getMinLocForSubTaskFunc = getMinLocForSubTask
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD"), IsNil)
 }
 
 func (t *testServer2) TestTaskAutoResume(c *C) {
@@ -247,6 +249,7 @@ func (t *testWorkerFunctionalities) SetUpSuite(c *C) {
 		return []unit.Unit{mockDumper, mockLoader, mockSync}
 	}
 	getMinLocForSubTaskFunc = getFakeLocForSubTask
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD", `return(true)`), IsNil)
 }
 
 func (t *testWorkerFunctionalities) TearDownSuite(c *C) {
@@ -254,6 +257,7 @@ func (t *testWorkerFunctionalities) TearDownSuite(c *C) {
 	NewSubTask = NewRealSubTask
 	createUnits = createRealUnits
 	getMinLocForSubTaskFunc = getMinLocForSubTask
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD"), IsNil)
 }
 
 func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
@@ -418,12 +422,14 @@ func (t *testWorkerEtcdCompact) SetUpSuite(c *C) {
 		mockSync := NewMockUnit(pb.UnitType_Sync)
 		return []unit.Unit{mockDumper, mockLoader, mockSync}
 	}
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD", `return(true)`), IsNil)
 }
 
 func (t *testWorkerEtcdCompact) TearDownSuite(c *C) {
 	NewRelayHolder = NewRealRelayHolder
 	NewSubTask = NewRealSubTask
 	createUnits = createRealUnits
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD"), IsNil)
 }
 
 func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
