@@ -1074,7 +1074,6 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 		return nil, terror.Annotate(err, "fail to get random server id when relay adjust gtid")
 	}
 	syncCfg.ServerID = randomServerID
-
 	tcpReader := binlogReader.NewTCPReader(syncCfg)
 	resultGs, err := binlogReader.GetPreviousGTIDFromGTIDSet(ctx, tcpReader, gset)
 	if err != nil {
