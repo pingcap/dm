@@ -21,6 +21,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/google/uuid"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
@@ -151,6 +152,11 @@ func GetGTIDsForPos(ctx context.Context, r Reader, endPos gmysql.Position) (gtid
 // GetPreviousGTIDFromGTIDSet tries to get previous GTID sets from Previous_GTID_EVENT GTID for the specified GITD Set.
 // events should be [fake_rotate_event,format_description_event,previous_gtids_event/mariadb_gtid_list_event].
 func GetPreviousGTIDFromGTIDSet(ctx context.Context, r Reader, gset gtid.Set) (gtid.Set, error) {
+	failpoint.Inject("MockGetEmptyPreviousGTIDFromGTIDSet", func(_ failpoint.Value) {
+		gset, _ = gtid.ParserGTID("mysql", "")
+		failpoint.Return(gset, nil)
+	})
+
 	err := r.StartSyncByGTID(gset)
 	if err != nil {
 		return nil, err
