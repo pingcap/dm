@@ -146,6 +146,9 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 		},
 	}
 	syncer := NewSyncer(cfg, nil)
+	var err error
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
+	c.Assert(err, IsNil)
 	// test binlog filter
 	filterRules := []*bf.BinlogEventRule{
 		{
@@ -156,7 +159,6 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 			Action:        bf.Ignore,
 		},
 	}
-	var err error
 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, filterRules)
 	c.Assert(err, IsNil)
 
@@ -188,7 +190,7 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 			"create table s1.test (id int)",
 			&filter.Table{Schema: "s1", Name: "test"},
 			bf.CreateTable,
-			false, // there should be true, so what does BAList configure?
+			true,
 		},
 	}
 	for _, ca := range cases {
