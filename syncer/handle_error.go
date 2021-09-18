@@ -89,12 +89,12 @@ func (s *Syncer) genEvents(ctx context.Context, sqls []string) ([]*replication.B
 
 		switch node.(type) {
 		case ast.DDLNode:
-			tableNames, err := parserpkg.FetchDDLTableNames("", node, s.SourceTableNamesFlavor)
+			tables, err := parserpkg.FetchDDLTables("", node, s.SourceTableNamesFlavor)
 			if err != nil {
 				return nil, err
 			}
 
-			schema := tableNames[0].Schema
+			schema := tables[0].Schema
 			if len(schema) == 0 {
 				return nil, terror.ErrSyncerUnitInjectDDLWithoutSchema.Generate(sql)
 			}

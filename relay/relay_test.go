@@ -16,16 +16,15 @@ package relay
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
@@ -34,12 +33,10 @@ import (
 	"github.com/pingcap/parser"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/reader"
 	"github.com/pingcap/dm/relay/retry"
@@ -102,12 +99,6 @@ func getDBConfigForTest() config.DBConfig {
 		User:     user,
 		Password: password,
 	}
-}
-
-func openDBForTest() (*conn.BaseDB, error) {
-	cfg := getDBConfigForTest()
-
-	return conn.DefaultDBProvider.Apply(cfg)
 }
 
 // mockReader is used only for relay testing.
@@ -180,6 +171,11 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged", `return("406a3f61-690d-11e7-87c5-6c92bf46f384:1-122")`), IsNil)
 	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged")
+	cfg := getDBConfigForTest()
+	conn.InitMockDB(c)
+	db, err := conn.DefaultDBProvider.Apply(cfg)
+	c.Assert(err, IsNil)
+	r.db = db
 	c.Assert(r.Init(context.Background()), IsNil)
 	// purge old relay dir
 	f, err := os.Create(filepath.Join(r.cfg.RelayDir, "old_relay_log"))
@@ -267,6 +263,11 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 		relayCfg = newRelayCfg(c, gmysql.MySQLFlavor)
 		r        = NewRelay(relayCfg).(*Relay)
 	)
+	cfg := getDBConfigForTest()
+	conn.InitMockDB(c)
+	db, err := conn.DefaultDBProvider.Apply(cfg)
+	c.Assert(err, IsNil)
+	r.db = db
 	c.Assert(r.Init(context.Background()), IsNil)
 	recoverGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, recoverGTIDSetStr)
 	c.Assert(err, IsNil)
@@ -294,6 +295,9 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	f.Close()
 
 	// recover with empty GTIDs.
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged", `return("")`), IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged")
 	c.Assert(r.tryRecoverLatestFile(context.Background(), parser2), IsNil)
 	_, latestPos := r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
@@ -398,6 +402,11 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 		rotateEv, _ = event.GenRotateEvent(eventHeader, 123, []byte(binlogPos.Name), uint64(binlogPos.Pos))
 		queryEv, _  = event.GenQueryEvent(eventHeader, 123, 0, 0, 0, nil, nil, []byte("CREATE DATABASE db_relay_test"))
 	)
+	cfg := getDBConfigForTest()
+	conn.InitMockDB(c)
+	db, err := conn.DefaultDBProvider.Apply(cfg)
+	c.Assert(err, IsNil)
+	r.db = db
 	c.Assert(r.Init(context.Background()), IsNil)
 	// NOTE: we can mock meta later.
 	c.Assert(r.meta.Load(), IsNil)
@@ -417,8 +426,8 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 		replication.ErrSyncClosed,
 		replication.ErrNeedSyncAgain,
 	} {
-		_, err := r.handleEvents(ctx, reader2, transformer2, writer2)
-		c.Assert(errors.Cause(err), Equals, reader2.err)
+		_, handleErr := r.handleEvents(ctx, reader2, transformer2, writer2)
+		c.Assert(errors.Cause(handleErr), Equals, reader2.err)
 	}
 
 	// reader return valid event
@@ -428,7 +437,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	// writer return error
 	writer2.err = errors.New("writer error for testing")
 	// return with the annotated writer error
-	_, err := r.handleEvents(ctx, reader2, transformer2, writer2)
+	_, err = r.handleEvents(ctx, reader2, transformer2, writer2)
 	c.Assert(errors.Cause(err), Equals, writer2.err)
 	// after handle rotate event, we save and flush the meta immediately
 	c.Assert(r.meta.Dirty(), Equals, false)
@@ -499,6 +508,11 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 		relayCfg = newRelayCfg(c, gmysql.MySQLFlavor)
 		r        = NewRelay(relayCfg).(*Relay)
 	)
+	cfg := getDBConfigForTest()
+	mockDB := conn.InitMockDB(c)
+	db, err := conn.DefaultDBProvider.Apply(cfg)
+	c.Assert(err, IsNil)
+	r.db = db
 	c.Assert(r.Init(context.Background()), IsNil)
 
 	// empty metadata
@@ -506,13 +520,11 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	t.verifyMetadata(c, r, "", minCheckpoint, "", nil)
 
 	// open connected DB and get its UUID
-	db, err := openDBForTest()
-	c.Assert(err, IsNil)
-	r.db = db
 	defer func() {
 		r.db.Close()
 		r.db = nil
 	}()
+	mockGetServerUUID(mockDB)
 	uuid, err := utils.GetServerUUID(ctx, r.db.DB, r.cfg.Flavor)
 	c.Assert(err, IsNil)
 
@@ -526,11 +538,21 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	emptyGTID, err := gtid.ParserGTID(r.cfg.Flavor, "")
 	c.Assert(err, IsNil)
 
+	mockGetServerUUID(mockDB)
+	mockGetRandomServerID(mockDB)
+	//  mock AddGSetWithPurged
+	mockDB.ExpectQuery("select @@GLOBAL.gtid_purged").WillReturnRows(sqlmock.NewRows([]string{"@@GLOBAL.gtid_purged"}).AddRow(""))
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/binlog/reader/MockGetEmptyPreviousGTIDFromGTIDSet", "return()"), IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/binlog/reader/MockGetEmptyPreviousGTIDFromGTIDSet")
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid001 := fmt.Sprintf("%s.000001", uuid)
 	t.verifyMetadata(c, r, uuid001, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, emptyGTID.String(), []string{uuid001})
 
 	// re-setup meta again, often happen when connecting a server behind a VIP.
+	mockGetServerUUID(mockDB)
+	mockGetRandomServerID(mockDB)
+	mockDB.ExpectQuery("select @@GLOBAL.gtid_purged").WillReturnRows(sqlmock.NewRows([]string{"@@GLOBAL.gtid_purged"}).AddRow(""))
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid002 := fmt.Sprintf("%s.000002", uuid)
 	t.verifyMetadata(c, r, uuid002, minCheckpoint, emptyGTID.String(), []string{uuid001, uuid002})
@@ -538,13 +560,20 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	r.cfg.BinLogName = "mysql-bin.000002"
 	r.cfg.BinlogGTID = "24ecd093-8cec-11e9-aa0d-0242ac170002:1-50,24ecd093-8cec-11e9-aa0d-0242ac170003:1-50"
 	r.cfg.UUIDSuffix = 2
+	mockGetServerUUID(mockDB)
+	mockGetRandomServerID(mockDB)
+	mockDB.ExpectQuery("select @@GLOBAL.gtid_purged").WillReturnRows(sqlmock.NewRows([]string{"@@GLOBAL.gtid_purged"}).AddRow(""))
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	t.verifyMetadata(c, r, uuid002, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, emptyGTID.String(), []string{uuid002})
 
 	// re-setup meta again, often happen when connecting a server behind a VIP.
+	mockGetServerUUID(mockDB)
+	mockGetRandomServerID(mockDB)
+	mockDB.ExpectQuery("select @@GLOBAL.gtid_purged").WillReturnRows(sqlmock.NewRows([]string{"@@GLOBAL.gtid_purged"}).AddRow(""))
 	c.Assert(r.reSetupMeta(ctx), IsNil)
 	uuid003 := fmt.Sprintf("%s.000003", uuid)
 	t.verifyMetadata(c, r, uuid003, minCheckpoint, emptyGTID.String(), []string{uuid002, uuid003})
+	c.Assert(mockDB.ExpectationsWereMet(), IsNil)
 }
 
 func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,
@@ -561,144 +590,4 @@ func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,
 	UUIDs, err := utils.ParseUUIDIndex(indexFile)
 	c.Assert(err, IsNil)
 	c.Assert(UUIDs, DeepEquals, uuidsExpected)
-}
-
-func (t *testRelaySuite) TestProcess(c *C) {
-	var (
-		dbCfg    = getDBConfigForTest()
-		relayCfg = &Config{
-			EnableGTID: false, // position mode, so auto-positioning can work
-			Flavor:     gmysql.MySQLFlavor,
-			RelayDir:   c.MkDir(),
-			ServerID:   12321,
-			From: config.DBConfig{
-				Host:     dbCfg.Host,
-				Port:     dbCfg.Port,
-				User:     dbCfg.User,
-				Password: dbCfg.Password,
-			},
-			ReaderRetry: retry.ReaderRetryConfig{
-				BackoffRollback: 200 * time.Millisecond,
-				BackoffMax:      1 * time.Second,
-				BackoffMin:      1 * time.Millisecond,
-				BackoffJitter:   true,
-				BackoffFactor:   2,
-			},
-		}
-		r = NewRelay(relayCfg).(*Relay)
-	)
-	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	err := r.Init(ctx)
-	c.Assert(err, IsNil)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err2 := r.process(ctx)
-		if !utils.IsErrBinlogPurged(err2) {
-			// we can tolerate `ERROR 1236` caused by `RESET MASTER` in other test cases.
-			c.Assert(err2, IsNil)
-		}
-	}()
-
-	time.Sleep(1 * time.Second) // waiting for get events from upstream
-
-	// kill the binlog dump connection
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel2()
-	var connID uint32
-	db := r.db.DB
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		connID, err = getBinlogDumpConnID(ctx2, db)
-		return err == nil
-	}), IsTrue)
-	_, err = db.ExecContext(ctx2, fmt.Sprintf(`KILL %d`, connID))
-	c.Assert(err, IsNil)
-
-	// execute a DDL again
-	lastDDL := "CREATE DATABASE `test_relay_retry_db`"
-	_, err = db.ExecContext(ctx2, lastDDL)
-	c.Assert(err, IsNil)
-
-	defer func() {
-		query := "DROP DATABASE IF EXISTS `test_relay_retry_db`"
-		_, err = db.ExecContext(ctx2, query)
-		c.Assert(err, IsNil)
-	}()
-
-	// should got the last DDL
-	gotLastDDL := false
-	binlogFileCount := 0
-	// nolint:unparam
-	onEventFunc := func(e *replication.BinlogEvent) error {
-		// nolint:gocritic
-		switch ev := e.Event.(type) {
-		case *replication.QueryEvent:
-			if bytes.Contains(ev.Query, []byte(lastDDL)) {
-				gotLastDDL = true
-			}
-		}
-		return nil
-	}
-	uuid, err := utils.GetServerUUID(ctx2, db, r.cfg.Flavor)
-	c.Assert(err, IsNil)
-
-	utils.WaitSomething(6, 500*time.Millisecond, func() bool {
-		parser2 := replication.NewBinlogParser()
-		parser2.SetVerifyChecksum(true)
-
-		// check whether have binlog file in relay directory
-		// and check for events already done in `TestHandleEvent`
-		files, err2 := streamer.CollectAllBinlogFiles(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
-		c.Assert(err2, IsNil)
-		binlogFileCount = 0
-		for _, f := range files {
-			if binlog.VerifyFilename(f) {
-				binlogFileCount++
-				if !gotLastDDL {
-					err2 = parser2.ParseFile(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid), f), 0, onEventFunc)
-					c.Assert(err2, IsNil)
-				}
-			}
-		}
-		return gotLastDDL
-	})
-
-	cancel() // stop processing
-	wg.Wait()
-
-	c.Assert(binlogFileCount, Greater, 0)
-	c.Assert(gotLastDDL, IsTrue)
-}
-
-// getBinlogDumpConnID gets the `Binlog Dump` connection ID.
-// now only return the first one.
-func getBinlogDumpConnID(ctx context.Context, db *sql.DB) (uint32, error) {
-	query := `SHOW PROCESSLIST`
-	rows, err := db.QueryContext(ctx, query)
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-
-	var (
-		id      sql.NullInt64
-		user    sql.NullString
-		host    sql.NullString
-		db2     sql.NullString
-		command sql.NullString
-		time2   sql.NullInt64
-		state   sql.NullString
-		info    sql.NullString
-	)
-	for rows.Next() {
-		err = rows.Scan(&id, &user, &host, &db2, &command, &time2, &state, &info)
-		if err != nil {
-			return 0, err
-		}
-		if id.Valid && command.Valid && command.String == "Binlog Dump" {
-			return uint32(id.Int64), rows.Err()
-		}
-	}
-	return 0, errors.NotFoundf("Binlog Dump")
 }

@@ -22,7 +22,6 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/terror"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	tidbConfig "github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/ddl"
@@ -170,9 +169,11 @@ func (tr *Tracker) Exec(ctx context.Context, db string, sql string) error {
 	return err
 }
 
-// GetTable returns the schema associated with the table.
-func (tr *Tracker) GetTable(db, table string) (*model.TableInfo, error) {
-	t, err := tr.dom.InfoSchema().TableByName(model.NewCIStr(db), model.NewCIStr(table))
+// GetTableInfo returns the schema associated with the table.
+func (tr *Tracker) GetTableInfo(table *filter.Table) (*model.TableInfo, error) {
+	dbName := model.NewCIStr(table.Schema)
+	tableName := model.NewCIStr(table.Name)
+	t, err := tr.dom.InfoSchema().TableByName(dbName, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -180,10 +181,9 @@ func (tr *Tracker) GetTable(db, table string) (*model.TableInfo, error) {
 }
 
 // GetCreateTable returns the `CREATE TABLE` statement of the table.
-func (tr *Tracker) GetCreateTable(ctx context.Context, db, table string) (string, error) {
-	name := dbutil.TableName(db, table)
+func (tr *Tracker) GetCreateTable(ctx context.Context, table *filter.Table) (string, error) {
 	// use `SHOW CREATE TABLE` now, another method maybe `executor.ConstructResultOfShowCreateTable`.
-	rs, err := tr.se.Execute(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", name))
+	rs, err := tr.se.Execute(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", table.String()))
 	if err != nil {
 		return "", err
 	} else if len(rs) != 1 {
@@ -277,13 +277,21 @@ func (tr *Tracker) Close() error {
 }
 
 // DropTable drops a table from this tracker.
-func (tr *Tracker) DropTable(db, table string) error {
-	return tr.dom.DDL().DropTable(tr.se, ast.Ident{Schema: model.NewCIStr(db), Name: model.NewCIStr(table)})
+func (tr *Tracker) DropTable(table *filter.Table) error {
+	tableIdent := ast.Ident{
+		Schema: model.NewCIStr(table.Schema),
+		Name:   model.NewCIStr(table.Name),
+	}
+	return tr.dom.DDL().DropTable(tr.se, tableIdent)
 }
 
 // DropIndex drops an index from this tracker.
-func (tr *Tracker) DropIndex(db, table, index string) error {
-	return tr.dom.DDL().DropIndex(tr.se, ast.Ident{Schema: model.NewCIStr(db), Name: model.NewCIStr(table)}, model.NewCIStr(index), true)
+func (tr *Tracker) DropIndex(table *filter.Table, index string) error {
+	tableIdent := ast.Ident{
+		Schema: model.NewCIStr(table.Schema),
+		Name:   model.NewCIStr(table.Name),
+	}
+	return tr.dom.DDL().DropIndex(tr.se, tableIdent, model.NewCIStr(index), true)
 }
 
 // CreateSchemaIfNotExists creates a SCHEMA of the given name if it did not exist.
@@ -309,12 +317,12 @@ func cloneTableInfo(ti *model.TableInfo) *model.TableInfo {
 }
 
 // CreateTableIfNotExists creates a TABLE of the given name if it did not exist.
-func (tr *Tracker) CreateTableIfNotExists(db, table string, ti *model.TableInfo) error {
-	dbName := model.NewCIStr(db)
-	tableName := model.NewCIStr(table)
+func (tr *Tracker) CreateTableIfNotExists(table *filter.Table, ti *model.TableInfo) error {
+	schemaName := model.NewCIStr(table.Schema)
+	tableName := model.NewCIStr(table.Name)
 	ti = cloneTableInfo(ti)
 	ti.Name = tableName
-	return tr.dom.DDL().CreateTableWithInfo(tr.se, dbName, ti, ddl.OnExistIgnore, false)
+	return tr.dom.DDL().CreateTableWithInfo(tr.se, schemaName, ti, ddl.OnExistIgnore, false)
 }
 
 // GetSystemVar gets a variable from schema tracker.
