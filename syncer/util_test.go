@@ -26,7 +26,7 @@ var _ = Suite(&testUtilSuite{})
 
 type testUtilSuite struct{}
 
-func (t *testUtilSuite) TestTableNameForDML(c *C) {
+func (t *testUtilSuite) TestGetTableByDML(c *C) {
 	cases := []struct {
 		sql      string
 		schema   string
@@ -77,14 +77,15 @@ func (t *testUtilSuite) TestTableNameForDML(c *C) {
 		c.Assert(err, IsNil)
 		dml, ok := stmt.(ast.DMLNode)
 		c.Assert(ok, IsTrue)
-		schema, table, err := tableNameForDML(dml)
+		table, err := getTableByDML(dml)
 		if cs.hasError {
 			c.Assert(err, NotNil)
+			c.Assert(table, IsNil)
 		} else {
 			c.Assert(err, IsNil)
+			c.Assert(table.Schema, Equals, cs.schema)
+			c.Assert(table.Name, Equals, cs.table)
 		}
-		c.Assert(schema, Equals, cs.schema)
-		c.Assert(table, Equals, cs.table)
 	}
 }
 
@@ -115,10 +116,10 @@ func (t *testUtilSuite) TestTableNameResultSet(c *C) {
 			Name:   model.NewCIStr("t1"),
 		},
 	}
-	schema, table, err := tableNameResultSet(rs)
+	table, err := tableNameResultSet(rs)
 	c.Assert(err, IsNil)
-	c.Assert(schema, Equals, "test")
-	c.Assert(table, Equals, "t1")
+	c.Assert(table.Schema, Equals, "test")
+	c.Assert(table.Name, Equals, "t1")
 }
 
 func (t *testUtilSuite) TestRecordSourceTbls(c *C) {
