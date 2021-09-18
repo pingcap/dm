@@ -239,14 +239,6 @@ var (
 			Help:      "waiting shard DDL lock to be resolved",
 		}, []string{"task", "source_id"})
 
-	HeartbeatUpdateErr = metricsproxy.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: "dm",
-			Subsystem: "syncer",
-			Name:      "heartbeat_update_error",
-			Help:      "number of error when update heartbeat timestamp",
-		}, []string{"server_id"})
-
 	FinishedTransactionTotal = metricsproxy.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "dm",
@@ -299,7 +291,6 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(RemainingTimeGauge)
 	registry.MustRegister(UnsyncedTableGauge)
 	registry.MustRegister(ShardLockResolving)
-	registry.MustRegister(HeartbeatUpdateErr)
 
 	registry.MustRegister(IdealQPS)
 	registry.MustRegister(FinishedTransactionTotal)
