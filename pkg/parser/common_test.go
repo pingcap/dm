@@ -375,7 +375,7 @@ func (t *testParserSuite) TestError(c *C) {
 
 	stmts, err := Parse(p, dml, "", "")
 	c.Assert(err, IsNil)
-	_, err = FetchDDLTableNames("test", stmts[0], utils.LCTableNamesInsensitive)
+	_, err = FetchDDLTables("test", stmts[0], utils.LCTableNamesInsensitive)
 	c.Assert(terror.ErrUnknownTypeDDL.Equal(err), IsTrue)
 
 	_, err = RenameDDLTable(stmts[0], nil)
@@ -407,7 +407,7 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 			c.Assert(err, IsNil)
 			c.Assert(s, HasLen, 1)
 
-			tableNames, err := FetchDDLTableNames("test", s[0], utils.LCTableNamesSensitive)
+			tableNames, err := FetchDDLTables("test", s[0], utils.LCTableNamesSensitive)
 			c.Assert(err, IsNil)
 			c.Assert(tableNames, DeepEquals, tbs[j])
 

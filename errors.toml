@@ -1787,7 +1787,7 @@ workaround = "Please check the `column-mappings` config in task configuration fi
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36033]
-message = "mapping row data %v for table `%s`.`%s`"
+message = "mapping row data %v for table %v"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -2885,7 +2885,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-schema-tracker-44003]
-message = "failed to create table for `%s`.`%s` in schema tracker"
+message = "failed to create table for %v in schema tracker"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -2897,7 +2897,7 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-schema-tracker-44005]
-message = "cannot get table info for `%s`.`%s` from schema tracker"
+message = "cannot get table info for %v from schema tracker"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -2909,13 +2909,13 @@ workaround = ""
 tags = ["internal", "high"]
 
 [error.DM-schema-tracker-44007]
-message = "cannot fetch downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker"
+message = "cannot fetch downstream table schema of %v to initialize upstream schema %v in schema tracker"
 description = ""
 workaround = ""
 tags = ["downstream", "medium"]
 
 [error.DM-schema-tracker-44008]
-message = "cannot parse downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker"
+message = "cannot parse downstream table schema of %v to initialize upstream schema %v in schema tracker"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -2933,7 +2933,7 @@ workaround = ""
 tags = ["internal", "medium"]
 
 [error.DM-schema-tracker-44011]
-message = "failed to drop table for `%s`.`%s` in schema tracker"
+message = "failed to drop table for %v in schema tracker"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -3086,6 +3086,12 @@ tags = ["internal", "high"]
 message = "when %s, resource %s is in use by other client"
 description = ""
 workaround = "Please try again later"
+tags = ["internal", "low"]
+
+[error.DM-scheduler-46025]
+message = "source can only update relay-log related parts for now"
+description = ""
+workaround = ""
 tags = ["internal", "low"]
 
 [error.DM-dmctl-48001]
