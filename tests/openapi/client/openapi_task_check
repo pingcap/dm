@@ -51,8 +51,8 @@ def start_task_failed():
         },
     }
     resp = requests.post(url=API_ENDPOINT, json={"remove_meta": True, "task": task})
-    assert resp.status_code == 400
     print("start_task_failed resp=", resp.json())
+    assert resp.status_code == 400
 
 
 def start_noshard_task_success():
@@ -95,8 +95,8 @@ def start_noshard_task_success():
         },
     }
     resp = requests.post(url=API_ENDPOINT, json={"remove_meta": True, "task": task})
-    assert resp.status_code == 201
     print("start_noshard_task_success resp=", resp.json())
+    assert resp.status_code == 201
 
 
 def start_shard_task_success():
@@ -151,15 +151,15 @@ def start_shard_task_success():
         ],
     }
     resp = requests.post(url=API_ENDPOINT, json={"remove_meta": True, "task": task})
-    assert resp.status_code == 201
     print("start_shard_task_success resp=", resp.json())
+    assert resp.status_code == 201
 
 
 def get_task_status_failed(task_name):
     url = API_ENDPOINT + "/" + task_name + "/status"
     resp = requests.get(url=url)
-    assert resp.status_code == 400
     print("get_task_status_failed resp=", resp.json())
+    assert resp.status_code == 400
 
 
 def get_task_status_success(task_name, total):
@@ -167,8 +167,8 @@ def get_task_status_success(task_name, total):
     resp = requests.get(url=url)
     data = resp.json()
     assert resp.status_code == 200
-    assert data["total"] == int(total)
     print("get_task_status_failed resp=", data)
+    assert data["total"] == int(total)
 
 
 def get_task_list(task_count):
@@ -176,14 +176,14 @@ def get_task_list(task_count):
     resp = requests.get(url=url)
     data = resp.json()
     assert resp.status_code == 200
-    assert data["total"] == int(task_count)
     print("get_task_list resp=", data)
+    assert data["total"] == int(task_count)
 
 
 def stop_task_failed(task_name):
     resp = requests.delete(url=API_ENDPOINT + "/" + task_name)
-    assert resp.status_code == 400
     print("stop_task_failed resp=", resp.json())
+    assert resp.status_code == 400
 
 
 def stop_task_success(task_name):

@@ -23,11 +23,10 @@ import (
 	"github.com/deepmap/oapi-codegen/pkg/middleware"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
-	"go.uber.org/zap"
-
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
@@ -228,7 +227,9 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		return err
 	}
 	task := req.Task
-	adjustModelTask(&task)
+	if err := adjustModelTask(&task); err != nil {
+		return err
+	}
 	// prepare target db config
 	newCtx := ctx.Request().Context()
 	toDBCfg, err := getAndAdjustTaskTargetDBCfg(newCtx, &task)
@@ -413,11 +414,7 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 	// source name -> migrate rule list
 	tableMigrateRuleMap := make(map[string][]openapi.TaskTableMigrateRule)
 	for _, rule := range task.TableMigrateRule {
-		if _, ok := tableMigrateRuleMap[rule.Source.SourceName]; !ok {
-			tableMigrateRuleMap[rule.Source.SourceName] = []openapi.TaskTableMigrateRule{rule}
-		} else {
-			tableMigrateRuleMap[rule.Source.SourceName] = append(tableMigrateRuleMap[rule.Source.SourceName], rule)
-		}
+		tableMigrateRuleMap[rule.Source.SourceName] = append(tableMigrateRuleMap[rule.Source.SourceName], rule)
 	}
 	// rule name -> rule template
 	eventFilterTemplateMap := make(map[string]bf.BinlogEventRule)
@@ -475,6 +472,9 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 			if fullCfg.ExportThreads != nil {
 				subTaskCfg.MydumperConfig.Threads = *fullCfg.ExportThreads
 			}
+			if fullCfg.ImportThreads != nil {
+				subTaskCfg.LoaderConfig.PoolSize = *fullCfg.ImportThreads
+			}
 			if fullCfg.DataDir != nil {
 				subTaskCfg.LoaderConfig.Dir = *fullCfg.DataDir
 			}
@@ -489,7 +489,7 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 				subTaskCfg.SyncerConfig.Batch = *incrCfg.ReplBatch
 			}
 		}
-		// set route , blockAllowList, filter config
+		// set route,blockAllowList,filter config
 		doDBs := []string{}
 		doTables := []*filter.Table{}
 		routeRules := []*router.TableRule{}
@@ -497,15 +497,13 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 		for _, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
 			// route
 			routeRules = append(routeRules, &router.TableRule{
-				SchemaPattern: rule.Source.Schema,
-				TablePattern:  rule.Source.Table,
-				TargetSchema:  rule.Target.Schema,
-				TargetTable:   rule.Target.Table,
+				SchemaPattern: rule.Source.Schema, TablePattern: rule.Source.Table,
+				TargetSchema: rule.Target.Schema, TargetTable: rule.Target.Table,
 			})
 			// filter
 			if rule.EventFilterName != nil {
 				for _, name := range *rule.EventFilterName {
-					filterRule, ok := eventFilterTemplateMap[name] // NOTE: this return a cpoied value
+					filterRule, ok := eventFilterTemplateMap[name] // NOTE: this return a copied value
 					if !ok {
 						return nil, terror.ErrOpenAPICommonError.Generatef("filter rule name=%s not found", name)
 					}
@@ -516,38 +514,30 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 			}
 			// BlockAllowList
 			doDBs = append(doDBs, rule.Source.Schema)
-			doTables = append(doTables, &filter.Table{
-				Schema: rule.Source.Schema,
-				Name:   rule.Source.Table,
-			})
+			doTables = append(doTables, &filter.Table{Schema: rule.Source.Schema, Name: rule.Source.Table})
 		}
 		subTaskCfg.RouteRules = routeRules
 		subTaskCfg.FilterRules = filterRules
-		subTaskCfg.BAList = &filter.Rules{DoDBs: doDBs, DoTables: doTables}
+		subTaskCfg.BAList = &filter.Rules{DoDBs: removeDuplication(doDBs), DoTables: doTables}
 		// adjust sub task config
 		if err := subTaskCfg.Adjust(true); err != nil {
 			return nil, terror.Annotatef(err, "source name=%s", sourceCfg.SourceName)
-		}
-		// pre-check filter rules
-		_, err := bf.NewBinlogEvent(subTaskCfg.CaseSensitive, subTaskCfg.FilterRules)
-		if err != nil {
-			return nil, terror.ErrConfigBinlogEventFilter.Delegate(err)
 		}
 		subTaskCfgList[i] = *subTaskCfg
 	}
 	return subTaskCfgList, nil
 }
 
-func adjustModelTask(task *openapi.Task) {
+func adjustModelTask(task *openapi.Task) error {
 	defaultMetaSchema := "dm_meta"
 	if task.MetaSchema == nil {
 		task.MetaSchema = &defaultMetaSchema
 	}
 	// check some not implemented features
 	if task.OnDuplication != openapi.TaskOnDuplicationError {
-		log.L().Warn("now on duplication is currently only implemented at the error level")
-		task.OnDuplication = openapi.TaskOnDuplicationError
+		return terror.ErrOpenAPICommonError.Generate("now on duplication is currently only implemented at the error level")
 	}
+	return nil
 }
 
 func getAndAdjustTaskTargetDBCfg(ctx context.Context, task *openapi.Task) (*config.DBConfig, error) {
@@ -573,4 +563,19 @@ func getAndAdjustTaskTargetDBCfg(ctx context.Context, task *openapi.Task) (*conf
 		return nil, terror.WithClass(adjustDBErr, terror.ClassDMMaster)
 	}
 	return toDBCfg, nil
+}
+
+func removeDuplication(in []string) []string {
+	m := make(map[string]struct{}, len(in))
+	j := 0
+	for _, v := range in {
+		_, ok := m[v]
+		if ok {
+			continue
+		}
+		m[v] = struct{}{}
+		in[j] = v
+		j++
+	}
+	return in[:j]
 }
