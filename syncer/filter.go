@@ -39,12 +39,9 @@ func (s *Syncer) skipQueryEvent(tables []*filter.Table, stmt ast.StmtNode, sql s
 }
 
 func (s *Syncer) skipRowsEvent(table *filter.Table, eventType replication.EventType) (bool, error) {
-	// skip ghost table
-	if s.onlineDDL != nil {
-		tp := s.onlineDDL.TableType(table.Name)
-		if tp != onlineddl.RealTable {
-			return true, nil
-		}
+	// skip un-realTable
+	if s.onlineDDL != nil && s.onlineDDL.TableType(table.Name) != onlineddl.RealTable {
+		return true, nil
 	}
 	var et bf.EventType
 	switch eventType {
@@ -55,14 +52,10 @@ func (s *Syncer) skipRowsEvent(table *filter.Table, eventType replication.EventT
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 		et = bf.DeleteEvent
 	default:
-		needSkip, err := s.skipOneEvent(table, bf.NullEvent, "")
-		if err != nil {
-			return false, err
+		if s.skipByTable(table) {
+			return true, nil
 		}
-		if needSkip {
-			return needSkip, nil
-		}
-		return needSkip, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
+		return false, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
 	}
 	return s.skipOneEvent(table, et, "")
 }
@@ -85,11 +78,7 @@ func (s *Syncer) skipSQLByPattern(sql string) (bool, error) {
 // - type of SQL doesn't pass binlog-filter.
 // - pattern of SQL doesn't pass binlog-filter.
 func (s *Syncer) skipOneEvent(table *filter.Table, et bf.EventType, sql string) (bool, error) {
-	if filter.IsSystemSchema(table.Schema) {
-		return true, nil
-	}
-	tables := s.baList.Apply([]*filter.Table{table})
-	if len(tables) == 0 {
+	if s.skipByTable(table) {
 		return true, nil
 	}
 	if s.binlogFilter == nil {
@@ -100,4 +89,12 @@ func (s *Syncer) skipOneEvent(table *filter.Table, et bf.EventType, sql string) 
 		return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.New(err.Error()), "skip event %s on %v", et, table)
 	}
 	return action == bf.Ignore, nil
+}
+
+func (s *Syncer) skipByTable(table *filter.Table) bool {
+	if filter.IsSystemSchema(table.Schema) {
+		return true
+	}
+	tables := s.baList.Apply([]*filter.Table{table})
+	return len(tables) == 0
 }

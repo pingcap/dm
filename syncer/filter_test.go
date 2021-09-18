@@ -111,6 +111,7 @@ func (s *testFilterSuite) TestSkipRowsEvent(c *C) {
 	var err error
 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, filterRules)
 	c.Assert(err, IsNil)
+	syncer.onlineDDL = mockOnlinePlugin{}
 
 	cases := []struct {
 		table     *filter.Table
@@ -118,6 +119,11 @@ func (s *testFilterSuite) TestSkipRowsEvent(c *C) {
 		expected  bool
 	}{
 		{
+			// test un-realTable
+			&filter.Table{Schema: "foo", Name: "_test_gho"},
+			replication.UNKNOWN_EVENT,
+			true,
+		}, {
 			// test filter one event
 			&filter.Table{Schema: "foo", Name: "test"},
 			replication.WRITE_ROWS_EVENTv0,
@@ -197,5 +203,40 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 		skipped, err2 := syncer.skipOneEvent(ca.table, ca.eventType, ca.sql)
 		c.Assert(err2, IsNil)
 		c.Assert(skipped, Equals, ca.expectSkipped)
+	}
+}
+
+func (s *testFilterSuite) TestSkipByTable(c *C) {
+	cfg := &config.SubTaskConfig{
+		BAList: &filter.Rules{
+			IgnoreDBs: []string{"s1"},
+		},
+	}
+	syncer := NewSyncer(cfg, nil)
+	var err error
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
+	c.Assert(err, IsNil)
+
+	cases := []struct {
+		table    *filter.Table
+		expected bool
+	}{
+		{
+			// system table
+			&filter.Table{Schema: "mysql", Name: "test"},
+			true,
+		}, {
+			// test balist
+			&filter.Table{Schema: "s1", Name: "test"},
+			true,
+		}, {
+			// test balist
+			&filter.Table{Schema: "s2", Name: "test"},
+			false,
+		},
+	}
+	for _, ca := range cases {
+		needSkip := syncer.skipByTable(ca.table)
+		c.Assert(needSkip, Equals, ca.expected)
 	}
 }
