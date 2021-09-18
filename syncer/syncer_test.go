@@ -1597,7 +1597,13 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 
 		ca.callback()
 
-		c.Assert(syncer.trackDDL(testDB, ddlSQL, filter, stmt, ec), IsNil)
+		trackInfo := &trackInfo{
+			sql:          ddlSQL,
+			stmt:         stmt,
+			sourceTables: filter[0],
+			targetTables: filter[1],
+		}
+		c.Assert(syncer.trackDDL(testDB, trackInfo, ec), IsNil)
 		c.Assert(syncer.schemaTracker.Reset(), IsNil)
 		c.Assert(mock.ExpectationsWereMet(), IsNil)
 		c.Assert(checkPointMock.ExpectationsWereMet(), IsNil)

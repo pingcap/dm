@@ -132,9 +132,9 @@ func newDDLJob(qec *queryEventContext) *job {
 				j.sourceTbls[schema] = append(j.sourceTbls[schema], &filter.Table{Schema: schema, Name: name})
 			}
 		}
-	} else if qec.ddlInfo != nil && len(qec.ddlInfo.tables) >= 2 {
-		j.sourceTbls = map[string][]*filter.Table{qec.ddlInfo.tables[0][0].Schema: {qec.ddlInfo.tables[0][0]}}
-		j.targetTable = qec.ddlInfo.tables[1][0]
+	} else if qec.ddlInfo != nil && qec.ddlInfo.sourceTables != nil && qec.ddlInfo.targetTables != nil {
+		j.sourceTbls = map[string][]*filter.Table{qec.ddlInfo.sourceTables[0].Schema: {qec.ddlInfo.sourceTables[0]}}
+		j.targetTable = qec.ddlInfo.targetTables[0]
 	}
 
 	return j
