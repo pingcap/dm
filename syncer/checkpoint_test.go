@@ -395,7 +395,7 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(s.tracker.CreateSchemaIfNotExists(schemaName), IsNil)
 	err = s.tracker.Exec(ctx, schemaName, "create table "+tableName+" (c int);")
 	c.Assert(err, IsNil)
-	ti, err := s.tracker.GetTable(table)
+	ti, err := s.tracker.GetTableInfo(table)
 	c.Assert(err, IsNil)
 	cp.SaveTablePoint(table, binlog.Location{Position: pos1}, ti)
 	rcp := cp.(*RemoteCheckPoint)
@@ -407,13 +407,13 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(rcp.points[schemaName][tableName].TableInfo(), IsNil)
 	c.Assert(rcp.points[schemaName][tableName].flushedTI, IsNil)
 
-	_, err = s.tracker.GetTable(table)
+	_, err = s.tracker.GetTableInfo(table)
 	c.Assert(strings.Contains(err.Error(), "doesn't exist"), IsTrue)
 
 	// test save, flush and rollback to not nil table info
 	err = s.tracker.Exec(ctx, schemaName, "create table "+tableName+" (c int);")
 	c.Assert(err, IsNil)
-	ti, err = s.tracker.GetTable(table)
+	ti, err = s.tracker.GetTableInfo(table)
 	c.Assert(err, IsNil)
 	cp.SaveTablePoint(table, binlog.Location{Position: pos1}, ti)
 	tiBytes, _ := json.Marshal(ti)
@@ -423,11 +423,11 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(cp.FlushPointsExcept(tctx, nil, nil, nil), IsNil)
 	err = s.tracker.Exec(ctx, schemaName, "alter table "+tableName+" add c2 int;")
 	c.Assert(err, IsNil)
-	ti2, err := s.tracker.GetTable(table)
+	ti2, err := s.tracker.GetTableInfo(table)
 	c.Assert(err, IsNil)
 	cp.SaveTablePoint(table, binlog.Location{Position: pos2}, ti2)
 	cp.Rollback(s.tracker)
-	ti11, err := s.tracker.GetTable(table)
+	ti11, err := s.tracker.GetTableInfo(table)
 	c.Assert(err, IsNil)
 	c.Assert(ti11.Columns, HasLen, 1)
 

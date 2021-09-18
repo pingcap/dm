@@ -296,7 +296,7 @@ ErrSyncerUnitDMLPruneColumnMismatch,[code=36029:class=sync-unit:scope=internal:l
 ErrSyncerUnitGenBinlogEventFilter,[code=36030:class=sync-unit:scope=internal:level=high], "Message: generate binlog event filter, Workaround: Please check the `filters` config in source and task configuration files."
 ErrSyncerUnitGenTableRouter,[code=36031:class=sync-unit:scope=internal:level=high], "Message: generate table router, Workaround: Please check `routes` config in task configuration file."
 ErrSyncerUnitGenColumnMapping,[code=36032:class=sync-unit:scope=internal:level=high], "Message: generate column mapping, Workaround: Please check the `column-mappings` config in task configuration file."
-ErrSyncerUnitDoColumnMapping,[code=36033:class=sync-unit:scope=internal:level=high], "Message: mapping row data %v for table `%s`.`%s`"
+ErrSyncerUnitDoColumnMapping,[code=36033:class=sync-unit:scope=internal:level=high], "Message: mapping row data %v for table %v"
 ErrSyncerUnitCacheKeyNotFound,[code=36034:class=sync-unit:scope=internal:level=high], "Message: cache key %s in %s not found"
 ErrSyncerUnitHeartbeatCheckConfig,[code=36035:class=sync-unit:scope=internal:level=medium], "Workaround: Please check `heartbeat` config in task configuration file."
 ErrSyncerUnitHeartbeatRecordExists,[code=36036:class=sync-unit:scope=internal:level=medium], "Message: heartbeat slave record for task %s already exists"
