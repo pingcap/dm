@@ -241,6 +241,7 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 	if err != nil {
 		return err
 	}
+	var needStartSubTaskList []config.SubTaskConfig
 	// check subtask config
 	subTaskConfigPList := make([]*config.SubTaskConfig, len(subTaskConfigList))
 	for i := range subTaskConfigList {
@@ -249,6 +250,24 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 	if err = checker.CheckSyncConfigFunc(newCtx, subTaskConfigPList,
 		common.DefaultErrorCnt, common.DefaultWarnCnt); err != nil {
 		return terror.WithClass(err, terror.ClassDMMaster)
+	}
+	// specify only start task on partial sources
+	if req.SourceNameList != nil {
+		// source name -> sub task config
+		subTaskCfgM := make(map[string]*config.SubTaskConfig, len(subTaskConfigList))
+		for idx := range subTaskConfigList {
+			cfg := subTaskConfigList[idx]
+			subTaskCfgM[cfg.SourceID] = &cfg
+		}
+		for _, sourceName := range *req.SourceNameList {
+			subTaskCfg, ok := subTaskCfgM[sourceName]
+			if !ok {
+				return terror.ErrOpenAPICommonError.Generatef("source %s not found.", sourceName)
+			}
+			needStartSubTaskList = append(needStartSubTaskList, *subTaskCfg)
+		}
+	} else {
+		needStartSubTaskList = subTaskConfigList
 	}
 	// end all pre-check, start to create task
 	var (
@@ -268,7 +287,7 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 			return terror.Annotate(err, "while removing metadata")
 		}
 	}
-	err = s.scheduler.AddSubTasks(latched, subTaskConfigList...)
+	err = s.scheduler.AddSubTasks(latched, needStartSubTaskList...)
 	if err != nil {
 		return err
 	}
@@ -279,8 +298,13 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 }
 
 // DMAPIDeleteTask url is:(DELETE /api/v1/tasks).
-func (s *Server) DMAPIDeleteTask(ctx echo.Context, taskName string) error {
-	sourceList := s.getTaskResources(taskName)
+func (s *Server) DMAPIDeleteTask(ctx echo.Context, taskName string, params openapi.DMAPIDeleteTaskParams) error {
+	var sourceList []string
+	if params.SourceNameList != nil {
+		sourceList = *params.SourceNameList
+	} else {
+		sourceList = s.getTaskResources(taskName)
+	}
 	if len(sourceList) == 0 {
 		return terror.ErrSchedulerTaskNotExist.Generate(taskName)
 	}
@@ -505,7 +529,7 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 				for _, name := range *rule.EventFilterName {
 					filterRule, ok := eventFilterTemplateMap[name] // NOTE: this return a copied value
 					if !ok {
-						return nil, terror.ErrOpenAPICommonError.Generatef("filter rule name=%s not found", name)
+						return nil, terror.ErrOpenAPICommonError.Generatef("filter rule name %s not found.", name)
 					}
 					filterRule.SchemaPattern = rule.Source.Schema
 					filterRule.TablePattern = rule.Source.Table
@@ -535,7 +559,7 @@ func adjustModelTask(task *openapi.Task) error {
 	}
 	// check some not implemented features
 	if task.OnDuplication != openapi.TaskOnDuplicationError {
-		return terror.ErrOpenAPICommonError.Generate("now on duplication is currently only implemented at the error level")
+		return terror.ErrOpenAPICommonError.Generate("`on_duplicate` only supports `error` for now.")
 	}
 	return nil
 }

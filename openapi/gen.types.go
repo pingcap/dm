@@ -31,6 +31,9 @@ type CreateTaskRequest struct {
 	// whether to remove meta database in downstream database
 	RemoveMeta bool `json:"remove_meta"`
 
+	// source name list
+	SourceNameList *SourceNameList `json:"source_name_list,omitempty"`
+
 	// task
 	Task Task `json:"task"`
 }
@@ -160,6 +163,9 @@ type Source struct {
 	// source username
 	User string `json:"user"`
 }
+
+// source name list
+type SourceNameList []string
 
 // source status
 type SourceStatus struct {
@@ -398,6 +404,12 @@ type DMAPIStopRelayJSONBody StopRelayRequest
 
 // DMAPIStartTaskJSONBody defines parameters for DMAPIStartTask.
 type DMAPIStartTaskJSONBody CreateTaskRequest
+
+// DMAPIDeleteTaskParams defines parameters for DMAPIDeleteTask.
+type DMAPIDeleteTaskParams struct {
+	// source name list
+	SourceNameList *[]string `json:"source-name-list,omitempty"`
+}
 
 // DMAPICreateSourceJSONRequestBody defines body for DMAPICreateSource for application/json ContentType.
 type DMAPICreateSourceJSONRequestBody DMAPICreateSourceJSONBody

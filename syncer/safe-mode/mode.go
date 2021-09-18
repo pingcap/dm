@@ -16,9 +16,8 @@ package mode
 import (
 	"sync"
 
-	"go.uber.org/zap"
-
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
