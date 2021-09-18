@@ -16,6 +16,9 @@ import (
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/conn"
 )
 
 var _ = Suite(&testPortalSuite{})
@@ -127,6 +130,11 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	resp := httptest.NewRecorder()
 
 	// will connection to database failed
+	dbCfg := config.GetDBConfigFromEnv()
+	fakeMysqlServer := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
+	go func() {
+		c.Assert(fakeMysqlServer.Start(), IsNil)
+	}()
 	t.portalHandler.Check(resp, req)
 	c.Log("resp", resp)
 	c.Assert(resp.Code, Equals, http.StatusBadRequest)
@@ -151,9 +159,15 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(checkResult.Result, Equals, success)
 	c.Assert(checkResult.Error, Equals, "")
+	fakeMysqlServer.Close()
 }
 
 func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
+	dbCfg := config.GetDBConfigFromEnv()
+	fakeMysqlServer := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
+	go func() {
+		c.Assert(fakeMysqlServer.Start(), IsNil)
+	}()
 	dbCfgBytes := getTestDBCfgBytes(c)
 	req := httptest.NewRequest("POST", "/schema", bytes.NewReader(dbCfgBytes))
 	resp := httptest.NewRecorder()
@@ -166,7 +180,7 @@ func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 	err := readJSON(resp.Body, schemaInfoResult)
 	c.Assert(err, IsNil)
 	c.Assert(schemaInfoResult.Result, Equals, failed)
-	c.Assert(schemaInfoResult.Error, Matches, "Error 1045: Access denied for user 'root'@.*")
+	c.Assert(schemaInfoResult.Error, Matches, "Error 1045: Access denied for user 'root'.*")
 	c.Assert(schemaInfoResult.Tables, IsNil)
 
 	getDBConnFunc = t.getMockDB
@@ -189,6 +203,7 @@ func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 			c.Assert(table, Equals, t.allTables[i].Tables[j])
 		}
 	}
+	fakeMysqlServer.Close()
 }
 
 func (t *testPortalSuite) TestGenerateAndDownloadAndAnalyzeConfig(c *C) {
