@@ -84,12 +84,12 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 		}, nil
 	case ast.DMLNode:
 		// if DML can be ignored, we do not report an error
-		schema2, table, err2 := tableNameForDML(node)
+		table, err2 := getTableByDML(node)
 		if err2 == nil {
-			if len(schema2) > 0 {
-				schema = schema2
+			if len(table.Schema) == 0 {
+				table.Schema = schema
 			}
-			ignore, err2 := s.skipDMLEvent(&filter.Table{Schema: schema, Name: table}, replication.QUERY_EVENT)
+			ignore, err2 := s.skipDMLEvent(table, replication.QUERY_EVENT)
 			if err2 == nil && ignore {
 				return parseDDLResult{
 					stmt:   nil,
@@ -181,19 +181,19 @@ func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (string, [][]*fi
 		return "", nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
-	tables, err := parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
+	sourceTables, err := parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
 		return "", nil, nil, err
 	}
 
-	targetTables := make([]*filter.Table, 0, len(tables))
-	for i := range tables {
-		renamedTable := s.renameShardingSchema(tables[i])
+	targetTables := make([]*filter.Table, 0, len(sourceTables))
+	for i := range sourceTables {
+		renamedTable := s.renameShardingSchema(sourceTables[i])
 		targetTables = append(targetTables, renamedTable)
 	}
 
 	ddl, err := parserpkg.RenameDDLTable(stmt, targetTables)
-	return ddl, [][]*filter.Table{tables, targetTables}, stmt, err
+	return ddl, [][]*filter.Table{sourceTables, targetTables}, stmt, err
 }
 
 // handleOnlineDDL checks if the input `sql` is came from online DDL tools.
@@ -297,10 +297,10 @@ func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *filter.Tabl
 	tables := group.Tables()
 
 	for _, table := range tables {
-		s.tctx.L().Info("finish online ddl", zap.String("schema", table.Schema), zap.String("table", table.Name))
-		err := s.onlineDDL.Finish(tctx, table.Schema, table.Name)
+		s.tctx.L().Info("finish online ddl", zap.Stringer("table", table))
+		err := s.onlineDDL.Finish(tctx, table)
 		if err != nil {
-			return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
+			return terror.Annotatef(err, "finish online ddl on %v", table)
 		}
 	}
 

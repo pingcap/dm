@@ -242,6 +242,8 @@ const (
 	codeConfigGenTableRouter
 	codeConfigGenColumnMapping
 	codeConfigInvalidChunkFileSize
+	codeConfigOnlineDDLInvalidRegex
+	codeConfigOnlineDDLRegexCompile
 )
 
 // Binlog operation error code list.
@@ -630,8 +632,7 @@ const (
 	codeSchedulerRelayWorkersWrongRelay
 	codeSchedulerSourceOpRelayExist
 	codeSchedulerLatchInUse
-	codeConfigOnlineDDLInvalidRegex
-	codeConfigOnlineDDLRegexCompile
+	codeSchedulerSourceCfgUpdate
 )
 
 // dmctl error code.
@@ -878,6 +879,10 @@ var (
 	ErrConfigGenTableRouter         = New(codeConfigGenTableRouter, ClassConfig, ScopeInternal, LevelHigh, "generate table router error", "Please check the `routes` config in task configuration file.")
 	ErrConfigGenColumnMapping       = New(codeConfigGenColumnMapping, ClassConfig, ScopeInternal, LevelHigh, "generate column mapping error", "Please check the `column-mappings` config in task configuration file.")
 	ErrConfigInvalidChunkFileSize   = New(codeConfigInvalidChunkFileSize, ClassConfig, ScopeInternal, LevelHigh, "invalid `chunk-filesize` %v", "Please check the `chunk-filesize` config in task configuration file.")
+	ErrConfigOnlineDDLInvalidRegex  = New(codeConfigOnlineDDLInvalidRegex, ClassConfig, ScopeInternal, LevelHigh,
+		"'%s' regex pattern %s isn't contains exactly one submatch", "Please check if params is correctly in the configuration file.")
+	ErrConfigOnlineDDLRegexCompile = New(codeConfigOnlineDDLRegexCompile, ClassConfig, ScopeInternal, LevelHigh,
+		"'%s' regex pattern %s compile falied", "Please check if params is correctly in the configuration file.")
 
 	// Binlog operation error.
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
@@ -1014,7 +1019,7 @@ var (
 	ErrSyncerUnitGenBinlogEventFilter       = New(codeSyncerUnitGenBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "generate binlog event filter", "Please check the `filters` config in source and task configuration files.")
 	ErrSyncerUnitGenTableRouter             = New(codeSyncerUnitGenTableRouter, ClassSyncUnit, ScopeInternal, LevelHigh, "generate table router", "Please check `routes` config in task configuration file.")
 	ErrSyncerUnitGenColumnMapping           = New(codeSyncerUnitGenColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "generate column mapping", "Please check the `column-mappings` config in task configuration file.")
-	ErrSyncerUnitDoColumnMapping            = New(codeSyncerUnitDoColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "mapping row data %v for table `%s`.`%s`", "")
+	ErrSyncerUnitDoColumnMapping            = New(codeSyncerUnitDoColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "mapping row data %v for table %v", "")
 	ErrSyncerUnitCacheKeyNotFound           = New(codeSyncerUnitCacheKeyNotFound, ClassSyncUnit, ScopeInternal, LevelHigh, "cache key %s in %s not found", "")
 	ErrSyncerUnitHeartbeatCheckConfig       = New(codeSyncerUnitHeartbeatCheckConfig, ClassSyncUnit, ScopeInternal, LevelMedium, "", "Please check `heartbeat` config in task configuration file.")
 	ErrSyncerUnitHeartbeatRecordExists      = New(codeSyncerUnitHeartbeatRecordExists, ClassSyncUnit, ScopeInternal, LevelMedium, "heartbeat slave record for task %s already exists", "")
@@ -1255,6 +1260,7 @@ var (
 	ErrSchedulerRelayWorkersWrongRelay    = New(codeSchedulerRelayWorkersWrongRelay, ClassScheduler, ScopeInternal, LevelHigh, "these workers %s have started relay for another sources %s respectively", "Please correct sources in `stop-relay`.")
 	ErrSchedulerSourceOpRelayExist        = New(codeSchedulerSourceOpRelayExist, ClassScheduler, ScopeInternal, LevelHigh, "source with name %s need to operate has existing relay workers %s", "Please `stop-relay` first.")
 	ErrSchedulerLatchInUse                = New(codeSchedulerLatchInUse, ClassScheduler, ScopeInternal, LevelLow, "when %s, resource %s is in use by other client", "Please try again later")
+	ErrSchedulerSourceCfgUpdate           = New(codeSchedulerSourceCfgUpdate, ClassScheduler, ScopeInternal, LevelLow, "source can only update relay-log related parts for now", "")
 
 	// dmctl.
 	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")
@@ -1267,11 +1273,4 @@ var (
 
 	// default error.
 	ErrNotSet = New(codeNotSet, ClassNotSet, ScopeNotSet, LevelHigh, "", "")
-
-	// ddl regex
-	ErrConfigOnlineDDLInvalidRegex = New(codeConfigOnlineDDLInvalidRegex, ClassConfig, ScopeInternal, LevelHigh,
-		"''%s' regex pattern %s isn't contains exactly one submatch", "Please check if params is correctly in the configuration file.")
-
-	ErrConfigOnlineDDLRegexCompile = New(codeConfigOnlineDDLRegexCompile, ClassConfig, ScopeInternal, LevelHigh,
-		"''%s' regex pattern %s compile falied", "Please check if params is correctly in the configuration file.")
 )

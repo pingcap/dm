@@ -47,41 +47,41 @@ func binlogTypeToString(binlogType BinlogType) string {
 	}
 }
 
-// tableNameForDML gets table name from INSERT/UPDATE/DELETE statement.
-func tableNameForDML(dml ast.DMLNode) (schema, table string, err error) {
+// getTableByDML gets table from INSERT/UPDATE/DELETE statement.
+func getTableByDML(dml ast.DMLNode) (*filter.Table, error) {
 	switch stmt := dml.(type) {
 	case *ast.InsertStmt:
 		if stmt.Table == nil || stmt.Table.TableRefs == nil || stmt.Table.TableRefs.Left == nil {
-			return "", "", terror.ErrSyncUnitInvalidTableName.Generate(fmt.Sprintf("INSERT statement %s not valid", stmt.Text()))
+			return nil, terror.ErrSyncUnitInvalidTableName.Generate(fmt.Sprintf("INSERT statement %s not valid", stmt.Text()))
 		}
-		schema, table, err = tableNameResultSet(stmt.Table.TableRefs.Left)
-		return schema, table, terror.Annotatef(err, "INSERT statement %s", stmt.Text())
+		table, err := tableNameResultSet(stmt.Table.TableRefs.Left)
+		return table, terror.Annotatef(err, "INSERT statement %s", stmt.Text())
 	case *ast.UpdateStmt:
 		if stmt.TableRefs == nil || stmt.TableRefs.TableRefs == nil || stmt.TableRefs.TableRefs.Left == nil {
-			return "", "", terror.ErrSyncUnitInvalidTableName.Generate(fmt.Sprintf("UPDATE statement %s not valid", stmt.Text()))
+			return nil, terror.ErrSyncUnitInvalidTableName.Generate(fmt.Sprintf("UPDATE statement %s not valid", stmt.Text()))
 		}
-		schema, table, err = tableNameResultSet(stmt.TableRefs.TableRefs.Left)
-		return schema, table, terror.Annotatef(err, "UPDATE statement %s", stmt.Text())
+		table, err := tableNameResultSet(stmt.TableRefs.TableRefs.Left)
+		return table, terror.Annotatef(err, "UPDATE statement %s", stmt.Text())
 	case *ast.DeleteStmt:
 		if stmt.TableRefs == nil || stmt.TableRefs.TableRefs == nil || stmt.TableRefs.TableRefs.Left == nil {
-			return "", "", terror.ErrSyncUnitInvalidTableName.Generate(fmt.Sprintf("DELETE statement %s not valid", stmt.Text()))
+			return nil, terror.ErrSyncUnitInvalidTableName.Generate(fmt.Sprintf("DELETE statement %s not valid", stmt.Text()))
 		}
-		schema, table, err = tableNameResultSet(stmt.TableRefs.TableRefs.Left)
-		return schema, table, terror.Annotatef(err, "DELETE statement %s", stmt.Text())
+		table, err := tableNameResultSet(stmt.TableRefs.TableRefs.Left)
+		return table, terror.Annotatef(err, "DELETE statement %s", stmt.Text())
 	}
-	return "", "", terror.ErrSyncUnitNotSupportedDML.Generate(dml)
+	return nil, terror.ErrSyncUnitNotSupportedDML.Generate(dml)
 }
 
-func tableNameResultSet(rs ast.ResultSetNode) (schema, table string, err error) {
+func tableNameResultSet(rs ast.ResultSetNode) (*filter.Table, error) {
 	ts, ok := rs.(*ast.TableSource)
 	if !ok {
-		return "", "", terror.ErrSyncUnitTableNameQuery.Generate(fmt.Sprintf("ResultSetNode %s", rs.Text()))
+		return nil, terror.ErrSyncUnitTableNameQuery.Generate(fmt.Sprintf("ResultSetNode %s", rs.Text()))
 	}
 	tn, ok := ts.Source.(*ast.TableName)
 	if !ok {
-		return "", "", terror.ErrSyncUnitTableNameQuery.Generate(fmt.Sprintf("TableSource %s", ts.Text()))
+		return nil, terror.ErrSyncUnitTableNameQuery.Generate(fmt.Sprintf("TableSource %s", ts.Text()))
 	}
-	return tn.Schema.O, tn.Name.O, nil
+	return &filter.Table{Schema: tn.Schema.O, Name: tn.Name.O}, nil
 }
 
 // record source tbls record the tables that need to flush checkpoints.

@@ -49,7 +49,7 @@ type OnlinePlugin interface {
 	// returns sqls, error
 	Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error)
 	// Finish would delete online ddl from memory and storage
-	Finish(tctx *tcontext.Context, schema, table string) error
+	Finish(tctx *tcontext.Context, table *filter.Table) error
 	// TableType returns ghhost/real table
 	TableType(table string) TableType
 	// RealName returns real table name that removed ghost suffix and handled by table router
@@ -479,12 +479,12 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 }
 
 // Finish implements interface.
-func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) error {
+func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, table *filter.Table) error {
 	if r == nil {
 		return nil
 	}
 
-	return r.storage.Delete(tctx, schema, table)
+	return r.storage.Delete(tctx, table.Schema, table.Name)
 }
 
 // TableType implements interface.

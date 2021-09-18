@@ -117,7 +117,7 @@ func (b *binlogPoint) rollback(schemaTracker *schema.Tracker, schema string) (is
 
 	// NOTE: no `Equal` function for `model.TableInfo` exists now, so we compare `pointer` directly,
 	// and after a new DDL applied to the schema, the returned pointer of `model.TableInfo` changed now.
-	trackedTi, _ := schemaTracker.GetTable(&filter.Table{Schema: schema, Name: b.ti.Name.O}) // ignore the returned error, only compare `trackerTi` is enough.
+	trackedTi, _ := schemaTracker.GetTableInfo(&filter.Table{Schema: schema, Name: b.ti.Name.O}) // ignore the returned error, only compare `trackerTi` is enough.
 	// may three versions of schema exist:
 	// - the one tracked in the TiDB-with-mockTiKV.
 	// - the one in the checkpoint but not flushed.
