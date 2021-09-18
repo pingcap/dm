@@ -124,6 +124,7 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 	}()
 
 	keepAliveCtx, keepAliveCancel := context.WithCancel(ctx)
+	_ = keepAliveCancel // make go vet happy
 	defer func() {
 		keepAliveCancel()
 	}()
@@ -137,12 +138,10 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 		case _, ok := <-ch:
 			if !ok {
 				log.L().Info("keep alive channel is closed")
-				keepAliveCancel() // make go vet happy
 				return nil
 			}
 		case <-ctx.Done():
 			log.L().Info("ctx is canceled, keepalive will exit now")
-			keepAliveCancel() // make go vet happy
 			return nil
 		case newTTL := <-KeepAliveUpdateCh:
 			if newTTL == currentKeepAliveTTL {
@@ -155,22 +154,22 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 			leaseID, err = grantAndPutKV(k, workerEventJSON, newTTL)
 			if err != nil {
 				log.L().Error("meet error when grantAndPutKV keepalive TTL", zap.Error(err))
-				keepAliveCancel() // make go vet happy
 				return err
 			}
 
 			oldCancel := keepAliveCancel
 			keepAliveCtx, keepAliveCancel = context.WithCancel(ctx)
+			_ = keepAliveCancel // make go vet happy
 			ch, err = cli.KeepAlive(keepAliveCtx, leaseID)
 			if err != nil {
 				log.L().Error("meet error when change keepalive TTL", zap.Error(err))
-				keepAliveCancel() // make go vet happy
+				oldCancel()
 				return err
 			}
 			currentKeepAliveTTL = newTTL
 			log.L().Info("dynamically changed keepalive TTL to", zap.Int64("ttl in seconds", newTTL))
 
-			// after new keepalive is succeed, we cancel the old keepalive
+			// after new keepalive succeed, we cancel the old keepalive
 			oldCancel()
 			_, err2 := revokeLease(cli, oldLeaseID)
 			if err2 != nil {
