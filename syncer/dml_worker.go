@@ -55,7 +55,7 @@ type DMLWorker struct {
 
 	// channel
 	compactedCh chan map[opType][]*job
-	drainCh     chan struct{}
+	pullCh      chan struct{}
 	causalityCh chan *job
 	flushCh     chan *job
 }
@@ -83,11 +83,11 @@ func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, 
 }
 
 // run runs dml workers, return worker count and flush job channel.
-func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, compactedCh chan map[opType][]*job, drainCh chan struct{}, nonCompactedCh chan *job, causalityCh chan *job) (int, chan *job) {
+func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, compactedCh chan map[opType][]*job, pullCh chan struct{}, causalityCh chan *job) (int, chan *job) {
 	w.tctx = tctx
 	w.toDBConns = toDBConns
 	w.compactedCh = compactedCh
-	w.drainCh = drainCh
+	w.pullCh = pullCh
 	w.causalityCh = causalityCh
 	w.flushCh = make(chan *job)
 
@@ -96,7 +96,13 @@ func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, comp
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		w.runCausalityDMLWorker(causalityCh)
+		w.runCompactedDMLWorker()
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		w.runCausalityDMLWorker()
 	}()
 
 	go func() {
@@ -104,7 +110,7 @@ func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, comp
 		wg.Wait()
 	}()
 
-	return w.workerCount, w.flushCh
+	return w.workerCount + 1, w.flushCh
 }
 
 func (w *DMLWorker) close() {
@@ -256,8 +262,46 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 	}
 }
 
+func (w *DMLWorker) executeCompactedJobsWithOpType(op opType, jobsMap map[opType][]*job) {
+	jobs, ok := jobsMap[op]
+	if !ok {
+		return
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < len(jobs); i += w.batch {
+		j := i + w.batch
+		if j >= len(jobs) {
+			j = len(jobs)
+		}
+		wg.Add(1)
+		batchJobs := jobs[i:j]
+		w.connectionPool.ApplyWithID(w.executeBatchJobs(w.workerCount, batchJobs, func() { wg.Done() }))
+	}
+	wg.Wait()
+}
+
+func (w *DMLWorker) runCompactedDMLWorker() {
+	for {
+		select {
+		case jobsMap, ok := <-w.compactedCh:
+			if !ok {
+				return
+			}
+			w.executeCompactedJobsWithOpType(del, jobsMap)
+			w.executeCompactedJobsWithOpType(insert, jobsMap)
+			w.executeCompactedJobsWithOpType(update, jobsMap)
+
+			if _, ok := jobsMap[flush]; ok {
+				w.flushCh <- newFlushJob()
+			}
+		case <-time.After(waitTime):
+			w.pullCh <- struct{}{}
+		}
+	}
+}
+
 // runCausalityDMLWorker distribute jobs by queueBucket.
-func (w *DMLWorker) runCausalityDMLWorker(causalityCh chan *job) {
+func (w *DMLWorker) runCausalityDMLWorker() {
 	causalityJobChs := make([]chan *job, w.workerCount)
 
 	for i := 0; i < w.workerCount; i++ {
@@ -276,8 +320,8 @@ func (w *DMLWorker) runCausalityDMLWorker(causalityCh chan *job) {
 		queueBucketMapping[i] = queueBucketName(i)
 	}
 
-	for j := range causalityCh {
-		metrics.QueueSizeGauge.WithLabelValues(w.task, "causality_output", w.source).Set(float64(len(causalityCh)))
+	for j := range w.causalityCh {
+		metrics.QueueSizeGauge.WithLabelValues(w.task, "causality_output", w.source).Set(float64(len(w.causalityCh)))
 		if j.tp == flush || j.tp == conflict {
 			if j.tp == conflict {
 				w.causalityWg.Add(w.workerCount)

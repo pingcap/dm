@@ -18,6 +18,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+
 	"github.com/pingcap/dm/pkg/log"
 )
 
@@ -74,8 +76,6 @@ func (c *Compactor) run(in chan *job) (chan map[opType][]*job, chan *job, chan s
 }
 
 func (c *Compactor) runCompactor() {
-	defer c.close()
-
 	for {
 		select {
 		case <-c.drainCh:
@@ -98,18 +98,21 @@ func (c *Compactor) runCompactor() {
 				continue
 			}
 
-			if j.tp != update {
-				c.compactJob(j)
-			} else {
+			if j.tp == update && j.dmlParam.updateIdentify() {
 				delJob := j.clone()
 				delJob.tp = del
-				delJob.dmlParam.values = nil
+				delJob.dmlParam.op = del
+				delJob.dmlParam.values = delJob.dmlParam.oldValues
+				delJob.dmlParam.oldValues = nil
 				c.compactJob(delJob)
 
 				insertJob := j.clone()
 				insertJob.tp = insert
+				insertJob.dmlParam.op = insert
 				insertJob.dmlParam.oldValues = nil
 				c.compactJob(insertJob)
+			} else {
+				c.compactJob(j)
 			}
 			if c.counter >= c.bufferSize {
 				<-c.drainCh
@@ -125,6 +128,10 @@ func (c *Compactor) close() {
 }
 
 func (c *Compactor) flushBuffer() {
+	if c.counter == 0 {
+		return
+	}
+
 	res := make(map[opType][]*job, 3)
 	for _, tableJobs := range c.compactedBuffer {
 		for _, j := range tableJobs {
@@ -133,6 +140,7 @@ func (c *Compactor) flushBuffer() {
 	}
 	c.compactedCh <- res
 	c.counter = 0
+	c.compactedBuffer = make(map[string]map[string]*job)
 }
 
 func (c *Compactor) sendFlushJob(j *job) {
@@ -141,7 +149,7 @@ func (c *Compactor) sendFlushJob(j *job) {
 }
 
 func (c *Compactor) compactJob(j *job) {
-	tableName := j.targetTable
+	tableName := dbutil.TableName(j.dmlParam.schema, j.dmlParam.table)
 	tableJobs, ok := c.compactedBuffer[tableName]
 	if !ok {
 		c.compactedBuffer[tableName] = make(map[string]*job, c.bufferSize)
@@ -159,15 +167,16 @@ func (c *Compactor) compactJob(j *job) {
 	switch j.tp {
 	case insert:
 		// delete + insert => insert
-		// if prevJob.tp != del {
-		// 	// s.tctx.L().Warn("update-insert/insert-insert happen", zap.Reflect("before", oldDML), zap.Reflect("after", dml))
-		// }
+		if prevJob.tp != del {
+			c.logger.Warn("update-insert/insert-insert happen", zap.Stringer("before", prevJob), zap.Stringer("after", j))
+		}
 	case del:
 		// insert/update + delete => delete
-		// if prevJob.tp != insert && prevJob.tp != update {
-		// 	// s.tctx.L().Warn("update-insert/insert-insert happen", zap.Reflect("before", oldDML), zap.Reflect("after", dml))
-		// }
+		if prevJob.tp != insert && prevJob.tp != update {
+			c.logger.Warn("update-insert/insert-insert happen", zap.Reflect("before", prevJob), zap.Stringer("after", j))
+		}
 	case update:
+		// nolint:gocritic
 		if prevJob.tp == insert {
 			// insert + update ==> insert
 			j.tp = insert
@@ -175,9 +184,9 @@ func (c *Compactor) compactJob(j *job) {
 		} else if prevJob.tp == update {
 			// update + update ==> update
 			j.dmlParam.oldValues = prevJob.dmlParam.oldValues
-		} // else {
-		// s.tctx.L().Warn("update-insert/insert-insert happen", zap.Reflect("before", oldDML), zap.Reflect("after", dml))
-		// }
+		} else {
+			c.logger.Warn("update-insert/insert-insert happen", zap.Reflect("before", prevJob), zap.Stringer("after", j))
+		}
 	}
 	tableJobs[key] = j
 }

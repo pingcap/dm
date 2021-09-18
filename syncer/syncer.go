@@ -267,7 +267,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
 	syncer.recordedActiveRelayLog = false
-	syncer.workerJobTSArray = make([]*atomic.Int64, cfg.WorkerCount+workerJobTSArrayInitSize)
+	syncer.workerJobTSArray = make([]*atomic.Int64, cfg.WorkerCount+workerJobTSArrayInitSize+1)
 	for i := range syncer.workerJobTSArray {
 		syncer.workerJobTSArray[i] = atomic.NewInt64(0)
 	}
@@ -1309,7 +1309,7 @@ func (s *Syncer) syncDML(tctx *tcontext.Context) {
 
 	compactedCh, nonCompactedCh, drainCh := s.compactor.run(s.dmlJobCh)
 	causalityCh := s.causality.run(nonCompactedCh)
-	flushCount, flushCh := s.dmlWorker.run(tctx, s.toDBConns,compactedCh,drainCh, causalityCh)
+	flushCount, flushCh := s.dmlWorker.run(tctx, s.toDBConns, compactedCh, drainCh, causalityCh)
 
 	// wait all worker flushed
 	// use counter is enough since we only add new flush job after previous flush job done

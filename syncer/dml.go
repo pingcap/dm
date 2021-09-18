@@ -453,17 +453,17 @@ func (dmlParam *DMLParam) identifyValues() []interface{} {
 	return nil
 }
 
-// // oldIdentifyValues gets old values of unique not null columns.
-// func (dmlParam *DMLParam) oldIdentifyValues() []interface{} {
-// 	if defaultIndexColumns := findFitIndex(dmlParam.ti); defaultIndexColumns != nil {
-// 		values := make([]interface{}, 0, len(defaultIndexColumns.Columns))
-// 		for _, column := range defaultIndexColumns.Columns {
-// 			values = append(values, dmlParam.oldValues[column.Offset])
-// 		}
-// 		return values
-// 	}
-// 	return nil
-// }
+// oldIdentifyValues gets old values of unique not null columns.
+func (dmlParam *DMLParam) oldIdentifyValues() []interface{} {
+	if defaultIndexColumns := findFitIndex(dmlParam.ti); defaultIndexColumns != nil {
+		values := make([]interface{}, 0, len(defaultIndexColumns.Columns))
+		for _, column := range defaultIndexColumns.Columns {
+			values = append(values, dmlParam.oldValues[column.Offset])
+		}
+		return values
+	}
+	return nil
+}
 
 // identifyKey use identifyValues to gen key.
 // This is used for compacted.
@@ -485,11 +485,6 @@ func (dmlParam *DMLParam) identifyKeys() []string {
 	}
 	return keys
 }
-
-// // oldIdentifyKey use oldIdentifyValues to gen key.
-// func (dmlParam *DMLParam) oldIdentifyKey() string {
-// 	return genKey(dmlParam.oldIdentifyValues())
-// }
 
 // whereColumnsAndValues gets columns and values of unique column with not null value.
 func (dmlParam *DMLParam) whereColumnsAndValues() ([]string, []interface{}) {
@@ -579,23 +574,23 @@ func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []s
 	return multipleKeys
 }
 
-// // updateIdentify check whether a update sql update its identify keys.
-// func (dmlParam *DMLParam) updateIdentify() bool {
-// 	if len(dmlParam.oldValues) == 0 {
-// 		return false
-// 	}
-//
-// 	values := dmlParam.identifyValues()
-// 	oldValues := dmlParam.oldIdentifyValues()
-//
-// 	for i := 0; i < len(values); i++ {
-// 		if values[i] != oldValues[i] {
-// 			return true
-// 		}
-// 	}
-//
-// 	return false
-// }
+// updateIdentify check whether a update sql update its identify keys.
+func (dmlParam *DMLParam) updateIdentify() bool {
+	if len(dmlParam.oldValues) == 0 {
+		return false
+	}
+
+	values := dmlParam.identifyValues()
+	oldValues := dmlParam.oldIdentifyValues()
+
+	for i := 0; i < len(values); i++ {
+		if values[i] != oldValues[i] {
+			return true
+		}
+	}
+
+	return false
+}
 
 func (dmlParam *DMLParam) genWhere(buf *strings.Builder) []interface{} {
 	whereColumns, whereValues := dmlParam.whereColumnsAndValues()
