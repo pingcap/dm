@@ -2198,11 +2198,11 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 	// ENDTODO
 
-	ignore, err := s.filterRowsEvent(originTable, ec.header.EventType)
+	needSkip, err := s.skipRowsEvent(originTable, ec.header.EventType)
 	if err != nil {
 		return err
 	}
-	if ignore {
+	if needSkip {
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		// for RowsEvent, we should record lastLocation rather than currentLocation
 		return s.recordSkipSQLsLocation(&ec)
@@ -2210,9 +2210,9 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	if s.cfg.ShardMode == config.ShardPessimistic {
 		if s.sgk.InSyncing(originTable, targetTable, *ec.currentLocation) {
-			// if in unsync stage and not before active DDL, ignore it
-			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), ignore it
-			ec.tctx.L().Debug("replicate sharding DDL, ignore Rows event",
+			// if in unsync stage and not before active DDL, filter it
+			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), filter it
+			ec.tctx.L().Debug("replicate sharding DDL, filter Rows event",
 				zap.String("event", "row"),
 				zap.Stringer("source", originTable),
 				log.WrapStringerField("location", ec.currentLocation))
@@ -2390,7 +2390,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		return err
 	}
 
-	if parseResult.ignore {
+	if parseResult.needSkip {
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 		qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))
 		*qec.lastLocation = *qec.currentLocation // before record skip location, update lastLocation
@@ -2492,9 +2492,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 
 		// DDL is sequentially synchronized in this syncer's main process goroutine
-		// ignore DDL that is older or same as table checkpoint, to avoid sync again for already synced DDLs
+		// filter DDL that is older or same as table checkpoint, to avoid sync again for already synced DDLs
 		if s.checkpoint.IsOlderThanTablePoint(tables[0][0], *qec.currentLocation, true) {
-			qec.tctx.L().Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", qec.currentLocation))
+			qec.tctx.L().Info("filter obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", qec.currentLocation))
 			continue
 		}
 
@@ -2519,7 +2519,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 				}
 				continue
 			case *ast.TruncateTableStmt:
-				qec.tctx.L().Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
+				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
 				continue
 			}
 
@@ -2536,7 +2536,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		} else if s.cfg.ShardMode == config.ShardOptimistic {
 			switch stmt.(type) {
 			case *ast.TruncateTableStmt:
-				qec.tctx.L().Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
+				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
 				continue
 			case *ast.RenameTableStmt:
 				return terror.ErrSyncerUnsupportedStmt.Generate("RENAME TABLE", config.ShardOptimistic)

@@ -50,7 +50,7 @@ func (s *testFilterSuite) TearDownSuite(c *C) {
 	c.Assert(s.db.Close(), IsNil)
 }
 
-func (s *testFilterSuite) TestFilterQueryEvent(c *C) {
+func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 	syncer := &Syncer{}
 	// test binlog filter
 	filterRules := []*bf.BinlogEventRule{
@@ -91,13 +91,13 @@ func (s *testFilterSuite) TestFilterQueryEvent(c *C) {
 	for _, ca := range cases {
 		stmt, err := p.ParseOneStmt(ca.sql, "", "")
 		c.Assert(err, IsNil)
-		skipped, err2 := syncer.filterQueryEvent(ca.tables, stmt, ca.sql)
+		skipped, err2 := syncer.skipQueryEvent(ca.tables, stmt, ca.sql)
 		c.Assert(err2, IsNil)
 		c.Assert(skipped, Equals, ca.expectSkipped)
 	}
 }
 
-func (s *testFilterSuite) TestFilterRowsEvent(c *C) {
+func (s *testFilterSuite) TestSkipRowsEvent(c *C) {
 	syncer := &Syncer{}
 	filterRules := []*bf.BinlogEventRule{
 		{
@@ -113,9 +113,9 @@ func (s *testFilterSuite) TestFilterRowsEvent(c *C) {
 	c.Assert(err, IsNil)
 
 	cases := []struct {
-		table         *filter.Table
-		eventType     replication.EventType
-		expectSkipped bool
+		table     *filter.Table
+		eventType replication.EventType
+		expected  bool
 	}{
 		{
 			// test filter one event
@@ -133,10 +133,9 @@ func (s *testFilterSuite) TestFilterRowsEvent(c *C) {
 		},
 	}
 	for _, ca := range cases {
-
-		skipped, err2 := syncer.filterRowsEvent(ca.table, ca.eventType)
+		needSkip, err2 := syncer.skipRowsEvent(ca.table, ca.eventType)
 		c.Assert(err2, IsNil)
-		c.Assert(skipped, Equals, ca.expectSkipped)
+		c.Assert(needSkip, Equals, ca.expected)
 	}
 }
 
@@ -194,7 +193,7 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 		},
 	}
 	for _, ca := range cases {
-		skipped, err2 := syncer.filterOneEvent(ca.table, ca.eventType, ca.sql)
+		skipped, err2 := syncer.skipOneEvent(ca.table, ca.eventType, ca.sql)
 		c.Assert(err2, IsNil)
 		c.Assert(skipped, Equals, ca.expectSkipped)
 	}

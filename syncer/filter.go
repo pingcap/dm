@@ -24,22 +24,22 @@ import (
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
 
-func (s *Syncer) filterQueryEvent(tables []*filter.Table, stmt ast.StmtNode, sql string) (bool, error) {
+func (s *Syncer) skipQueryEvent(tables []*filter.Table, stmt ast.StmtNode, sql string) (bool, error) {
 	if utils.IsBuildInSkipDDL(sql) {
 		return true, nil
 	}
 	et := bf.AstToDDLEvent(stmt)
 	for _, table := range tables {
-		needFilter, err := s.filterOneEvent(table, et, sql)
-		if err != nil || needFilter {
-			return needFilter, err
+		needSkip, err := s.skipOneEvent(table, et, sql)
+		if err != nil || needSkip {
+			return needSkip, err
 		}
 	}
 	return false, nil
 }
 
-func (s *Syncer) filterRowsEvent(table *filter.Table, eventType replication.EventType) (bool, error) {
-	// filter ghost table
+func (s *Syncer) skipRowsEvent(table *filter.Table, eventType replication.EventType) (bool, error) {
+	// skip ghost table
 	if s.onlineDDL != nil {
 		tp := s.onlineDDL.TableType(table.Name)
 		if tp != onlineddl.RealTable {
@@ -55,20 +55,21 @@ func (s *Syncer) filterRowsEvent(table *filter.Table, eventType replication.Even
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 		et = bf.DeleteEvent
 	default:
-		filtered, err := s.filterOneEvent(table, bf.NullEvent, "")
+		needSkip, err := s.skipOneEvent(table, bf.NullEvent, "")
 		if err != nil {
 			return false, err
-		} else if filtered {
-			return filtered, nil
+		}
+		if needSkip {
+			return needSkip, nil
 		} else {
-			return false, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
+			return needSkip, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
 		}
 	}
-	return s.filterOneEvent(table, et, "")
+	return s.skipOneEvent(table, et, "")
 }
 
-// filterSQL filter unsupported sql in tidb and global sql-patterns in binlog-filter config file.
-func (s *Syncer) filterSQL(sql string) (bool, error) {
+// skipSQLByPattern skip unsupported sql in tidb and global sql-patterns in binlog-filter config file.
+func (s *Syncer) skipSQLByPattern(sql string) (bool, error) {
 	if utils.IsBuildInSkipDDL(sql) {
 		return true, nil
 	}
@@ -79,13 +80,13 @@ func (s *Syncer) filterSQL(sql string) (bool, error) {
 	return action == bf.Ignore, nil
 }
 
-// filterOneEvent will return true when
+// skipOneEvent will return true when
 // - given `sql` matches builtin pattern.
 // - any schema of table names is system schema.
 // - any table name doesn't pass block-allow list.
-// - type of SQL doesn't pass binlog filter.
-// - pattern of SQL doesn't pass binlog filter.
-func (s *Syncer) filterOneEvent(table *filter.Table, et bf.EventType, sql string) (bool, error) {
+// - type of SQL doesn't pass binlog-filter.
+// - pattern of SQL doesn't pass binlog-filter.
+func (s *Syncer) skipOneEvent(table *filter.Table, et bf.EventType, sql string) (bool, error) {
 	if filter.IsSystemSchema(table.Schema) {
 		return true, nil
 	}
