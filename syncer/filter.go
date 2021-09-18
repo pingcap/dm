@@ -80,7 +80,6 @@ func (s *Syncer) skipSQLByPattern(sql string) (bool, error) {
 }
 
 // skipOneEvent will return true when
-// - given `sql` matches builtin pattern.
 // - any schema of table names is system schema.
 // - any table name doesn't pass block-allow list.
 // - type of SQL doesn't pass binlog-filter.
