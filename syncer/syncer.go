@@ -194,8 +194,6 @@ type Syncer struct {
 	// record whether error occurred when execute SQLs
 	execError atomic.Error
 
-	heartbeat *Heartbeat
-
 	readerHub              *streamer.ReaderHub
 	recordedActiveRelayLog bool
 
@@ -406,22 +404,6 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 				return err
 			}
 		}
-	}
-	if s.cfg.EnableHeartbeat {
-		s.heartbeat, err = GetHeartbeat(&HeartbeatConfig{
-			serverID:       s.cfg.ServerID,
-			primaryCfg:     s.cfg.From,
-			updateInterval: int64(s.cfg.HeartbeatUpdateInterval),
-			reportInterval: int64(s.cfg.HeartbeatReportInterval),
-		})
-		if err != nil {
-			return err
-		}
-		err = s.heartbeat.AddTask(s.cfg.Name)
-		if err != nil {
-			return err
-		}
-		rollbackHolder.Add(fr.FuncRollback{Name: "remove-heartbeat", Fn: s.removeHeartbeat})
 	}
 
 	// when Init syncer, set active relay log info
@@ -2192,12 +2174,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		log.WrapStringerField("location", ec.currentLocation),
 		zap.Reflect("raw event data", ev.Rows))
 
-	// TODO(ehco) remove heartbeat
-	if s.cfg.EnableHeartbeat {
-		s.heartbeat.TryUpdateTaskTS(s.cfg.Name, originTable.Schema, originTable.Name, ev.Rows)
-	}
-	// ENDTODO
-
 	ignore, err := s.skipDMLEvent(originTable, ec.header.EventType)
 	if err != nil {
 		return err
@@ -3218,8 +3194,6 @@ func (s *Syncer) Close() {
 		return
 	}
 
-	s.removeHeartbeat()
-
 	s.stopSync()
 	s.closeDBs()
 
@@ -3264,15 +3238,6 @@ func (s *Syncer) closeOnlineDDL() {
 	if s.onlineDDL != nil {
 		s.onlineDDL.Close()
 		s.onlineDDL = nil
-	}
-}
-
-func (s *Syncer) removeHeartbeat() {
-	if s.cfg.EnableHeartbeat {
-		err := s.heartbeat.RemoveTask(s.cfg.Name)
-		if err != nil {
-			s.tctx.L().Error("fail to remove task for heartbeat", zap.Error(err))
-		}
 	}
 }
 
