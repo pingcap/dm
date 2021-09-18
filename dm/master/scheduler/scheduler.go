@@ -326,6 +326,48 @@ func (s *Scheduler) AddSourceCfg(cfg *config.SourceConfig) error {
 	return nil
 }
 
+// UpdateSourceCfg update the upstream source config to the cluster.
+// please verify the config before call this.
+func (s *Scheduler) UpdateSourceCfg(cfg *config.SourceConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	// 1. check whether the config exists.
+	_, ok := s.sourceCfgs[cfg.SourceID]
+	if !ok {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(cfg.SourceID)
+	}
+	// 2. check if tasks using this configuration are running
+	if tasks := s.GetTaskNameListBySourceName(cfg.SourceID); len(tasks) > 0 {
+		return terror.ErrSchedulerSourceOpTaskExist.Generate(cfg.SourceID, tasks)
+	}
+	// 3. check this cfg is ok to update.
+	if !checkSourceCfgCanUpdated(s.sourceCfgs[cfg.SourceID], cfg) {
+		return terror.ErrSchedulerSourceCfgUpdate.Generate()
+	}
+	// 4. put the config into etcd.
+	_, err := ha.PutSourceCfg(s.etcdCli, cfg)
+	if err != nil {
+		return err
+	}
+	// 5. record the config in the scheduler.
+	s.sourceCfgs[cfg.SourceID] = cfg
+	return nil
+}
+
+// currently the source cfg can only update relay-log related parts.
+func checkSourceCfgCanUpdated(oldCfg, newCfg *config.SourceConfig) bool {
+	newCfgClone := newCfg.Clone()
+	newCfgClone.RelayBinLogName = oldCfg.RelayBinLogName
+	newCfgClone.RelayBinlogGTID = oldCfg.RelayBinlogGTID
+	newCfgClone.RelayDir = oldCfg.RelayDir
+	return newCfgClone.String() == oldCfg.String()
+}
+
 // RemoveSourceCfg removes the upstream source config in the cluster.
 // when removing the upstream source config, it should also remove:
 // - any existing relay stage.
@@ -876,6 +918,20 @@ func (s *Scheduler) GetSubTaskCfgs() map[string]map[string]config.SubTaskConfig 
 	})
 
 	return clone
+}
+
+// GetTaskNameListBySourceName gets task name list by source name.
+func (s *Scheduler) GetTaskNameListBySourceName(sourceName string) []string {
+	var taskNameList []string
+	s.subTaskCfgs.Range(func(k, v interface{}) bool {
+		task := k.(string)
+		subtaskCfgMap := v.(map[string]config.SubTaskConfig)
+		if _, ok := subtaskCfgMap[sourceName]; ok {
+			taskNameList = append(taskNameList, task)
+		}
+		return true
+	})
+	return taskNameList
 }
 
 // AddWorker adds the information of the DM-worker when registering a new instance.

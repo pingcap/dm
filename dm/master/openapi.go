@@ -103,7 +103,7 @@ func (s *Server) DMAPICreateSource(ctx echo.Context) error {
 		return err
 	}
 	cfg := modelToSourceCfg(createSourceReq)
-	if err := checkAndAdjustSourceConfig(ctx.Request().Context(), cfg); err != nil {
+	if err := checkAndAdjustSourceConfigFunc(ctx.Request().Context(), cfg); err != nil {
 		return err
 	}
 	if err := s.scheduler.AddSourceCfg(cfg); err != nil {
@@ -133,17 +133,84 @@ func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string) error {
 
 // DMAPIStartRelay url is:(POST /api/v1/sources/{source-id}/relay).
 func (s *Server) DMAPIStartRelay(ctx echo.Context, sourceName string) error {
-	return nil
+	var req openapi.StartRelayRequest
+	if err := ctx.Bind(&req); err != nil {
+		return err
+	}
+	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
+	if sourceCfg == nil {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
+	}
+	needUpdate := false
+	// update relay related in source cfg
+	if req.RelayBinlogName != nil && sourceCfg.RelayBinLogName != *req.RelayBinlogName {
+		sourceCfg.RelayBinLogName = *req.RelayBinlogName
+		needUpdate = true
+	}
+	if req.RelayBinlogGtid != nil && sourceCfg.RelayBinlogGTID != *req.RelayBinlogGtid {
+		sourceCfg.RelayBinlogGTID = *req.RelayBinlogGtid
+		needUpdate = true
+	}
+	if req.RelayDir != nil && sourceCfg.RelayDir != *req.RelayDir {
+		sourceCfg.RelayDir = *req.RelayDir
+		needUpdate = true
+	}
+	if needUpdate {
+		// update current source relay config before start relay
+		if err := s.scheduler.UpdateSourceCfg(sourceCfg); err != nil {
+			return err
+		}
+	}
+	return s.scheduler.StartRelay(sourceName, req.WorkerNameList)
 }
 
 // DMAPIStopRelay url is:(DELETE /api/v1/sources/{source-id}/relay).
 func (s *Server) DMAPIStopRelay(ctx echo.Context, sourceName string) error {
-	return nil
+	var req openapi.StopRelayRequest
+	if err := ctx.Bind(&req); err != nil {
+		return err
+	}
+	return s.scheduler.StopRelay(sourceName, req.WorkerNameList)
 }
 
 // DMAPIGetSourceStatus url is:(GET /api/v1/sources/{source-id}/status).
 func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error {
-	return nil
+	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
+	if sourceCfg == nil {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
+	}
+	var resp openapi.GetSourceStatusResponse
+	worker := s.scheduler.GetWorkerBySource(sourceName)
+	// current this source not bound to any worker
+	if worker == nil {
+		resp.Data = append(resp.Data, openapi.SourceStatus{SourceName: sourceName})
+		resp.Total = len(resp.Data)
+		return ctx.JSON(http.StatusOK, resp)
+	}
+	// get status from worker
+	workerRespList := s.getStatusFromWorkers(ctx.Request().Context(), []string{sourceName}, "", true)
+	for _, workerStatus := range workerRespList {
+		if workerStatus == nil {
+			// this should not happen unless the rpc in the worker server has been modified
+			return terror.ErrOpenAPICommonError.New("worker's query-status response is nil")
+		}
+		sourceStatus := openapi.SourceStatus{SourceName: sourceName, WorkerName: workerStatus.SourceStatus.Worker}
+		if !workerStatus.Result {
+			sourceStatus.ErrorMsg = &workerStatus.Msg
+		} else if relayStatus := workerStatus.SourceStatus.GetRelayStatus(); relayStatus != nil {
+			sourceStatus.RelayStatus = &openapi.RelayStatus{
+				MasterBinlog:       relayStatus.MasterBinlog,
+				MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
+				RelayBinlogGtid:    relayStatus.RelayBinlogGtid,
+				RelayCatchUpMaster: relayStatus.RelayCatchUpMaster,
+				RelayDir:           relayStatus.RelaySubDir,
+				Stage:              relayStatus.Stage.String(),
+			}
+		}
+		resp.Data = append(resp.Data, sourceStatus)
+	}
+	resp.Total = len(resp.Data)
+	return ctx.JSON(http.StatusOK, resp)
 }
 
 // DMAPIStartTask url is:(POST /api/v1/tasks).
@@ -194,6 +261,11 @@ func sourceCfgToModel(cfg *config.SourceConfig) openapi.Source {
 		Port:       cfg.From.Port,
 		SourceName: cfg.SourceID,
 		User:       cfg.From.User,
+		Purge: &openapi.Purge{
+			Expires:     &cfg.Purge.Expires,
+			Interval:    &cfg.Purge.Interval,
+			RemainSpace: &cfg.Purge.RemainSpace,
+		},
 	}
 	if cfg.From.Security != nil {
 		// NOTE we don't return security content here, because we don't want to expose it to the user.
@@ -227,5 +299,16 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 	cfg.From = from
 	cfg.EnableGTID = source.EnableGtid
 	cfg.SourceID = source.SourceName
+	if purge := source.Purge; purge != nil {
+		if purge.Expires != nil {
+			cfg.Purge.Expires = *purge.Expires
+		}
+		if purge.Interval != nil {
+			cfg.Purge.Interval = *purge.Interval
+		}
+		if purge.RemainSpace != nil {
+			cfg.Purge.RemainSpace = *purge.RemainSpace
+		}
+	}
 	return cfg
 }
