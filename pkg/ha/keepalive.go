@@ -124,10 +124,7 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 	}()
 
 	keepAliveCtx, keepAliveCancel := context.WithCancel(ctx)
-	_ = keepAliveCancel // make go vet happy
-	defer func() {
-		keepAliveCancel()
-	}()
+	defer keepAliveCancel()
 
 	ch, err := cli.KeepAlive(keepAliveCtx, leaseID)
 	if err != nil {
@@ -157,20 +154,15 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 				return err
 			}
 
-			oldCancel := keepAliveCancel
-			keepAliveCtx, keepAliveCancel = context.WithCancel(ctx)
-			_ = keepAliveCancel // make go vet happy
 			ch, err = cli.KeepAlive(keepAliveCtx, leaseID)
 			if err != nil {
 				log.L().Error("meet error when change keepalive TTL", zap.Error(err))
-				oldCancel()
 				return err
 			}
 			currentKeepAliveTTL = newTTL
 			log.L().Info("dynamically changed keepalive TTL to", zap.Int64("ttl in seconds", newTTL))
 
 			// after new keepalive succeed, we cancel the old keepalive
-			oldCancel()
 			_, err2 := revokeLease(cli, oldLeaseID)
 			if err2 != nil {
 				log.L().Warn("fail to revoke lease", zap.Error(err))
