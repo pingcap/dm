@@ -364,10 +364,10 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 
 			p, err := regexp.Compile(r)
 			if err != nil {
-				return terror.ErrConfigOnlineDDLRegexCompile.Generate("'shadow-table-rule'", r)
+				return terror.ErrConfigOnlineDDLRegexCompile.Generate("shadow-table-rule", r)
 			}
 			if p.NumSubexp() != 1 {
-				return terror.ErrConfigOnlineDDLInvalidRegex.Generate("'shadow-table-rule", r)
+				return terror.ErrConfigOnlineDDLInvalidRegex.Generate("shadow-table-rule", r)
 			}
 			shadowTableRule = append(shadowTableRule, r)
 		}
@@ -388,10 +388,10 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 			}
 			p, err := regexp.Compile(r)
 			if err != nil {
-				return terror.ErrConfigOnlineDDLRegexCompile.Generate("'trash-table-rule'", r)
+				return terror.ErrConfigOnlineDDLRegexCompile.Generate("trash-table-rule", r)
 			}
 			if p.NumSubexp() != 1 {
-				return terror.ErrConfigOnlineDDLInvalidRegex.Generate("'trash-table-rule'", r)
+				return terror.ErrConfigOnlineDDLInvalidRegex.Generate("trash-table-rule", r)
 			}
 		}
 		c.TrashTableRule = trashTableRule

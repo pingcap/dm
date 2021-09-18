@@ -385,7 +385,25 @@ type RealOnlinePlugin struct {
 }
 
 // NewRealOnlinePlugin returns real online plugin.
-func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig, shadowRegs, trashRegs []*regexp.Regexp) (OnlinePlugin, error) {
+func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
+	var (
+		shadowRegs []*regexp.Regexp
+		trashRegs  []*regexp.Regexp
+	)
+	for _, sg := range cfg.ShadowTableRule {
+		shadowReg, err := regexp.Compile(sg)
+		if err != nil {
+			return nil, terror.ErrConfigOnlineDDLRegexCompile.Generate("shadow-table-rule", sg)
+		}
+		shadowRegs = append(shadowRegs, shadowReg)
+	}
+	for _, tg := range cfg.TrashTableRule {
+		trashReg, err := regexp.Compile(tg)
+		if err != nil {
+			return nil, terror.ErrConfigOnlineDDLRegexCompile.Generate("trash-table-rule", tg)
+		}
+		trashRegs = append(trashRegs, trashReg)
+	}
 	r := &RealOnlinePlugin{
 		storage:    NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
 		shadowRegs: shadowRegs,
