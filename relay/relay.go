@@ -243,14 +243,16 @@ func (r *Relay) process(ctx context.Context) error {
 		}
 
 		if isRelayMetaOutdated {
+			uuidWithSuffix := r.meta.UUID() // only change after switch
 			err2 = r.PurgeRelayDir()
 			if err2 != nil {
 				return err2
 			}
-			uuidWithSuffix := r.meta.UUID() // only change after switch
+			r.ResetMeta()
+
 			uuid, _, err3 := utils.ParseSuffixForUUID(uuidWithSuffix)
 			if err3 != nil {
-				r.logger.Error("parse suffix for UUID when relay meta oudated", zap.String("UUID", uuidWithSuffix), zap.Error(err))
+				r.logger.Error("parse suffix for UUID when relay meta outdated", zap.String("UUID", uuidWithSuffix), zap.Error(err))
 				return err3
 			}
 
@@ -1068,7 +1070,6 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 		return nil, terror.Annotate(err, "fail to get random server id when relay adjust gtid")
 	}
 	syncCfg.ServerID = randomServerID
-
 	tcpReader := binlogReader.NewTCPReader(syncCfg)
 	resultGs, err := binlogReader.GetPreviousGTIDFromGTIDSet(ctx, tcpReader, gset)
 	if err != nil {
