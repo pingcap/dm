@@ -327,11 +327,11 @@ func adjustOnlineTableRules(ruleType string, rules []string) ([]string, error) {
 	adjustedRules := make([]string, 0, len(rules))
 	for _, r := range rules {
 		if !strings.HasPrefix(r, "^") {
-			r = fmt.Sprintf("^%s", r)
+			r = "^" + r
 		}
 
 		if !strings.HasSuffix(r, "$") {
-			r = fmt.Sprintf("%s$", r)
+			r += "$"
 		}
 
 		p, err := regexp.Compile(r)
