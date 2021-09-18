@@ -61,9 +61,8 @@ func (s *Syncer) skipRowsEvent(table *filter.Table, eventType replication.EventT
 		}
 		if needSkip {
 			return needSkip, nil
-		} else {
-			return needSkip, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
 		}
+		return needSkip, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
 	}
 	return s.skipOneEvent(table, et, "")
 }
