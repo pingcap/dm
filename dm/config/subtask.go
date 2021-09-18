@@ -323,6 +323,29 @@ func (c *SubTaskConfig) Decode(data string, verifyDecryptPassword bool) error {
 	return c.Adjust(verifyDecryptPassword)
 }
 
+func adjustOnlineTableRules(ruleType string, rules []string) ([]string, error) {
+	adjustedRules := make([]string, 0, len(rules))
+	for _, r := range rules {
+		if !strings.HasPrefix(r, "^") {
+			r = fmt.Sprintf("^%s", r)
+		}
+
+		if !strings.HasSuffix(r, "$") {
+			r = fmt.Sprintf("%s$", r)
+		}
+
+		p, err := regexp.Compile(r)
+		if err != nil {
+			return rules, terror.ErrConfigOnlineDDLRegexCompile.Generate(ruleType, r)
+		}
+		if p.NumSubexp() != 1 {
+			return rules, terror.ErrConfigOnlineDDLInvalidRegex.Generate(ruleType, r)
+		}
+		adjustedRules = append(adjustedRules, r)
+	}
+	return adjustedRules, nil
+}
+
 // Adjust adjusts and verifies configs.
 func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if c.Name == "" {
@@ -352,24 +375,9 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if len(c.ShadowTableRule) == 0 {
 		c.ShadowTableRule = []string{"^_(.+)_(?:new|gho)$"}
 	} else {
-		shadowTableRule := make([]string, 0, len(c.ShadowTableRule))
-		for _, r := range c.ShadowTableRule {
-			if !strings.HasPrefix(r, "^") {
-				r = fmt.Sprintf("^%s", r)
-			}
-
-			if !strings.HasSuffix(r, "$") {
-				r = fmt.Sprintf("%s$", r)
-			}
-
-			p, err := regexp.Compile(r)
-			if err != nil {
-				return terror.ErrConfigOnlineDDLRegexCompile.Generate("shadow-table-rule", r)
-			}
-			if p.NumSubexp() != 1 {
-				return terror.ErrConfigOnlineDDLInvalidRegex.Generate("shadow-table-rule", r)
-			}
-			shadowTableRule = append(shadowTableRule, r)
+		shadowTableRule, err := adjustOnlineTableRules("shadow-table-rule", c.ShadowTableRule)
+		if err != nil {
+			return err
 		}
 		c.ShadowTableRule = shadowTableRule
 	}
@@ -377,22 +385,9 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if len(c.TrashTableRule) == 0 {
 		c.TrashTableRule = []string{"^_(.+)_(?:ghc|del|old)$"}
 	} else {
-		trashTableRule := make([]string, 0, len(c.TrashTableRule))
-		for _, r := range c.TrashTableRule {
-			if !strings.HasPrefix(r, "^") {
-				r = fmt.Sprintf("^%s", r)
-			}
-
-			if !strings.HasSuffix(r, "$") {
-				r = fmt.Sprintf("%s$", r)
-			}
-			p, err := regexp.Compile(r)
-			if err != nil {
-				return terror.ErrConfigOnlineDDLRegexCompile.Generate("trash-table-rule", r)
-			}
-			if p.NumSubexp() != 1 {
-				return terror.ErrConfigOnlineDDLInvalidRegex.Generate("trash-table-rule", r)
-			}
+		trashTableRule, err := adjustOnlineTableRules("trash-table-rule", c.TrashTableRule)
+		if err != nil {
+			return err
 		}
 		c.TrashTableRule = trashTableRule
 	}

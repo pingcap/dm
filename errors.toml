@@ -1073,13 +1073,13 @@ workaround = "Please check the `chunk-filesize` config in task configuration fil
 tags = ["internal", "high"]
 
 [error.DM-config-20048]
-message = "'%s' regex pattern '%s' isn't contains exactly one submatch"
+message = "'%s' regex pattern '%s' compile falied"
 description = ""
 workaround = "Please check if params is correctly in the configuration file."
 tags = ["internal", "high"]
 
 [error.DM-config-20049]
-message = "'%s' regex pattern '%s' compile falied"
+message = "'%s' regex pattern '%s' isn't contains exactly one submatch"
 description = ""
 workaround = "Please check if params is correctly in the configuration file."
 tags = ["internal", "high"]
