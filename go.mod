@@ -17,7 +17,7 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.2.0
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/labstack/echo/v4 v4.4.0
