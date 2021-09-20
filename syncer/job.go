@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/pkg/binlog"
 )
@@ -67,9 +68,8 @@ type job struct {
 	// ddl in ShardOptimistic and ShardPessimistic will only affect one table at one time but for normal node
 	// we don't have this limit. So we should update multi tables in normal mode.
 	// sql example: drop table `s1`.`t1`, `s2`.`t2`.
-	sourceTbl       map[string][]string
-	targetSchema    string
-	targetTable     string
+	sourceTbls      map[string][]*filter.Table
+	targetTable     *filter.Table
 	sql             string
 	args            []interface{}
 	key             string
@@ -90,17 +90,16 @@ func (j *job) String() string {
 	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.startLocation, j.currentLocation)
 }
 
-func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{},
+func newDMLJob(tp opType, sourceTable, targetTable *filter.Table, sql string, args []interface{},
 	keys []string, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader) *job {
 	return &job{
-		tp:           tp,
-		sourceTbl:    map[string][]string{sourceSchema: {sourceTable}},
-		targetSchema: targetSchema,
-		targetTable:  targetTable,
-		sql:          sql,
-		args:         args,
-		keys:         keys,
-		retry:        true,
+		tp:          tp,
+		sourceTbls:  map[string][]*filter.Table{sourceTable.Schema: {sourceTable}},
+		targetTable: targetTable,
+		sql:         sql,
+		args:        args,
+		keys:        keys,
+		retry:       true,
 
 		location:        location,
 		startLocation:   startLocation,
@@ -111,37 +110,35 @@ func newDMLJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, 
 }
 
 // newDDL job is used to create a new ddl job
-// when cfg.ShardMode == "", ddlInfo == nil，sourceTbls != nil, we use sourceTbls to record ddl affected tables.
-// when cfg.ShardMode == ShardOptimistic || ShardPessimistic, ddlInfo != nil, sourceTbls == nil.
-func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, location, startLocation, cmdLocation binlog.Location,
-	sourceTbls map[string]map[string]struct{}, originSQL string, eventHeader *replication.EventHeader) *job {
+// when cfg.ShardMode == ShardOptimistic || ShardPessimistic, len(qec.sourceTbls) == 0.
+// when cfg.ShardMode == "", len(sourceTbls) != 0, we use sourceTbls to record ddl affected tables.
+func newDDLJob(qec *queryEventContext) *job {
 	j := &job{
-		tp:        ddl,
-		ddls:      ddls,
-		originSQL: originSQL,
+		tp:          ddl,
+		targetTable: &filter.Table{},
+		ddls:        qec.needHandleDDLs,
+		originSQL:   qec.originSQL,
 
-		location:        location,
-		startLocation:   startLocation,
-		currentLocation: cmdLocation,
-		eventHeader:     eventHeader,
+		location:        *qec.lastLocation,
+		startLocation:   *qec.startLocation,
+		currentLocation: *qec.currentLocation,
+		eventHeader:     qec.header,
 		jobAddTime:      time.Now(),
 	}
 
-	if ddlInfo != nil {
-		j.sourceTbl = map[string][]string{ddlInfo.tableNames[0][0].Schema: {ddlInfo.tableNames[0][0].Name}}
-		j.targetSchema = ddlInfo.tableNames[1][0].Schema
-		j.targetTable = ddlInfo.tableNames[1][0].Name
-	} else if sourceTbls != nil {
-		sourceTbl := make(map[string][]string, len(sourceTbls))
-		for schema, tbMap := range sourceTbls {
+	if len(qec.sourceTbls) != 0 {
+		j.sourceTbls = make(map[string][]*filter.Table, len(qec.sourceTbls))
+		for schema, tbMap := range qec.sourceTbls {
 			if len(tbMap) > 0 {
-				sourceTbl[schema] = make([]string, 0, len(tbMap))
+				j.sourceTbls[schema] = make([]*filter.Table, 0, len(tbMap))
 			}
 			for name := range tbMap {
-				sourceTbl[schema] = append(sourceTbl[schema], name)
+				j.sourceTbls[schema] = append(j.sourceTbls[schema], &filter.Table{Schema: schema, Name: name})
 			}
 		}
-		j.sourceTbl = sourceTbl
+	} else if qec.ddlInfo != nil && len(qec.ddlInfo.tables) >= 2 {
+		j.sourceTbls = map[string][]*filter.Table{qec.ddlInfo.tables[0][0].Schema: {qec.ddlInfo.tables[0][0]}}
+		j.targetTable = qec.ddlInfo.tables[1][0]
 	}
 
 	return j
@@ -168,8 +165,9 @@ func newXIDJob(location, startLocation, currentLocation binlog.Location) *job {
 
 func newFlushJob() *job {
 	return &job{
-		tp:         flush,
-		jobAddTime: time.Now(),
+		tp:          flush,
+		targetTable: &filter.Table{},
+		jobAddTime:  time.Now(),
 	}
 }
 

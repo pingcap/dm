@@ -19,6 +19,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	brutils "github.com/pingcap/tidb/br/pkg/utils"
 	"go.uber.org/zap"
 
@@ -51,7 +52,7 @@ type DMLWorker struct {
 	successFunc  func(int, []*job)
 	fatalFunc    func(*job, error)
 	lagFunc      func(*job, int)
-	addCountFunc func(bool, string, opType, int64, string, string)
+	addCountFunc func(bool, string, opType, int64, *filter.Table)
 
 	// channel
 	causalityCh chan *job
@@ -62,7 +63,7 @@ func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, 
 	successFunc func(int, []*job),
 	fatalFunc func(*job, error),
 	lagFunc func(*job, int),
-	addCountFunc func(bool, string, opType, int64, string, string),
+	addCountFunc func(bool, string, opType, int64, *filter.Table),
 ) *DMLWorker {
 	return &DMLWorker{
 		batch:          batch,
@@ -263,7 +264,7 @@ func (w *DMLWorker) runCausalityDMLWorker(causalityCh chan *job) {
 			}
 			// flush for every DML queue
 			for i, causalityJobCh := range causalityJobChs {
-				w.addCountFunc(false, queueBucketMapping[i], j.tp, 1, j.targetSchema, j.targetTable)
+				w.addCountFunc(false, queueBucketMapping[i], j.tp, 1, j.targetTable)
 				startTime := time.Now()
 				causalityJobCh <- j
 				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[i], w.source).Observe(time.Since(startTime).Seconds())
@@ -273,7 +274,7 @@ func (w *DMLWorker) runCausalityDMLWorker(causalityCh chan *job) {
 			}
 		} else {
 			queueBucket := int(utils.GenHashKey(j.key)) % w.workerCount
-			w.addCountFunc(false, queueBucketMapping[queueBucket], j.tp, 1, j.targetSchema, j.targetTable)
+			w.addCountFunc(false, queueBucketMapping[queueBucket], j.tp, 1, j.targetTable)
 			startTime := time.Now()
 			w.logger.Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.key))
 			causalityJobChs[queueBucket] <- j

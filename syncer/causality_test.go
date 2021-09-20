@@ -18,6 +18,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/util/mock"
 
 	"github.com/pingcap/dm/pkg/binlog"
@@ -86,13 +87,14 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 		},
 	}
 	results := []opType{insert, insert, update, del, conflict, insert}
+	table := &filter.Table{Schema: "test", Name: "t1"}
 
 	for _, tc := range testCases {
 		var keys []string
 		for _, val := range tc.vals {
 			keys = append(keys, genMultipleKeys(ti, val, "tb")...)
 		}
-		job := newDMLJob(tc.op, "", "", "", "", "", nil, keys, location, location, location, nil)
+		job := newDMLJob(tc.op, table, table, "", nil, keys, location, location, location, nil)
 		jobCh <- job
 	}
 
