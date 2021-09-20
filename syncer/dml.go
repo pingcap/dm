@@ -610,8 +610,38 @@ func (dmlParam *DMLParam) genWhere(buf *strings.Builder) []interface{} {
 	return whereValues
 }
 
+func (dmlParam *DMLParam) genWhereIN(buf *strings.Builder) {
+	whereColumns, whereValues := dmlParam.whereColumnsAndValues()
+
+	buf.WriteString("(")
+	for i, column := range whereColumns {
+		if i != len(whereColumns)-1 {
+			buf.WriteString("`" + strings.ReplaceAll(column, "`", "``") + "`,")
+		} else {
+			buf.WriteString("`" + strings.ReplaceAll(column, "`", "``") + "`)")
+		}
+	}
+	buf.WriteString(" IN (")
+
+	holder := fmt.Sprintf("(%s)", holderString(len(whereValues)))
+	for i := range whereColumns {
+		if i != 0 {
+			buf.WriteByte(',')
+		}
+		buf.WriteString(holder)
+	}
+	buf.WriteString(")")
+}
+
 // genDeleteSQL generates a `UPDATE` SQL with `WHERE`.
-func (dmlParam *DMLParam) genUpdateSQL() (string, []interface{}) {
+func (dmlParam *DMLParam) genUpdateSQL() ([]string, [][]interface{}) {
+	if dmlParam.safeMode {
+		sqls, args := dmlParam.genDeleteSQL()
+		replaceSQLs, replaceArgs := dmlParam.genInsertReplaceSQL()
+		sqls = append(sqls, replaceSQLs...)
+		args = append(args, replaceArgs...)
+		return sqls, args
+	}
 	var buf strings.Builder
 	buf.Grow(2048)
 	buf.WriteString("UPDATE ")
@@ -632,11 +662,23 @@ func (dmlParam *DMLParam) genUpdateSQL() (string, []interface{}) {
 
 	args := dmlParam.values
 	args = append(args, whereArgs...)
-	return buf.String(), args
+	return []string{buf.String()}, [][]interface{}{args}
+}
+
+func (dmlParam *DMLParam) genSQL() (sql []string, arg [][]interface{}) {
+	switch dmlParam.op {
+	case insert:
+		return dmlParam.genInsertReplaceSQL()
+	case del:
+		return dmlParam.genDeleteSQL()
+	case update:
+		return dmlParam.genUpdateSQL()
+	}
+	return
 }
 
 // genDeleteSQL generates a `DELETE FROM` SQL with `WHERE`.
-func (dmlParam *DMLParam) genDeleteSQL() (string, []interface{}) {
+func (dmlParam *DMLParam) genDeleteSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
 	buf.Grow(1024)
 	buf.WriteString("DELETE FROM ")
@@ -645,13 +687,18 @@ func (dmlParam *DMLParam) genDeleteSQL() (string, []interface{}) {
 	whereArgs := dmlParam.genWhere(&buf)
 	buf.WriteString(" LIMIT 1")
 
-	return buf.String(), whereArgs
+	return []string{buf.String()}, [][]interface{}{whereArgs}
 }
 
-func (dmlParam *DMLParam) genInsertReplaceSQL(op string) (string, []interface{}) {
+func (dmlParam *DMLParam) genInsertReplaceSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
 	buf.Grow(256)
-	buf.WriteString(op)
+	if dmlParam.safeMode {
+		buf.WriteString("REPLACE INTO")
+	} else {
+		buf.WriteString("INSERT INTO")
+	}
+
 	buf.WriteString(" " + dmlParam.qualifiedName() + " (")
 	for i, column := range dmlParam.columns {
 		if i != len(dmlParam.columns)-1 {
@@ -670,27 +717,81 @@ func (dmlParam *DMLParam) genInsertReplaceSQL(op string) (string, []interface{})
 			buf.WriteString("?)")
 		}
 	}
-	return buf.String(), dmlParam.values
+	return []string{buf.String()}, [][]interface{}{dmlParam.values}
 }
 
-// genInsertSQL generates a DML for `INSERT INTO`.
-func (dmlParam *DMLParam) genInsertSQL() (string, []interface{}) {
-	return dmlParam.genInsertReplaceSQL("INSERT INTO")
-}
-
-// genReplaceSQL generates a DML for `REPLACE INTO`.
-func (dmlParam *DMLParam) genReplaceSQL() (string, []interface{}) {
-	return dmlParam.genInsertReplaceSQL("REPLACE INTO")
-}
-
-func (dmlParam *DMLParam) genSQL() (sql string, args []interface{}) {
-	switch dmlParam.op {
-	case insert:
-		return dmlParam.genInsertSQL()
-	case update:
-		return dmlParam.genUpdateSQL()
-	case del:
-		return dmlParam.genDeleteSQL()
+func holderString(n int) string {
+	builder := new(strings.Builder)
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			builder.WriteString(",")
+		}
+		builder.WriteString("?")
 	}
-	return
+	return builder.String()
+}
+
+func genMultipleRowsInsertReplace(replace bool, dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	if len(dmlParams) == 0 {
+		return nil, nil
+	}
+
+	var buf strings.Builder
+	buf.Grow(256)
+	if replace {
+		buf.WriteString("REPLACE INTO")
+	} else {
+		buf.WriteString("INSERT INTO")
+	}
+	buf.WriteString(" " + dmlParams[0].qualifiedName() + " (")
+	for i, column := range dmlParams[0].columns {
+		if i != len(dmlParams[0].columns)-1 {
+			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`,")
+		} else {
+			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`)")
+		}
+	}
+	buf.WriteString(" VALUES ")
+
+	holder := fmt.Sprintf("(%s)", holderString(len(dmlParams[0].columns)))
+	for i := range dmlParams {
+		if i > 0 {
+			buf.WriteString(",")
+		}
+		buf.WriteString(holder)
+	}
+
+	args := make([]interface{}, 0, len(dmlParams)*len(dmlParams[0].columns))
+	for _, dmlParam := range dmlParams {
+		args = append(args, dmlParam.values...)
+	}
+	return []string{buf.String()}, [][]interface{}{args}
+}
+
+func genMultipleRowsInsert(dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	return genMultipleRowsInsertReplace(dmlParams[0].safeMode, dmlParams)
+}
+
+func genMultipleRowsReplace(dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	return genMultipleRowsInsertReplace(true, dmlParams)
+}
+
+func genMultipleRowsDelete(dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	if len(dmlParams) == 0 {
+		return nil, nil
+	}
+
+	var buf strings.Builder
+	buf.Grow(1024)
+	buf.WriteString("DELETE FROM ")
+	buf.WriteString(dmlParams[0].qualifiedName())
+	buf.WriteString(" WHERE ")
+	dmlParams[0].genWhereIN(&buf)
+
+	args := make([]interface{}, 0, len(dmlParams)*len(dmlParams[0].columns))
+	for _, dmlParam := range dmlParams {
+		_, whereValues := dmlParam.whereColumnsAndValues()
+		args = append(args, whereValues...)
+	}
+	return []string{buf.String()}, [][]interface{}{args}
 }

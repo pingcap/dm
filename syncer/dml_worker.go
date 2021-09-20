@@ -117,8 +117,28 @@ func (w *DMLWorker) close() {
 	close(w.flushCh)
 }
 
+func (w *DMLWorker) genSQLs(op opType, dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	switch op {
+	case insert:
+		return genMultipleRowsInsert(dmlParams)
+	case del:
+		return genMultipleRowsDelete(dmlParams)
+	case update:
+		return genMultipleRowsReplace(dmlParams)
+	default:
+		queries := make([]string, 0, len(dmlParams))
+		args := make([][]interface{}, 0, len(dmlParams))
+		for _, dmlParam := range dmlParams {
+			query, arg := dmlParam.genSQL()
+			queries = append(queries, query...)
+			args = append(args, arg...)
+		}
+		return queries, args
+	}
+}
+
 // executeBatchJobs execute jobs with batch size.
-func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job, clearFunc func()) func(uint64) {
+func (w *DMLWorker) executeBatchJobs(queueID int, op opType, jobs []*job, clearFunc func()) func(uint64) {
 	executeJobs := func(id uint64) {
 		var (
 			affect int
@@ -152,29 +172,11 @@ func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job, clearFunc func())
 			}
 		})
 
-		queries := make([]string, 0, len(jobs))
-		args := make([][]interface{}, 0, len(jobs))
-		var query string
-		var arg []interface{}
+		dmlParams := make([]*DMLParam, 0, len(jobs))
 		for _, j := range jobs {
-			// nolint:gocritic
-			if j.dmlParam.safeMode && j.dmlParam.op == update {
-				query, arg = j.dmlParam.genDeleteSQL()
-				queries = append(queries, query)
-				args = append(args, arg)
-				query, arg = j.dmlParam.genReplaceSQL()
-				queries = append(queries, query)
-				args = append(args, arg)
-			} else if j.dmlParam.safeMode && j.dmlParam.op == insert {
-				query, arg = j.dmlParam.genReplaceSQL()
-				queries = append(queries, query)
-				args = append(args, arg)
-			} else {
-				query, arg = j.dmlParam.genSQL()
-				queries = append(queries, query)
-				args = append(args, arg)
-			}
+			dmlParams = append(dmlParams, j.dmlParam)
 		}
+		queries, args := w.genSQLs(op, dmlParams)
 		failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
 			t := v.(int)
 			time.Sleep(time.Duration(t) * time.Second)
@@ -227,12 +229,12 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 			wg.Add(1)
 
 			if j.tp == conflict {
-				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() {
+				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, null, batchJobs, func() {
 					wg.Done()
 					w.causalityWg.Done()
 				}))
 			} else {
-				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))
+				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, null, batchJobs, func() { wg.Done() }))
 			}
 
 			if j.tp == flush {
@@ -249,7 +251,7 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 				wg.Wait()
 				batchJobs := jobs
 				wg.Add(1)
-				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))
+				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, null, batchJobs, func() { wg.Done() }))
 				jobs = make([]*job, 0, w.batch)
 			} else {
 				failpoint.Inject("noJobInQueueLog", func() {
@@ -275,7 +277,7 @@ func (w *DMLWorker) executeCompactedJobsWithOpType(op opType, jobsMap map[opType
 		}
 		wg.Add(1)
 		batchJobs := jobs[i:j]
-		w.connectionPool.ApplyWithID(w.executeBatchJobs(w.workerCount, batchJobs, func() { wg.Done() }))
+		w.connectionPool.ApplyWithID(w.executeBatchJobs(w.workerCount, op, batchJobs, func() { wg.Done() }))
 	}
 	wg.Wait()
 }
