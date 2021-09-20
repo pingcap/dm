@@ -18,8 +18,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-
 	"github.com/pingcap/dm/pkg/log"
 )
 
@@ -149,7 +147,7 @@ func (c *Compactor) sendFlushJob(j *job) {
 }
 
 func (c *Compactor) compactJob(j *job) {
-	tableName := dbutil.TableName(j.dmlParam.schema, j.dmlParam.table)
+	tableName := j.dmlParam.tableID
 	tableJobs, ok := c.compactedBuffer[tableName]
 	if !ok {
 		c.compactedBuffer[tableName] = make(map[string]*job, c.bufferSize)

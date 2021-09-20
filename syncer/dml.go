@@ -22,7 +22,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/types"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/expression"
 	"go.uber.org/zap"
 
@@ -32,8 +32,7 @@ import (
 
 // genDMLParam stores pruned columns, data as well as the original columns, data, index.
 type genDMLParam struct {
-	schema            string
-	table             string
+	tableID           string              // as a key in map like `schema`.`table`
 	safeMode          bool                // only used in update
 	data              [][]interface{}     // pruned data
 	originalData      [][]interface{}     // all data
@@ -81,7 +80,7 @@ RowLoop:
 			}
 		}
 
-		dmlParams = append(dmlParams, newDMLParam(insert, param.safeMode, param.schema, param.table, nil, value, nil, originalValue, columns, ti))
+		dmlParams = append(dmlParams, newDMLParam(insert, param.safeMode, param.tableID, nil, value, nil, originalValue, columns, ti))
 	}
 
 	return dmlParams, nil
@@ -145,7 +144,7 @@ RowLoop:
 			}
 		}
 
-		dmlParams = append(dmlParams, newDMLParam(update, param.safeMode, param.schema, param.table, oldValues, changedValues, oriOldValues, oriChangedValues, columns, ti))
+		dmlParams = append(dmlParams, newDMLParam(update, param.safeMode, param.tableID, oldValues, changedValues, oriOldValues, oriChangedValues, columns, ti))
 	}
 
 	return dmlParams, nil
@@ -176,7 +175,7 @@ RowLoop:
 				continue RowLoop
 			}
 		}
-		dmlParams = append(dmlParams, newDMLParam(del, param.safeMode, param.schema, param.table, value, nil, value, nil, ti.Columns, ti))
+		dmlParams = append(dmlParams, newDMLParam(del, param.safeMode, param.tableID, nil, value, nil, value, ti.Columns, ti))
 	}
 
 	return dmlParams, nil
@@ -328,7 +327,7 @@ func getColumnData(columns []*model.ColumnInfo, indexColumns *model.IndexInfo, d
 	return cols, values
 }
 
-func (s *Syncer) mappingDML(schema, table string, ti *model.TableInfo, data [][]interface{}) ([][]interface{}, error) {
+func (s *Syncer) mappingDML(table *filter.Table, ti *model.TableInfo, data [][]interface{}) ([][]interface{}, error) {
 	if s.columnMapping == nil {
 		return data, nil
 	}
@@ -343,9 +342,9 @@ func (s *Syncer) mappingDML(schema, table string, ti *model.TableInfo, data [][]
 		rows = make([][]interface{}, len(data))
 	)
 	for i := range data {
-		rows[i], _, err = s.columnMapping.HandleRowValue(schema, table, columns, data[i])
+		rows[i], _, err = s.columnMapping.HandleRowValue(table.Schema, table.Name, columns, data[i])
 		if err != nil {
-			return nil, terror.ErrSyncerUnitDoColumnMapping.Delegate(err, data[i], schema, table)
+			return nil, terror.ErrSyncerUnitDoColumnMapping.Delegate(err, data[i], table)
 		}
 	}
 	return rows, nil
@@ -394,10 +393,21 @@ func pruneGeneratedColumnDML(ti *model.TableInfo, data [][]interface{}) ([]*mode
 	return cols, rows, nil
 }
 
+// checkLogColumns returns error when not all rows in skipped is empty, which means the binlog doesn't contain all
+// columns.
+// TODO: don't return error when all skipped columns is non-PK.
+func checkLogColumns(skipped [][]int) error {
+	for _, row := range skipped {
+		if len(row) > 0 {
+			return terror.ErrBinlogNotLogColumn
+		}
+	}
+	return nil
+}
+
 // DMLParam stores param for DML.
 type DMLParam struct {
-	schema          string
-	table           string
+	tableID         string
 	op              opType
 	oldValues       []interface{} // for update SQL
 	values          []interface{}
@@ -409,12 +419,11 @@ type DMLParam struct {
 	key             string // use to detect causality
 }
 
-func newDMLParam(op opType, safeMode bool, schema, table string, oldValues, values, originOldValues, originValues []interface{}, columns []*model.ColumnInfo, ti *model.TableInfo) *DMLParam {
+func newDMLParam(op opType, safeMode bool, tableID string, oldValues, values, originOldValues, originValues []interface{}, columns []*model.ColumnInfo, ti *model.TableInfo) *DMLParam {
 	return &DMLParam{
 		op:              op,
 		safeMode:        safeMode,
-		schema:          schema,
-		table:           table,
+		tableID:         tableID,
 		oldValues:       oldValues,
 		values:          values,
 		columns:         columns,
@@ -422,11 +431,6 @@ func newDMLParam(op opType, safeMode bool, schema, table string, oldValues, valu
 		originOldValues: originOldValues,
 		originValues:    originValues,
 	}
-}
-
-// qualifiedName returns `dbName`.`tbName` for a DML.
-func (dmlParam *DMLParam) qualifiedName() string {
-	return dbutil.TableName(dmlParam.schema, dmlParam.table)
 }
 
 // identifyColumns gets unique not null columns.
@@ -454,6 +458,7 @@ func (dmlParam *DMLParam) identifyValues() []interface{} {
 }
 
 // oldIdentifyValues gets old values of unique not null columns.
+// only for update SQL.
 func (dmlParam *DMLParam) oldIdentifyValues() []interface{} {
 	if defaultIndexColumns := findFitIndex(dmlParam.ti); defaultIndexColumns != nil {
 		values := make([]interface{}, 0, len(defaultIndexColumns.Columns))
@@ -478,24 +483,29 @@ func (dmlParam *DMLParam) identifyKey() string {
 func (dmlParam *DMLParam) identifyKeys() []string {
 	var keys []string
 	if dmlParam.originOldValues != nil {
-		keys = append(keys, genMultipleKeys(dmlParam.ti, dmlParam.originOldValues, dmlParam.qualifiedName())...)
+		keys = append(keys, genMultipleKeys(dmlParam.ti, dmlParam.originOldValues, dmlParam.tableID)...)
 	}
 	if dmlParam.originValues != nil {
-		keys = append(keys, genMultipleKeys(dmlParam.ti, dmlParam.originValues, dmlParam.qualifiedName())...)
+		keys = append(keys, genMultipleKeys(dmlParam.ti, dmlParam.originValues, dmlParam.tableID)...)
 	}
 	return keys
 }
 
 // whereColumnsAndValues gets columns and values of unique column with not null value.
 func (dmlParam *DMLParam) whereColumnsAndValues() ([]string, []interface{}) {
-	columns, values := dmlParam.ti.Columns, dmlParam.originOldValues
+	columns, values := dmlParam.ti.Columns, dmlParam.originValues
+
+	if dmlParam.op == update {
+		values = dmlParam.originOldValues
+	}
 
 	defaultIndexColumns := findFitIndex(dmlParam.ti)
+
 	if defaultIndexColumns == nil {
-		defaultIndexColumns = getAvailableIndexColumn(dmlParam.ti, dmlParam.originOldValues)
+		defaultIndexColumns = getAvailableIndexColumn(dmlParam.ti, values)
 	}
 	if defaultIndexColumns != nil {
-		columns, values = getColumnData(dmlParam.ti.Columns, defaultIndexColumns, dmlParam.originOldValues)
+		columns, values = getColumnData(dmlParam.ti.Columns, defaultIndexColumns, values)
 	}
 
 	columnNames := make([]string, 0, len(columns))
@@ -645,7 +655,7 @@ func (dmlParam *DMLParam) genUpdateSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
 	buf.Grow(2048)
 	buf.WriteString("UPDATE ")
-	buf.WriteString(dmlParam.qualifiedName())
+	buf.WriteString(dmlParam.tableID)
 	buf.WriteString(" SET ")
 
 	for i, column := range dmlParam.columns {
@@ -682,7 +692,7 @@ func (dmlParam *DMLParam) genDeleteSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
 	buf.Grow(1024)
 	buf.WriteString("DELETE FROM ")
-	buf.WriteString(dmlParam.qualifiedName())
+	buf.WriteString(dmlParam.tableID)
 	buf.WriteString(" WHERE ")
 	whereArgs := dmlParam.genWhere(&buf)
 	buf.WriteString(" LIMIT 1")
@@ -699,7 +709,7 @@ func (dmlParam *DMLParam) genInsertReplaceSQL() ([]string, [][]interface{}) {
 		buf.WriteString("INSERT INTO")
 	}
 
-	buf.WriteString(" " + dmlParam.qualifiedName() + " (")
+	buf.WriteString(" " + dmlParam.tableID + " (")
 	for i, column := range dmlParam.columns {
 		if i != len(dmlParam.columns)-1 {
 			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`,")
@@ -743,7 +753,7 @@ func genMultipleRowsInsertReplace(replace bool, dmlParams []*DMLParam) ([]string
 	} else {
 		buf.WriteString("INSERT INTO")
 	}
-	buf.WriteString(" " + dmlParams[0].qualifiedName() + " (")
+	buf.WriteString(" " + dmlParams[0].tableID + " (")
 	for i, column := range dmlParams[0].columns {
 		if i != len(dmlParams[0].columns)-1 {
 			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`,")
@@ -784,7 +794,7 @@ func genMultipleRowsDelete(dmlParams []*DMLParam) ([]string, [][]interface{}) {
 	var buf strings.Builder
 	buf.Grow(1024)
 	buf.WriteString("DELETE FROM ")
-	buf.WriteString(dmlParams[0].qualifiedName())
+	buf.WriteString(dmlParams[0].tableID)
 	buf.WriteString(" WHERE ")
 	dmlParams[0].genWhereIN(&buf)
 

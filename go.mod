@@ -3,7 +3,7 @@ module github.com/pingcap/dm
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
-	github.com/chaos-mesh/go-sqlsmith v0.0.0-20210730091118-5201af078b27
+	github.com/chaos-mesh/go-sqlsmith v0.0.0-20210914111832-b3d328d69449
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/coreos/go-semver v0.3.0
 	github.com/deepmap/oapi-codegen v1.8.2
@@ -17,16 +17,16 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.1.2
-	github.com/grpc-ecosystem/grpc-gateway v1.14.3
+	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/labstack/echo/v4 v4.4.0
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/dumpling v0.0.0-20210827102405-445b35d0f4b7
+	github.com/pingcap/dumpling v0.0.0-20210914144241-99aca9186bc8
 	github.com/pingcap/errors v0.11.5-0.20210513014640-40f9a1999b3b
 	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
-	github.com/pingcap/log v0.0.0-20210818144256-6455d4a4c6f9
-	github.com/pingcap/parser v0.0.0-20210823033705-7a7940986a30
-	github.com/pingcap/tidb v1.1.0-beta.0.20210829194212-04e144aeb58a
+	github.com/pingcap/log v0.0.0-20210906054005-afc726e70354
+	github.com/pingcap/parser v0.0.0-20210907051057-948434fa20e4
+	github.com/pingcap/tidb v1.1.0-beta.0.20210914112841-6ebfe8aa4257
 	github.com/pingcap/tidb-tools v5.2.0-alpha.0.20210727084616-915b22e4d42c+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
@@ -46,11 +46,13 @@ require (
 	go.uber.org/zap v1.19.0
 	golang.org/x/net v0.0.0-20210503060351-7fd8e65b6420
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
+	golang.org/x/sys v0.0.0-20210806184541-e5e7981a1069
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
-	google.golang.org/genproto v0.0.0-20200305110556-506484158171
-	google.golang.org/grpc v1.29.1
+	google.golang.org/genproto v0.0.0-20210825212027-de86158e7fda
+	google.golang.org/grpc v1.40.0
 	gopkg.in/yaml.v2 v2.4.0
 )
+
+replace google.golang.org/grpc => google.golang.org/grpc v1.29.1
 
 go 1.16

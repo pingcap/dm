@@ -74,12 +74,53 @@ function run() {
 	check_port_offline $WORKER1_PORT 20
 	check_port_offline $WORKER2_PORT 20
 
-	export GO_FAILPOINTS=''
+	# mock recover relay writer
+	export GO_FAILPOINTS='github.com/pingcap/dm/relay/writer/MockRecoverRelayWriter=return(true)'
 
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+	check_log_contain_with_retry 'mock recover relay writer' $WORK_DIR/worker2/log/dm-worker.log
+	truncate -s 0 $WORK_DIR/worker2/log/dm-worker.log
+
+	run_sql_source1 'insert into sharding22.t1 values(16, "l", 16, 16, 16);'
+	run_sql_source2 'insert into sharding22.t1 values(17, "m", 17, 17, 17);'
+
+	# sync without relay
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"stop-relay -s $SOURCE_ID2 worker2" \
+		"\"result\": true" 1
+
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	# flush logs and flush checkpoints
+	run_sql_source1 'insert into sharding22.t1 values(18, "o", 18, 18, 18);'
+	run_sql_source1 'flush logs;'
+	run_sql_source1 'insert into sharding22.t1 values(19, "p", 19, 19, 19);'
+	run_sql_source1 'alter table sharding22.t1 add column new_col int;'
+
+	run_sql_source2 'insert into sharding22.t1 values(20, "q", 20, 20, 20);'
+	run_sql_source2 'flush logs;'
+	run_sql_source2 'insert into sharding22.t1 values(21, "r", 21, 21, 21);'
+	run_sql_source2 'alter table sharding22.t1 add column new_col int;'
+
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	# start-relay, purge relay dir and pull from checkpoint
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"start-relay -s $SOURCE_ID2 worker2" \
+		"\"result\": true" 1
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s $SOURCE_ID2" \
+		"\"stage\": \"Running\"" 2
+
+	check_log_contain_with_retry 'will try purge whole relay dir for new relay log' $WORK_DIR/worker2/log/dm-worker.log
+
+	run_sql_source1 'insert into sharding22.t1 values(22, "s", 22, 22, 22, 22);'
+	run_sql_source2 'insert into sharding22.t1 values(23, "s", 23, 23, 23, 23);'
 
 	# use sync_diff_inspector to check data now!
 	echo "check sync diff for the increment replication"

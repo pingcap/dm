@@ -308,10 +308,10 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		stmt, err := p.ParseOneStmt(query, "", "")
 		c.Assert(err, IsNil)
 
-		tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
+		tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
 
-		r, err := syncer.skipQuery(tableNames, stmt, query)
+		r, err := syncer.skipQuery(tables, stmt, query)
 		c.Assert(err, IsNil)
 		c.Assert(r, Equals, cs.skip)
 	}
@@ -450,9 +450,9 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 		stmt, err := p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
 
-		tableNames, err := parserpkg.FetchDDLTableNames(sql, stmt, syncer.SourceTableNamesFlavor)
+		tables, err := parserpkg.FetchDDLTables(sql, stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
-		r, err := syncer.skipQuery(tableNames, stmt, sql)
+		r, err := syncer.skipQuery(tables, stmt, sql)
 		c.Assert(err, IsNil)
 		c.Assert(r, Equals, res[i])
 		i++
@@ -643,7 +643,11 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 				_, err = p.ParseOneStmt(string(ev.Query), "", "")
 				c.Assert(err, IsNil)
 			case *replication.RowsEvent:
-				r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+				table := &filter.Table{
+					Schema: string(ev.Table.Schema),
+					Name:   string(ev.Table.Table),
+				}
+				r, err := syncer.skipDMLEvent(table, e.Header.EventType)
 				c.Assert(err, IsNil)
 				c.Assert(r, Equals, sql.skipped)
 			default:
@@ -922,18 +926,19 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 			c.Assert(err, IsNil)
 			switch ev := e.Event.(type) {
 			case *replication.RowsEvent:
-				schemaName := string(ev.Table.Schema)
-				tableName := string(ev.Table.Table)
+				table := &filter.Table{
+					Schema: string(ev.Table.Schema),
+					Name:   string(ev.Table.Table),
+				}
 				var ti *model.TableInfo
-				ti, err = syncer.getTable(tcontext.Background(), schemaName, tableName, schemaName, tableName)
+				ti, err = syncer.getTableInfo(tcontext.Background(), table, table)
 				c.Assert(err, IsNil)
 				var dmlParam []*DMLParam
 
 				prunedColumns, prunedRows, err2 := pruneGeneratedColumnDML(ti, ev.Rows)
 				c.Assert(err2, IsNil)
 				param := &genDMLParam{
-					schema:            schemaName,
-					table:             tableName,
+					tableID:           utils.GenTableID(table),
 					data:              prunedRows,
 					originalData:      ev.Rows,
 					columns:           prunedColumns,
@@ -944,21 +949,21 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 					dmlParam, err = syncer.genAndFilterInsertDMLParams(param, nil)
 					c.Assert(err, IsNil)
 					sql, arg := dmlParam[0].genSQL()
-					c.Assert(sql, Equals, testCase.expected[idx])
-					c.Assert(arg, DeepEquals, testCase.args[idx])
+					c.Assert(sql[0], Equals, testCase.expected[idx])
+					c.Assert(arg[0], DeepEquals, testCase.args[idx])
 				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 					// test with sql_mode = false only
 					dmlParam, err = syncer.genAndFilterUpdateDMLParams(param, nil, nil)
 					c.Assert(err, IsNil)
 					sql, arg := dmlParam[0].genSQL()
-					c.Assert(sql, Equals, testCase.expected[idx])
-					c.Assert(arg, DeepEquals, testCase.args[idx])
+					c.Assert(sql[0], Equals, testCase.expected[idx])
+					c.Assert(arg[0], DeepEquals, testCase.args[idx])
 				case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 					dmlParam, err = syncer.genAndFilterDeleteDMLParams(param, nil)
 					c.Assert(err, IsNil)
 					sql, arg := dmlParam[0].genSQL()
-					c.Assert(sql, Equals, testCase.expected[idx])
-					c.Assert(arg, DeepEquals, testCase.args[idx])
+					c.Assert(sql[0], Equals, testCase.expected[idx])
+					c.Assert(arg[0], DeepEquals, testCase.args[idx])
 				}
 				idx++
 			default:
@@ -1084,80 +1089,80 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		// now every ddl job will start with a flush job
 		{
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE DATABASE IF NOT EXISTS `test_1`",
+			[]string{"CREATE DATABASE IF NOT EXISTS `test_1`"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			insert,
-			"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int64(580981944116838401), "a"},
+			[]string{"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)"},
+			[][]interface{}{{int64(580981944116838401), "a"}},
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`name`)",
+			[]string{"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`name`)"},
 			nil,
 		}, {
 			insert,
-			"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int64(580981944116838402), "b"},
+			[]string{"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)"},
+			[][]interface{}{{int64(580981944116838402), "b"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int64(580981944116838401)},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int64(580981944116838401)}},
 		}, {
-			// in the first minute, safe mode is true, will split update to delete + replace
+			// safe mode is true, will split update to delete + replace
 			update,
-			"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1",
-			[]interface{}{int64(580981944116838401), "b", int64(580981944116838402)},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1", "REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)"},
+			[][]interface{}{{int64(580981944116838402)}, {int64(580981944116838401), "b"}},
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_3` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_3` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"ALTER TABLE `test_1`.`t_3` DROP PRIMARY KEY",
+			[]string{"ALTER TABLE `test_1`.`t_3` DROP PRIMARY KEY"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"ALTER TABLE `test_1`.`t_3` ADD PRIMARY KEY(`id`, `name`)",
+			[]string{"ALTER TABLE `test_1`.`t_3` ADD PRIMARY KEY(`id`, `name`)"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		},
 	}
@@ -1213,15 +1218,15 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	expectJobs2 := []*expectJob{
 		{
 			insert,
-			"INSERT INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(3), "c"},
+			[]string{"INSERT INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?)"},
+			[][]interface{}{{int32(3), "c"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(3)},
+			[]string{"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(3)}},
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		},
 	}
@@ -1340,48 +1345,48 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 		// now every ddl job will start with a flush job
 		{
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE DATABASE IF NOT EXISTS `test_1`",
+			[]string{"CREATE DATABASE IF NOT EXISTS `test_1`"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			insert,
-			"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(1), "a"},
+			[]string{"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)"},
+			[][]interface{}{{int32(1), "a"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(1)},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(1)}},
 		}, {
 			update,
-			"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(1), "b", int32(2)},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1", "REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)"},
+			[][]interface{}{{int32(2)}, {int32(1), "b"}},
 		}, {
 			// start from this event, location passes safeModeExitLocation and safe mode should exit
 			insert,
-			"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(1), "a"},
+			[]string{"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)"},
+			[][]interface{}{{int32(1), "a"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(1)},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(1)}},
 		}, {
 			update,
-			"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(1), "b", int32(2)},
+			[]string{"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(1), "b", int32(2)}},
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		},
 	}
@@ -1583,14 +1588,18 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 				stmt, err := p.ParseOneStmt(sql, "", "")
 				c.Assert(err, IsNil)
 
-				tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
+				tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
 				c.Assert(err, IsNil)
-				r, err := syncer.skipQuery(tableNames, stmt, sql)
+				r, err := syncer.skipQuery(tables, stmt, sql)
 				c.Assert(err, IsNil)
 				c.Assert(r, Equals, res[i][j])
 			}
 		case *replication.RowsEvent:
-			r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+			table := &filter.Table{
+				Schema: string(ev.Table.Schema),
+				Name:   string(ev.Table.Table),
+			}
+			r, err := syncer.skipDMLEvent(table, e.Header.EventType)
 			c.Assert(err, IsNil)
 			c.Assert(r, Equals, res[i][0])
 		default:
@@ -1616,8 +1625,8 @@ func executeSQLAndWait(expectJobNum int) {
 
 type expectJob struct {
 	tp       opType
-	sqlInJob string
-	args     []interface{}
+	sqlInJob []string
+	args     [][]interface{}
 }
 
 func checkJobs(c *C, jobs []*job, expectJobs []*expectJob) {
@@ -1625,10 +1634,10 @@ func checkJobs(c *C, jobs []*job, expectJobs []*expectJob) {
 	for i, job := range jobs {
 		c.Assert(job.tp, Equals, expectJobs[i].tp)
 		if job.tp == ddl {
-			c.Assert(job.ddls[0], Equals, expectJobs[i].sqlInJob)
+			c.Assert(job.ddls, DeepEquals, expectJobs[i].sqlInJob)
 		} else if job.tp == insert || job.tp == update || job.tp == del {
-			sql, args := job.dmlParam.genSQL()
-			c.Assert(sql, Equals, expectJobs[i].sqlInJob)
+			sqls, args := job.dmlParam.genSQL()
+			c.Assert(sqls, DeepEquals, expectJobs[i].sqlInJob)
 			c.Assert(args, DeepEquals, expectJobs[i].args)
 		}
 	}
@@ -1643,7 +1652,7 @@ func (s *Syncer) mockFinishJob(jobs []*expectJob) {
 	for _, job := range jobs {
 		switch job.tp {
 		case ddl, insert, update, del, flush:
-			s.addCount(true, "test", job.tp, 1, "", "")
+			s.addCount(true, "test", job.tp, 1, &filter.Table{})
 		}
 	}
 }
@@ -1653,7 +1662,7 @@ func (s *Syncer) addJobToMemory(job *job) error {
 
 	switch job.tp {
 	case ddl, insert, update, del, flush:
-		s.addCount(false, "test", job.tp, 1, "", "")
+		s.addCount(false, "test", job.tp, 1, &filter.Table{})
 		testJobs.Lock()
 		testJobs.jobs = append(testJobs.jobs, job)
 		testJobs.Unlock()
@@ -1666,24 +1675,24 @@ func (s *Syncer) addJobToMemory(job *job) error {
 	case ddl:
 		s.saveGlobalPoint(job.location)
 		s.checkpoint.(*RemoteCheckPoint).globalPoint.flush()
-		for sourceSchema, tbs := range job.sourceTbl {
+		for sourceSchema, tbs := range job.sourceTbls {
 			if len(sourceSchema) == 0 {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(sourceSchema, sourceTable, job.location)
-				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable].flush()
+				s.saveTablePoint(sourceTable, job.location)
+				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable.Name].flush()
 			}
 		}
-		s.resetShardingGroup(job.targetSchema, job.targetTable)
+		s.resetShardingGroup(job.targetTable)
 	case insert, update, del:
-		for sourceSchema, tbs := range job.sourceTbl {
+		for sourceSchema, tbs := range job.sourceTbls {
 			if len(sourceSchema) == 0 {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(sourceSchema, sourceTable, job.currentLocation)
-				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable].flush()
+				s.saveTablePoint(sourceTable, job.currentLocation)
+				s.checkpoint.(*RemoteCheckPoint).points[sourceSchema][sourceTable.Name].flush()
 			}
 		}
 	}
@@ -1718,23 +1727,29 @@ func (s *testSyncerSuite) TestTrackDownstreamTableWontOverwrite(c *C) {
 	syncer.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, defaultTestSessionCfg, baseConn)
 	c.Assert(err, IsNil)
 
-	upTable, downTable := "up", "down"
-	schema := "test"
+	upTable := &filter.Table{
+		Schema: "test",
+		Name:   "up",
+	}
+	downTable := &filter.Table{
+		Schema: "test",
+		Name:   "down",
+	}
 	createTableSQL := "CREATE TABLE up (c1 int, c2 int);"
 
 	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
 	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(
 		sqlmock.NewRows([]string{"Table", "Create Table"}).
-			AddRow(downTable, " CREATE TABLE `"+downTable+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
+			AddRow(downTable.Name, " CREATE TABLE `"+downTable.Name+"` (\n  `c` int(11) DEFAULT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
 
-	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(schema), IsNil)
+	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(upTable.Schema), IsNil)
 	c.Assert(syncer.schemaTracker.Exec(ctx, "test", createTableSQL), IsNil)
-	ti, err := syncer.getTable(tctx, schema, upTable, schema, downTable)
+	ti, err := syncer.getTableInfo(tctx, upTable, downTable)
 	c.Assert(err, IsNil)
 	c.Assert(ti.Columns, HasLen, 2)
-	c.Assert(syncer.trackTableInfoFromDownstream(tctx, schema, upTable, schema, downTable), IsNil)
-	newTi, err := syncer.getTable(tctx, schema, upTable, schema, downTable)
+	c.Assert(syncer.trackTableInfoFromDownstream(tctx, upTable, downTable), IsNil)
+	newTi, err := syncer.getTableInfo(tctx, upTable, downTable)
 	c.Assert(err, IsNil)
 	c.Assert(newTi, DeepEquals, ti)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
@@ -1756,6 +1771,10 @@ func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 
 	schemaName := "test"
 	tableName := "tbl"
+	table := &filter.Table{
+		Schema: "test",
+		Name:   "tbl",
+	}
 
 	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", ""))
@@ -1765,15 +1784,15 @@ func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 			AddRow(tableName, " CREATE TABLE `"+tableName+"` (\n  `c` bigint(20) NOT NULL /*T![auto_rand] AUTO_RANDOM(5) */,\n  PRIMARY KEY (`c`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
 
 	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(schemaName), IsNil)
-	c.Assert(syncer.trackTableInfoFromDownstream(tctx, schemaName, tableName, schemaName, tableName), IsNil)
-	ti, err := syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	c.Assert(syncer.trackTableInfoFromDownstream(tctx, table, table), IsNil)
+	ti, err := syncer.getTableInfo(tctx, table, table)
 	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
-	c.Assert(syncer.schemaTracker.DropTable("test", "tbl"), IsNil)
+	c.Assert(syncer.schemaTracker.DropTable(table), IsNil)
 	sql := "create table tbl (c bigint primary key);"
 	c.Assert(syncer.schemaTracker.Exec(ctx, schemaName, sql), IsNil)
-	ti2, err := syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	ti2, err := syncer.getTableInfo(tctx, table, table)
 	c.Assert(err, IsNil)
 
 	ti.ID = ti2.ID
@@ -1801,15 +1820,15 @@ func (s *testSyncerSuite) TestDownstreamTableHasAutoRandom(c *C) {
 			AddRow(tableName, " CREATE TABLE `"+tableName+"` (\n  `c` bigint(20) NOT NULL /*T![auto_rand] AUTO_RANDOM(5) */,\n  PRIMARY KEY (`c`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"))
 
 	c.Assert(syncer.schemaTracker.CreateSchemaIfNotExists(schemaName), IsNil)
-	c.Assert(syncer.trackTableInfoFromDownstream(tctx, schemaName, tableName, schemaName, tableName), IsNil)
-	ti, err = syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	c.Assert(syncer.trackTableInfoFromDownstream(tctx, table, table), IsNil)
+	ti, err = syncer.getTableInfo(tctx, table, table)
 	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 
-	c.Assert(syncer.schemaTracker.DropTable("test", "tbl"), IsNil)
+	c.Assert(syncer.schemaTracker.DropTable(table), IsNil)
 	sql = "create table tbl (c bigint primary key auto_random);"
 	c.Assert(syncer.schemaTracker.Exec(ctx, schemaName, sql), IsNil)
-	ti2, err = syncer.getTable(tctx, schemaName, tableName, schemaName, tableName)
+	ti2, err = syncer.getTableInfo(tctx, table, table)
 	c.Assert(err, IsNil)
 
 	ti.ID = ti2.ID
@@ -1944,7 +1963,11 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 			c.Assert(err, IsNil)
 			switch ev := e.Event.(type) {
 			case *replication.RowsEvent:
-				skip, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+				table := &filter.Table{
+					Schema: string(ev.Table.Schema),
+					Name:   string(ev.Table.Table),
+				}
+				skip, err := syncer.skipDMLEvent(table, e.Header.EventType)
 				c.Assert(err, IsNil)
 				if skip {
 					continue
