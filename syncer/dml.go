@@ -409,16 +409,17 @@ func checkLogColumns(skipped [][]int) error {
 type DMLParam struct {
 	tableID         string
 	op              opType
-	oldValues       []interface{} // for update SQL
+	oldValues       []interface{} // only for update SQL
 	values          []interface{}
 	columns         []*model.ColumnInfo
 	ti              *model.TableInfo
 	originOldValues []interface{} // use to gen `WHERE` for update SQL
-	originValues    []interface{} // use to gen `WHERE` for update/delete SQL
+	originValues    []interface{} // use to gen `WHERE` for delete SQL
 	safeMode        bool
 	key             string // use to detect causality
 }
 
+// newDMLParam creates DMLParam.
 func newDMLParam(op opType, safeMode bool, tableID string, oldValues, values, originOldValues, originValues []interface{}, columns []*model.ColumnInfo, ti *model.TableInfo) *DMLParam {
 	return &DMLParam{
 		op:              op,
@@ -433,7 +434,37 @@ func newDMLParam(op opType, safeMode bool, tableID string, oldValues, values, or
 	}
 }
 
-// identifyColumns gets unique not null columns.
+// newDelDMLParam generate delete DMLParam from origin dmlParam.
+func (dmlParam *DMLParam) newDelDMLParam() *DMLParam {
+	return &DMLParam{
+		op:              del,
+		safeMode:        dmlParam.safeMode,
+		tableID:         dmlParam.tableID,
+		oldValues:       nil,
+		values:          dmlParam.oldValues,
+		columns:         dmlParam.columns,
+		ti:              dmlParam.ti,
+		originOldValues: nil,
+		originValues:    dmlParam.originOldValues,
+	}
+}
+
+// newInsertDMLParam generate insert DMLParam from origin dmlParam.
+func (dmlParam *DMLParam) newInsertDMLParam() *DMLParam {
+	return &DMLParam{
+		op:              dmlParam.op,
+		safeMode:        dmlParam.safeMode,
+		tableID:         dmlParam.tableID,
+		oldValues:       nil,
+		values:          dmlParam.values,
+		columns:         dmlParam.columns,
+		ti:              dmlParam.ti,
+		originOldValues: nil,
+		originValues:    dmlParam.originValues,
+	}
+}
+
+// identifyColumns gets columns of unique not null index.
 func (dmlParam *DMLParam) identifyColumns() []string {
 	if defaultIndexColumns := findFitIndex(dmlParam.ti); defaultIndexColumns != nil {
 		columns := make([]string, 0, len(defaultIndexColumns.Columns))
@@ -445,7 +476,7 @@ func (dmlParam *DMLParam) identifyColumns() []string {
 	return nil
 }
 
-// identifyValues gets values of unique not null columns.
+// identifyValues gets values of unique not null index.
 func (dmlParam *DMLParam) identifyValues() []interface{} {
 	if defaultIndexColumns := findFitIndex(dmlParam.ti); defaultIndexColumns != nil {
 		values := make([]interface{}, 0, len(defaultIndexColumns.Columns))
@@ -457,7 +488,7 @@ func (dmlParam *DMLParam) identifyValues() []interface{} {
 	return nil
 }
 
-// oldIdentifyValues gets old values of unique not null columns.
+// oldIdentifyValues gets old values of unique not null index.
 // only for update SQL.
 func (dmlParam *DMLParam) oldIdentifyValues() []interface{} {
 	if defaultIndexColumns := findFitIndex(dmlParam.ti); defaultIndexColumns != nil {
@@ -479,7 +510,7 @@ func (dmlParam *DMLParam) identifyKey() string {
 
 // identifyKeys gens keys by unique not null value.
 // This is used for causality.
-// PK or (UK + NOT NULL) or (UK + NULL + NO NULL VALUE).
+// PK or (UK + NOT NULL) or (UK + NULL + NOT NULL VALUE).
 func (dmlParam *DMLParam) identifyKeys() []string {
 	var keys []string
 	if dmlParam.originOldValues != nil {
@@ -584,7 +615,7 @@ func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []s
 	return multipleKeys
 }
 
-// updateIdentify check whether a update sql update its identify keys.
+// updateIdentify check whether a update sql update its identify values.
 func (dmlParam *DMLParam) updateIdentify() bool {
 	if len(dmlParam.oldValues) == 0 {
 		return false
@@ -618,29 +649,6 @@ func (dmlParam *DMLParam) genWhere(buf *strings.Builder) []interface{} {
 		}
 	}
 	return whereValues
-}
-
-func (dmlParam *DMLParam) genWhereIN(buf *strings.Builder) {
-	whereColumns, whereValues := dmlParam.whereColumnsAndValues()
-
-	buf.WriteString("(")
-	for i, column := range whereColumns {
-		if i != len(whereColumns)-1 {
-			buf.WriteString("`" + strings.ReplaceAll(column, "`", "``") + "`,")
-		} else {
-			buf.WriteString("`" + strings.ReplaceAll(column, "`", "``") + "`)")
-		}
-	}
-	buf.WriteString(" IN (")
-
-	holder := fmt.Sprintf("(%s)", holderString(len(whereValues)))
-	for i := range whereColumns {
-		if i != 0 {
-			buf.WriteByte(',')
-		}
-		buf.WriteString(holder)
-	}
-	buf.WriteString(")")
 }
 
 // genDeleteSQL generates a `UPDATE` SQL with `WHERE`.
@@ -779,7 +787,7 @@ func genMultipleRowsInsertReplace(replace bool, dmlParams []*DMLParam) ([]string
 }
 
 func genMultipleRowsInsert(dmlParams []*DMLParam) ([]string, [][]interface{}) {
-	return genMultipleRowsInsertReplace(dmlParams[0].safeMode, dmlParams)
+	return genMultipleRowsInsertReplace(false, dmlParams)
 }
 
 func genMultipleRowsReplace(dmlParams []*DMLParam) ([]string, [][]interface{}) {
@@ -795,13 +803,139 @@ func genMultipleRowsDelete(dmlParams []*DMLParam) ([]string, [][]interface{}) {
 	buf.Grow(1024)
 	buf.WriteString("DELETE FROM ")
 	buf.WriteString(dmlParams[0].tableID)
-	buf.WriteString(" WHERE ")
-	dmlParams[0].genWhereIN(&buf)
+	buf.WriteString(" WHERE (")
 
+	whereColumns, _ := dmlParams[0].whereColumnsAndValues()
+	for i, column := range whereColumns {
+		if i != len(whereColumns)-1 {
+			buf.WriteString("`" + strings.ReplaceAll(column, "`", "``") + "`,")
+		} else {
+			buf.WriteString("`" + strings.ReplaceAll(column, "`", "``") + "`)")
+		}
+	}
+	buf.WriteString(" IN (")
+
+	holder := fmt.Sprintf("(%s)", holderString(len(whereColumns)))
 	args := make([]interface{}, 0, len(dmlParams)*len(dmlParams[0].columns))
-	for _, dmlParam := range dmlParams {
+	for i, dmlParam := range dmlParams {
+		if i > 0 {
+			buf.WriteString(",")
+		}
+		buf.WriteString(holder)
 		_, whereValues := dmlParam.whereColumnsAndValues()
 		args = append(args, whereValues...)
 	}
+	buf.WriteString(")")
 	return []string{buf.String()}, [][]interface{}{args}
+}
+
+func genMultipleRowsSQLWithSameTp(dmlParams []*DMLParam) (queries []string, args [][]interface{}) {
+	if len(dmlParams) == 0 {
+		return
+	}
+
+	tp := dmlParams[0].op
+	safeMode := dmlParams[0].safeMode
+	switch tp {
+	case insert:
+		if safeMode {
+			return genMultipleRowsReplace(dmlParams)
+		}
+		return genMultipleRowsInsert(dmlParams)
+	case replace:
+		return genMultipleRowsReplace(dmlParams)
+	case del:
+		return genMultipleRowsDelete(dmlParams)
+	case update:
+		for _, dmlParam := range dmlParams {
+			query, arg := dmlParam.genUpdateSQL()
+			queries = append(queries, query...)
+			args = append(args, arg...)
+		}
+	}
+	return
+}
+
+func genMultipleRowsSQLWithSameTable(dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	queries := make([]string, 0, len(dmlParams))
+	args := make([][]interface{}, 0, len(dmlParams))
+	var lastTp opType
+	var lastSafeMode bool
+	tpDMLParams := make([]*DMLParam, 0, len(dmlParams))
+
+	for i, dmlParam := range dmlParams {
+		// if update statement didn't update primary values, regard it as replace
+		if dmlParam.op == update && !dmlParam.updateIdentify() {
+			dmlParam.op = replace
+			dmlParam.safeMode = false
+		}
+		if i == 0 {
+			lastTp = dmlParam.op
+			lastSafeMode = dmlParam.safeMode
+		}
+		if lastTp == dmlParam.op && lastSafeMode == dmlParam.safeMode {
+			tpDMLParams = append(tpDMLParams, dmlParam)
+		} else {
+			query, arg := genMultipleRowsSQLWithSameTp(tpDMLParams)
+			queries = append(queries, query...)
+			args = append(args, arg...)
+
+			tpDMLParams = tpDMLParams[0:0]
+			lastTp = dmlParam.op
+			lastSafeMode = dmlParam.safeMode
+			tpDMLParams = append(tpDMLParams, dmlParam)
+		}
+	}
+	if len(tpDMLParams) > 0 {
+		query, arg := genMultipleRowsSQLWithSameTp(tpDMLParams)
+		queries = append(queries, query...)
+		args = append(args, arg...)
+	}
+	return queries, args
+}
+
+func genMultipleRowsSQL(op opType, dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	if len(dmlParams) == 0 {
+		return nil, nil
+	}
+
+	switch op {
+	case del:
+		return genMultipleRowsDelete(dmlParams)
+	case insert:
+		if dmlParams[0].safeMode {
+			return genMultipleRowsReplace(dmlParams)
+		}
+		return genMultipleRowsInsert(dmlParams)
+	case update:
+		return genMultipleRowsReplace(dmlParams)
+	}
+
+	queries := make([]string, 0, len(dmlParams))
+	args := make([][]interface{}, 0, len(dmlParams))
+	var lastTable string
+	tableDMLParams := make([]*DMLParam, 0, len(dmlParams))
+
+	for i, dmlParam := range dmlParams {
+		if i == 0 {
+			lastTable = dmlParam.tableID
+		}
+		if lastTable == dmlParam.tableID {
+			tableDMLParams = append(tableDMLParams, dmlParam)
+		} else {
+			query, arg := genMultipleRowsSQLWithSameTable(tableDMLParams)
+			queries = append(queries, query...)
+			args = append(args, arg...)
+
+			tableDMLParams = tableDMLParams[0:0]
+			lastTable = dmlParam.tableID
+			tableDMLParams = append(tableDMLParams, dmlParam)
+		}
+	}
+	if len(tableDMLParams) > 0 {
+		query, arg := genMultipleRowsSQLWithSameTable(tableDMLParams)
+		queries = append(queries, query...)
+		args = append(args, arg...)
+	}
+	return queries, args
 }

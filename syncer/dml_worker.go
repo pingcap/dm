@@ -75,7 +75,7 @@ func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, 
 		source:         source,
 		worker:         worker,
 		connectionPool: brutils.NewWorkerPool(uint(workerCount), "dml_connection_pool"),
-		logger:         pLogger.WithFields(zap.String("component", "causality")),
+		logger:         pLogger.WithFields(zap.String("component", "dml_worker")),
 		successFunc:    successFunc,
 		fatalFunc:      fatalFunc,
 		lagFunc:        lagFunc,
@@ -118,26 +118,6 @@ func (w *DMLWorker) close() {
 	close(w.flushCh)
 }
 
-func (w *DMLWorker) genSQLs(op opType, dmlParams []*DMLParam) ([]string, [][]interface{}) {
-	switch op {
-	case insert:
-		return genMultipleRowsInsert(dmlParams)
-	case del:
-		return genMultipleRowsDelete(dmlParams)
-	case update:
-		return genMultipleRowsReplace(dmlParams)
-	default:
-		queries := make([]string, 0, len(dmlParams))
-		args := make([][]interface{}, 0, len(dmlParams))
-		for _, dmlParam := range dmlParams {
-			query, arg := dmlParam.genSQL()
-			queries = append(queries, query...)
-			args = append(args, arg...)
-		}
-		return queries, args
-	}
-}
-
 // executeBatchJobs execute jobs with batch size.
 func (w *DMLWorker) executeBatchJobs(queueID int, op opType, jobs []*job, clearFunc func()) func(uint64) {
 	executeJobs := func(id uint64) {
@@ -177,7 +157,7 @@ func (w *DMLWorker) executeBatchJobs(queueID int, op opType, jobs []*job, clearF
 		for _, j := range jobs {
 			dmlParams = append(dmlParams, j.dmlParam)
 		}
-		queries, args := w.genSQLs(op, dmlParams)
+		queries, args := genMultipleRowsSQL(op, dmlParams)
 		failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
 			t := v.(int)
 			time.Sleep(time.Duration(t) * time.Second)

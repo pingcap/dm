@@ -99,15 +99,12 @@ func (c *Compactor) runCompactor() {
 			if j.tp == update && j.dmlParam.updateIdentify() {
 				delJob := j.clone()
 				delJob.tp = del
-				delJob.dmlParam.op = del
-				delJob.dmlParam.values = delJob.dmlParam.oldValues
-				delJob.dmlParam.oldValues = nil
+				delJob.dmlParam = j.dmlParam.newDelDMLParam()
 				c.compactJob(delJob)
 
 				insertJob := j.clone()
 				insertJob.tp = insert
-				insertJob.dmlParam.op = insert
-				insertJob.dmlParam.oldValues = nil
+				insertJob.dmlParam = j.dmlParam.newInsertDMLParam()
 				c.compactJob(insertJob)
 			} else {
 				c.compactJob(j)

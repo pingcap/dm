@@ -573,6 +573,25 @@ function DM_COLUMN_INDEX() {
 		"clean_table" "optimistic"
 }
 
+function DM_COMPACT_CASE() {
+	run_sql_source1 "insert into ${shardddl1}.${tb1}(a,b) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)"
+	run_sql_source1 "insert into ${shardddl1}.${tb1}(a,b) values(11,11),(12,12),(13,13),(14,14),(15,15),(16,16),(17,17),(18,18)"
+	run_sql_source1 "insert into ${shardddl1}.${tb1}(a,b) values(21,21),(22,22),(23,23),(24,24),(25,25),(26,26),(27,27),(28,28)"
+	run_sql_source1 "update ${shardddl1}.${tb1} set c=1;"
+	run_sql_source1 "update ${shardddl1}.${tb1} set c=c+1;"
+	run_sql_source1 "update ${shardddl1}.${tb1} set b=b+1000;"
+	run_sql_source1 "update ${shardddl1}.${tb1} set a=a+100;"
+	run_sql_source1 "delete from ${shardddl1}.${tb1};"
+
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function DM_COMPACT() {
+	run_case COMPACT "single-source-no-sharding" \
+		"run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int unique, c int);\"" \
+		"clean_table" ""
+}
+
 function DM_CAUSALITY_CASE() {
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,2)"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(2,3)"
@@ -594,6 +613,7 @@ function run() {
 	init_cluster
 	init_database
 
+	DM_COMPACT
 	DM_CAUSALITY
 	DM_UpdateBARule
 	DM_RENAME_TABLE

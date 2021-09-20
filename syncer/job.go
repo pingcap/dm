@@ -29,6 +29,7 @@ const (
 	null opType = iota
 	insert
 	update
+	replace
 	del
 	ddl
 	xid
