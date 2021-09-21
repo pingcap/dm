@@ -175,7 +175,7 @@ RowLoop:
 				continue RowLoop
 			}
 		}
-		dmlParams = append(dmlParams, newDMLParam(del, param.safeMode, param.tableID, nil, value, nil, value, ti.Columns, ti))
+		dmlParams = append(dmlParams, newDMLParam(del, false, param.tableID, nil, value, nil, value, ti.Columns, ti))
 	}
 
 	return dmlParams, nil
@@ -438,7 +438,7 @@ func newDMLParam(op opType, safeMode bool, tableID string, oldValues, values, or
 func (dmlParam *DMLParam) newDelDMLParam() *DMLParam {
 	return &DMLParam{
 		op:              del,
-		safeMode:        dmlParam.safeMode,
+		safeMode:        false,
 		tableID:         dmlParam.tableID,
 		oldValues:       nil,
 		values:          dmlParam.oldValues,
@@ -462,6 +462,14 @@ func (dmlParam *DMLParam) newInsertDMLParam() *DMLParam {
 		originOldValues: nil,
 		originValues:    dmlParam.originValues,
 	}
+}
+
+func (dmlParam *DMLParam) columnNames() []string {
+	columnNames := make([]string, 0, len(dmlParam.columns))
+	for _, column := range dmlParam.columns {
+		columnNames = append(columnNames, column.Name.O)
+	}
+	return columnNames
 }
 
 // identifyColumns gets columns of unique not null index.
@@ -790,6 +798,111 @@ func genMultipleRowsInsert(dmlParams []*DMLParam) ([]string, [][]interface{}) {
 	return genMultipleRowsInsertReplace(false, dmlParams)
 }
 
+func columnNamesEqual(lhs []string, rhs []string) bool {
+	if len(lhs) != len(rhs) {
+		return false
+	}
+	for i := 0; i < len(lhs); i++ {
+		if lhs[i] != rhs[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// nolint:dupl
+func genMultipleRowsInsertSameCols(dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	queries := make([]string, 0, len(dmlParams))
+	args := make([][]interface{}, 0, len(dmlParams))
+	var lastCols []string
+	sameColsDMLParams := make([]*DMLParam, 0, len(dmlParams))
+
+	for i, dmlParam := range dmlParams {
+		if i == 0 {
+			lastCols = dmlParam.columnNames()
+		}
+		if columnNamesEqual(lastCols, dmlParam.columnNames()) {
+			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
+		} else {
+			query, arg := genMultipleRowsInsert(sameColsDMLParams)
+			queries = append(queries, query...)
+			args = append(args, arg...)
+
+			sameColsDMLParams = sameColsDMLParams[0:0]
+			lastCols = dmlParam.columnNames()
+			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
+		}
+	}
+	if len(sameColsDMLParams) > 0 {
+		query, arg := genMultipleRowsInsert(sameColsDMLParams)
+		queries = append(queries, query...)
+		args = append(args, arg...)
+	}
+	return queries, args
+}
+
+// nolint:dupl
+func genMultipleRowsReplaceSameCols(dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	queries := make([]string, 0, len(dmlParams))
+	args := make([][]interface{}, 0, len(dmlParams))
+	var lastCols []string
+	sameColsDMLParams := make([]*DMLParam, 0, len(dmlParams))
+
+	for i, dmlParam := range dmlParams {
+		if i == 0 {
+			lastCols = dmlParam.columnNames()
+		}
+		if columnNamesEqual(lastCols, dmlParam.columnNames()) {
+			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
+		} else {
+			query, arg := genMultipleRowsReplace(sameColsDMLParams)
+			queries = append(queries, query...)
+			args = append(args, arg...)
+
+			sameColsDMLParams = sameColsDMLParams[0:0]
+			lastCols = dmlParam.columnNames()
+			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
+		}
+	}
+	if len(sameColsDMLParams) > 0 {
+		query, arg := genMultipleRowsReplace(sameColsDMLParams)
+		queries = append(queries, query...)
+		args = append(args, arg...)
+	}
+	return queries, args
+}
+
+func genMultipleRowsDeleteSameCols(dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	queries := make([]string, 0, len(dmlParams))
+	args := make([][]interface{}, 0, len(dmlParams))
+	var lastCols []string
+	sameColsDMLParams := make([]*DMLParam, 0, len(dmlParams))
+
+	for i, dmlParam := range dmlParams {
+		if i == 0 {
+			lastCols, _ = dmlParam.whereColumnsAndValues()
+		}
+		cols, _ := dmlParam.whereColumnsAndValues()
+		if columnNamesEqual(lastCols, cols) {
+			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
+		} else {
+			query, arg := genMultipleRowsDelete(sameColsDMLParams)
+			queries = append(queries, query...)
+			args = append(args, arg...)
+
+			sameColsDMLParams = sameColsDMLParams[0:0]
+			lastCols = cols
+			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
+		}
+	}
+	if len(sameColsDMLParams) > 0 {
+		query, arg := genMultipleRowsDelete(sameColsDMLParams)
+		queries = append(queries, query...)
+		args = append(args, arg...)
+	}
+	return queries, args
+}
+
 func genMultipleRowsReplace(dmlParams []*DMLParam) ([]string, [][]interface{}) {
 	return genMultipleRowsInsertReplace(true, dmlParams)
 }
@@ -841,11 +954,11 @@ func genMultipleRowsSQLWithSameTp(dmlParams []*DMLParam) (queries []string, args
 		if safeMode {
 			return genMultipleRowsReplace(dmlParams)
 		}
-		return genMultipleRowsInsert(dmlParams)
+		return genMultipleRowsInsertSameCols(dmlParams)
 	case replace:
-		return genMultipleRowsReplace(dmlParams)
+		return genMultipleRowsReplaceSameCols(dmlParams)
 	case del:
-		return genMultipleRowsDelete(dmlParams)
+		return genMultipleRowsDeleteSameCols(dmlParams)
 	case update:
 		for _, dmlParam := range dmlParams {
 			query, arg := dmlParam.genUpdateSQL()
@@ -901,14 +1014,14 @@ func genMultipleRowsSQL(op opType, dmlParams []*DMLParam) ([]string, [][]interfa
 
 	switch op {
 	case del:
-		return genMultipleRowsDelete(dmlParams)
+		return genMultipleRowsDeleteSameCols(dmlParams)
 	case insert:
 		if dmlParams[0].safeMode {
-			return genMultipleRowsReplace(dmlParams)
+			return genMultipleRowsReplaceSameCols(dmlParams)
 		}
-		return genMultipleRowsInsert(dmlParams)
+		return genMultipleRowsInsertSameCols(dmlParams)
 	case update:
-		return genMultipleRowsReplace(dmlParams)
+		return genMultipleRowsReplaceSameCols(dmlParams)
 	}
 
 	queries := make([]string, 0, len(dmlParams))

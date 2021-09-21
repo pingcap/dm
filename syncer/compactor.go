@@ -31,6 +31,7 @@ type Compactor struct {
 	bufferSize     int
 	chanSize       int
 	logger         log.Logger
+	safeMode       bool
 
 	// table -> pk -> job
 	compactedBuffer map[string]map[string]*job
@@ -91,6 +92,10 @@ func (c *Compactor) runCompactor() {
 				c.sendFlushJob(j)
 				continue
 			}
+
+			if c.counter == 0 {
+				c.safeMode = j.dmlParam.safeMode
+			}
 			if j.dmlParam.identifyColumns() == nil {
 				c.nonCompactedCh <- j
 				continue
@@ -130,6 +135,9 @@ func (c *Compactor) flushBuffer() {
 	res := make(map[opType][]*job, 3)
 	for _, tableJobs := range c.compactedBuffer {
 		for _, j := range tableJobs {
+			if j.tp == insert || j.tp == update {
+				j.dmlParam.safeMode = c.safeMode
+			}
 			res[j.tp] = append(res[j.tp], j)
 		}
 	}

@@ -180,6 +180,9 @@ func newCausalityJob() *job {
 
 // put queues into bucket to monitor them.
 func queueBucketName(queueID int) string {
+	if queueID == -1 {
+		return fmt.Sprintf("q_%d", queueID)
+	}
 	return fmt.Sprintf("q_%d", queueID%defaultBucketCount)
 }
 

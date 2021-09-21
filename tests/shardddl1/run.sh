@@ -614,7 +614,7 @@ function run() {
 	init_database
 
 	DM_COMPACT
-	DM_CAUSALITY
+	#	DM_CAUSALITY
 	DM_UpdateBARule
 	DM_RENAME_TABLE
 	DM_RENAME_COLUMN_OPTIMISTIC

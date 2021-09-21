@@ -258,7 +258,7 @@ func (w *DMLWorker) executeCompactedJobsWithOpType(op opType, jobsMap map[opType
 		}
 		wg.Add(1)
 		batchJobs := jobs[i:j]
-		w.connectionPool.ApplyWithID(w.executeBatchJobs(w.workerCount, op, batchJobs, func() { wg.Done() }))
+		w.connectionPool.ApplyWithID(w.executeBatchJobs(-1, op, batchJobs, func() { wg.Done() }))
 	}
 	wg.Wait()
 }
@@ -274,8 +274,12 @@ func (w *DMLWorker) runCompactedDMLWorker() {
 			w.executeCompactedJobsWithOpType(insert, jobsMap)
 			w.executeCompactedJobsWithOpType(update, jobsMap)
 
-			if _, ok := jobsMap[flush]; ok {
-				w.flushCh <- newFlushJob()
+			if jobs, ok := jobsMap[flush]; ok {
+				j := jobs[0]
+				w.addCountFunc(false, "q_-1", j.tp, 1, j.targetTable)
+				startTime := time.Now()
+				w.flushCh <- j
+				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, "q_-1", w.source).Observe(time.Since(startTime).Seconds())
 			}
 		case <-time.After(waitTime):
 			w.pullCh <- struct{}{}
