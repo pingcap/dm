@@ -2054,13 +2054,14 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	var (
-		dmlParams []*DMLParam
-		jobType   opType
+		dmls    []*DML
+		jobType opType
 	)
 
 	param := &genDMLParam{
 		tableID:           utils.GenTableID(targetTable),
 		data:              prunedRows,
+		originTable:       originTable,
 		originalData:      rows,
 		columns:           prunedColumns,
 		originalTableInfo: tableInfo,
@@ -2074,7 +2075,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode
-		dmlParams, err = s.genAndFilterInsertDMLParams(param, exprFilter)
+		dmls, err = s.genAndFilterInsertdmls(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen insert sqls failed, originTable: %v, targetTable: %v", originTable, targetTable)
 		}
@@ -2088,7 +2089,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode
-		dmlParams, err = s.genAndFilterUpdateDMLParams(param, oldExprFilter, newExprFilter)
+		dmls, err = s.genAndFilterUpdatedmls(param, oldExprFilter, newExprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen update sqls failed, originTable: %v, targetTable: %v", originTable, targetTable)
 		}
@@ -2101,7 +2102,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err2
 		}
 
-		dmlParams, err = s.genAndFilterDeleteDMLParams(param, exprFilter)
+		dmls, err = s.genAndFilterDeletedmls(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen delete sqls failed, originTable: %v, targetTable: %v", originTable, targetTable)
 		}
@@ -2114,8 +2115,8 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	startTime := time.Now()
-	for i := range dmlParams {
-		job := newDMLJob(jobType, originTable, targetTable, dmlParams[i], *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
+	for i := range dmls {
+		job := newDMLJob(jobType, originTable, targetTable, dmls[i], *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err

@@ -933,7 +933,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				var ti *model.TableInfo
 				ti, err = syncer.getTableInfo(tcontext.Background(), table, table)
 				c.Assert(err, IsNil)
-				var dmlParam []*DMLParam
+				var dml []*DML
 
 				prunedColumns, prunedRows, err2 := pruneGeneratedColumnDML(ti, ev.Rows)
 				c.Assert(err2, IsNil)
@@ -946,22 +946,22 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				}
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-					dmlParam, err = syncer.genAndFilterInsertDMLParams(param, nil)
+					dml, err = syncer.genAndFilterInsertdmls(param, nil)
 					c.Assert(err, IsNil)
-					sql, arg := dmlParam[0].genSQL()
+					sql, arg := dml[0].genSQL()
 					c.Assert(sql[0], Equals, testCase.expected[idx])
 					c.Assert(arg[0], DeepEquals, testCase.args[idx])
 				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 					// test with sql_mode = false only
-					dmlParam, err = syncer.genAndFilterUpdateDMLParams(param, nil, nil)
+					dml, err = syncer.genAndFilterUpdatedmls(param, nil, nil)
 					c.Assert(err, IsNil)
-					sql, arg := dmlParam[0].genSQL()
+					sql, arg := dml[0].genSQL()
 					c.Assert(sql[0], Equals, testCase.expected[idx])
 					c.Assert(arg[0], DeepEquals, testCase.args[idx])
 				case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-					dmlParam, err = syncer.genAndFilterDeleteDMLParams(param, nil)
+					dml, err = syncer.genAndFilterDeletedmls(param, nil)
 					c.Assert(err, IsNil)
-					sql, arg := dmlParam[0].genSQL()
+					sql, arg := dml[0].genSQL()
 					c.Assert(sql[0], Equals, testCase.expected[idx])
 					c.Assert(arg[0], DeepEquals, testCase.args[idx])
 				}
@@ -1636,7 +1636,7 @@ func checkJobs(c *C, jobs []*job, expectJobs []*expectJob) {
 		if job.tp == ddl {
 			c.Assert(job.ddls, DeepEquals, expectJobs[i].sqlInJob)
 		} else if job.tp == insert || job.tp == update || job.tp == del {
-			sqls, args := job.dmlParam.genSQL()
+			sqls, args := job.dml.genSQL()
 			c.Assert(sqls, DeepEquals, expectJobs[i].sqlInJob)
 			c.Assert(args, DeepEquals, expectJobs[i].args)
 		}

@@ -92,7 +92,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	table := &filter.Table{Schema: "test", Name: "t1"}
 
 	for _, tc := range testCases {
-		job := newDMLJob(tc.op, table, table, newDMLParam(tc.op, false, "", tc.oldVals, tc.vals, tc.oldVals, tc.vals, ti.Columns, ti), location, location, location, nil)
+		job := newDMLJob(tc.op, table, table, newDML(tc.op, false, "", table, tc.oldVals, tc.vals, tc.oldVals, tc.vals, ti.Columns, ti), location, location, location, nil)
 		jobCh <- job
 	}
 

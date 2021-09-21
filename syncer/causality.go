@@ -96,7 +96,7 @@ func (c *Causality) runCausality() {
 
 		startTime := time.Now()
 		if j.tp != flush {
-			keys := j.dmlParam.identifyKeys()
+			keys := j.dml.identifyKeys()
 			// detectConflict before add
 			if c.detectConflict(keys) {
 				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", keys))
@@ -109,7 +109,7 @@ func (c *Causality) runCausality() {
 			if len(keys) > 0 {
 				key = keys[0]
 			}
-			j.dmlParam.key = c.get(key)
+			j.dml.key = c.get(key)
 			c.logger.Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 		} else {
 			c.reset()

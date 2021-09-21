@@ -61,6 +61,7 @@ type DMLWorker struct {
 	flushCh     chan *job
 }
 
+// newDMLWorker creates new DML Worker.
 func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, source, worker string,
 	successFunc func(int, []*job),
 	fatalFunc func(*job, error),
@@ -83,7 +84,15 @@ func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, 
 	}
 }
 
-// run runs dml workers, return worker count and flush job channel.
+// run runs dml workers, return all workers count and flush job channel.
+//			  |‾ causality worker  ‾|
+// causality -|- causality worker	|
+//			  |_ causality worker   |
+//									|=> connection pool
+//			  |‾ delete			    |
+// compactor -|- insert				|
+//			  |_ update			   _|
+// .
 func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, compactedCh chan map[opType][]*job, pullCh chan struct{}, causalityCh chan *job) (int, chan *job) {
 	w.tctx = tctx
 	w.toDBConns = toDBConns
@@ -114,76 +123,107 @@ func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, comp
 	return w.workerCount + 1, w.flushCh
 }
 
+// close all outer channel.
 func (w *DMLWorker) close() {
 	close(w.flushCh)
 }
 
-// genMultipleRowsSQL generate multiple rows SQL by different opType
-// for insert/update/delete which has been compacted, all the dmlParams have same tablename and opType
-// for null, group dmlParams by tableName.
-func genMultipleRowsSQL(op opType, dmlParams []*DMLParam) ([]string, [][]interface{}) {
-	if op != null {
-		return groupDMLParamsWithSameTable(op, dmlParams)
+// runCompactedDMLWorker receive compacted jobs and execute concurrently.
+// All jobs have been compacted, so one identify key has only one SQL.
+// Execute SQLs in the order of (delete, insert, update).
+func (w *DMLWorker) runCompactedDMLWorker() {
+	for {
+		select {
+		case jobsMap, ok := <-w.compactedCh:
+			if !ok {
+				return
+			}
+			w.executeCompactedJobsWithOpType(del, jobsMap)
+			w.executeCompactedJobsWithOpType(insert, jobsMap)
+			w.executeCompactedJobsWithOpType(update, jobsMap)
+
+			if jobs, ok := jobsMap[flush]; ok {
+				j := jobs[0]
+				w.addCountFunc(false, "q_-1", j.tp, 1, j.targetTable)
+				startTime := time.Now()
+				w.flushCh <- j
+				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, "q_-1", w.source).Observe(time.Since(startTime).Seconds())
+			}
+		// notify compactor
+		case <-time.After(waitTime):
+			w.pullCh <- struct{}{}
+		}
 	}
-	return groupDMLParamsWithSameTp(dmlParams)
 }
 
-// executeBatchJobs execute jobs with batch size.
-func (w *DMLWorker) executeBatchJobs(queueID int, op opType, jobs []*job, clearFunc func()) func(uint64) {
-	executeJobs := func(id uint64) {
-		var (
-			affect int
-			db     = w.toDBConns[int(id)-1]
-			err    error
-		)
+// runCausalityDMLWorker distribute jobs by queueBucket.
+func (w *DMLWorker) runCausalityDMLWorker() {
+	causalityJobChs := make([]chan *job, w.workerCount)
 
-		defer func() {
-			if err == nil {
-				w.successFunc(queueID, jobs)
-			} else {
-				w.fatalFunc(jobs[affect], err)
-			}
-			clearFunc()
-		}()
-
-		if len(jobs) == 0 {
-			return
-		}
-		failpoint.Inject("BlockExecuteSQLs", func(v failpoint.Value) {
-			t := v.(int) // sleep time
-			w.logger.Info("BlockExecuteSQLs", zap.Any("job", jobs[0]), zap.Int("sleep time", t))
-			time.Sleep(time.Second * time.Duration(t))
-		})
-
-		failpoint.Inject("failSecondJob", func() {
-			if failExecuteSQL && failOnce.CAS(false, true) {
-				w.logger.Info("trigger failSecondJob")
-				err = terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJob"), "mock")
-				failpoint.Return()
-			}
-		})
-
-		dmlParams := make([]*DMLParam, 0, len(jobs))
-		for _, j := range jobs {
-			dmlParams = append(dmlParams, j.dmlParam)
-		}
-		queries, args := genMultipleRowsSQL(op, dmlParams)
-		failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
-			t := v.(int)
-			time.Sleep(time.Duration(t) * time.Second)
-		})
-		// use background context to execute sqls as much as possible
-		ctctx, cancel := w.tctx.WithTimeout(maxDMLExecutionDuration)
-		defer cancel()
-		affect, err = db.ExecuteSQL(ctctx, queries, args...)
-		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
-			if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
-				w.logger.Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
-				affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
-			}
-		})
+	for i := 0; i < w.workerCount; i++ {
+		causalityJobChs[i] = make(chan *job, w.queueSize)
+		go w.executeCausalityJobs(i, causalityJobChs[i])
 	}
-	return executeJobs
+
+	defer func() {
+		for i := 0; i < w.workerCount; i++ {
+			close(causalityJobChs[i])
+		}
+	}()
+
+	queueBucketMapping := make([]string, w.workerCount)
+	for i := 0; i < w.workerCount; i++ {
+		queueBucketMapping[i] = queueBucketName(i)
+	}
+
+	for j := range w.causalityCh {
+		metrics.QueueSizeGauge.WithLabelValues(w.task, "causality_output", w.source).Set(float64(len(w.causalityCh)))
+		if j.tp == flush || j.tp == conflict {
+			if j.tp == conflict {
+				w.causalityWg.Add(w.workerCount)
+			}
+			// flush for every DML queue
+			for i, causalityJobCh := range causalityJobChs {
+				w.addCountFunc(false, queueBucketMapping[i], j.tp, 1, j.targetTable)
+				startTime := time.Now()
+				causalityJobCh <- j
+				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[i], w.source).Observe(time.Since(startTime).Seconds())
+			}
+			if j.tp == conflict {
+				w.causalityWg.Wait()
+			}
+		} else {
+			queueBucket := int(utils.GenHashKey(j.dml.key)) % w.workerCount
+			w.addCountFunc(false, queueBucketMapping[queueBucket], j.tp, 1, j.targetTable)
+			startTime := time.Now()
+			w.logger.Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.dml.key))
+			causalityJobChs[queueBucket] <- j
+			metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[queueBucket], w.source).Observe(time.Since(startTime).Seconds())
+		}
+	}
+}
+
+// executeCompactedJobsWithOpType execute special opType of compacted jobs.
+func (w *DMLWorker) executeCompactedJobsWithOpType(op opType, jobsMap map[opType][]*job) {
+	jobs, ok := jobsMap[op]
+	if !ok {
+		return
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < len(jobs); i += w.batch {
+		j := i + w.batch
+		if j >= len(jobs) {
+			j = len(jobs)
+		}
+		wg.Add(1)
+		batchJobs := jobs[i:j]
+		// for update jobs, regard it as replace jobs
+		if op == update {
+			op = replace
+		}
+		w.connectionPool.ApplyWithID(w.executeBatchJobs(-1, op, batchJobs, func() { wg.Done() }))
+	}
+	wg.Wait()
 }
 
 // executeCausalityJobs execute jobs in same queueBucket
@@ -255,94 +295,81 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 	}
 }
 
-func (w *DMLWorker) executeCompactedJobsWithOpType(op opType, jobsMap map[opType][]*job) {
-	jobs, ok := jobsMap[op]
-	if !ok {
-		return
-	}
-	var wg sync.WaitGroup
-	for i := 0; i < len(jobs); i += w.batch {
-		j := i + w.batch
-		if j >= len(jobs) {
-			j = len(jobs)
+// executeBatchJobs execute jobs with batch size.
+func (w *DMLWorker) executeBatchJobs(queueID int, op opType, jobs []*job, clearFunc func()) func(uint64) {
+	executeJobs := func(id uint64) {
+		var (
+			affect int
+			db     = w.toDBConns[int(id)-1]
+			err    error
+		)
+
+		defer func() {
+			if err == nil {
+				w.successFunc(queueID, jobs)
+			} else {
+				w.fatalFunc(jobs[affect], err)
+			}
+			clearFunc()
+		}()
+
+		if len(jobs) == 0 {
+			return
 		}
-		wg.Add(1)
-		batchJobs := jobs[i:j]
-		if op == update {
-			op = replace
+		failpoint.Inject("BlockExecuteSQLs", func(v failpoint.Value) {
+			t := v.(int) // sleep time
+			w.logger.Info("BlockExecuteSQLs", zap.Any("job", jobs[0]), zap.Int("sleep time", t))
+			time.Sleep(time.Second * time.Duration(t))
+		})
+
+		failpoint.Inject("failSecondJob", func() {
+			if failExecuteSQL && failOnce.CAS(false, true) {
+				w.logger.Info("trigger failSecondJob")
+				err = terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJob"), "mock")
+				failpoint.Return()
+			}
+		})
+
+		dmls := make([]*DML, 0, len(jobs))
+		for _, j := range jobs {
+			dmls = append(dmls, j.dml)
 		}
-		w.connectionPool.ApplyWithID(w.executeBatchJobs(-1, op, batchJobs, func() { wg.Done() }))
+		queries, args := genMultipleRowsSQL(op, dmls)
+		failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
+			t := v.(int)
+			time.Sleep(time.Duration(t) * time.Second)
+		})
+		// use background context to execute sqls as much as possible
+		ctctx, cancel := w.tctx.WithTimeout(maxDMLExecutionDuration)
+		defer cancel()
+		affect, err = db.ExecuteSQL(ctctx, queries, args...)
+		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
+			if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
+				w.logger.Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
+				affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
+			}
+		})
 	}
-	wg.Wait()
+	return executeJobs
 }
 
-func (w *DMLWorker) runCompactedDMLWorker() {
-	for {
-		select {
-		case jobsMap, ok := <-w.compactedCh:
-			if !ok {
-				return
-			}
-			w.executeCompactedJobsWithOpType(del, jobsMap)
-			w.executeCompactedJobsWithOpType(insert, jobsMap)
-			w.executeCompactedJobsWithOpType(update, jobsMap)
-
-			if jobs, ok := jobsMap[flush]; ok {
-				j := jobs[0]
-				w.addCountFunc(false, "q_-1", j.tp, 1, j.targetTable)
-				startTime := time.Now()
-				w.flushCh <- j
-				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, "q_-1", w.source).Observe(time.Since(startTime).Seconds())
-			}
-		case <-time.After(waitTime):
-			w.pullCh <- struct{}{}
-		}
+// genMultipleRowsSQL generate multiple rows SQL by different opType.
+// insert into tb values(1,1)	‾|
+// insert into tb values(2,2)	 |=> insert into tb values (1,1),(2,2),(3,3)
+// insert into tb values(3,3)	_|
+// update tb set b=1 where a=1	‾|
+// update tb set b=2 where a=2	 |=> replace into tb values(1,1),(2,2),(3,3)
+// update tb set b=3 where a=3	_|
+// delete from tb where a=1,b=1	‾|
+// delete from tb where a=2,b=2	 |=> delete from tb where (a,b) in (1,1),(2,2),(3,3)
+// delete from tb where a=3,b=3	_|
+// group by [opType => table name => columns].
+func genMultipleRowsSQL(op opType, dmls []*DML) ([]string, [][]interface{}) {
+	// for compacted jobs, all dmlParmas already has same opType
+	// so group by table
+	if op != null {
+		return gendmlsWithSameTable(op, dmls)
 	}
-}
-
-// runCausalityDMLWorker distribute jobs by queueBucket.
-func (w *DMLWorker) runCausalityDMLWorker() {
-	causalityJobChs := make([]chan *job, w.workerCount)
-
-	for i := 0; i < w.workerCount; i++ {
-		causalityJobChs[i] = make(chan *job, w.queueSize)
-		go w.executeCausalityJobs(i, causalityJobChs[i])
-	}
-
-	defer func() {
-		for i := 0; i < w.workerCount; i++ {
-			close(causalityJobChs[i])
-		}
-	}()
-
-	queueBucketMapping := make([]string, w.workerCount)
-	for i := 0; i < w.workerCount; i++ {
-		queueBucketMapping[i] = queueBucketName(i)
-	}
-
-	for j := range w.causalityCh {
-		metrics.QueueSizeGauge.WithLabelValues(w.task, "causality_output", w.source).Set(float64(len(w.causalityCh)))
-		if j.tp == flush || j.tp == conflict {
-			if j.tp == conflict {
-				w.causalityWg.Add(w.workerCount)
-			}
-			// flush for every DML queue
-			for i, causalityJobCh := range causalityJobChs {
-				w.addCountFunc(false, queueBucketMapping[i], j.tp, 1, j.targetTable)
-				startTime := time.Now()
-				causalityJobCh <- j
-				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[i], w.source).Observe(time.Since(startTime).Seconds())
-			}
-			if j.tp == conflict {
-				w.causalityWg.Wait()
-			}
-		} else {
-			queueBucket := int(utils.GenHashKey(j.dmlParam.key)) % w.workerCount
-			w.addCountFunc(false, queueBucketMapping[queueBucket], j.tp, 1, j.targetTable)
-			startTime := time.Now()
-			w.logger.Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.dmlParam.key))
-			causalityJobChs[queueBucket] <- j
-			metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[queueBucket], w.source).Observe(time.Since(startTime).Seconds())
-		}
-	}
+	// for causality jobs, group dmls with opType
+	return gendmlsWithSameTp(dmls)
 }
