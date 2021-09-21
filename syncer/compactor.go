@@ -15,7 +15,9 @@ package syncer
 
 import (
 	"sync"
+	"time"
 
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -28,6 +30,7 @@ type Compactor struct {
 	nonCompactedCh chan *job
 	drainCh        chan struct{}
 	in             chan *job
+	drain          atomic.Bool
 	counter        int
 	bufferSize     int
 	chanSize       int
@@ -70,6 +73,13 @@ func (c *Compactor) run(in chan *job) (chan map[opType][]*job, chan *job, chan s
 		c.runCompactor()
 	}()
 
+	// no need to wait because it close by sender
+	go func() {
+		for range c.drainCh {
+			c.drain.Store(true)
+		}
+	}()
+
 	go func() {
 		defer c.close()
 		wg.Wait()
@@ -81,10 +91,6 @@ func (c *Compactor) run(in chan *job) (chan map[opType][]*job, chan *job, chan s
 func (c *Compactor) runCompactor() {
 	for {
 		select {
-		case <-c.drainCh:
-			if c.counter > 0 {
-				c.flushBuffer()
-			}
 		case j, ok := <-c.in:
 			if !ok {
 				return
@@ -92,7 +98,6 @@ func (c *Compactor) runCompactor() {
 			metrics.QueueSizeGauge.WithLabelValues(c.task, "compactor_input", c.source).Set(float64(len(c.in)))
 
 			if j.tp == flush {
-				<-c.drainCh
 				c.flushBuffer()
 				c.sendFlushJob(j)
 				continue
@@ -121,8 +126,11 @@ func (c *Compactor) runCompactor() {
 			} else {
 				c.compactJob(j)
 			}
-			if c.counter >= c.bufferSize {
-				<-c.drainCh
+			if c.drain.Load() {
+				c.flushBuffer()
+			}
+		case <-time.After(waitTime):
+			if c.drain.Load() && c.counter > 0 {
 				c.flushBuffer()
 			}
 		}
@@ -151,6 +159,7 @@ func (c *Compactor) flushBuffer() {
 			res[j.tp] = append(res[j.tp], j)
 		}
 	}
+	c.drain.Store(false)
 	c.compactedCh <- res
 	c.counter = 0
 	c.compactedBuffer = make(map[string]map[string]*job)
@@ -158,6 +167,7 @@ func (c *Compactor) flushBuffer() {
 
 // sendFlushJob send flush job to all outer channel.
 func (c *Compactor) sendFlushJob(j *job) {
+	c.drain.Store(false)
 	c.compactedCh <- map[opType][]*job{flush: {j}}
 	c.nonCompactedCh <- j
 }

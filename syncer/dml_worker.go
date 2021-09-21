@@ -36,6 +36,7 @@ type DMLWorker struct {
 	batch          int
 	workerCount    int
 	queueSize      int
+	multipleRows   bool
 	toDBConns      []*dbconn.DBConn
 	tctx           *tcontext.Context
 	causalityWg    sync.WaitGroup
@@ -62,7 +63,7 @@ type DMLWorker struct {
 }
 
 // newDMLWorker creates new DML Worker.
-func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, source, worker string,
+func newDMLWorker(batch, workerCount, queueSize int, multipleRows bool, pLogger *log.Logger, task, source, worker string,
 	successFunc func(int, []*job),
 	fatalFunc func(*job, error),
 	lagFunc func(*job, int),
@@ -72,6 +73,7 @@ func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, 
 		batch:          batch,
 		workerCount:    workerCount,
 		queueSize:      queueSize,
+		multipleRows:   multipleRows,
 		task:           task,
 		source:         source,
 		worker:         worker,
@@ -103,11 +105,15 @@ func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, comp
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		w.runCompactedDMLWorker()
-	}()
+	workerCount := w.workerCount
+	if compactedCh != nil {
+		workerCount++
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w.runCompactedDMLWorker()
+		}()
+	}
 
 	wg.Add(1)
 	go func() {
@@ -120,7 +126,7 @@ func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, comp
 		wg.Wait()
 	}()
 
-	return w.workerCount + 1, w.flushCh
+	return workerCount, w.flushCh
 }
 
 // close all outer channel.
@@ -132,27 +138,20 @@ func (w *DMLWorker) close() {
 // All jobs have been compacted, so one identify key has only one SQL.
 // Execute SQLs in the order of (delete, insert, update).
 func (w *DMLWorker) runCompactedDMLWorker() {
-	for {
-		select {
-		case jobsMap, ok := <-w.compactedCh:
-			if !ok {
-				return
-			}
-			w.executeCompactedJobsWithOpType(del, jobsMap)
-			w.executeCompactedJobsWithOpType(insert, jobsMap)
-			w.executeCompactedJobsWithOpType(update, jobsMap)
+	w.pullCh <- struct{}{}
+	for jobsMap := range w.compactedCh {
+		w.executeCompactedJobsWithOpType(del, jobsMap)
+		w.executeCompactedJobsWithOpType(insert, jobsMap)
+		w.executeCompactedJobsWithOpType(update, jobsMap)
 
-			if jobs, ok := jobsMap[flush]; ok {
-				j := jobs[0]
-				w.addCountFunc(false, "q_-1", j.tp, 1, j.targetTable)
-				startTime := time.Now()
-				w.flushCh <- j
-				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, "q_-1", w.source).Observe(time.Since(startTime).Seconds())
-			}
-		// notify compactor
-		case <-time.After(waitTime):
-			w.pullCh <- struct{}{}
+		if jobs, ok := jobsMap[flush]; ok {
+			j := jobs[0]
+			w.addCountFunc(false, "q_-1", j.tp, 1, j.targetTable)
+			startTime := time.Now()
+			w.flushCh <- j
+			metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, "q_-1", w.source).Observe(time.Since(startTime).Seconds())
 		}
+		w.pullCh <- struct{}{}
 	}
 }
 
@@ -334,7 +333,13 @@ func (w *DMLWorker) executeBatchJobs(queueID int, op opType, jobs []*job, clearF
 		for _, j := range jobs {
 			dmls = append(dmls, j.dml)
 		}
-		queries, args := genMultipleRowsSQL(op, dmls)
+		var queries []string
+		var args [][]interface{}
+		if w.multipleRows {
+			queries, args = genMultipleRowsSQL(op, dmls)
+		} else {
+			queries, args = genSingleRowSQL(dmls)
+		}
 		failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
 			t := v.(int)
 			time.Sleep(time.Duration(t) * time.Second)
@@ -353,7 +358,7 @@ func (w *DMLWorker) executeBatchJobs(queueID int, op opType, jobs []*job, clearF
 	return executeJobs
 }
 
-// genMultipleRowsSQL generate multiple rows SQL by different opType.
+// genMultipleRowsSQL generate multiple row values SQL by different opType.
 // insert into tb values(1,1)	‾|
 // insert into tb values(2,2)	 |=> insert into tb values (1,1),(2,2),(3,3)
 // insert into tb values(3,3)	_|
@@ -372,4 +377,16 @@ func genMultipleRowsSQL(op opType, dmls []*DML) ([]string, [][]interface{}) {
 	}
 	// for causality jobs, group dmls with opType
 	return gendmlsWithSameTp(dmls)
+}
+
+// genSingleRowSQL generate single row value SQL.
+func genSingleRowSQL(dmls []*DML) ([]string, [][]interface{}) {
+	queries := make([]string, 0, len(dmls))
+	args := make([][]interface{}, 0, len(dmls))
+	for _, dml := range dmls {
+		query, arg := dml.genSQL()
+		queries = append(queries, query...)
+		args = append(args, arg...)
+	}
+	return queries, args
 }

@@ -243,9 +243,11 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.binlogSizeCount.Store(0)
 	syncer.lastCount.Store(0)
 	syncer.count.Store(0)
-	syncer.compactor = newCompactor(cfg.WorkerCount*cfg.QueueSize, cfg.WorkerCount*cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
+	if cfg.Compact {
+		syncer.compactor = newCompactor(cfg.WorkerCount*cfg.QueueSize, cfg.WorkerCount*cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
+	}
 	syncer.causality = newCausality(cfg.WorkerCount*cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
-	syncer.dmlWorker = newDMLWorker(cfg.Batch, cfg.WorkerCount, cfg.QueueSize, &logger, cfg.Name, cfg.SourceID, cfg.WorkerName, syncer.successFunc, syncer.fatalFunc, syncer.updateReplicationJobTS, syncer.addCount)
+	syncer.dmlWorker = newDMLWorker(cfg.Batch, cfg.WorkerCount, cfg.QueueSize, cfg.MultipleRows, &logger, cfg.Name, cfg.SourceID, cfg.WorkerName, syncer.successFunc, syncer.fatalFunc, syncer.updateReplicationJobTS, syncer.addCount)
 	syncer.done = nil
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
@@ -1278,7 +1280,17 @@ func (s *Syncer) syncDML(tctx *tcontext.Context) {
 		s.tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
 	})
 
-	compactedCh, nonCompactedCh, drainCh := s.compactor.run(s.dmlJobCh)
+	var (
+		compactedCh    chan map[opType][]*job
+		nonCompactedCh chan *job
+		drainCh        chan struct{}
+	)
+
+	if s.compactor != nil {
+		compactedCh, nonCompactedCh, drainCh = s.compactor.run(s.dmlJobCh)
+	} else {
+		nonCompactedCh = s.dmlJobCh
+	}
 	causalityCh := s.causality.run(nonCompactedCh)
 	flushCount, flushCh := s.dmlWorker.run(tctx, s.toDBConns, compactedCh, drainCh, causalityCh)
 
