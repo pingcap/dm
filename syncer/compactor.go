@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/syncer/metrics"
 )
 
 // Compactor compact multiple statements into one statement.
@@ -82,6 +83,8 @@ func (c *Compactor) runCompactor() {
 				c.flushBuffer()
 			}
 		case j, ok := <-c.in:
+			metrics.QueueSizeGauge.WithLabelValues(c.task, "compactor_input", c.source).Set(float64(len(c.in)))
+
 			if !ok {
 				return
 			}
@@ -93,6 +96,7 @@ func (c *Compactor) runCompactor() {
 				continue
 			}
 
+			// set safeMode when receive first job
 			if c.counter == 0 {
 				c.safeMode = j.dmlParam.safeMode
 			}
@@ -135,7 +139,8 @@ func (c *Compactor) flushBuffer() {
 	res := make(map[opType][]*job, 3)
 	for _, tableJobs := range c.compactedBuffer {
 		for _, j := range tableJobs {
-			if j.tp == insert || j.tp == update {
+			// if there is one job with safeMode(first one), we set safeMode for all other jobs
+			if c.safeMode {
 				j.dmlParam.safeMode = c.safeMode
 			}
 			res[j.tp] = append(res[j.tp], j)

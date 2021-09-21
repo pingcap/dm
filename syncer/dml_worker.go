@@ -118,6 +118,16 @@ func (w *DMLWorker) close() {
 	close(w.flushCh)
 }
 
+// genMultipleRowsSQL generate multiple rows SQL by different opType
+// for insert/update/delete which has been compacted, all the dmlParams have same tablename and opType
+// for null, group dmlParams by tableName.
+func genMultipleRowsSQL(op opType, dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	if op != null {
+		return groupDMLParamsWithSameTable(op, dmlParams)
+	}
+	return groupDMLParamsWithSameTp(dmlParams)
+}
+
 // executeBatchJobs execute jobs with batch size.
 func (w *DMLWorker) executeBatchJobs(queueID int, op opType, jobs []*job, clearFunc func()) func(uint64) {
 	executeJobs := func(id uint64) {
@@ -258,6 +268,9 @@ func (w *DMLWorker) executeCompactedJobsWithOpType(op opType, jobsMap map[opType
 		}
 		wg.Add(1)
 		batchJobs := jobs[i:j]
+		if op == update {
+			op = replace
+		}
 		w.connectionPool.ApplyWithID(w.executeBatchJobs(-1, op, batchJobs, func() { wg.Done() }))
 	}
 	wg.Wait()

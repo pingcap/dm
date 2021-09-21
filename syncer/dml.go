@@ -795,7 +795,10 @@ func genMultipleRowsInsertReplace(replace bool, dmlParams []*DMLParam) ([]string
 }
 
 func genMultipleRowsInsert(dmlParams []*DMLParam) ([]string, [][]interface{}) {
-	return genMultipleRowsInsertReplace(false, dmlParams)
+	if len(dmlParams) == 0 {
+		return nil, nil
+	}
+	return genMultipleRowsInsertReplace(dmlParams[0].safeMode, dmlParams)
 }
 
 func columnNamesEqual(lhs []string, rhs []string) bool {
@@ -808,99 +811,6 @@ func columnNamesEqual(lhs []string, rhs []string) bool {
 		}
 	}
 	return true
-}
-
-// nolint:dupl
-func genMultipleRowsInsertSameCols(dmlParams []*DMLParam) ([]string, [][]interface{}) {
-	queries := make([]string, 0, len(dmlParams))
-	args := make([][]interface{}, 0, len(dmlParams))
-	var lastCols []string
-	sameColsDMLParams := make([]*DMLParam, 0, len(dmlParams))
-
-	for i, dmlParam := range dmlParams {
-		if i == 0 {
-			lastCols = dmlParam.columnNames()
-		}
-		if columnNamesEqual(lastCols, dmlParam.columnNames()) {
-			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
-		} else {
-			query, arg := genMultipleRowsInsert(sameColsDMLParams)
-			queries = append(queries, query...)
-			args = append(args, arg...)
-
-			sameColsDMLParams = sameColsDMLParams[0:0]
-			lastCols = dmlParam.columnNames()
-			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
-		}
-	}
-	if len(sameColsDMLParams) > 0 {
-		query, arg := genMultipleRowsInsert(sameColsDMLParams)
-		queries = append(queries, query...)
-		args = append(args, arg...)
-	}
-	return queries, args
-}
-
-// nolint:dupl
-func genMultipleRowsReplaceSameCols(dmlParams []*DMLParam) ([]string, [][]interface{}) {
-	queries := make([]string, 0, len(dmlParams))
-	args := make([][]interface{}, 0, len(dmlParams))
-	var lastCols []string
-	sameColsDMLParams := make([]*DMLParam, 0, len(dmlParams))
-
-	for i, dmlParam := range dmlParams {
-		if i == 0 {
-			lastCols = dmlParam.columnNames()
-		}
-		if columnNamesEqual(lastCols, dmlParam.columnNames()) {
-			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
-		} else {
-			query, arg := genMultipleRowsReplace(sameColsDMLParams)
-			queries = append(queries, query...)
-			args = append(args, arg...)
-
-			sameColsDMLParams = sameColsDMLParams[0:0]
-			lastCols = dmlParam.columnNames()
-			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
-		}
-	}
-	if len(sameColsDMLParams) > 0 {
-		query, arg := genMultipleRowsReplace(sameColsDMLParams)
-		queries = append(queries, query...)
-		args = append(args, arg...)
-	}
-	return queries, args
-}
-
-func genMultipleRowsDeleteSameCols(dmlParams []*DMLParam) ([]string, [][]interface{}) {
-	queries := make([]string, 0, len(dmlParams))
-	args := make([][]interface{}, 0, len(dmlParams))
-	var lastCols []string
-	sameColsDMLParams := make([]*DMLParam, 0, len(dmlParams))
-
-	for i, dmlParam := range dmlParams {
-		if i == 0 {
-			lastCols, _ = dmlParam.whereColumnsAndValues()
-		}
-		cols, _ := dmlParam.whereColumnsAndValues()
-		if columnNamesEqual(lastCols, cols) {
-			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
-		} else {
-			query, arg := genMultipleRowsDelete(sameColsDMLParams)
-			queries = append(queries, query...)
-			args = append(args, arg...)
-
-			sameColsDMLParams = sameColsDMLParams[0:0]
-			lastCols = cols
-			sameColsDMLParams = append(sameColsDMLParams, dmlParam)
-		}
-	}
-	if len(sameColsDMLParams) > 0 {
-		query, arg := genMultipleRowsDelete(sameColsDMLParams)
-		queries = append(queries, query...)
-		args = append(args, arg...)
-	}
-	return queries, args
 }
 
 func genMultipleRowsReplace(dmlParams []*DMLParam) ([]string, [][]interface{}) {
@@ -942,111 +852,151 @@ func genMultipleRowsDelete(dmlParams []*DMLParam) ([]string, [][]interface{}) {
 	return []string{buf.String()}, [][]interface{}{args}
 }
 
-func genMultipleRowsSQLWithSameTp(dmlParams []*DMLParam) (queries []string, args [][]interface{}) {
-	if len(dmlParams) == 0 {
-		return
-	}
-
-	tp := dmlParams[0].op
-	safeMode := dmlParams[0].safeMode
-	switch tp {
-	case insert:
-		if safeMode {
-			return genMultipleRowsReplace(dmlParams)
-		}
-		return genMultipleRowsInsertSameCols(dmlParams)
-	case replace:
-		return genMultipleRowsReplaceSameCols(dmlParams)
-	case del:
-		return genMultipleRowsDeleteSameCols(dmlParams)
-	case update:
-		for _, dmlParam := range dmlParams {
-			query, arg := dmlParam.genUpdateSQL()
-			queries = append(queries, query...)
-			args = append(args, arg...)
-		}
-	}
-	return
-}
-
-func genMultipleRowsSQLWithSameTable(dmlParams []*DMLParam) ([]string, [][]interface{}) {
+// groupDMLParamsWithSameCols group dmlParams by same columns.
+// in optimistic shard mode, different upstream tables may have different columns.
+// all dmlParams should have same opType and same tableName.
+func groupDMLParamsWithSameCols(op opType, dmlParams []*DMLParam) ([]string, [][]interface{}) {
 	queries := make([]string, 0, len(dmlParams))
 	args := make([][]interface{}, 0, len(dmlParams))
-	var lastTp opType
-	var lastSafeMode bool
-	tpDMLParams := make([]*DMLParam, 0, len(dmlParams))
+	var lastCols, cols []string
+	var query []string
+	var arg [][]interface{}
+	groupDMLParams := make([]*DMLParam, 0, len(dmlParams))
 
+	// group dmlParams by same columns
 	for i, dmlParam := range dmlParams {
-		// if update statement didn't update primary values, regard it as replace
-		if dmlParam.op == update && !dmlParam.updateIdentify() {
-			dmlParam.op = replace
-			dmlParam.safeMode = false
-		}
 		if i == 0 {
-			lastTp = dmlParam.op
-			lastSafeMode = dmlParam.safeMode
+			if op == del {
+				lastCols, _ = dmlParam.whereColumnsAndValues()
+			} else {
+				lastCols = dmlParam.columnNames()
+			}
+			groupDMLParams = append(groupDMLParams, dmlParam)
+			continue
 		}
-		if lastTp == dmlParam.op && lastSafeMode == dmlParam.safeMode {
-			tpDMLParams = append(tpDMLParams, dmlParam)
+
+		if op == del {
+			cols, _ = dmlParam.whereColumnsAndValues()
 		} else {
-			query, arg := genMultipleRowsSQLWithSameTp(tpDMLParams)
+			cols = dmlParam.columnNames()
+		}
+
+		if columnNamesEqual(lastCols, cols) {
+			groupDMLParams = append(groupDMLParams, dmlParam)
+		} else {
+			log.L().Debug("in same column", zap.Stringer("op", op))
+			switch op {
+			case insert:
+				query, arg = genMultipleRowsInsert(groupDMLParams)
+			case replace:
+				query, arg = genMultipleRowsReplace(groupDMLParams)
+			case del:
+				query, arg = genMultipleRowsDelete(groupDMLParams)
+			}
 			queries = append(queries, query...)
 			args = append(args, arg...)
 
-			tpDMLParams = tpDMLParams[0:0]
-			lastTp = dmlParam.op
-			lastSafeMode = dmlParam.safeMode
-			tpDMLParams = append(tpDMLParams, dmlParam)
+			groupDMLParams = groupDMLParams[0:0]
+			lastCols = cols
+			groupDMLParams = append(groupDMLParams, dmlParam)
 		}
 	}
-	if len(tpDMLParams) > 0 {
-		query, arg := genMultipleRowsSQLWithSameTp(tpDMLParams)
+	if len(groupDMLParams) > 0 {
+		switch op {
+		case insert:
+			query, arg = genMultipleRowsInsert(groupDMLParams)
+		case replace:
+			query, arg = genMultipleRowsReplace(groupDMLParams)
+		case del:
+			query, arg = genMultipleRowsDelete(groupDMLParams)
+		}
 		queries = append(queries, query...)
 		args = append(args, arg...)
 	}
 	return queries, args
 }
 
-func genMultipleRowsSQL(op opType, dmlParams []*DMLParam) ([]string, [][]interface{}) {
-	if len(dmlParams) == 0 {
-		return nil, nil
-	}
-
-	switch op {
-	case del:
-		return genMultipleRowsDeleteSameCols(dmlParams)
-	case insert:
-		if dmlParams[0].safeMode {
-			return genMultipleRowsReplaceSameCols(dmlParams)
-		}
-		return genMultipleRowsInsertSameCols(dmlParams)
-	case update:
-		return genMultipleRowsReplaceSameCols(dmlParams)
-	}
-
+// groupSQLsWithSameTable group DMLParams with same table.
+// all the DMLParams should have same opType.
+func groupDMLParamsWithSameTable(op opType, dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	// group dmlParams by tableName
 	queries := make([]string, 0, len(dmlParams))
 	args := make([][]interface{}, 0, len(dmlParams))
 	var lastTable string
-	tableDMLParams := make([]*DMLParam, 0, len(dmlParams))
+	groupDMLParams := make([]*DMLParam, 0, len(dmlParams))
 
+	// for update, generate SQLs one by one
+	if op == update {
+		for _, dmlParam := range dmlParams {
+			query, arg := dmlParam.genUpdateSQL()
+			queries = append(queries, query...)
+			args = append(args, arg...)
+		}
+		return queries, args
+	}
+
+	// group dmlParams with same table
 	for i, dmlParam := range dmlParams {
 		if i == 0 {
 			lastTable = dmlParam.tableID
 		}
 		if lastTable == dmlParam.tableID {
-			tableDMLParams = append(tableDMLParams, dmlParam)
+			groupDMLParams = append(groupDMLParams, dmlParam)
 		} else {
-			query, arg := genMultipleRowsSQLWithSameTable(tableDMLParams)
+			query, arg := groupDMLParamsWithSameCols(op, groupDMLParams)
 			queries = append(queries, query...)
 			args = append(args, arg...)
 
-			tableDMLParams = tableDMLParams[0:0]
+			groupDMLParams = groupDMLParams[0:0]
 			lastTable = dmlParam.tableID
-			tableDMLParams = append(tableDMLParams, dmlParam)
+			groupDMLParams = append(groupDMLParams, dmlParam)
 		}
 	}
-	if len(tableDMLParams) > 0 {
-		query, arg := genMultipleRowsSQLWithSameTable(tableDMLParams)
+	if len(groupDMLParams) > 0 {
+		query, arg := groupDMLParamsWithSameCols(op, groupDMLParams)
+		queries = append(queries, query...)
+		args = append(args, arg...)
+	}
+	return queries, args
+}
+
+// groupDMLParams group dmlParams by opType.
+func groupDMLParamsWithSameTp(dmlParams []*DMLParam) ([]string, [][]interface{}) {
+	queries := make([]string, 0, len(dmlParams))
+	args := make([][]interface{}, 0, len(dmlParams))
+	var lastTp opType
+	groupDMLParams := make([]*DMLParam, 0, len(dmlParams))
+
+	for i, dmlParam := range dmlParams {
+		// if update statement didn't update primary values, regard it as replace
+		// if insert statement in safeMode, regard it as replace
+		if dmlParam.op == update && !dmlParam.updateIdentify() || dmlParam.op == insert && dmlParam.safeMode {
+			dmlParam.op = replace
+			dmlParam.safeMode = false
+		}
+		if i == 0 {
+			lastTp = dmlParam.op
+		}
+		// now there are only 5 situation
+		// op		safeMode
+		// insert	false
+		// replace	false
+		// update	true/false
+		// delete 	false
+		if lastTp == dmlParam.op {
+			groupDMLParams = append(groupDMLParams, dmlParam)
+		} else {
+			query, arg := groupDMLParamsWithSameTable(lastTp, groupDMLParams)
+			queries = append(queries, query...)
+			args = append(args, arg...)
+
+			groupDMLParams = groupDMLParams[0:0]
+			lastTp = dmlParam.op
+			groupDMLParams = append(groupDMLParams, dmlParam)
+		}
+	}
+	if len(groupDMLParams) > 0 {
+		query, arg := groupDMLParamsWithSameTable(lastTp, groupDMLParams)
 		queries = append(queries, query...)
 		args = append(args, arg...)
 	}
