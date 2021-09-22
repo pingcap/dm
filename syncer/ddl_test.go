@@ -37,7 +37,6 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -449,14 +448,13 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	}
 	for _, ca := range cases {
 		fakeMysqlServer := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
-		var mysqlStarted atomic.Bool
 		go func() {
 			c.Assert(fakeMysqlServer.Start(), IsNil)
-			mysqlStarted.Store(true)
 		}()
-
 		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-			return mysqlStarted.Load()
+			db, err := conn.DefaultDBProvider.Apply(dbCfg)
+			c.Assert(err, IsNil)
+			return db.DB.Ping() == nil
 		}), IsTrue)
 
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
