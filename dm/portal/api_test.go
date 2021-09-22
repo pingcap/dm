@@ -127,11 +127,6 @@ func (t *testPortalSuite) initTaskCfg() {
 }
 
 func (t *testPortalSuite) TestCheck(c *C) {
-	dbCfgBytes := getTestDBCfgBytes(c)
-	req := httptest.NewRequest("POST", "/check", bytes.NewReader(dbCfgBytes))
-	resp := httptest.NewRecorder()
-
-	// will connection to database failed
 	dbCfg := config.GetDBConfigFromEnv()
 	freePortStr := tempurl.Alloc()[len("http://127.0.0.1:"):]
 	freePort, err := strconv.Atoi(freePortStr)
@@ -141,6 +136,14 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	go func() {
 		c.Assert(fakeMysqlServer.Start(), IsNil)
 	}()
+	wrongDbCfg := dbCfg.Clone()
+	wrongDbCfg.Password = "wrong"
+	dbCfgBytes := getTestDBCfgBytes(c, wrongDbCfg)
+	req := httptest.NewRequest("POST", "/check", bytes.NewReader(dbCfgBytes))
+	resp := httptest.NewRecorder()
+
+	// will connection to database failed
+
 	t.portalHandler.Check(resp, req)
 	c.Log("resp", resp)
 	c.Assert(resp.Code, Equals, http.StatusBadRequest)
@@ -174,7 +177,7 @@ func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 	go func() {
 		c.Assert(fakeMysqlServer.Start(), IsNil)
 	}()
-	dbCfgBytes := getTestDBCfgBytes(c)
+	dbCfgBytes := getTestDBCfgBytes(c, &dbCfg)
 	req := httptest.NewRequest("POST", "/schema", bytes.NewReader(dbCfgBytes))
 	resp := httptest.NewRecorder()
 
@@ -388,15 +391,8 @@ func (t *testPortalSuite) TestGenerateTaskFileName(c *C) {
 	c.Assert(fileName, Equals, "test-task.yaml")
 }
 
-func getTestDBCfgBytes(c *C) []byte {
-	dbCfg := &DBConfig{
-		Host:     "127.0.0.1",
-		Port:     3306,
-		User:     "root",
-		Password: "wrong_password",
-	}
+func getTestDBCfgBytes(c *C, dbCfg *config.DBConfig) []byte {
 	dbCfgBytes, err := json.Marshal(dbCfg)
 	c.Assert(err, IsNil)
-
 	return dbCfgBytes
 }
