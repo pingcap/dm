@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
@@ -26,6 +27,7 @@ import (
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
+	"github.com/tikv/pd/pkg/tempurl"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
@@ -429,9 +431,13 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		tctx: tctx,
 	}
 	dbCfg := config.GetDBConfigFromEnv()
+	freePortStr := tempurl.Alloc()[len("http://127.0.0.1:"):]
+	freePort, err := strconv.Atoi(freePortStr)
+	c.Assert(err, IsNil)
+	dbCfg.Port = freePort
 	cfg := &config.SubTaskConfig{
-		From:       config.GetDBConfigFromEnv(),
-		To:         config.GetDBConfigFromEnv(),
+		From:       dbCfg,
+		To:         dbCfg,
 		ServerID:   101,
 		MetaSchema: "test",
 		Name:       "syncer_ut",

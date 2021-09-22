@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strconv"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -16,6 +17,7 @@ import (
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/tikv/pd/pkg/tempurl"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
@@ -131,6 +133,10 @@ func (t *testPortalSuite) TestCheck(c *C) {
 
 	// will connection to database failed
 	dbCfg := config.GetDBConfigFromEnv()
+	freePortStr := tempurl.Alloc()[len("http://127.0.0.1:"):]
+	freePort, err := strconv.Atoi(freePortStr)
+	c.Assert(err, IsNil)
+	dbCfg.Port = freePort
 	fakeMysqlServer := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
 	go func() {
 		c.Assert(fakeMysqlServer.Start(), IsNil)
@@ -140,7 +146,7 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	c.Assert(resp.Code, Equals, http.StatusBadRequest)
 
 	checkResult := &CheckResult{}
-	err := readJSON(resp.Body, checkResult)
+	err = readJSON(resp.Body, checkResult)
 	c.Assert(err, IsNil)
 	c.Assert(checkResult.Result, Equals, failed)
 	c.Assert(checkResult.Error, Matches, "Error 1045: Access denied for user 'root'.*")
