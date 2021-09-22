@@ -33,6 +33,11 @@ import (
 
 var _ = Suite(&testDumplingSuite{})
 
+const (
+	testDumplingSchemaName = "INFORMATION_SCHEMA"
+	testDumplingTableName  = "TABLES"
+)
+
 func TestSuite(t *testing.T) {
 	TestingT(t)
 }
@@ -72,7 +77,11 @@ func (d *testDumplingSuite) SetUpSuite(c *C) {
 			Dir: dir,
 		},
 		BAList: &filter.Rules{
-			DoDBs: []string{"information_schema"},
+			DoDBs: []string{testDumplingSchemaName},
+			DoTables: []*filter.Table{{
+				Schema: testDumplingSchemaName,
+				Name:   testDumplingTableName,
+			}},
 		},
 	}
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)

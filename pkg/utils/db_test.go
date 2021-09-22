@@ -18,14 +18,15 @@ import (
 	"strconv"
 	"time"
 
-	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
-	tmysql "github.com/pingcap/parser/mysql"
-
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/coreos/go-semver/semver"
 	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-sql-driver/mysql"
+	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
+	tmysql "github.com/pingcap/parser/mysql"
+
+	"github.com/pingcap/dm/pkg/gtid"
 )
 
 var _ = Suite(&testDBSuite{})
@@ -362,5 +363,64 @@ func (t *testDBSuite) TestTiDBVersion(c *C) {
 		} else {
 			c.Assert(tidbVer, DeepEquals, tc.result)
 		}
+	}
+}
+
+func getGSetFromString(c *C, s string) gtid.Set {
+	gSet, err := gtid.ParserGTID("mysql", s)
+	c.Assert(err, IsNil)
+	return gSet
+}
+
+func (t *testDBSuite) TestAddGSetWithPurged(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	mariaGTID, err := gtid.ParserGTID("mariadb", "1-2-100")
+	c.Assert(err, IsNil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := db.Conn(ctx)
+	c.Assert(err, IsNil)
+
+	testCases := []struct {
+		originGSet  gtid.Set
+		purgedSet   gtid.Set
+		expectedSet gtid.Set
+		err         error
+	}{
+		{
+			getGSetFromString(c, "3ccc475b-2343-11e7-be21-6c0b84d59f30:6-14"),
+			getGSetFromString(c, "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-5"),
+			getGSetFromString(c, "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14"),
+			nil,
+		}, {
+
+			getGSetFromString(c, "3ccc475b-2343-11e7-be21-6c0b84d59f30:2-6"),
+			getGSetFromString(c, "3ccc475b-2343-11e7-be21-6c0b84d59f30:1"),
+			getGSetFromString(c, "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-6"),
+			nil,
+		}, {
+
+			getGSetFromString(c, "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-6"),
+			getGSetFromString(c, "53bfca22-690d-11e7-8a62-18ded7a37b78:1-495"),
+			getGSetFromString(c, "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-6,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495"),
+			nil,
+		}, {
+			getGSetFromString(c, "3ccc475b-2343-11e7-be21-6c0b84d59f30:6-14"),
+			mariaGTID,
+			nil,
+			errors.New("invalid GTID format, must UUID:interval[:interval]"),
+		},
+	}
+
+	for _, tc := range testCases {
+		mock.ExpectQuery("select @@GLOBAL.gtid_purged").WillReturnRows(
+			sqlmock.NewRows([]string{"@@GLOBAL.gtid_purged"}).AddRow(tc.purgedSet.String()))
+		originSet := tc.originGSet.Clone()
+		newSet, err := AddGSetWithPurged(ctx, originSet, conn)
+		c.Assert(errors.ErrorEqual(err, tc.err), IsTrue)
+		c.Assert(newSet, DeepEquals, tc.expectedSet)
+		// make sure origin gSet hasn't changed
+		c.Assert(originSet, DeepEquals, tc.originGSet)
 	}
 }

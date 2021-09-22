@@ -78,7 +78,7 @@
 
 New integration tests can be written as shell scripts in `tests/TEST_NAME/run.sh`. The script should exit with a nonzero error code on failure.
 
-> Note the integration test runs in parallel, and new added test case is not listed in CI, so remember to add the `TEST_NAME` of new added test case to file `others_integration.txt` in a newline.
+> Note the integration test runs in parallel, and new added test case is not listed in CI, so remember to add the `TEST_NAME` of new added test case to file `others_integration_2.txt` in a newline.
 
 Several convenient commands are provided:
 
