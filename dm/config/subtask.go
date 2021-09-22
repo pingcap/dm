@@ -41,6 +41,9 @@ const (
 	ModeAll       = "all"
 	ModeFull      = "full"
 	ModeIncrement = "incremental"
+
+	DefaultShadowTableRules = "^_(.+)_(?:new|gho)$"
+	DefaultTrashTableRules  = "^_(.+)_(?:ghc|del|old)$"
 )
 
 var defaultMaxIdleConns = 2
@@ -373,7 +376,7 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	}
 
 	if len(c.ShadowTableRules) == 0 {
-		c.ShadowTableRules = []string{"^_(.+)_(?:new|gho)$"}
+		c.ShadowTableRules = []string{DefaultShadowTableRules}
 	} else {
 		shadowTableRule, err := adjustOnlineTableRules("shadow-table-rules", c.ShadowTableRules)
 		if err != nil {
@@ -383,7 +386,7 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	}
 
 	if len(c.TrashTableRules) == 0 {
-		c.TrashTableRules = []string{"^_(.+)_(?:ghc|del|old)$"}
+		c.TrashTableRules = []string{DefaultTrashTableRules}
 	} else {
 		trashTableRule, err := adjustOnlineTableRules("trash-table-rules", c.TrashTableRules)
 		if err != nil {

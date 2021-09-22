@@ -76,3 +76,5 @@ mysql-instances:
   syncer-config-name: sync-01
   syncer: null
   syncer-thread: 0
+shadow-table-rules: []
+trash-table-rules: []
