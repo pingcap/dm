@@ -2857,8 +2857,7 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 	return nil
 }
 
-// input `sql` should be a single DDL, which came from parserpkg.SplitDDL
-// tableNames[0] is source (upstream) tableNames, tableNames[1] is target (downstream) tableNames.
+// trackDDL tracks ddl in schemaTracker.
 func (s *Syncer) trackDDL(usedSchema string, trackInfo *trackInfo, ec *eventContext) error {
 	var (
 		srcTables    = trackInfo.sourceTables
