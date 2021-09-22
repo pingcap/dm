@@ -284,10 +284,12 @@ type TaskConfig struct {
 	// we store detail status in meta
 	// don't save configuration into it
 	MetaSchema string `yaml:"meta-schema" toml:"meta-schema" json:"meta-schema"`
-
-	EnableHeartbeat         bool `yaml:"enable-heartbeat" toml:"enable-heartbeat" json:"enable-heartbeat"`
-	HeartbeatUpdateInterval int  `yaml:"heartbeat-update-interval" toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
-	HeartbeatReportInterval int  `yaml:"heartbeat-report-interval" toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
+	// deprecated
+	EnableHeartbeat bool `yaml:"enable-heartbeat" toml:"enable-heartbeat" json:"enable-heartbeat"`
+	// deprecated
+	HeartbeatUpdateInterval int `yaml:"heartbeat-update-interval" toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
+	// deprecated
+	HeartbeatReportInterval int `yaml:"heartbeat-report-interval" toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	// deprecated
 	Timezone string `yaml:"timezone" toml:"timezone" json:"timezone"`
 
@@ -685,6 +687,11 @@ func (c *TaskConfig) adjust() error {
 		log.L().Warn("`remove-meta` in task config is deprecated, please use `start-task ... --remove-meta` instead")
 	}
 
+	if c.EnableHeartbeat || c.HeartbeatUpdateInterval != defaultUpdateInterval ||
+		c.HeartbeatReportInterval != defaultReportInterval {
+		c.EnableHeartbeat = false
+		log.L().Warn("heartbeat is deprecated, needn't set it anymore.")
+	}
 	return nil
 }
 
