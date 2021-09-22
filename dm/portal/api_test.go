@@ -136,9 +136,9 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	go func() {
 		c.Assert(fakeMysqlServer.Start(), IsNil)
 	}()
-	wrongDbCfg := dbCfg.Clone()
-	wrongDbCfg.Password = "wrong"
-	dbCfgBytes := getTestDBCfgBytes(c, wrongDbCfg)
+	wrongDBCfg := dbCfg.Clone()
+	wrongDBCfg.Password = "wrong"
+	dbCfgBytes := getTestDBCfgBytes(c, wrongDBCfg)
 	req := httptest.NewRequest("POST", "/check", bytes.NewReader(dbCfgBytes))
 	resp := httptest.NewRecorder()
 
