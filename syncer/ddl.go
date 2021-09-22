@@ -39,18 +39,12 @@ type parseDDLResult struct {
 func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (result parseDDLResult, err error) {
 	// check skip before parse (used to skip some un-supported DDLs)
 	needSkip, err := s.skipSQLByPattern(sql)
-	if err != nil {
+	if err != nil || needSkip {
 		return parseDDLResult{
 			stmt:     nil,
 			needSkip: needSkip,
 			isDDL:    false,
 		}, err
-	} else if needSkip {
-		return parseDDLResult{
-			stmt:     nil,
-			needSkip: needSkip,
-			isDDL:    false,
-		}, nil
 	}
 
 	// We use Parse not ParseOneStmt here, because sometimes we got a commented out ddl which can't be parsed
