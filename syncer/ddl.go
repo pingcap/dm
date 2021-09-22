@@ -174,26 +174,30 @@ func (s *Syncer) splitAndFilterDDL(
 	return statements, tableMap, nil
 }
 
-// routeDDL will rename tables in DDL.
-func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (string, [][]*filter.Table, ast.StmtNode, error) {
-	stmt, err := p.ParseOneStmt(sql, "", "")
+// routeDDL route DDL from sourceTables to targetTables.
+func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (
+	routedDDL string,
+	sourceTables, targetTables []*filter.Table,
+	stmt ast.StmtNode,
+	err error) {
+	stmt, err = p.ParseOneStmt(sql, "", "")
 	if err != nil {
-		return "", nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
+		return "", nil, nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
-	sourceTables, err := parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
+	sourceTables, err = parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
-		return "", nil, nil, err
+		return "", nil, nil, nil, err
 	}
 
-	targetTables := make([]*filter.Table, 0, len(sourceTables))
+	targetTables = make([]*filter.Table, 0, len(sourceTables))
 	for i := range sourceTables {
 		renamedTable := s.renameShardingSchema(sourceTables[i])
 		targetTables = append(targetTables, renamedTable)
 	}
 
-	ddl, err := parserpkg.RenameDDLTable(stmt, targetTables)
-	return ddl, [][]*filter.Table{sourceTables, targetTables}, stmt, err
+	routedDDL, err = parserpkg.RenameDDLTable(stmt, targetTables)
+	return
 }
 
 // handleOnlineDDL checks if the input `sql` is came from online DDL tools.

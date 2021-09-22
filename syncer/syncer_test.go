@@ -1592,7 +1592,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 
 	p := parser.New()
 	for _, ca := range cases {
-		ddlSQL, filter, stmt, err := syncer.routeDDL(p, testDB, ca.sql)
+		ddlSQL, sourceTables, targetTables, stmt, err := syncer.routeDDL(p, testDB, ca.sql)
 		c.Assert(err, IsNil)
 
 		ca.callback()
@@ -1600,8 +1600,8 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		trackInfo := &trackInfo{
 			sql:          ddlSQL,
 			stmt:         stmt,
-			sourceTables: filter[0],
-			targetTables: filter[1],
+			sourceTables: sourceTables,
+			targetTables: targetTables,
 		}
 		c.Assert(syncer.trackDDL(testDB, trackInfo, ec), IsNil)
 		c.Assert(syncer.schemaTracker.Reset(), IsNil)

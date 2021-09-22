@@ -2457,12 +2457,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	// handle one-schema change DDL
 	for _, sql := range qec.appliedDDLs {
 		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		sqlDDL, tables, stmt, handleErr := s.routeDDL(qec.p, qec.ddlSchema, sql)
-		if handleErr != nil {
-			return handleErr
+		sqlDDL, sourceTables, targetTables, stmt, err := s.routeDDL(qec.p, qec.ddlSchema, sql)
+		if err != nil {
+			return err
 		}
-		sourceTables := tables[0]
-		targetTables := tables[1]
 		if len(sqlDDL) == 0 {
 			metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 			qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", qec.ddlSchema))
