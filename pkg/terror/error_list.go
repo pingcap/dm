@@ -242,7 +242,6 @@ const (
 	codeConfigGenTableRouter
 	codeConfigGenColumnMapping
 	codeConfigInvalidChunkFileSize
-	codeConfigOnlineDDLRegexCompile
 	codeConfigOnlineDDLInvalidRegex
 )
 
@@ -879,10 +878,8 @@ var (
 	ErrConfigGenTableRouter         = New(codeConfigGenTableRouter, ClassConfig, ScopeInternal, LevelHigh, "generate table router error", "Please check the `routes` config in task configuration file.")
 	ErrConfigGenColumnMapping       = New(codeConfigGenColumnMapping, ClassConfig, ScopeInternal, LevelHigh, "generate column mapping error", "Please check the `column-mappings` config in task configuration file.")
 	ErrConfigInvalidChunkFileSize   = New(codeConfigInvalidChunkFileSize, ClassConfig, ScopeInternal, LevelHigh, "invalid `chunk-filesize` %v", "Please check the `chunk-filesize` config in task configuration file.")
-	ErrConfigOnlineDDLRegexCompile  = New(codeConfigOnlineDDLRegexCompile, ClassConfig, ScopeInternal, LevelHigh,
-		"'%s' regex pattern '%s' compile falied", "Please check if params is correctly in the configuration file.")
-	ErrConfigOnlineDDLInvalidRegex = New(codeConfigOnlineDDLInvalidRegex, ClassConfig, ScopeInternal, LevelHigh,
-		"'%s' regex pattern '%s' isn't contains exactly one submatch", "Please check if params is correctly in the configuration file.")
+	ErrConfigOnlineDDLInvalidRegex  = New(codeConfigOnlineDDLInvalidRegex, ClassConfig, ScopeInternal, LevelHigh,
+		"config '%s' regex pattern '%s' invalid, reason: %s", "Please check if params is correctly in the configuration file.")
 
 	// Binlog operation error.
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")

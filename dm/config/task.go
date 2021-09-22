@@ -303,8 +303,8 @@ type TaskConfig struct {
 
 	OnlineDDL bool `yaml:"online-ddl" toml:"online-ddl" json:"online-ddl"`
 	// pt/gh-ost name rule,support regex
-	ShadowTableRule []string `yaml:"shadow-table-rule" toml:"shadow-table-rule" json:"shadow-table-rule"`
-	TrashTableRule  []string `yaml:"trash-table-rule" toml:"trash-table-rule" json:"trash-table-rule"`
+	ShadowTableRules []string `yaml:"shadow-table-rules" toml:"shadow-table-rules" json:"shadow-table-rules"`
+	TrashTableRules  []string `yaml:"trash-table-rules" toml:"trash-table-rules" json:"trash-table-rules"`
 
 	// deprecated
 	OnlineDDLScheme string `yaml:"online-ddl-scheme" toml:"online-ddl-scheme" json:"online-ddl-scheme"`
@@ -712,8 +712,8 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.IsSharding = c.IsSharding
 		cfg.ShardMode = c.ShardMode
 		cfg.OnlineDDL = c.OnlineDDL
-		cfg.TrashTableRule = c.TrashTableRule
-		cfg.ShadowTableRule = c.ShadowTableRule
+		cfg.TrashTableRules = c.TrashTableRules
+		cfg.ShadowTableRules = c.ShadowTableRules
 		cfg.IgnoreCheckingItems = c.IgnoreCheckingItems
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode

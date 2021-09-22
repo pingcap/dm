@@ -194,9 +194,9 @@ type SubTaskConfig struct {
 	ShardMode  string `toml:"shard-mode" json:"shard-mode"`
 	OnlineDDL  bool   `toml:"online-ddl" json:"online-ddl"`
 
-	// pt/gh-ost name rule,support regex
-	ShadowTableRule []string `yaml:"shadow-table-rule" toml:"shadow-table-rule" json:"shadow-table-rule"`
-	TrashTableRule  []string `yaml:"trash-table-rule" toml:"trash-table-rule" json:"trash-table-rule"`
+	// pt/gh-ost name rule, support regex
+	ShadowTableRules []string `yaml:"shadow-table-rules" toml:"shadow-table-rules" json:"shadow-table-rules"`
+	TrashTableRules  []string `yaml:"trash-table-rules" toml:"trash-table-rules" json:"trash-table-rules"`
 
 	// deprecated
 	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
@@ -336,10 +336,10 @@ func adjustOnlineTableRules(ruleType string, rules []string) ([]string, error) {
 
 		p, err := regexp.Compile(r)
 		if err != nil {
-			return rules, terror.ErrConfigOnlineDDLRegexCompile.Generate(ruleType, r)
+			return rules, terror.ErrConfigOnlineDDLInvalidRegex.Generate(ruleType, r, "fail to compile: "+err.Error())
 		}
 		if p.NumSubexp() != 1 {
-			return rules, terror.ErrConfigOnlineDDLInvalidRegex.Generate(ruleType, r)
+			return rules, terror.ErrConfigOnlineDDLInvalidRegex.Generate(ruleType, r, "rule isn't contains exactly one submatch")
 		}
 		adjustedRules = append(adjustedRules, r)
 	}
@@ -372,24 +372,24 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		log.L().Warn("'online-ddl-scheme' will be deprecated soon. Recommend that use online-ddl instead of online-ddl-scheme.")
 	}
 
-	if len(c.ShadowTableRule) == 0 {
-		c.ShadowTableRule = []string{"^_(.+)_(?:new|gho)$"}
+	if len(c.ShadowTableRules) == 0 {
+		c.ShadowTableRules = []string{"^_(.+)_(?:new|gho)$"}
 	} else {
-		shadowTableRule, err := adjustOnlineTableRules("shadow-table-rule", c.ShadowTableRule)
+		shadowTableRule, err := adjustOnlineTableRules("shadow-table-rules", c.ShadowTableRules)
 		if err != nil {
 			return err
 		}
-		c.ShadowTableRule = shadowTableRule
+		c.ShadowTableRules = shadowTableRule
 	}
 
-	if len(c.TrashTableRule) == 0 {
-		c.TrashTableRule = []string{"^_(.+)_(?:ghc|del|old)$"}
+	if len(c.TrashTableRules) == 0 {
+		c.TrashTableRules = []string{"^_(.+)_(?:ghc|del|old)$"}
 	} else {
-		trashTableRule, err := adjustOnlineTableRules("trash-table-rule", c.TrashTableRule)
+		trashTableRule, err := adjustOnlineTableRules("trash-table-rules", c.TrashTableRules)
 		if err != nil {
 			return err
 		}
-		c.TrashTableRule = trashTableRule
+		c.TrashTableRules = trashTableRule
 	}
 
 	if c.MetaSchema == "" {

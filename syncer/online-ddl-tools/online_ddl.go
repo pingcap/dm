@@ -386,19 +386,19 @@ type RealOnlinePlugin struct {
 
 // NewRealOnlinePlugin returns real online plugin.
 func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
-	shadowRegs := make([]*regexp.Regexp, 0, len(cfg.ShadowTableRule))
-	trashRegs := make([]*regexp.Regexp, 0, len(cfg.TrashTableRule))
-	for _, sg := range cfg.ShadowTableRule {
+	shadowRegs := make([]*regexp.Regexp, 0, len(cfg.ShadowTableRules))
+	trashRegs := make([]*regexp.Regexp, 0, len(cfg.TrashTableRules))
+	for _, sg := range cfg.ShadowTableRules {
 		shadowReg, err := regexp.Compile(sg)
 		if err != nil {
-			return nil, terror.ErrConfigOnlineDDLRegexCompile.Generate("shadow-table-rule", sg)
+			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate("shadow-table-rules", sg, "fail to compile: "+err.Error())
 		}
 		shadowRegs = append(shadowRegs, shadowReg)
 	}
-	for _, tg := range cfg.TrashTableRule {
+	for _, tg := range cfg.TrashTableRules {
 		trashReg, err := regexp.Compile(tg)
 		if err != nil {
-			return nil, terror.ErrConfigOnlineDDLRegexCompile.Generate("trash-table-rule", tg)
+			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate("trash-table-rules", tg, "fail to compile: "+err.Error())
 		}
 		trashRegs = append(trashRegs, trashReg)
 	}

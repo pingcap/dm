@@ -57,8 +57,8 @@ mysql-instances:
   syncer: null
   syncer-thread: 0
 online-ddl: false
-shadow-table-rule: []
-trash-table-rule: []
+shadow-table-rules: []
+trash-table-rules: []
 online-ddl-scheme: ""
 routes: {}
 filters: {}
