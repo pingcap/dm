@@ -192,7 +192,7 @@ func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (
 
 	targetTables = make([]*filter.Table, 0, len(sourceTables))
 	for i := range sourceTables {
-		renamedTable := s.renameShardingSchema(sourceTables[i])
+		renamedTable := s.route(sourceTables[i])
 		targetTables = append(targetTables, renamedTable)
 	}
 

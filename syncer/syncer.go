@@ -478,7 +478,7 @@ func (s *Syncer) initShardingGroups(ctx context.Context, needCheck bool) error {
 	for schema, tables := range sourceTables {
 		for _, table := range tables {
 			sourceTable := &filter.Table{Schema: schema, Name: table}
-			targetTable := s.renameShardingSchema(sourceTable)
+			targetTable := s.route(sourceTable)
 			targetID := utils.GenTableID(targetTable)
 			sourceID := utils.GenTableID(sourceTable)
 			_, ok := mapper[targetID]
@@ -2134,7 +2134,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		Schema: string(ev.Table.Schema),
 		Name:   string(ev.Table.Table),
 	}
-	targetTable := s.renameShardingSchema(originTable)
+	targetTable := s.route(originTable)
 
 	*ec.currentLocation = binlog.InitLocation(
 		mysql.Position{
@@ -2457,9 +2457,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	// handle one-schema change DDL
 	for _, sql := range qec.appliedDDLs {
 		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		sqlDDL, sourceTables, targetTables, stmt, err := s.routeDDL(qec.p, qec.ddlSchema, sql)
-		if err != nil {
-			return err
+		sqlDDL, sourceTables, targetTables, stmt, err2 := s.routeDDL(qec.p, qec.ddlSchema, sql)
+		if err2 != nil {
+			return err2
 		}
 		if len(sqlDDL) == 0 {
 			metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
@@ -3160,7 +3160,7 @@ func (s *Syncer) reSyncBinlog(tctx tcontext.Context, location binlog.Location) e
 	return s.streamerController.ReopenWithRetry(&tctx, location)
 }
 
-func (s *Syncer) renameShardingSchema(table *filter.Table) *filter.Table {
+func (s *Syncer) route(table *filter.Table) *filter.Table {
 	if table.Schema == "" {
 		return table
 	}

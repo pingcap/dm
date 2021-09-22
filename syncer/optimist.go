@@ -50,7 +50,7 @@ func (s *Syncer) initOptimisticShardDDL(ctx context.Context) error {
 	for upSchema, UpTables := range sourceTables {
 		for _, upTable := range UpTables {
 			up := &filter.Table{Schema: upSchema, Name: upTable}
-			down := s.renameShardingSchema(up)
+			down := s.route(up)
 			downSchema, downTable := down.Schema, down.Name
 			if _, ok := mapper[downSchema]; !ok {
 				mapper[downSchema] = make(map[string]map[string]map[string]struct{})
