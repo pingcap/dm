@@ -2461,6 +2461,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		if err2 != nil {
 			return err2
 		}
+		sourceTable := sourceTables[0]
+		targetTable := targetTables[0]
 		if len(sqlDDL) == 0 {
 			metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 			qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", qec.ddlSchema))
@@ -2469,7 +2471,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 		// DDL is sequentially synchronized in this syncer's main process goroutine
 		// ignore DDL that is older or same as table checkpoint, to avoid sync again for already synced DDLs
-		if s.checkpoint.IsOlderThanTablePoint(sourceTables[0], *qec.currentLocation, true) {
+		if s.checkpoint.IsOlderThanTablePoint(sourceTable, *qec.currentLocation, true) {
 			qec.tctx.L().Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", qec.currentLocation))
 			continue
 		}
@@ -2478,18 +2480,18 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		if s.cfg.ShardMode == config.ShardPessimistic {
 			switch stmt.(type) {
 			case *ast.DropDatabaseStmt:
-				err = s.dropSchemaInSharding(qec.tctx, sourceTables[0].Schema)
+				err = s.dropSchemaInSharding(qec.tctx, sourceTable.Schema)
 				if err != nil {
 					return err
 				}
 				continue
 			case *ast.DropTableStmt:
-				sourceTableID := utils.GenTableID(sourceTables[0])
-				err = s.sgk.LeaveGroup(targetTables[0], []string{sourceTableID})
+				sourceTableID := utils.GenTableID(sourceTable)
+				err = s.sgk.LeaveGroup(targetTable, []string{sourceTableID})
 				if err != nil {
 					return err
 				}
-				err = s.checkpoint.DeleteTablePoint(qec.tctx, sourceTables[0])
+				err = s.checkpoint.DeleteTablePoint(qec.tctx, sourceTable)
 				if err != nil {
 					return err
 				}
@@ -2506,7 +2508,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 					targetTables: targetTables,
 					stmt:         stmt,
 				}
-			} else if qec.ddlInfo.sourceTables[0].String() != sourceTables[0].String() {
+			} else if qec.ddlInfo.sourceTables[0].String() != sourceTable.String() {
 				return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
 			}
 		} else if s.cfg.ShardMode == config.ShardOptimistic {
@@ -2524,7 +2526,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
 		//       we should use a better mechanism to combine these operations
 		if s.cfg.ShardMode == "" {
-			recordSourceTbls(qec.sourceTbls, stmt, sourceTables[0])
+			recordSourceTbls(qec.sourceTbls, stmt, sourceTable)
 		}
 	}
 
