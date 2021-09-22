@@ -445,7 +445,8 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		Mode:       config.ModeIncrement,
 		Flavor:     "mysql",
 	}
-	fakeMysqlServer := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
+	fakeMysqlServer, err := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
+	c.Assert(err, IsNil)
 	go func() {
 		c.Assert(fakeMysqlServer.Start(), IsNil)
 	}()
@@ -455,7 +456,6 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		return db.DB.Ping() == nil
 	}), IsTrue)
 	defer fakeMysqlServer.Close()
-	c.Assert(err, IsNil)
 	for _, ca := range cases {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)

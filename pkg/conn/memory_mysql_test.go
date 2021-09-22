@@ -32,7 +32,8 @@ func (t *testMemoryMysqlSuite) TestNewMemoryMysqlServer(c *check.C) {
 	freePort, err := strconv.Atoi(freePortStr)
 	c.Assert(err, check.IsNil)
 	dbCfg.Port = freePort
-	server := NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
+	server, err := NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
+	c.Assert(err, check.IsNil)
 	go func() {
 		c.Assert(server.Start(), check.IsNil)
 	}()

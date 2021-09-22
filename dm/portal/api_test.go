@@ -132,7 +132,8 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	freePort, err := strconv.Atoi(freePortStr)
 	c.Assert(err, IsNil)
 	dbCfg.Port = freePort
-	fakeMysqlServer := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
+	fakeMysqlServer, err := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
+	c.Assert(err, IsNil)
 	go func() {
 		c.Assert(fakeMysqlServer.Start(), IsNil)
 	}()
@@ -173,7 +174,12 @@ func (t *testPortalSuite) TestCheck(c *C) {
 
 func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 	dbCfg := config.GetDBConfigFromEnv()
-	fakeMysqlServer := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
+	freePortStr := tempurl.Alloc()[len("http://127.0.0.1:"):]
+	freePort, err := strconv.Atoi(freePortStr)
+	c.Assert(err, IsNil)
+	dbCfg.Port = freePort
+	fakeMysqlServer, err := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
+	c.Assert(err, IsNil)
 	go func() {
 		c.Assert(fakeMysqlServer.Start(), IsNil)
 	}()
@@ -186,7 +192,7 @@ func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 	c.Assert(resp.Code, Equals, http.StatusBadRequest)
 
 	schemaInfoResult := new(SchemaInfoResult)
-	err := readJSON(resp.Body, schemaInfoResult)
+	err = readJSON(resp.Body, schemaInfoResult)
 	c.Assert(err, IsNil)
 	c.Assert(schemaInfoResult.Result, Equals, failed)
 	c.Assert(schemaInfoResult.Error, Matches, "Error 1045: Access denied for user 'root'.*")
