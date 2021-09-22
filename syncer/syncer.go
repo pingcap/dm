@@ -2483,24 +2483,8 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 	// handle one-schema change DDL
 	for _, sql := range qec.appliedDDLs {
-		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		stmt, err2 := qec.p.ParseOneStmt(sql, "", "")
-		if err2 != nil {
-			return terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err2.Error()), "ddl %s", sql)
-		}
-
-		originTables, err2 := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
-		if err2 != nil {
-			return err2
-		}
-
-		routedTables := make([]*filter.Table, 0, len(originTables))
-		for i := range originTables {
-			routedTable := s.route(originTables[i])
-			routedTables = append(routedTables, routedTable)
-		}
-
-		sqlDDL, err2 := parserpkg.RenameDDLTable(stmt, routedTables)
+		// We use default parser because sqls are came from above parsepkg.Split, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
+		sqlDDL, sourceTables, targetTables, stmt, err2 := s.routeDDL(qec.p, qec.ddlSchema, sql)
 		if err2 != nil {
 			return err2
 		}
@@ -2513,7 +2497,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 		// DDL is sequentially synchronized in this syncer's main process goroutine
 		// ignore DDL that is older or same as table checkpoint, to avoid sync again for already synced DDLs
-		if s.checkpoint.IsOlderThanTablePoint(originTables[0], *qec.currentLocation, true) {
+		if s.checkpoint.IsOlderThanTablePoint(sourceTables[0], *qec.currentLocation, true) {
 			qec.tctx.L().Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", qec.currentLocation))
 			continue
 		}
@@ -2522,18 +2506,18 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		if s.cfg.ShardMode == config.ShardPessimistic {
 			switch stmt.(type) {
 			case *ast.DropDatabaseStmt:
-				err = s.dropSchemaInSharding(qec.tctx, originTables[0].Schema)
+				err = s.dropSchemaInSharding(qec.tctx, sourceTables[0].Schema)
 				if err != nil {
 					return err
 				}
 				continue
 			case *ast.DropTableStmt:
-				sourceTableID := utils.GenTableID(originTables[0])
-				err = s.sgk.LeaveGroup(routedTables[0], []string{sourceTableID})
+				sourceTableID := utils.GenTableID(sourceTables[0])
+				err = s.sgk.LeaveGroup(targetTables[0], []string{sourceTableID})
 				if err != nil {
 					return err
 				}
-				err = s.checkpoint.DeleteTablePoint(qec.tctx, originTables[0])
+				err = s.checkpoint.DeleteTablePoint(qec.tctx, sourceTables[0])
 				if err != nil {
 					return err
 				}
@@ -2546,11 +2530,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			// in sharding mode, we only support to do one ddl in one event
 			if qec.ddlInfo == nil {
 				qec.ddlInfo = &shardingDDLInfo{
-					name:   originTables[0].String(),
-					tables: [][]*filter.Table{originTables, routedTables},
+					name:   sourceTables[0].String(),
+					tables: [][]*filter.Table{sourceTables, targetTables},
 					stmt:   stmt,
 				}
-			} else if qec.ddlInfo.name != originTables[0].String() {
+			} else if qec.ddlInfo.name != sourceTables[0].String() {
 				return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
 			}
 		} else if s.cfg.ShardMode == config.ShardOptimistic {
@@ -2564,11 +2548,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 
 		qec.needHandleDDLs = append(qec.needHandleDDLs, sqlDDL)
-		qec.needTrackDDLs = append(qec.needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tables: [][]*filter.Table{originTables, routedTables}})
+		qec.needTrackDDLs = append(qec.needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tables: [][]*filter.Table{sourceTables, targetTables}})
 		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
 		//       we should use a better mechanism to combine these operations
 		if s.cfg.ShardMode == "" {
-			recordSourceTbls(qec.sourceTbls, stmt, originTables[0])
+			recordSourceTbls(qec.sourceTbls, stmt, sourceTables[0])
 		}
 	}
 

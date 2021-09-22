@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
+// TODO: delete
 // trackedDDL keeps data needed for schema tracker.
 type trackedDDL struct {
 	rawSQL string

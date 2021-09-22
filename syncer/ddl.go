@@ -16,6 +16,7 @@ package syncer
 import (
 	"time"
 
+	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
@@ -44,25 +45,21 @@ func (s *Syncer) parseDDLSQL(qec *queryEventContext) (stmt ast.StmtNode, err err
 }
 
 // processSplitedDDL processes SplitedDDLddl as follow step:
-// 1. track ddl whatever skip it;
+// 1. track ddl whatever skip it except optimist shard ddl; (TODO: will implement in https://github.com/pingcap/dm/pull/1975)
 // 2. skip sql by filterQueryEvent;
 // 3. apply online ddl if onlineDDL is not nil:
 //    * specially, if skip, apply empty string;
 // 4. handle online ddl SQL by handleOnlineDDL.
 func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string, error) {
-	stmt, err := qec.p.ParseOneStmt(sql, "", "")
-	if err != nil {
-		return nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
-	}
-
-	tables, err2 := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, s.SourceTableNamesFlavor)
+	_, sourceTables, targetTables, stmt, err := s.routeDDL(qec.p, qec.ddlSchema, sql)
 	if err != nil {
 		return nil, err
 	}
+	// TODO: add track ddl
 
-	// get real tableNames before apply block-allow list
-	realTables := make([]*filter.Table, 0, len(tables))
-	for _, table := range tables {
+	// get real tables before apply block-allow list
+	realTables := make([]*filter.Table, 0, len(targetTables))
+	for _, table := range targetTables {
 		realName := table.Name
 		if s.onlineDDL != nil {
 			realName = s.onlineDDL.RealName(table.Name)
@@ -74,7 +71,7 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 	}
 
 	shouldSkip, err := s.filterQueryEvent(realTables, stmt, sql)
-	if err2 != nil {
+	if err != nil {
 		return nil, err
 	}
 	if shouldSkip {
@@ -88,7 +85,7 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 	sqls := []string{sql}
 	if s.onlineDDL != nil {
 		// filter and save ghost table ddl
-		sqls, err = s.onlineDDL.Apply(qec.tctx, tables, sql, stmt)
+		sqls, err = s.onlineDDL.Apply(qec.tctx, sourceTables, sql, stmt)
 		if err != nil {
 			return nil, err
 		}
@@ -104,17 +101,43 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 		// In there, stmt must be a `RenameTableStmt`. See details in OnlinePlugin.Apply.
 		// So tables is [old1, new1], which new1 is the OnlinePlugin.RealTable. See details in FetchDDLTables.
 		// Rename ddl's table to RealTable.
-		sqls, err = s.renameOnlineDDLTable(qec, tables[1], sqls)
+		sqls, err = s.renameOnlineDDLTable(qec, sourceTables[1], sqls)
 		if err != nil {
 			return sqls, err
 		}
 		if qec.onlineDDLTable == nil {
-			qec.onlineDDLTable = tables[0]
-		} else if qec.onlineDDLTable.String() != tables[0].String() {
+			qec.onlineDDLTable = sourceTables[0]
+		} else if qec.onlineDDLTable.String() != sourceTables[0].String() {
 			return nil, terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(qec.originSQL)
 		}
 	}
 	return sqls, nil
+}
+
+// routeDDL route DDL from sourceTables to targetTables.
+func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (
+	routedDDL string,
+	sourceTables, targetTables []*filter.Table,
+	stmt ast.StmtNode,
+	err error) {
+	stmt, err = p.ParseOneStmt(sql, "", "")
+	if err != nil {
+		return "", nil, nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
+	}
+
+	sourceTables, err = parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
+	if err != nil {
+		return "", nil, nil, nil, err
+	}
+
+	targetTables = make([]*filter.Table, 0, len(sourceTables))
+	for i := range sourceTables {
+		renamedTable := s.route(sourceTables[i])
+		targetTables = append(targetTables, renamedTable)
+	}
+
+	routedDDL, err = parserpkg.RenameDDLTable(stmt, targetTables)
+	return
 }
 
 // renameOnlineDDLTable renames the given ddl sqls by given targetTable.
@@ -206,4 +229,14 @@ type shardingDDLInfo struct {
 	name   string
 	tables [][]*filter.Table
 	stmt   ast.StmtNode
+}
+
+// TODO: use ddlInfo to flow
+// fetch from routeDDL, saved in onlineDDL, used for trackDDL
+// nolint: no used
+type ddlInfo struct {
+	sql          string
+	stmt         ast.StmtNode
+	sourceTables []*filter.Table
+	targetTables []*filter.Table
 }
