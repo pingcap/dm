@@ -14,29 +14,36 @@
 package conn
 
 import (
-	. "github.com/pingcap/check"
+	"strconv"
+
+	"github.com/pingcap/check"
+	"github.com/tikv/pd/pkg/tempurl"
 
 	"github.com/pingcap/dm/dm/config"
 )
 
-var _ = Suite(&testMemoryMysqlSuite{})
+var _ = check.Suite(&testMemoryMysqlSuite{})
 
 type testMemoryMysqlSuite struct{}
 
-func (t *testMemoryMysqlSuite) TestNewMemoryMysqlServer(c *C) {
-	dbDFG := config.GetDBConfigFromEnv()
-	server := NewMemoryMysqlServer(dbDFG.Host, dbDFG.User, dbDFG.Password, dbDFG.Port)
+func (t *testMemoryMysqlSuite) TestNewMemoryMysqlServer(c *check.C) {
 
+	dbCfg := config.GetDBConfigFromEnv()
+	freePortStr := tempurl.Alloc()[len("http://127.0.0.1:"):]
+	freePort, err := strconv.Atoi(freePortStr)
+	c.Assert(err, check.IsNil)
+	dbCfg.Port = freePort
+	server := NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
 	go func() {
-		c.Assert(server.Start(), IsNil)
+		c.Assert(server.Start(), check.IsNil)
 	}()
 
 	defer server.Close()
 
-	db, err := DefaultDBProvider.Apply(dbDFG)
-	c.Assert(err, IsNil)
-	c.Assert(db.DB.Ping(), IsNil)
+	db, err := DefaultDBProvider.Apply(dbCfg)
+	c.Assert(err, check.IsNil)
+	c.Assert(db.DB.Ping(), check.IsNil)
 
 	_, err = db.DB.Exec("show databases;")
-	c.Assert(err, IsNil)
+	c.Assert(err, check.IsNil)
 }
