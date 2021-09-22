@@ -930,11 +930,11 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				prunedColumns, prunedRows, err2 := pruneGeneratedColumnDML(ti, ev.Rows)
 				c.Assert(err2, IsNil)
 				param := &genDMLParam{
-					tableID:           utils.GenTableID(table),
-					data:              prunedRows,
-					originalData:      ev.Rows,
-					columns:           prunedColumns,
-					originalTableInfo: ti,
+					tableID:         utils.GenTableID(table),
+					data:            prunedRows,
+					originalData:    ev.Rows,
+					columns:         prunedColumns,
+					sourceTableInfo: ti,
 				}
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:

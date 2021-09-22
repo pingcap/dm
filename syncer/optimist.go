@@ -232,15 +232,15 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 }
 
 // trackInitTableInfoOptimistic tries to get the initial table info (before modified by other tables) and track it in optimistic shard mode.
-func (s *Syncer) trackInitTableInfoOptimistic(origTable, renamedTable *filter.Table) (*model.TableInfo, error) {
-	ti, err := s.optimist.GetTableInfo(renamedTable.Schema, renamedTable.Name)
+func (s *Syncer) trackInitTableInfoOptimistic(sourceTable, targetTable *filter.Table) (*model.TableInfo, error) {
+	ti, err := s.optimist.GetTableInfo(targetTable.Schema, targetTable.Name)
 	if err != nil {
-		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origTable)
+		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, sourceTable)
 	}
 	if ti != nil {
-		err = s.schemaTracker.CreateTableIfNotExists(origTable, ti)
+		err = s.schemaTracker.CreateTableIfNotExists(sourceTable, ti)
 		if err != nil {
-			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origTable)
+			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, sourceTable)
 		}
 	}
 	return ti, nil

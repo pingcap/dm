@@ -674,31 +674,31 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 }
 
-func (s *Syncer) getTableInfo(tctx *tcontext.Context, origTable, targetTable *filter.Table) (*model.TableInfo, error) {
-	ti, err := s.schemaTracker.GetTableInfo(origTable)
+func (s *Syncer) getTableInfo(tctx *tcontext.Context, sourceTable, targetTable *filter.Table) (*model.TableInfo, error) {
+	ti, err := s.schemaTracker.GetTableInfo(sourceTable)
 	if err == nil {
 		return ti, nil
 	}
 	if !schema.IsTableNotExists(err) {
-		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origTable)
+		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, sourceTable)
 	}
 
-	if err = s.schemaTracker.CreateSchemaIfNotExists(origTable.Schema); err != nil {
-		return nil, terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, origTable.Schema)
+	if err = s.schemaTracker.CreateSchemaIfNotExists(sourceTable.Schema); err != nil {
+		return nil, terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, sourceTable.Schema)
 	}
 
 	// if table already exists in checkpoint, create it in schema tracker
-	if ti = s.checkpoint.GetFlushedTableInfo(origTable); ti != nil {
-		if err = s.schemaTracker.CreateTableIfNotExists(origTable, ti); err != nil {
-			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origTable)
+	if ti = s.checkpoint.GetFlushedTableInfo(sourceTable); ti != nil {
+		if err = s.schemaTracker.CreateTableIfNotExists(sourceTable, ti); err != nil {
+			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, sourceTable)
 		}
-		tctx.L().Debug("lazy init table info in schema tracker", zap.Stringer("table", origTable))
+		tctx.L().Debug("lazy init table info in schema tracker", zap.Stringer("table", sourceTable))
 		return ti, nil
 	}
 
 	// in optimistic shard mode, we should try to get the init schema (the one before modified by other tables) first.
 	if s.cfg.ShardMode == config.ShardOptimistic {
-		ti, err = s.trackInitTableInfoOptimistic(origTable, targetTable)
+		ti, err = s.trackInitTableInfoOptimistic(sourceTable, targetTable)
 		if err != nil {
 			return nil, err
 		}
@@ -706,31 +706,31 @@ func (s *Syncer) getTableInfo(tctx *tcontext.Context, origTable, targetTable *fi
 
 	// if the table does not exist (IsTableNotExists(err)), continue to fetch the table from downstream and create it.
 	if ti == nil {
-		err = s.trackTableInfoFromDownstream(tctx, origTable, targetTable)
+		err = s.trackTableInfoFromDownstream(tctx, sourceTable, targetTable)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	ti, err = s.schemaTracker.GetTableInfo(origTable)
+	ti, err = s.schemaTracker.GetTableInfo(sourceTable)
 	if err != nil {
-		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origTable)
+		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, sourceTable)
 	}
 	return ti, nil
 }
 
 // trackTableInfoFromDownstream tries to track the table info from the downstream. It will not overwrite existing table.
-func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origTable, targetTable *filter.Table) error {
+func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, sourceTable, targetTable *filter.Table) error {
 	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly if HTTP port is available
 	// use parser for downstream.
 	parser2, err := utils.GetParserForConn(tctx.Ctx, s.ddlDBConn.BaseConn.DBConn)
 	if err != nil {
-		return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, origTable)
+		return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, sourceTable)
 	}
 
 	rows, err := s.ddlDBConn.QuerySQL(tctx, "SHOW CREATE TABLE "+targetTable.String())
 	if err != nil {
-		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, targetTable, origTable)
+		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, targetTable, sourceTable)
 	}
 	defer rows.Close()
 
@@ -744,12 +744,12 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origTable,
 		var createNode ast.StmtNode
 		createNode, err = parser2.ParseOneStmt(createSQL, "", "")
 		if err != nil {
-			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, origTable)
+			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, sourceTable)
 		}
 		createStmt := createNode.(*ast.CreateTableStmt)
 		createStmt.IfNotExists = true
-		createStmt.Table.Schema = model.NewCIStr(origTable.Schema)
-		createStmt.Table.Name = model.NewCIStr(origTable.Name)
+		createStmt.Table.Schema = model.NewCIStr(sourceTable.Schema)
+		createStmt.Table.Name = model.NewCIStr(sourceTable.Name)
 
 		// schema tracker sets non-clustered index, so can't handle auto_random.
 		if v, _ := s.schemaTracker.GetSystemVar(schema.TiDBClusteredIndex); v == "OFF" {
@@ -768,16 +768,16 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origTable,
 		var newCreateSQLBuilder strings.Builder
 		restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &newCreateSQLBuilder)
 		if err = createStmt.Restore(restoreCtx); err != nil {
-			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, origTable)
+			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, sourceTable)
 		}
 		newCreateSQL := newCreateSQLBuilder.String()
 		tctx.L().Debug("reverse-synchronized table schema",
-			zap.Stringer("origTable", origTable),
+			zap.Stringer("sourceTable", sourceTable),
 			zap.Stringer("targetTable", targetTable),
 			zap.String("sql", newCreateSQL),
 		)
-		if err = s.schemaTracker.Exec(tctx.Ctx, origTable.Schema, newCreateSQL); err != nil {
-			return terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origTable)
+		if err = s.schemaTracker.Exec(tctx.Ctx, sourceTable.Schema, newCreateSQL); err != nil {
+			return terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, sourceTable)
 		}
 	}
 
@@ -2130,11 +2130,11 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 }
 
 func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) error {
-	originTable := &filter.Table{
+	sourceTable := &filter.Table{
 		Schema: string(ev.Table.Schema),
 		Name:   string(ev.Table.Table),
 	}
-	targetTable := s.route(originTable)
+	targetTable := s.route(sourceTable)
 
 	*ec.currentLocation = binlog.InitLocation(
 		mysql.Position{
@@ -2159,22 +2159,22 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	// For DML position before table checkpoint, ignore it. When the position equals to table checkpoint, this event may
 	// be partially replicated to downstream, we rely on safe-mode to handle it.
-	if s.checkpoint.IsOlderThanTablePoint(originTable, *ec.currentLocation, false) {
+	if s.checkpoint.IsOlderThanTablePoint(sourceTable, *ec.currentLocation, false) {
 		ec.tctx.L().Debug("ignore obsolete event that is old than table checkpoint",
 			zap.String("event", "row"),
 			log.WrapStringerField("location", ec.currentLocation),
-			zap.Stringer("origin table", originTable))
+			zap.Stringer("source table", sourceTable))
 		return nil
 	}
 
 	ec.tctx.L().Debug("",
 		zap.String("event", "row"),
-		zap.Stringer("origin table", originTable),
+		zap.Stringer("source table", sourceTable),
 		zap.Stringer("target table", targetTable),
 		log.WrapStringerField("location", ec.currentLocation),
 		zap.Reflect("raw event data", ev.Rows))
 
-	ignore, err := s.skipDMLEvent(originTable, ec.header.EventType)
+	ignore, err := s.skipDMLEvent(sourceTable, ec.header.EventType)
 	if err != nil {
 		return err
 	}
@@ -2185,23 +2185,23 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	if s.cfg.ShardMode == config.ShardPessimistic {
-		if s.sgk.InSyncing(originTable, targetTable, *ec.currentLocation) {
+		if s.sgk.InSyncing(sourceTable, targetTable, *ec.currentLocation) {
 			// if in unsync stage and not before active DDL, ignore it
 			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), ignore it
 			ec.tctx.L().Debug("replicate sharding DDL, ignore Rows event",
 				zap.String("event", "row"),
-				zap.Stringer("source", originTable),
+				zap.Stringer("source", sourceTable),
 				log.WrapStringerField("location", ec.currentLocation))
 			return nil
 		}
 	}
 
 	// TODO(csuzhangxc): check performance of `getTable` from schema tracker.
-	tableInfo, err := s.getTableInfo(ec.tctx, originTable, targetTable)
+	tableInfo, err := s.getTableInfo(ec.tctx, sourceTable, targetTable)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
-	rows, err := s.mappingDML(originTable, tableInfo, ev.Rows)
+	rows, err := s.mappingDML(sourceTable, tableInfo, ev.Rows)
 	if err != nil {
 		return err
 	}
@@ -2222,16 +2222,16 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	)
 
 	param := &genDMLParam{
-		tableID:           utils.GenTableID(targetTable),
-		data:              prunedRows,
-		originalData:      rows,
-		columns:           prunedColumns,
-		originalTableInfo: tableInfo,
+		tableID:         utils.GenTableID(targetTable),
+		data:            prunedRows,
+		originalData:    rows,
+		columns:         prunedColumns,
+		sourceTableInfo: tableInfo,
 	}
 
 	switch ec.header.EventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originTable, tableInfo)
+		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(sourceTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
@@ -2239,13 +2239,13 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		param.safeMode = ec.safeMode
 		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen insert sqls failed, originTable: %v, targetTable: %v", originTable, targetTable)
+			return terror.Annotatef(err, "gen insert sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
 		metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenWriteRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originTable, tableInfo)
+		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(sourceTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
@@ -2253,20 +2253,20 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		param.safeMode = ec.safeMode
 		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen update sqls failed, originTable: %v, targetTable: %v", originTable, targetTable)
+			return terror.Annotatef(err, "gen update sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
 		metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenUpdateRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originTable, tableInfo)
+		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(sourceTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
 
 		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen delete sqls failed, originTable: %v, targetTable: %v", originTable, targetTable)
+			return terror.Annotatef(err, "gen delete sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
 		metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenDeleteRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = del
@@ -2286,7 +2286,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if keys != nil {
 			key = keys[i]
 		}
-		err = s.commitJob(jobType, originTable, targetTable, sqls[i], arg, key, &ec)
+		err = s.commitJob(jobType, sourceTable, targetTable, sqls[i], arg, key, &ec)
 		if err != nil {
 			return err
 		}
