@@ -1059,9 +1059,11 @@ type TaskConfigForDowngrade struct {
 	EnableANSIQuotes        bool                           `yaml:"ansi-quotes"`
 	RemoveMeta              bool                           `yaml:"remove-meta"`
 	// new config item
-	MySQLInstances []*MySQLInstanceForDowngrade `yaml:"mysql-instances"`
-	ExprFilter     map[string]*ExpressionFilter `yaml:"expression-filter,omitempty"`
-	OnlineDDL      bool                         `yaml:"online-ddl,omitempty"`
+	MySQLInstances   []*MySQLInstanceForDowngrade `yaml:"mysql-instances"`
+	ExprFilter       map[string]*ExpressionFilter `yaml:"expression-filter,omitempty"`
+	OnlineDDL        bool                         `yaml:"online-ddl,omitempty"`
+	ShadowTableRules []string                     `yaml:"shadow-table-rules" toml:"shadow-table-rules" json:"shadow-table-rules"`
+	TrashTableRules  []string                     `yaml:"trash-table-rules" toml:"trash-table-rules" json:"trash-table-rules"`
 }
 
 // NewTaskConfigForDowngrade create new TaskConfigForDowngrade.
@@ -1094,6 +1096,8 @@ func NewTaskConfigForDowngrade(taskConfig *TaskConfig) *TaskConfigForDowngrade {
 		MySQLInstances:          NewMySQLInstancesForDowngrade(taskConfig.MySQLInstances),
 		ExprFilter:              taskConfig.ExprFilter,
 		OnlineDDL:               taskConfig.OnlineDDL,
+		ShadowTableRules:        taskConfig.ShadowTableRules,
+		TrashTableRules:         taskConfig.TrashTableRules,
 	}
 }
 
