@@ -158,10 +158,26 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 	// test binlog filter
 	filterRules := []*bf.BinlogEventRule{
 		{
+			// rule 1
 			SchemaPattern: "*",
 			TablePattern:  "",
 			Events:        []bf.EventType{bf.DropTable},
 			SQLPattern:    []string{"^drop\\s+table"},
+			Action:        bf.Ignore,
+		}, {
+			// rule 2
+			SchemaPattern: "foo*",
+			TablePattern:  "",
+			Events:        []bf.EventType{bf.CreateTable},
+			SQLPattern:    []string{"^create\\s+table"},
+			Action:        bf.Do,
+		}, {
+			// rule 3
+			// compare to rule 2, finer granularity has higher priority
+			SchemaPattern: "foo*",
+			TablePattern:  "bar*",
+			Events:        []bf.EventType{bf.CreateTable},
+			SQLPattern:    []string{"^create\\s+table"},
 			Action:        bf.Ignore,
 		},
 	}
@@ -187,10 +203,15 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 			bf.DropTable,
 			true,
 		}, {
-			"create table tx.test (id int)",
-			&filter.Table{Schema: "tx", Name: "test"},
+			"create table foo.test (id int)",
+			&filter.Table{Schema: "foo", Name: "test"},
 			bf.CreateTable,
 			false,
+		}, {
+			"create table foo.bar (id int)",
+			&filter.Table{Schema: "foo", Name: "bar"},
+			bf.CreateTable,
+			true,
 		}, {
 			// test balist
 			"create table s1.test (id int)",
