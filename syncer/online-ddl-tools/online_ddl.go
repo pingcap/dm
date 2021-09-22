@@ -386,10 +386,8 @@ type RealOnlinePlugin struct {
 
 // NewRealOnlinePlugin returns real online plugin.
 func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
-	var (
-		shadowRegs []*regexp.Regexp
-		trashRegs  []*regexp.Regexp
-	)
+	shadowRegs := make([]*regexp.Regexp, 0, len(cfg.ShadowTableRule))
+	trashRegs := make([]*regexp.Regexp, 0, len(cfg.TrashTableRule))
 	for _, sg := range cfg.ShadowTableRule {
 		shadowReg, err := regexp.Compile(sg)
 		if err != nil {

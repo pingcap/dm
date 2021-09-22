@@ -16,12 +16,12 @@ package mode
 import (
 	"sync"
 
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/tidb-tools/pkg/filter"
 )
 
 // SafeMode controls whether enable safe-mode through a mechanism similar to reference-count
