@@ -500,7 +500,7 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		c.Assert(sqls[0], Equals, newSQL)
 		tableName := &filter.Table{Schema: "test", Name: ca.ghostname}
 		c.Assert(tables, DeepEquals, map[string]*filter.Table{tableName.String(): tableName})
-		fakeMysqlServer.Close()
+		fakeMysqlServer.Listener.Shutdown()
 	}
 }
 
