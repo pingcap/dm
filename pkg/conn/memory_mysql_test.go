@@ -27,7 +27,6 @@ var _ = check.Suite(&testMemoryMysqlSuite{})
 type testMemoryMysqlSuite struct{}
 
 func (t *testMemoryMysqlSuite) TestNewMemoryMysqlServer(c *check.C) {
-
 	dbCfg := config.GetDBConfigFromEnv()
 	freePortStr := tempurl.Alloc()[len("http://127.0.0.1:"):]
 	freePort, err := strconv.Atoi(freePortStr)
