@@ -42,13 +42,13 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 	if err != nil {
 		return parseDDLResult{
 			stmt:     nil,
-			needSkip: false,
+			needSkip: needSkip,
 			isDDL:    false,
 		}, err
 	} else if needSkip {
 		return parseDDLResult{
 			stmt:     nil,
-			needSkip: true,
+			needSkip: needSkip,
 			isDDL:    false,
 		}, nil
 	}
