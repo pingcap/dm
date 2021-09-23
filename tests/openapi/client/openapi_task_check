@@ -18,7 +18,7 @@ def start_task_failed():
         "shard_mode": "pessimistic_xxd",  # pessimistic_xxd is not a valid shard mode
         "meta_schema": "dm-meta",
         "enhance_online_schema_change": True,
-        "on_duplication": "error",
+        "on_duplicate": "error",
         "target_config": {
             "host": "127.0.0.1",
             "port": 4000,
@@ -62,7 +62,7 @@ def start_noshard_task_success():
         "shard_mode": "pessimistic",
         "meta_schema": "dm-meta",
         "enhance_online_schema_change": True,
-        "on_duplication": "error",
+        "on_duplicate": "error",
         "target_config": {
             "host": "127.0.0.1",
             "port": 4000,
@@ -106,7 +106,7 @@ def start_shard_task_success():
         "shard_mode": "pessimistic",
         "meta_schema": "dm-meta",
         "enhance_online_schema_change": True,
-        "on_duplication": "error",
+        "on_duplicate": "error",
         "target_config": {
             "host": "127.0.0.1",
             "port": 4000,
@@ -139,7 +139,7 @@ def start_shard_task_success():
                 {"source_name": SOURCE2_NAME},
             ],
         },
-        "event_filter_rule": [
+        "binlog_filter_rule": [
             {
                 "rule_name": "rule-1",
                 "ignore_event": ["delete"],
