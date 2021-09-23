@@ -1062,8 +1062,8 @@ type TaskConfigForDowngrade struct {
 	MySQLInstances   []*MySQLInstanceForDowngrade `yaml:"mysql-instances"`
 	ExprFilter       map[string]*ExpressionFilter `yaml:"expression-filter,omitempty"`
 	OnlineDDL        bool                         `yaml:"online-ddl,omitempty"`
-	ShadowTableRules []string                     `yaml:"shadow-table-rules" toml:"shadow-table-rules" json:"shadow-table-rules"`
-	TrashTableRules  []string                     `yaml:"trash-table-rules" toml:"trash-table-rules" json:"trash-table-rules"`
+	ShadowTableRules []string                     `yaml:"shadow-table-rules,omitempty"`
+	TrashTableRules  []string                     `yaml:"trash-table-rules,omitempty"`
 }
 
 // NewTaskConfigForDowngrade create new TaskConfigForDowngrade.
@@ -1109,6 +1109,12 @@ func (c *TaskConfigForDowngrade) omitDefaultVals() {
 		if timeZone, ok := c.TargetDB.Session["time_zone"]; ok && timeZone == defaultTimeZone {
 			delete(c.TargetDB.Session, "time_zone")
 		}
+	}
+	if len(c.ShadowTableRules) == 1 && c.ShadowTableRules[0] == DefaultShadowTableRules {
+		c.ShadowTableRules = nil
+	}
+	if len(c.TrashTableRules) == 1 && c.TrashTableRules[0] == DefaultTrashTableRules {
+		c.TrashTableRules = nil
 	}
 }
 
