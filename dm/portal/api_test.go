@@ -70,6 +70,10 @@ func (t *testPortalSuite) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 }
 
+func (t *testPortalSuite) TearDownSuite(c *C) {
+	t.mockCluster.Stop()
+}
+
 func (t *testPortalSuite) initTaskCfg() {
 	t.taskConfig = &DMTaskConfig{
 		Name:     "unit-test",
@@ -147,7 +151,6 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	resp := httptest.NewRecorder()
 
 	// will connection to database failed
-
 	t.portalHandler.Check(resp, req)
 	c.Log("resp", resp)
 	c.Assert(resp.Code, Equals, http.StatusBadRequest)
