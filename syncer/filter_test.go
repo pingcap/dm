@@ -51,7 +51,17 @@ func (s *testFilterSuite) TearDownSuite(c *C) {
 }
 
 func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
-	syncer := &Syncer{}
+	cfg := &config.SubTaskConfig{
+		BAList: &filter.Rules{
+			IgnoreDBs:    []string{"s1"},
+			IgnoreTables: []*filter.Table{{Schema: "s1", Name: "test"}},
+		},
+	}
+	syncer := NewSyncer(cfg, nil)
+	var err error
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
+	c.Assert(err, IsNil)
+
 	// test binlog filter
 	filterRules := []*bf.BinlogEventRule{
 		{
@@ -62,7 +72,6 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 			Action:        bf.Ignore,
 		},
 	}
-	var err error
 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, filterRules)
 	c.Assert(err, IsNil)
 
@@ -84,6 +93,14 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 		}, {
 			"create table foo.test (id int)",
 			[]*filter.Table{{Schema: "foo", Name: "test"}},
+			true,
+		}, {
+			"rename table s1.test to s1.test1",
+			[]*filter.Table{{Schema: "s1", Name: "test"}, {Schema: "s1", Name: "test1"}},
+			true,
+		}, {
+			"rename table s1.test1 to s1.test",
+			[]*filter.Table{{Schema: "s1", Name: "test1"}, {Schema: "s1", Name: "test"}},
 			true,
 		},
 	}
