@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/tidb/expression"
 	"go.uber.org/zap"
 
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -100,22 +101,29 @@ RowLoop:
 }
 
 func (s *Syncer) genUpdateSQLs(
+	tctx *tcontext.Context,
 	param *genDMLParam,
 	oldValueFilters []expression.Expression,
 	newValueFilters []expression.Expression,
 ) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		qualifiedName       = dbutil.TableName(param.schema, param.table)
-		data                = param.data
-		originalData        = param.originalData
-		columns             = param.columns
-		ti                  = param.originalTableInfo
-		defaultIndexColumns = findFitIndex(ti)
-		replaceSQL          string // `REPLACE INTO` SQL
-		sqls                = make([]string, 0, len(data)/2)
-		keys                = make([][]string, 0, len(data)/2)
-		values              = make([][]interface{}, 0, len(data)/2)
+		qualifiedName = dbutil.TableName(param.schema, param.table)
+		data          = param.data
+		originalData  = param.originalData
+		columns       = param.columns
+		ti            = param.originalTableInfo
+		// defaultIndexColumns = findFitIndex(ti)
+		replaceSQL string // `REPLACE INTO` SQL
+		sqls       = make([]string, 0, len(data)/2)
+		keys       = make([][]string, 0, len(data)/2)
+		values     = make([][]interface{}, 0, len(data)/2)
 	)
+
+	// if downstream pk exits, then use downstream pk
+	defaultIndexColumns, err := s.schemaTracker.GetToIndexInfo(param.schema, param.table, ti, tctx, s.cfg.Name, s.ddlDBConn.BaseConn)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	if param.safeMode {
 		replaceSQL = genInsertReplace("REPLACE INTO", qualifiedName, columns)
@@ -167,7 +175,8 @@ RowLoop:
 		}
 
 		if defaultIndexColumns == nil {
-			defaultIndexColumns = getAvailableIndexColumn(ti, oriOldValues)
+			// defaultIndexColumns = getAvailableIndexColumn(ti, oriOldValues)
+			defaultIndexColumns = s.schemaTracker.GetAvailableUKToIndexInfo(param.schema, param.table, ti, oriOldValues)
 		}
 
 		ks := genMultipleKeys(ti, oriOldValues, qualifiedName)
@@ -218,16 +227,22 @@ RowLoop:
 	return sqls, keys, values, nil
 }
 
-func (s *Syncer) genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
+func (s *Syncer) genDeleteSQLs(tctx *tcontext.Context, param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		qualifiedName       = dbutil.TableName(param.schema, param.table)
-		dataSeq             = param.originalData
-		ti                  = param.originalTableInfo
-		defaultIndexColumns = findFitIndex(ti)
-		sqls                = make([]string, 0, len(dataSeq))
-		keys                = make([][]string, 0, len(dataSeq))
-		values              = make([][]interface{}, 0, len(dataSeq))
+		qualifiedName = dbutil.TableName(param.schema, param.table)
+		dataSeq       = param.originalData
+		ti            = param.originalTableInfo
+		// defaultIndexColumns = findFitIndex(ti)
+		sqls   = make([]string, 0, len(dataSeq))
+		keys   = make([][]string, 0, len(dataSeq))
+		values = make([][]interface{}, 0, len(dataSeq))
 	)
+
+	// if downstream pk exits, then use downstream pk
+	defaultIndexColumns, err := s.schemaTracker.GetToIndexInfo(param.schema, param.table, ti, tctx, s.cfg.Name, s.ddlDBConn.BaseConn)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 RowLoop:
 	for _, data := range dataSeq {
@@ -249,8 +264,10 @@ RowLoop:
 		}
 
 		if defaultIndexColumns == nil {
-			defaultIndexColumns = getAvailableIndexColumn(ti, value)
+			// defaultIndexColumns = getAvailableIndexColumn(ti, value)
+			defaultIndexColumns = s.schemaTracker.GetAvailableUKToIndexInfo(param.schema, param.table, ti, value)
 		}
+
 		ks := genMultipleKeys(ti, value, qualifiedName)
 
 		sql, value := genDeleteSQL(qualifiedName, value, ti.Columns, defaultIndexColumns)
@@ -498,13 +515,13 @@ func findFitIndex(ti *model.TableInfo) *model.IndexInfo {
 	return getSpecifiedIndexColumn(ti, fn)
 }
 
-func getAvailableIndexColumn(ti *model.TableInfo, data []interface{}) *model.IndexInfo {
-	fn := func(i int) bool {
-		return data[i] == nil
-	}
+// func getAvailableIndexColumn(ti *model.TableInfo, data []interface{}) *model.IndexInfo {
+// 	fn := func(i int) bool {
+// 		return data[i] == nil
+// 	}
 
-	return getSpecifiedIndexColumn(ti, fn)
-}
+// 	return getSpecifiedIndexColumn(ti, fn)
+// }
 
 func getSpecifiedIndexColumn(ti *model.TableInfo, fn func(i int) bool) *model.IndexInfo {
 	for _, indexCols := range ti.Indices {
