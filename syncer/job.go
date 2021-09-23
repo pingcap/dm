@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/pkg/binlog"
-	"github.com/pingcap/tidb-tools/pkg/filter"
 )
 
 type opType byte
