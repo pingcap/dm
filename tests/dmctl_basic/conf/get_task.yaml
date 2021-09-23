@@ -63,6 +63,8 @@ mysql-instances:
   syncer: null
   syncer-thread: 0
 online-ddl: false
+shadow-table-rules: []
+trash-table-rules: []
 online-ddl-scheme: ""
 routes:
   route-01:
