@@ -44,6 +44,20 @@ var _ = Suite(&testDDLSuite{})
 
 type testDDLSuite struct{}
 
+func (s *testDDLSuite) newSubTaskCfg(dbCfg config.DBConfig) *config.SubTaskConfig {
+	return &config.SubTaskConfig{
+		From:             dbCfg,
+		To:               dbCfg,
+		ServerID:         101,
+		MetaSchema:       "test",
+		Name:             "syncer_ut",
+		Mode:             config.ModeIncrement,
+		Flavor:           "mysql",
+		ShadowTableRules: []string{config.DefaultShadowTableRules},
+		TrashTableRules:  []string{config.DefaultTrashTableRules},
+	}
+}
+
 func (s *testDDLSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.Parser, error) {
 	mock.ExpectQuery("SHOW VARIABLES LIKE").
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
@@ -429,9 +443,7 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveOnlineDDL")))
 	p := parser.New()
 
-	ec := eventContext{
-		tctx: tctx,
-	}
+	ec := eventContext{tctx: tctx}
 	cluster, err := mock.NewCluster()
 	c.Assert(err, IsNil)
 	c.Assert(cluster.Start(), IsNil)
@@ -442,15 +454,7 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	dbCfg := config.GetDBConfigFromEnv()
 	dbCfg.Port = mockClusterPort
 	dbCfg.Password = ""
-	cfg := &config.SubTaskConfig{
-		From:       dbCfg,
-		To:         dbCfg,
-		ServerID:   101,
-		MetaSchema: "test",
-		Name:       "syncer_ut",
-		Mode:       config.ModeIncrement,
-		Flavor:     "mysql",
-	}
+	cfg := s.newSubTaskCfg(dbCfg)
 	for _, ca := range cases {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
@@ -509,16 +513,8 @@ func (s *testDDLSuite) TestDropSchemaInSharding(c *C) {
 		source2  = "`db1`.`tbl2`"
 		tctx     = tcontext.Background()
 	)
-
-	cfg := &config.SubTaskConfig{
-		From:       config.GetDBConfigFromEnv(),
-		To:         config.GetDBConfigFromEnv(),
-		ServerID:   101,
-		MetaSchema: "test",
-		Name:       "syncer_ut",
-		Mode:       config.ModeIncrement,
-		Flavor:     "mysql",
-	}
+	dbCfg := config.GetDBConfigFromEnv()
+	cfg := s.newSubTaskCfg(dbCfg)
 	cfg.ShardMode = config.ShardPessimistic
 	syncer := NewSyncer(cfg, nil)
 	// nolint:dogsled
@@ -544,17 +540,8 @@ func (s *testDDLSuite) TestClearOnlineDDL(c *C) {
 		key2    = "db1tbl2"
 		tctx    = tcontext.Background()
 	)
-
-	cfg := &config.SubTaskConfig{
-		From:       config.GetDBConfigFromEnv(),
-		To:         config.GetDBConfigFromEnv(),
-		ServerID:   101,
-		MetaSchema: "test",
-		Name:       "syncer_ut",
-		Mode:       config.ModeIncrement,
-		Flavor:     "mysql",
-	}
-
+	dbCfg := config.GetDBConfigFromEnv()
+	cfg := s.newSubTaskCfg(dbCfg)
 	cfg.ShardMode = config.ShardPessimistic
 	syncer := NewSyncer(cfg, nil)
 	mock := mockOnlinePlugin{

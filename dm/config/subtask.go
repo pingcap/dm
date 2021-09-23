@@ -374,7 +374,6 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		c.OnlineDDL = true
 		log.L().Warn("'online-ddl-scheme' will be deprecated soon. Recommend that use online-ddl instead of online-ddl-scheme.")
 	}
-
 	if len(c.ShadowTableRules) == 0 {
 		c.ShadowTableRules = []string{DefaultShadowTableRules}
 	} else {
