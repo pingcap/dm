@@ -53,7 +53,6 @@ func (s *testFilterSuite) TearDownSuite(c *C) {
 func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 	cfg := &config.SubTaskConfig{
 		BAList: &filter.Rules{
-			IgnoreDBs:    []string{"s1"},
 			IgnoreTables: []*filter.Table{{Schema: "s1", Name: "test"}},
 		},
 	}
@@ -102,6 +101,10 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 			"rename table s1.test1 to s1.test",
 			[]*filter.Table{{Schema: "s1", Name: "test1"}, {Schema: "s1", Name: "test"}},
 			true,
+		}, {
+			"rename table s1.test1 to s1.test2",
+			[]*filter.Table{{Schema: "s1", Name: "test1"}, {Schema: "s1", Name: "test2"}},
+			false,
 		},
 	}
 	p := parser.New()
