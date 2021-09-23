@@ -648,6 +648,8 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 			IsSharding:              true,
 			ShardMode:               shardMode,
 			OnlineDDL:               onlineDDL,
+			ShadowTableRules:        []string{DefaultShadowTableRules},
+			TrashTableRules:         []string{DefaultTrashTableRules},
 			CaseSensitive:           true,
 			Name:                    name,
 			Mode:                    taskMode,
