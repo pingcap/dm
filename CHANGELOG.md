@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Improvements
 
 - Disable background statistic job in schema tracker to reduce CPU consumption [#2065](https://github.com/pingcap/dm/pull/2065)
-- Support regular expressions rules for Online DDL shadow and trash tables [#2139](https://github.com/pingcap/dm/pull/2139)
+- Support regular expressions rules for online DDL shadow and trash tables [#2139](https://github.com/pingcap/dm/pull/2139)
 
 ### Known issues
 
