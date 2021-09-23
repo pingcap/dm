@@ -400,6 +400,7 @@ function run() {
 		"resume-relay -s mysql-replica-01" \
 		"\"result\": true" 2
 
+	sleep 2
 	# relay should continue pulling from syncer's checkpoint, so only pull the latest binlog
 	server_uuid=$(tail -n 1 $WORK_DIR/worker1/relay_log/server-uuid.index)
 	echo "relay logs $(ls $WORK_DIR/worker1/relay_log/$server_uuid)"
