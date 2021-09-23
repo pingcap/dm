@@ -1066,6 +1066,12 @@ description = ""
 workaround = "Please check the `chunk-filesize` config in task configuration file."
 tags = ["internal", "high"]
 
+[error.DM-config-20048]
+message = "config '%s' regex pattern '%s' invalid, reason: %s"
+description = ""
+workaround = "Please check if params is correctly in the configuration file."
+tags = ["internal", "high"]
+
 [error.DM-binlog-op-22001]
 message = ""
 description = ""

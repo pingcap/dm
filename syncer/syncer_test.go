@@ -136,14 +136,16 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		Dir: loaderDir,
 	}
 	s.cfg = &config.SubTaskConfig{
-		From:         getDBConfigFromEnv(),
-		To:           getDBConfigFromEnv(),
-		ServerID:     101,
-		MetaSchema:   "test",
-		Name:         "syncer_ut",
-		Mode:         config.ModeIncrement,
-		Flavor:       "mysql",
-		LoaderConfig: loaderCfg,
+		From:             getDBConfigFromEnv(),
+		To:               getDBConfigFromEnv(),
+		ServerID:         101,
+		MetaSchema:       "test",
+		Name:             "syncer_ut",
+		ShadowTableRules: []string{config.DefaultShadowTableRules},
+		TrashTableRules:  []string{config.DefaultTrashTableRules},
+		Mode:             config.ModeIncrement,
+		Flavor:           "mysql",
+		LoaderConfig:     loaderCfg,
 	}
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
