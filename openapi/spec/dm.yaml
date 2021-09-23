@@ -507,7 +507,7 @@ components:
         - "port"
         - "user"
         - "password"
-    TaskEventFilterRule:
+    TaskBinLogFilterRule:
       description: "Filtering rules at binlog level"
       type: object
       properties:
@@ -826,7 +826,7 @@ components:
           example: true
           description: whether to enable support for the online ddl plugin
           default: true
-        on_duplication:
+        on_duplicate:
           type: string
           description: "how to handle conflicted data"
           enum:
@@ -834,11 +834,11 @@ components:
             - "error"
         target_config:
           $ref: "#/components/schemas/TaskTargetDataBase"
-        event_filter_rule:
+        binlog_filter_rule:
           type: array
-          description: "binlog event filter rule set"
+          description: "binlog filter rule set"
           items:
-            $ref: "#/components/schemas/TaskEventFilterRule"
+            $ref: "#/components/schemas/TaskBinLogFilterRule"
         table_migrate_rule:
           type: array
           description: "table migrate rule"
@@ -850,7 +850,7 @@ components:
         - "name"
         - "task_mode"
         - "enhance_online_schema_change"
-        - "on_duplication"
+        - "on_duplicate"
         - "target_config"
         - "table_migrate_rule"
         - "source_config"

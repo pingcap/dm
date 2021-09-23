@@ -442,8 +442,8 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 	}
 	// rule name -> rule template
 	eventFilterTemplateMap := make(map[string]bf.BinlogEventRule)
-	if task.EventFilterRule != nil {
-		for _, rule := range *task.EventFilterRule {
+	if task.BinlogFilterRule != nil {
+		for _, rule := range *task.BinlogFilterRule {
 			ruleT := bf.BinlogEventRule{Action: bf.Ignore}
 			if rule.IgnoreEvent != nil {
 				events := make([]bf.EventType, len(*rule.IgnoreEvent))
@@ -558,7 +558,7 @@ func adjustModelTask(task *openapi.Task) error {
 		task.MetaSchema = &defaultMetaSchema
 	}
 	// check some not implemented features
-	if task.OnDuplication != openapi.TaskOnDuplicationError {
+	if task.OnDuplicate != openapi.TaskOnDuplicateError {
 		return terror.ErrOpenAPICommonError.Generate("`on_duplicate` only supports `error` for now.")
 	}
 	return nil

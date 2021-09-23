@@ -516,7 +516,7 @@ func genNoShardTask() openapi.Task {
 		Name:                      taskName,
 		MetaSchema:                &metaSchema,
 		TaskMode:                  openapi.TaskTaskModeAll,
-		OnDuplication:             openapi.TaskOnDuplicationError,
+		OnDuplicate:               openapi.TaskOnDuplicateError,
 		TargetConfig: openapi.TaskTargetDataBase{
 			Host:     "root",
 			Password: "123456",
@@ -609,13 +609,13 @@ func genShardAndFilterTask() openapi.Task {
 	}
 	ignoreEvent := []string{shardSource1FilterEvent}
 	ignoreSQL := []string{shardSource1FilterSQL}
-	eventFilterRule := openapi.TaskEventFilterRule{
+	eventFilterRule := openapi.TaskBinLogFilterRule{
 		IgnoreEvent: &ignoreEvent,
 		IgnoreSql:   &ignoreSQL,
 		RuleName:    shardSource1FilterName,
 	}
 	eventFilterNameList := []string{"filterA"}
-	eventFilterList := []openapi.TaskEventFilterRule{eventFilterRule}
+	eventFilterList := []openapi.TaskBinLogFilterRule{eventFilterRule}
 	tableMigrateRule1 := openapi.TaskTableMigrateRule{
 		EventFilterName: &eventFilterNameList,
 		Source: struct {
@@ -661,8 +661,8 @@ func genShardAndFilterTask() openapi.Task {
 		Name:                      taskName,
 		MetaSchema:                &metaSchema,
 		TaskMode:                  openapi.TaskTaskModeAll,
-		OnDuplication:             openapi.TaskOnDuplicationError,
-		EventFilterRule:           &eventFilterList,
+		OnDuplicate:               openapi.TaskOnDuplicateError,
+		BinlogFilterRule:          &eventFilterList,
 		TargetConfig: openapi.TaskTargetDataBase{
 			Host:     "root",
 			Password: "123456",
