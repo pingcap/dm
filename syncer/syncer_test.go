@@ -721,13 +721,8 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 	mapping, err := cm.NewMapping(false, rules)
 	c.Assert(err, IsNil)
 
-<<<<<<< HEAD
-	// nolint:gocritic
-	allEvents := append(createEvents, dmlEvents...)
-=======
 	allEvents := createEvents
 	allEvents = append(allEvents, dmlEvents...)
->>>>>>> f0b171389 (*: update tools and fix lint (#2158))
 	allEvents = append(allEvents, dropEvents...)
 	dmlIndex := 0
 	for _, e := range allEvents {
@@ -1373,13 +1368,8 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	}
 	generatedEvents2 := s.generateEvents(events2, c)
 
-<<<<<<< HEAD
-	// nolint:gocritic
-	generatedEvents := append(generatedEvents1, generatedEvents2...)
-=======
 	generatedEvents := generatedEvents1
 	generatedEvents = append(generatedEvents, generatedEvents2...)
->>>>>>> f0b171389 (*: update tools and fix lint (#2158))
 
 	mockStreamerProducer := &MockStreamProducer{generatedEvents}
 	mockStreamer, err := mockStreamerProducer.generateStreamer(binlog.NewLocation(""))
