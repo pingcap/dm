@@ -16,7 +16,7 @@ package onlineddl
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
+	"regexp"
 	"sync"
 
 	"github.com/pingcap/failpoint"
@@ -46,10 +46,10 @@ type OnlinePlugin interface {
 	// * detect online ddl
 	// * record changes
 	// * apply online ddl on real table
-	// returns sqls, replaced/self schema, replaced/self table, error
-	Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error)
+	// returns sqls, error
+	Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error)
 	// Finish would delete online ddl from memory and storage
-	Finish(tctx *tcontext.Context, schema, table string) error
+	Finish(tctx *tcontext.Context, table *filter.Table) error
 	// TableType returns ghhost/real table
 	TableType(table string) TableType
 	// RealName returns real table name that removed ghost suffix and handled by table router
@@ -379,23 +379,43 @@ func (s *Storage) CheckAndUpdate(
 // (_*).*_old ghost trash table
 // we don't support `--new-table-name` flag.
 type RealOnlinePlugin struct {
-	storage *Storage
+	storage    *Storage
+	shadowRegs []*regexp.Regexp
+	trashRegs  []*regexp.Regexp
 }
 
 // NewRealOnlinePlugin returns real online plugin.
 func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
+	shadowRegs := make([]*regexp.Regexp, 0, len(cfg.ShadowTableRules))
+	trashRegs := make([]*regexp.Regexp, 0, len(cfg.TrashTableRules))
+	for _, sg := range cfg.ShadowTableRules {
+		shadowReg, err := regexp.Compile(sg)
+		if err != nil {
+			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate("shadow-table-rules", sg, "fail to compile: "+err.Error())
+		}
+		shadowRegs = append(shadowRegs, shadowReg)
+	}
+	for _, tg := range cfg.TrashTableRules {
+		trashReg, err := regexp.Compile(tg)
+		if err != nil {
+			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate("trash-table-rules", tg, "fail to compile: "+err.Error())
+		}
+		trashRegs = append(trashRegs, trashReg)
+	}
 	r := &RealOnlinePlugin{
-		storage: NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
+		storage:    NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
+		shadowRegs: shadowRegs,
+		trashRegs:  trashRegs,
 	}
 
 	return r, r.storage.Init(tctx)
 }
 
 // Apply implements interface.
-// returns ddls, real schema, real table, error.
-func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
+// returns ddls, error.
+func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error) {
 	if len(tables) < 1 {
-		return nil, "", "", terror.ErrSyncerUnitGhostApplyEmptyTable.Generate()
+		return nil, terror.ErrSyncerUnitGhostApplyEmptyTable.Generate()
 	}
 
 	schema, table := tables[0].Schema, tables[0].Name
@@ -406,27 +426,27 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 	case RealTable:
 		if _, ok := stmt.(*ast.RenameTableStmt); ok {
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
-				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+				return nil, terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
 			}
 
 			tp1 := r.TableType(tables[1].Name)
 			if tp1 == TrashTable {
-				return nil, "", "", nil
+				return nil, nil
 			} else if tp1 == GhostTable {
-				return nil, "", "", terror.ErrSyncerUnitGhostRenameToGhostTable.Generate(statement)
+				return nil, terror.ErrSyncerUnitGhostRenameToGhostTable.Generate(statement)
 			}
 		}
-		return []string{statement}, schema, table, nil
+		return []string{statement}, nil
 	case TrashTable:
 		// ignore TrashTable
 		if _, ok := stmt.(*ast.RenameTableStmt); ok {
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
-				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+				return nil, terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
 			}
 
 			tp1 := r.TableType(tables[1].Name)
 			if tp1 == GhostTable {
-				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
+				return nil, terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
 			}
 		}
 	case GhostTable:
@@ -435,64 +455,65 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 		case *ast.CreateTableStmt:
 			err := r.storage.Delete(tctx, schema, table)
 			if err != nil {
-				return nil, "", "", err
+				return nil, err
 			}
 		case *ast.DropTableStmt:
 			err := r.storage.Delete(tctx, schema, table)
 			if err != nil {
-				return nil, "", "", err
+				return nil, err
 			}
 		case *ast.RenameTableStmt:
 			if len(tables) != parserpkg.SingleRenameTableNameNum {
-				return nil, "", "", terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
+				return nil, terror.ErrSyncerUnitGhostRenameTableNotValid.Generate()
 			}
 
 			tp1 := r.TableType(tables[1].Name)
 			if tp1 == RealTable {
 				ghostInfo := r.storage.Get(schema, table)
 				if ghostInfo != nil {
-					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
+					return ghostInfo.DDLs, nil
 				}
-				return nil, "", "", terror.ErrSyncerUnitGhostOnlineDDLOnGhostTbl.Generate(schema, table)
+				return nil, terror.ErrSyncerUnitGhostOnlineDDLOnGhostTbl.Generate(schema, table)
 			} else if tp1 == GhostTable {
-				return nil, "", "", terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
+				return nil, terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
 			}
 
 			// rename ghost table to trash table
 			err := r.storage.Delete(tctx, schema, table)
 			if err != nil {
-				return nil, "", "", err
+				return nil, err
 			}
 
 		default:
 			err := r.storage.Save(tctx, schema, table, schema, targetTable, statement)
 			if err != nil {
-				return nil, "", "", err
+				return nil, err
 			}
 		}
 	}
-
-	return nil, schema, table, nil
+	return nil, nil
 }
 
 // Finish implements interface.
-func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) error {
+func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, table *filter.Table) error {
 	if r == nil {
 		return nil
 	}
 
-	return r.storage.Delete(tctx, schema, table)
+	return r.storage.Delete(tctx, table.Schema, table.Name)
 }
 
 // TableType implements interface.
 func (r *RealOnlinePlugin) TableType(table string) TableType {
 	// 5 is _ _gho/ghc/del or _ _old/new
-	if len(table) > 5 && strings.HasPrefix(table, "_") {
-		if strings.HasSuffix(table, "_gho") || strings.HasSuffix(table, "_new") {
+	for _, shadowReg := range r.shadowRegs {
+		if shadowReg.MatchString(table) {
 			return GhostTable
 		}
+	}
 
-		if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") || strings.HasSuffix(table, "_old") {
+	for _, trashReg := range r.trashRegs {
+		if trashReg.MatchString(table) {
 			return TrashTable
 		}
 	}
@@ -501,9 +522,18 @@ func (r *RealOnlinePlugin) TableType(table string) TableType {
 
 // RealName implements interface.
 func (r *RealOnlinePlugin) RealName(table string) string {
-	tp := r.TableType(table)
-	if tp == GhostTable || tp == TrashTable {
-		table = table[1 : len(table)-4]
+	for _, shadowReg := range r.shadowRegs {
+		shadowRes := shadowReg.FindStringSubmatch(table)
+		if len(shadowRes) > 1 {
+			return shadowRes[1]
+		}
+	}
+
+	for _, trashReg := range r.trashRegs {
+		trashRes := trashReg.FindStringSubmatch(table)
+		if len(trashRes) > 1 {
+			return trashRes[1]
+		}
 	}
 	return table
 }

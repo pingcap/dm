@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -28,29 +29,36 @@ const (
 	DefaultInitTimeout = time.Minute
 )
 
-// Unit defines interface for sub task process units, like syncer, loader, relay, etc.
+// Unit defines interface for subtask process units, like syncer, loader, relay, etc.
+// The Unit is not responsible to maintain its status like "pausing"/"paused". The caller should maintain the status,
+// for example, know the Unit is "paused" and avoid call Pause again.
+// All method is Unit interface can expect no concurrent invocation, the caller should guarantee this.
 type Unit interface {
 	// Init initializes the dm process unit
-	// every unit does base initialization in `Init`, and this must pass before start running the sub task
-	// other setups can be done in `Process`, but this should be treated carefully, let it's compatible with Pause / Resume
+	// every unit does base initialization in `Init`, and this must pass before start running the subtask
+	// other setups can be done in the beginning of `Process`, but this should be treated carefully to make it
+	// compatible with Pause / Resume.
 	// if initialing successfully, the outer caller should call `Close` when the unit (or the task) finished, stopped or canceled (because other units Init fail).
 	// if initialing fail, Init itself should release resources it acquired before (rolling itself back).
 	Init(ctx context.Context) error
-	// Process processes sub task
-	// When ctx.Done, stops the process and returns
+	// Process does the main logic and its returning must send a result to pr channel.
+	// When ctx.Done, stops the process and returns, otherwise the DM-worker will be blocked forever
 	// When not in processing, call Process to continue or resume the process
 	Process(ctx context.Context, pr chan pb.ProcessResult)
 	// Close shuts down the process and closes the unit, after that can not call Process to resume
+	// The implementation should not block for a long time.
 	Close()
-	// Pause pauses the process, it can be resumed later
+	// Pause does some cleanups and the unit can be resumed later. The caller will make sure Process has returned.
+	// The implementation should not block for a long time.
 	Pause()
-	// Resume resumes the paused process
+	// Resume resumes the paused process and its returning must send a result to pr channel.
 	Resume(ctx context.Context, pr chan pb.ProcessResult)
 	// Update updates the configuration
 	Update(cfg *config.SubTaskConfig) error
 
-	// Status returns the unit's current status
-	Status() interface{}
+	// Status returns the unit's current status. The result may need calculation with source status, like estimated time
+	// to catch up. If sourceStatus is nil, the calculation should be skipped.
+	Status(sourceStatus *binlog.SourceStatus) interface{}
 	// Type returns the unit's type
 	Type() pb.UnitType
 	// IsFreshTask return whether is a fresh task (not processed before)

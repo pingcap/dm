@@ -46,6 +46,12 @@ function test_session_config() {
 	run_sql_source1 "create table if not exists all_mode.t1 (c int); insert into all_mode.t1 (id, name) values (9, 'haha');"
 
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	run_sql_source1 "set session binlog_row_image = 'minimal'; update all_mode.t1 set name = 'hoho' where id = 9;"
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status $ILLEGAL_CHAR_NAME" \
+		"upstream didn't log enough columns in binlog" 1
+
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"stop-task $ILLEGAL_CHAR_NAME" \
 		"\"result\": true" 3
@@ -394,6 +400,7 @@ function run() {
 		"resume-relay -s mysql-replica-01" \
 		"\"result\": true" 2
 
+	sleep 2
 	# relay should continue pulling from syncer's checkpoint, so only pull the latest binlog
 	server_uuid=$(tail -n 1 $WORK_DIR/worker1/relay_log/server-uuid.index)
 	echo "relay logs $(ls $WORK_DIR/worker1/relay_log/$server_uuid)"

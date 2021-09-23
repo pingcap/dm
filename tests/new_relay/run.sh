@@ -10,6 +10,45 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 API_VERSION="v1alpha1"
 
+function test_kill_dump_connection() {
+	cleanup_data $TEST_NAME
+	cleanup_process
+
+	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	check_contains 'Query OK, 2 rows affected'
+
+	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+
+	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"start-relay -s $SOURCE_ID1 worker1" \
+		"\"result\": true" 1
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s $SOURCE_ID1" \
+		"\"result\": true" 2 \
+		"\"worker\": \"worker1\"" 1
+	run_sql_source1 "show processlist"
+
+	# kill dumop connection to test wheather relay will auto reconnect db
+	dump_conn_id=$(cat $TEST_DIR/sql_res.$TEST_NAME.txt | grep Binlog -B 4 | grep Id | cut -d : -f2)
+	run_sql_source1 "kill ${dump_conn_id}"
+
+	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s $SOURCE_ID1" \
+		"\"relayCatchUpMaster\": true" 1
+
+	cleanup_process
+	cleanup_data $TEST_NAME
+}
+
 function run() {
 	export GO_FAILPOINTS="github.com/pingcap/dm/relay/ReportRelayLogSpaceInBackground=return(1)"
 
@@ -124,7 +163,7 @@ function run() {
 
 	# check configs
 	sed '/password/d' /tmp/configs/tasks/test.yaml | diff $cur/configs/tasks/test.yaml - || exit 1
-	sed '/password/d' /tmp/configs/sources/mysql-replica-01.yaml | diff $cur/configs/sources/mysql-replica-01.yaml - || exit 1
+	sed '/password/d' /tmp/configs/sources/mysql-replica-01.yaml | diff -I '^case-sensitive*' $cur/configs/sources/mysql-replica-01.yaml - || exit 1
 	diff <(jq --sort-keys . /tmp/configs/relay_workers.json) <(jq --sort-keys . $cur/configs/relay_workers.json) || exit 1
 
 	# destroy cluster
@@ -159,12 +198,14 @@ function run() {
 		"\"result\": true" 2
 
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+	test_kill_dump_connection
 }
 
 cleanup_data $TEST_NAME
 # also cleanup dm processes in case of last run failed
-cleanup_process $*
-run $*
-cleanup_process $*
+cleanup_process
+run
+cleanup_process
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"

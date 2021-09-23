@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -209,7 +210,7 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 	for i, sql := range sqls {
 		result, err := syncer.parseDDLSQL(sql, p, "test")
 		c.Assert(err, IsNil)
-		c.Assert(result.ignore, IsFalse)
+		c.Assert(result.needSkip, IsFalse)
 		c.Assert(result.isDDL, IsTrue)
 
 		statements, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, "test")
@@ -229,98 +230,98 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 	cases := []struct {
 		sql      string
 		schema   string
-		ignore   bool
+		needSkip bool
 		isDDL    bool
 		hasError bool
 	}{
 		{
 			sql:      "FLUSH",
 			schema:   "",
-			ignore:   true,
+			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "BEGIN",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "CREATE TABLE do_db.do_table (c1 INT)",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    true,
 			hasError: false,
 		},
 		{
 			sql:      "INSERT INTO do_db.do_table VALUES (1)",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: true,
 		},
 		{
 			sql:      "INSERT INTO ignore_db.ignore_table VALUES (1)",
 			schema:   "",
-			ignore:   true,
+			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "UPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
 			schema:   "ignore_db",
-			ignore:   true,
+			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "DELETE FROM `ignore_table` WHERE c1=2",
 			schema:   "ignore_db",
-			ignore:   true,
+			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "SELECT * FROM ignore_db.ignore_table",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: true,
 		},
 		{
 			sql:      "#",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "# this is a comment",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "# a comment with DDL\nCREATE TABLE do_db.do_table (c1 INT)",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    true,
 			hasError: false,
 		},
 		{
 			sql:      "# a comment with DML\nUPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
 			schema:   "ignore_db",
-			ignore:   true,
+			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "NOT A SQL",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: true,
 		},
@@ -348,7 +349,7 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 		} else {
 			c.Assert(err, IsNil)
 		}
-		c.Assert(pr.ignore, Equals, cs.ignore)
+		c.Assert(pr.needSkip, Equals, cs.needSkip)
 		c.Assert(pr.isDDL, Equals, cs.isDDL)
 	}
 }
@@ -465,21 +466,23 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 
 func (s *testSyncerSuite) TestDropSchemaInSharding(c *C) {
 	var (
-		targetDB  = "target_db"
-		targetTbl = "tbl"
-		sourceDB  = "db1"
-		source1   = "`db1`.`tbl1`"
-		source2   = "`db1`.`tbl2`"
-		tctx      = tcontext.Background()
+		targetTable = &filter.Table{
+			Schema: "target_db",
+			Name:   "tbl",
+		}
+		sourceDB = "db1"
+		source1  = "`db1`.`tbl1`"
+		source2  = "`db1`.`tbl2`"
+		tctx     = tcontext.Background()
 	)
 	clone, _ := s.cfg.Clone()
 	clone.ShardMode = config.ShardPessimistic
 	syncer := NewSyncer(clone, nil)
 	// nolint:dogsled
-	_, _, _, _, err := syncer.sgk.AddGroup(targetDB, targetTbl, []string{source1}, nil, true)
+	_, _, _, _, err := syncer.sgk.AddGroup(targetTable, []string{source1}, nil, true)
 	c.Assert(err, IsNil)
 	// nolint:dogsled
-	_, _, _, _, err = syncer.sgk.AddGroup(targetDB, targetTbl, []string{source2}, nil, true)
+	_, _, _, _, err = syncer.sgk.AddGroup(targetTable, []string{source2}, nil, true)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.sgk.Groups(), HasLen, 2)
 	c.Assert(syncer.dropSchemaInSharding(tctx, sourceDB), IsNil)
@@ -490,21 +493,31 @@ type mockOnlinePlugin struct {
 	toFinish map[string]struct{}
 }
 
-func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
-	return nil, "", "", nil
+func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error) {
+	return nil, nil
 }
 
-func (m mockOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) error {
-	k := schema + table
-	if _, ok := m.toFinish[k]; !ok {
+func (m mockOnlinePlugin) Finish(tctx *tcontext.Context, table *filter.Table) error {
+	tableID := table.Schema + table.Name
+	if _, ok := m.toFinish[tableID]; !ok {
 		return errors.New("finish table not found")
 	}
-	delete(m.toFinish, schema+table)
+	delete(m.toFinish, tableID)
 	return nil
 }
 
 func (m mockOnlinePlugin) TableType(table string) onlineddl.TableType {
-	return ""
+	// 5 is _ _gho/ghc/del or _ _old/new
+	if len(table) > 5 && strings.HasPrefix(table, "_") {
+		if strings.HasSuffix(table, "_gho") || strings.HasSuffix(table, "_new") {
+			return onlineddl.GhostTable
+		}
+
+		if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") || strings.HasSuffix(table, "_old") {
+			return onlineddl.TrashTable
+		}
+	}
+	return onlineddl.RealTable
 }
 
 func (m mockOnlinePlugin) RealName(table string) string {
@@ -528,13 +541,15 @@ func (m mockOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[str
 
 func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
 	var (
-		targetDB  = "target_db"
-		targetTbl = "tbl"
-		source1   = "`db1`.`tbl1`"
-		key1      = "db1tbl1"
-		source2   = "`db1`.`tbl2`"
-		key2      = "db1tbl2"
-		tctx      = tcontext.Background()
+		targetTable = &filter.Table{
+			Schema: "target_db",
+			Name:   "tbl",
+		}
+		source1 = "`db1`.`tbl1`"
+		key1    = "db1tbl1"
+		source2 = "`db1`.`tbl2`"
+		key2    = "db1tbl2"
+		tctx    = tcontext.Background()
 	)
 	clone, _ := s.cfg.Clone()
 	clone.ShardMode = config.ShardPessimistic
@@ -545,12 +560,12 @@ func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
 	syncer.onlineDDL = mock
 
 	// nolint:dogsled
-	_, _, _, _, err := syncer.sgk.AddGroup(targetDB, targetTbl, []string{source1}, nil, true)
+	_, _, _, _, err := syncer.sgk.AddGroup(targetTable, []string{source1}, nil, true)
 	c.Assert(err, IsNil)
 	// nolint:dogsled
-	_, _, _, _, err = syncer.sgk.AddGroup(targetDB, targetTbl, []string{source2}, nil, true)
+	_, _, _, _, err = syncer.sgk.AddGroup(targetTable, []string{source2}, nil, true)
 	c.Assert(err, IsNil)
 
-	c.Assert(syncer.clearOnlineDDL(tctx, targetDB, targetTbl), IsNil)
+	c.Assert(syncer.clearOnlineDDL(tctx, targetTable), IsNil)
 	c.Assert(mock.toFinish, HasLen, 0)
 }

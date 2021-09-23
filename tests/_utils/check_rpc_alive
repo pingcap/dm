@@ -16,7 +16,7 @@ if [ $# == 5 ]; then
 fi
 
 i=0
-while [ $i -lt 10 ]; do
+while [ $i -lt 20 ]; do
 	bash -c "$check_tool $addr $ssl_ca $ssl_cert $ssl_key"
 	ret=$?
 	if [ "$ret" == 0 ]; then
@@ -28,7 +28,7 @@ while [ $i -lt 10 ]; do
 	sleep 1
 done
 
-if [ $i -ge 10 ]; then
+if [ $i -ge 20 ]; then
 	echo "rpc addr $addr check alive timeout"
 	exit 1
 fi

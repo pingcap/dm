@@ -6,36 +6,25 @@ cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
-function check_seconds_behind_master() {
-	min_val=$1
-	need_cnt=$2
-	all_matched=false
-
-	for ((k = 0; k < 10; k++)); do
-		$PWD/bin/dmctl.test DEVEL --master-addr=:$MASTER_PORT query-status "test" >$WORK_DIR/query-status.log
-		query_msg=$(cat $WORK_DIR/query-status.log)
-		cnt=$(echo "${query_msg}" | jq -r --arg min_val $min_val '.sources[].subTaskStatus[].sync | select((.secondsBehindMaster|tonumber)>($min_val | tonumber)).secondsBehindMaster' | wc -l)
-		if [ $cnt != $need_cnt ]; then
-			echo "check check_seconds_behind_master failed, cnt: $need_cnt current retry cnt: $k"
-		else
-			all_matched=true
-			break
-		fi
-		sleep 2
-	done
-
-	if $all_matched; then
-		echo "check check_seconds_behind_master success"
-	else
-		echo "check check_seconds_behind_master failed, cnt: $need_cnt after retry 10 times"
-		exit 1
-	fi
-
+function check_dashboard_datasource() {
+	echo "check dashboard datasource"
+	check_grafana_dashboard_datasource "dm/dm-ansible/scripts/DM-Monitor-Standard.json"
+	check_grafana_dashboard_datasource "dm/dm-ansible/scripts/DM-Monitor-Professional.json"
+	echo "check dashboard datasource success"
 }
 
 function run() {
+
+	check_dashboard_datasource
+
 	# add changeTickerInterval to keep metric from updating to zero too quickly when there is no work in the queue.
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/BlockSyncerUpdateLag=return(\"ddl,1\");github.com/pingcap/dm/syncer/changeTickerInterval=return(10)"
+	inject_points=(
+		"github.com/pingcap/dm/syncer/BlockDDLJob=return(1)"
+		"github.com/pingcap/dm/syncer/changeTickerInterval=return(10)"
+		"github.com/pingcap/dm/syncer/ShowLagInLog=return(1)" # test lag metric >= 1 beacuse we inject BlockDDLJob(ddl) to sleep(1)
+	)
+	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
+
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
@@ -71,21 +60,29 @@ function run() {
 	run_sql_source1 "alter table metrics.t1 add column new_col1 int;"
 	run_sql_source2 "alter table metrics.t2 add column new_col1 int;"
 
-	# test dml metric >= 1 beacuse we inject updateReplicationLag(ddl) to sleep(1)
+	# check two worker's lag >= 1
+	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker1/log/dm-worker.log
+	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker2/log/dm-worker.log
+
 	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 0 999
 	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 0 999
+	echo "check ddl lag done!"
 
 	# check new metric dm_syncer_flush_checkpoints_time_interval exists
 	check_metric $WORKER1_PORT 'dm_syncer_flush_checkpoints_time_interval_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 -1 99999
 	check_metric $WORKER2_PORT 'dm_syncer_flush_checkpoints_time_interval_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 -1 99999
 
-	# check two worker's secondsBehindMaster > 0
-	check_seconds_behind_master 0 2
-	echo "check ddl done!"
-
 	# restart dm worker
 	kill_dm_worker
-	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/BlockSyncerUpdateLag=return(\"insert,2\");github.com/pingcap/dm/syncer/changeTickerInterval=return(10)"
+	rm -rf $WORK_DIR/worker1/log/dm-worker.log # clean up the old log
+	rm -rf $WORK_DIR/worker2/log/dm-worker.log # clean up the old log
+	inject_points=(
+		"github.com/pingcap/dm/syncer/BlockExecuteSQLs=return(2)"
+		"github.com/pingcap/dm/syncer/changeTickerInterval=return(10)"
+		"github.com/pingcap/dm/syncer/ShowLagInLog=return(2)" # test lag metric >= 2 beacuse we inject BlockExecuteSQLs to sleep(2) although skip lag is 0 (locally), but we use that lag of all dml/skip lag, so lag still >= 2
+	)
+	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
+
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -95,10 +92,17 @@ function run() {
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 # make dml job
 	run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 # make dml job
 
-	# check new metric: dm_syncer_replication_lag_sum,dm_syncer_replication_lag_gauge,
-	# finished_transaction_total,dm_syncer_ideal_qps,dm_syncer_binlog_event_row,replication_transaction_batch exists
+	# check two worker's lag >= 2
+	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker1/log/dm-worker.log
+	check_log_contain_with_retry "[ShowLagInLog]" $WORK_DIR/worker2/log/dm-worker.log
 	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 999
 	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 999
+	echo "check dml/skip lag done!"
+
+	# check new metric: dm_syncer_replication_lag_sum,dm_syncer_replication_lag_gauge,
+	# finished_transaction_total,dm_syncer_ideal_qps,dm_syncer_binlog_event_row,replication_transaction_batch exists
+	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 -1 999
+	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_sum{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 -1 999
 
 	check_metric $WORKER1_PORT 'dm_syncer_replication_lag_gauge{source_id="mysql-replica-01",task="test",worker="worker1"}' 5 1 999
 	check_metric $WORKER2_PORT 'dm_syncer_replication_lag_gauge{source_id="mysql-replica-02",task="test",worker="worker2"}' 5 1 999
@@ -114,11 +118,6 @@ function run() {
 
 	check_metric $WORKER1_PORT 'dm_syncer_replication_transaction_batch_count' 5 0 99999
 	check_metric $WORKER2_PORT 'dm_syncer_replication_transaction_batch_count' 5 0 99999
-
-	# test dml lag metric >= 2 beacuse we inject updateReplicationLag(insert) to sleep(2)
-	# although skip lag is 0 (locally), but we use that lag of all dml/skip lag, so lag still >= 2
-	check_seconds_behind_master 1 2
-	echo "check dml/skip done!"
 
 	# restart dm worker
 	kill_dm_worker

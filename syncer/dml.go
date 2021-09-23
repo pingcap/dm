@@ -22,7 +22,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/types"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/expression"
 	"go.uber.org/zap"
 
@@ -33,8 +33,7 @@ import (
 
 // genDMLParam stores pruned columns, data as well as the original columns, data, index.
 type genDMLParam struct {
-	schema            string
-	table             string
+	tableID           string              // as a key in map like `schema`.`table`
 	safeMode          bool                // only used in update
 	data              [][]interface{}     // pruned data
 	originalData      [][]interface{}     // all data
@@ -52,7 +51,7 @@ func extractValueFromData(data []interface{}, columns []*model.ColumnInfo) []int
 
 func (s *Syncer) genInsertSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		qualifiedName   = dbutil.TableName(param.schema, param.table)
+		tableID         = param.tableID
 		dataSeq         = param.data
 		originalDataSeq = param.originalData
 		columns         = param.columns
@@ -66,7 +65,7 @@ func (s *Syncer) genInsertSQLs(param *genDMLParam, filterExprs []expression.Expr
 	if param.safeMode {
 		insertOrReplace = "REPLACE INTO"
 	}
-	sql := genInsertReplace(insertOrReplace, qualifiedName, columns)
+	sql := genInsertReplace(insertOrReplace, tableID, columns)
 
 RowLoop:
 	for dataIdx, data := range dataSeq {
@@ -91,7 +90,7 @@ RowLoop:
 			}
 		}
 
-		ks := genMultipleKeys(ti, originalValue, qualifiedName)
+		ks := genMultipleKeys(ti, originalValue, tableID)
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -107,11 +106,11 @@ func (s *Syncer) genUpdateSQLs(
 	newValueFilters []expression.Expression,
 ) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		qualifiedName = dbutil.TableName(param.schema, param.table)
-		data          = param.data
-		originalData  = param.originalData
-		columns       = param.columns
-		ti            = param.originalTableInfo
+		tableID      = param.tableID
+		data         = param.data
+		originalData = param.originalData
+		columns      = param.columns
+		ti           = param.originalTableInfo
 		// defaultIndexColumns = findFitIndex(ti)
 		replaceSQL string // `REPLACE INTO` SQL
 		sqls       = make([]string, 0, len(data)/2)
@@ -126,7 +125,7 @@ func (s *Syncer) genUpdateSQLs(
 	}
 
 	if param.safeMode {
-		replaceSQL = genInsertReplace("REPLACE INTO", qualifiedName, columns)
+		replaceSQL = genInsertReplace("REPLACE INTO", tableID, columns)
 	}
 
 RowLoop:
@@ -179,12 +178,12 @@ RowLoop:
 			defaultIndexColumns = s.schemaTracker.GetAvailableUKToIndexInfo(param.schema, param.table, ti, oriOldValues)
 		}
 
-		ks := genMultipleKeys(ti, oriOldValues, qualifiedName)
-		ks = append(ks, genMultipleKeys(ti, oriChangedValues, qualifiedName)...)
+		ks := genMultipleKeys(ti, oriOldValues, tableID)
+		ks = append(ks, genMultipleKeys(ti, oriChangedValues, tableID)...)
 
 		if param.safeMode {
 			// generate delete sql from old data
-			sql, value := genDeleteSQL(qualifiedName, oriOldValues, ti.Columns, defaultIndexColumns)
+			sql, value := genDeleteSQL(tableID, oriOldValues, ti.Columns, defaultIndexColumns)
 			sqls = append(sqls, sql)
 			values = append(values, value)
 			keys = append(keys, ks)
@@ -218,7 +217,7 @@ RowLoop:
 
 		value = append(value, whereValues...)
 
-		sql := genUpdateSQL(qualifiedName, updateColumns, whereColumns, whereValues)
+		sql := genUpdateSQL(tableID, updateColumns, whereColumns, whereValues)
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -229,9 +228,9 @@ RowLoop:
 
 func (s *Syncer) genDeleteSQLs(tctx *tcontext.Context, param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		qualifiedName = dbutil.TableName(param.schema, param.table)
-		dataSeq       = param.originalData
-		ti            = param.originalTableInfo
+		tableID = param.tableID
+		dataSeq = param.originalData
+		ti      = param.originalTableInfo
 		// defaultIndexColumns = findFitIndex(ti)
 		sqls   = make([]string, 0, len(dataSeq))
 		keys   = make([][]string, 0, len(dataSeq))
@@ -267,10 +266,9 @@ RowLoop:
 			// defaultIndexColumns = getAvailableIndexColumn(ti, value)
 			defaultIndexColumns = s.schemaTracker.GetAvailableUKToIndexInfo(param.schema, param.table, ti, value)
 		}
+		ks := genMultipleKeys(ti, value, tableID)
 
-		ks := genMultipleKeys(ti, value, qualifiedName)
-
-		sql, value := genDeleteSQL(qualifiedName, value, ti.Columns, defaultIndexColumns)
+		sql, value := genDeleteSQL(tableID, value, ti.Columns, defaultIndexColumns)
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -571,7 +569,7 @@ func genWhere(buf *strings.Builder, columns []*model.ColumnInfo, data []interfac
 	}
 }
 
-func (s *Syncer) mappingDML(schema, table string, ti *model.TableInfo, data [][]interface{}) ([][]interface{}, error) {
+func (s *Syncer) mappingDML(table *filter.Table, ti *model.TableInfo, data [][]interface{}) ([][]interface{}, error) {
 	if s.columnMapping == nil {
 		return data, nil
 	}
@@ -586,9 +584,9 @@ func (s *Syncer) mappingDML(schema, table string, ti *model.TableInfo, data [][]
 		rows = make([][]interface{}, len(data))
 	)
 	for i := range data {
-		rows[i], _, err = s.columnMapping.HandleRowValue(schema, table, columns, data[i])
+		rows[i], _, err = s.columnMapping.HandleRowValue(table.Schema, table.Name, columns, data[i])
 		if err != nil {
-			return nil, terror.ErrSyncerUnitDoColumnMapping.Delegate(err, data[i], schema, table)
+			return nil, terror.ErrSyncerUnitDoColumnMapping.Delegate(err, data[i], table)
 		}
 	}
 	return rows, nil
@@ -635,4 +633,16 @@ func pruneGeneratedColumnDML(ti *model.TableInfo, data [][]interface{}) ([]*mode
 		rows = append(rows, value)
 	}
 	return cols, rows, nil
+}
+
+// checkLogColumns returns error when not all rows in skipped is empty, which means the binlog doesn't contain all
+// columns.
+// TODO: don't return error when all skipped columns is non-PK.
+func checkLogColumns(skipped [][]int) error {
+	for _, row := range skipped {
+		if len(row) > 0 {
+			return terror.ErrBinlogNotLogColumn
+		}
+	}
+	return nil
 }

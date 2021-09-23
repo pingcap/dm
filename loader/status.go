@@ -14,19 +14,16 @@
 package loader
 
 import (
-	"context"
 	"time"
 
-	"github.com/pingcap/failpoint"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 )
 
-var printStatusInterval = time.Second * 5
-
 // Status implements Unit.Status.
-func (l *Loader) Status() interface{} {
+func (l *Loader) Status(_ *binlog.SourceStatus) interface{} {
 	finishedSize := l.finishedDataSize.Load()
 	totalSize := l.totalDataSize.Load()
 	progress := percent(finishedSize, totalSize, l.finish.Load())
@@ -37,56 +34,34 @@ func (l *Loader) Status() interface{} {
 		MetaBinlog:     l.metaBinlog.Load(),
 		MetaBinlogGTID: l.metaBinlogGTID.Load(),
 	}
+	go l.printStatus()
 	return s
 }
 
-// PrintStatus prints status like progress percentage.
-func (l *Loader) PrintStatus(ctx context.Context) {
-	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
-		if seconds, ok := val.(int); ok {
-			printStatusInterval = time.Duration(seconds) * time.Second
-			l.logger.Info("set printStatusInterval", zap.String("failpoint", "PrintStatusCheckSeconds"), zap.Int("value", seconds))
-		}
-	})
+// printStatus prints status like progress percentage.
+func (l *Loader) printStatus() {
+	finishedSize := l.finishedDataSize.Load()
+	totalSize := l.totalDataSize.Load()
+	totalFileCount := l.totalFileCount.Load()
 
-	ticker := time.NewTicker(printStatusInterval)
-	defer ticker.Stop()
-
-	newCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	var done bool
-	for {
-		select {
-		case <-newCtx.Done():
-			done = true
-		case <-ticker.C:
-		}
-
-		finishedSize := l.finishedDataSize.Load()
-		totalSize := l.totalDataSize.Load()
-		totalFileCount := l.totalFileCount.Load()
-
-		for db, tables := range l.dbTableDataFinishedSize {
-			for table, size := range tables {
-				curFinished := size.Load()
-				speed := float64(curFinished-l.dbTableDataLastFinishedSize[db][table]) / printStatusInterval.Seconds()
-				l.dbTableDataLastFinishedSize[db][table] = curFinished
-				if speed > 0 {
-					remainingSeconds := float64(l.dbTableDataTotalSize[db][table].Load()-curFinished) / speed
-					remainingTimeGauge.WithLabelValues(l.cfg.Name, l.cfg.WorkerName, l.cfg.SourceID, db, table).Set(remainingSeconds)
-				}
+	interval := time.Since(l.dbTableDataLastUpdatedTime)
+	for db, tables := range l.dbTableDataFinishedSize {
+		for table, size := range tables {
+			curFinished := size.Load()
+			speed := float64(curFinished-l.dbTableDataLastFinishedSize[db][table]) / interval.Seconds()
+			l.dbTableDataLastFinishedSize[db][table] = curFinished
+			if speed > 0 {
+				remainingSeconds := float64(l.dbTableDataTotalSize[db][table].Load()-curFinished) / speed
+				remainingTimeGauge.WithLabelValues(l.cfg.Name, l.cfg.WorkerName, l.cfg.SourceID, db, table).Set(remainingSeconds)
 			}
 		}
-
-		l.logger.Info("progress status of load",
-			zap.Int64("finished_bytes", finishedSize),
-			zap.Int64("total_bytes", totalSize),
-			zap.Int64("total_file_count", totalFileCount),
-			zap.String("progress", percent(finishedSize, totalSize, l.finish.Load())))
-		progressGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(progress(finishedSize, totalSize, l.finish.Load()))
-		if done {
-			return
-		}
 	}
+	l.dbTableDataLastUpdatedTime = time.Now()
+
+	l.logger.Info("progress status of load",
+		zap.Int64("finished_bytes", finishedSize),
+		zap.Int64("total_bytes", totalSize),
+		zap.Int64("total_file_count", totalFileCount),
+		zap.String("progress", percent(finishedSize, totalSize, l.finish.Load())))
+	progressGauge.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Set(progress(finishedSize, totalSize, l.finish.Load()))
 }

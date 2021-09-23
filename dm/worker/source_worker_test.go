@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
 	"github.com/tikv/pd/pkg/tempurl"
@@ -28,12 +29,20 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
 var emptyWorkerStatusInfoJSONLength = 25
+
+func mockShowMasterStatus(mockDB sqlmock.Sqlmock) {
+	rows := mockDB.NewRows([]string{"File", "Position", "Binlog_Do_DB", "Binlog_Ignore_DB", "Executed_Gtid_Set"}).AddRow(
+		"mysql-bin.000009", 11232, nil, nil, "074be7f4-f0f1-11ea-95bd-0242ac120002:1-699",
+	)
+	mockDB.ExpectQuery(`SHOW MASTER STATUS`).WillReturnRows(rows)
+}
 
 func (t *testServer) testWorker(c *C) {
 	cfg := loadSourceConfigWithoutPassword(c)
@@ -69,14 +78,14 @@ func (t *testServer) testWorker(c *C) {
 	defer func() {
 		NewRelayHolder = NewRealRelayHolder
 	}()
-	w, err := NewWorker(cfg, etcdCli, "")
+	w, err := NewSourceWorker(cfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	c.Assert(w.EnableRelay(), ErrorMatches, "init error")
 
 	NewRelayHolder = NewDummyRelayHolder
-	w, err = NewWorker(cfg, etcdCli, "")
+	w, err = NewSourceWorker(cfg, etcdCli, "")
 	c.Assert(err, IsNil)
-	c.Assert(w.StatusJSON(""), HasLen, emptyWorkerStatusInfoJSONLength)
+	c.Assert(w.GetUnitAndSourceStatusJSON("", nil), HasLen, emptyWorkerStatusInfoJSONLength)
 
 	// close twice
 	w.Close()
@@ -112,10 +121,12 @@ func (t *testServer2) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 
 	getMinLocForSubTaskFunc = getFakeLocForSubTask
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD", `return(true)`), IsNil)
 }
 
 func (t *testServer2) TearDownSuite(c *C) {
 	getMinLocForSubTaskFunc = getMinLocForSubTask
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD"), IsNil)
 }
 
 func (t *testServer2) TestTaskAutoResume(c *C) {
@@ -150,7 +161,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 		NewRelayHolder = NewRealRelayHolder
 	}()
 
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever", `return(true)`), IsNil)
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever", `return()`), IsNil)
 	//nolint:errcheck
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessForever")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly", `return(true)`), IsNil)
@@ -164,7 +175,6 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/dumpling/dumpUnitProcessWithError")
 
 	s := NewServer(cfg)
-
 	defer s.Close()
 	go func() {
 		c.Assert(s.Start(), IsNil)
@@ -184,6 +194,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 	var subtaskCfg config.SubTaskConfig
 	c.Assert(subtaskCfg.DecodeFile("./subtask.toml", true), IsNil)
 	c.Assert(err, IsNil)
+	subtaskCfg.Mode = "full"
 	c.Assert(s.getWorker(true).StartSubTask(&subtaskCfg, pb.Stage_Running, true), IsNil)
 
 	// check task in paused state
@@ -238,6 +249,7 @@ func (t *testWorkerFunctionalities) SetUpSuite(c *C) {
 		return []unit.Unit{mockDumper, mockLoader, mockSync}
 	}
 	getMinLocForSubTaskFunc = getFakeLocForSubTask
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD", `return(true)`), IsNil)
 }
 
 func (t *testWorkerFunctionalities) TearDownSuite(c *C) {
@@ -245,6 +257,7 @@ func (t *testWorkerFunctionalities) TearDownSuite(c *C) {
 	NewSubTask = NewRealSubTask
 	createUnits = createRealUnits
 	getMinLocForSubTaskFunc = getMinLocForSubTask
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD"), IsNil)
 }
 
 func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
@@ -277,7 +290,7 @@ func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
 	c.Assert(err, IsNil)
 
 	// start worker
-	w, err := NewWorker(sourceCfg, etcdCli, "")
+	w, err := NewSourceWorker(sourceCfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	defer w.Close()
 	go func() {
@@ -346,7 +359,7 @@ func (t *testWorkerFunctionalities) TestWorkerFunctionalities(c *C) {
 	c.Assert(w.subTaskEnabled.Load(), IsFalse)
 }
 
-func (t *testWorkerFunctionalities) testEnableRelay(c *C, w *Worker, etcdCli *clientv3.Client,
+func (t *testWorkerFunctionalities) testEnableRelay(c *C, w *SourceWorker, etcdCli *clientv3.Client,
 	sourceCfg *config.SourceConfig, cfg *Config) {
 	c.Assert(w.EnableRelay(), IsNil)
 
@@ -369,14 +382,14 @@ func (t *testWorkerFunctionalities) testEnableRelay(c *C, w *Worker, etcdCli *cl
 	}), IsTrue)
 }
 
-func (t *testWorkerFunctionalities) testDisableRelay(c *C, w *Worker) {
+func (t *testWorkerFunctionalities) testDisableRelay(c *C, w *SourceWorker) {
 	w.DisableRelay()
 
 	c.Assert(w.relayEnabled.Load(), IsFalse)
 	c.Assert(w.relayHolder, IsNil)
 }
 
-func (t *testWorkerFunctionalities) testEnableHandleSubtasks(c *C, w *Worker, etcdCli *clientv3.Client,
+func (t *testWorkerFunctionalities) testEnableHandleSubtasks(c *C, w *SourceWorker, etcdCli *clientv3.Client,
 	subtaskCfg config.SubTaskConfig, sourceCfg *config.SourceConfig) {
 	c.Assert(w.EnableHandleSubtasks(), IsNil)
 	c.Assert(w.subTaskEnabled.Load(), IsTrue)
@@ -409,12 +422,14 @@ func (t *testWorkerEtcdCompact) SetUpSuite(c *C) {
 		mockSync := NewMockUnit(pb.UnitType_Sync)
 		return []unit.Unit{mockDumper, mockLoader, mockSync}
 	}
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD", `return(true)`), IsNil)
 }
 
 func (t *testWorkerEtcdCompact) TearDownSuite(c *C) {
 	NewRelayHolder = NewRealRelayHolder
 	NewSubTask = NewRealSubTask
 	createUnits = createRealUnits
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD"), IsNil)
 }
 
 func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
@@ -423,6 +438,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 		keepAliveTTL = int64(1)
 		startRev     = int64(1)
 	)
+
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "http://"+masterAddr)
 	c.Assert(err, IsNil)
@@ -445,7 +461,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	sourceCfg.EnableRelay = false
 
 	// step 1: start worker
-	w, err := NewWorker(sourceCfg, etcdCli, "")
+	w, err := NewSourceWorker(sourceCfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -503,6 +519,8 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return w.subTaskHolder.findSubTask(subtaskCfg.Name) != nil
 	}), IsTrue)
+	mockDB := conn.InitMockDB(c)
+	mockShowMasterStatus(mockDB)
 	status, _, err := w.QueryStatus(ctx1, subtaskCfg.Name)
 	c.Assert(err, IsNil)
 	c.Assert(status, HasLen, 1)
@@ -522,6 +540,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return w.subTaskHolder.findSubTask(subtaskCfg.Name) != nil
 	}), IsTrue)
+	mockShowMasterStatus(mockDB)
 	status, _, err = w.QueryStatus(ctx2, subtaskCfg.Name)
 	c.Assert(err, IsNil)
 	c.Assert(status, HasLen, 1)
@@ -561,7 +580,7 @@ func (t *testWorkerEtcdCompact) TestWatchRelayStageEtcdCompact(c *C) {
 	sourceCfg.MetaDir = c.MkDir()
 
 	// step 1: start worker
-	w, err := NewWorker(sourceCfg, etcdCli, "")
+	w, err := NewSourceWorker(sourceCfg, etcdCli, "")
 	c.Assert(err, IsNil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

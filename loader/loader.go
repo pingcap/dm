@@ -445,6 +445,7 @@ type Loader struct {
 	dbTableDataTotalSize        map[string]map[string]*atomic.Int64
 	dbTableDataFinishedSize     map[string]map[string]*atomic.Int64
 	dbTableDataLastFinishedSize map[string]map[string]int64
+	dbTableDataLastUpdatedTime  time.Time
 
 	metaBinlog     atomic.String
 	metaBinlogGTID atomic.String
@@ -620,10 +621,6 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	default:
 	}
 
-	if len(errs) != 0 {
-		// pause because of error occurred
-		l.Pause()
-	}
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
 		Errors:     errs,
@@ -729,12 +726,6 @@ func (l *Loader) Restore(ctx context.Context) error {
 		return err2
 	}
 
-	l.wg.Add(1)
-	go func() {
-		defer l.wg.Done()
-		l.PrintStatus(ctx)
-	}()
-
 	begin := time.Now()
 	err = l.restoreData(ctx)
 
@@ -813,8 +804,7 @@ func (l *Loader) stopLoad() {
 	l.logger.Debug("all loader's go-routines have been closed")
 }
 
-// Pause pauses the process, and it can be resumed later
-// should cancel context from external.
+// Pause implements Unit.Pause.
 func (l *Loader) Pause() {
 	if l.isClosed() {
 		l.logger.Warn("try to pause, but already closed")

@@ -51,6 +51,7 @@ const (
 var (
 	etcdTestCli      *clientv3.Client
 	etcdErrCompacted = v3rpc.ErrCompacted
+	testRelayDir     = "./test_relay_dir"
 )
 
 func TestScheduler(t *testing.T) {
@@ -135,8 +136,9 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 
 	// not started scheduler can't do anything.
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSourceCfg(sourceCfg1)), IsTrue)
+	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.UpdateSourceCfg(sourceCfg1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveSourceCfg(sourceID1)), IsTrue)
-	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSubTasks(subtaskCfg1)), IsTrue)
+	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSubTasks(false, subtaskCfg1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveSubTasks(taskName1, sourceID1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddWorker(workerName1, workerAddr1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveWorker(workerName1)), IsTrue)
@@ -163,6 +165,23 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 	c.Assert(terror.ErrSchedulerSourceCfgExist.Equal(s.AddSourceCfg(sourceCfg1)), IsTrue) // can't add multiple times.
 	// the source config added.
 	t.sourceCfgExist(c, s, sourceCfg1)
+
+	// update source cfg
+	sourceCfg1.RelayDir = testRelayDir
+	c.Assert(s.UpdateSourceCfg(sourceCfg1), IsNil)
+	newCfg := s.GetSourceCfgByID(sourceID1)
+	c.Assert(newCfg.RelayDir, Equals, testRelayDir)
+
+	// update with invalid SourceID
+	fake := newCfg.Clone()
+	fake.SourceID = "not a source id"
+	c.Assert(terror.ErrSchedulerSourceCfgNotExist.Equal(s.UpdateSourceCfg(fake)), IsTrue)
+
+	// update field not related to relay-log will failed
+	fake2 := newCfg.Clone()
+	fake2.AutoFixGTID = !fake2.AutoFixGTID
+	c.Assert(terror.ErrSchedulerSourceCfgUpdate.Equal(s.UpdateSourceCfg(fake2)), IsTrue)
+
 	// one unbound source exist (because no free worker).
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 	rebuildScheduler(ctx)
@@ -232,18 +251,21 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 		return len(bounds) == 1 && bounds[0] == sourceID1
 	}), IsTrue)
 	// no subtask config exists before start.
-	c.Assert(s.AddSubTasks(), IsNil) // can call without configs, return without error, but take no effect.
+	c.Assert(s.AddSubTasks(false), IsNil) // can call without configs, return without error, but take no effect.
 	t.subTaskCfgNotExist(c, s, taskName1, sourceID1)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_InvalidStage)
 	// start the task.
-	c.Assert(s.AddSubTasks(subtaskCfg1), IsNil)
-	c.Assert(terror.ErrSchedulerSubTaskExist.Equal(s.AddSubTasks(subtaskCfg1)), IsTrue) // add again.
+	c.Assert(s.AddSubTasks(false, subtaskCfg1), IsNil)
+	c.Assert(terror.ErrSchedulerSubTaskExist.Equal(s.AddSubTasks(false, subtaskCfg1)), IsTrue) // add again.
 	// subtask config and stage exist.
 	t.subTaskCfgExist(c, s, subtaskCfg1)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
 
+	// update source config when task already started will failed
+	c.Assert(terror.ErrSchedulerSourceOpTaskExist.Equal(s.UpdateSourceCfg(sourceCfg1)), IsTrue)
+
 	// try start a task with two sources, some sources not bound.
-	c.Assert(terror.ErrSchedulerSourcesUnbound.Equal(s.AddSubTasks(subtaskCfg21, subtaskCfg22)), IsTrue)
+	c.Assert(terror.ErrSchedulerSourcesUnbound.Equal(s.AddSubTasks(false, subtaskCfg21, subtaskCfg22)), IsTrue)
 	t.subTaskCfgNotExist(c, s, taskName2, sourceID1)
 	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_InvalidStage)
 	t.subTaskCfgNotExist(c, s, taskName2, sourceID2)
@@ -387,14 +409,14 @@ func (t *testScheduler) testSchedulerProgress(c *C, restart int) {
 
 	// CASE 4.4: start a task with two sources.
 	// can't add more than one tasks at a time now.
-	c.Assert(terror.ErrSchedulerMultiTask.Equal(s.AddSubTasks(subtaskCfg1, subtaskCfg21)), IsTrue)
+	c.Assert(terror.ErrSchedulerMultiTask.Equal(s.AddSubTasks(false, subtaskCfg1, subtaskCfg21)), IsTrue)
 	// task2' config and stage not exists before.
 	t.subTaskCfgNotExist(c, s, taskName2, sourceID1)
 	t.subTaskCfgNotExist(c, s, taskName2, sourceID2)
 	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_InvalidStage)
 	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_InvalidStage)
 	// start task2.
-	c.Assert(s.AddSubTasks(subtaskCfg21, subtaskCfg22), IsNil)
+	c.Assert(s.AddSubTasks(false, subtaskCfg21, subtaskCfg22), IsNil)
 	// config added, stage become Running.
 	t.subTaskCfgExist(c, s, subtaskCfg21)
 	t.subTaskCfgExist(c, s, subtaskCfg22)
@@ -560,14 +582,14 @@ func (t *testScheduler) sourceCfgExist(c *C, s *Scheduler, expectCfg *config.Sou
 }
 
 func (t *testScheduler) subTaskCfgNotExist(c *C, s *Scheduler, task, source string) {
-	c.Assert(s.GetSubTaskCfgByTaskSource(task, source), IsNil)
+	c.Assert(s.getSubTaskCfgByTaskSource(task, source), IsNil)
 	cfgM, _, err := ha.GetSubTaskCfg(etcdTestCli, source, task, 0)
 	c.Assert(err, IsNil)
 	c.Assert(cfgM, HasLen, 0)
 }
 
 func (t *testScheduler) subTaskCfgExist(c *C, s *Scheduler, expectCfg config.SubTaskConfig) {
-	cfgP := s.GetSubTaskCfgByTaskSource(expectCfg.Name, expectCfg.SourceID)
+	cfgP := s.getSubTaskCfgByTaskSource(expectCfg.Name, expectCfg.SourceID)
 	c.Assert(cfgP, DeepEquals, &expectCfg)
 	cfgM, _, err := ha.GetSubTaskCfg(etcdTestCli, expectCfg.SourceID, expectCfg.Name, 0)
 	c.Assert(err, IsNil)
@@ -1197,7 +1219,7 @@ func (t *testScheduler) TestTransferSource(c *C) {
 	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/master/scheduler/failToReplaceSourceBound"), IsNil)
 
 	// test can't transfer when there's any running task on the source
-	s.expectSubTaskStages["test"] = map[string]ha.Stage{sourceID1: {Expect: pb.Stage_Running}}
+	s.expectSubTaskStages.Store("test", map[string]ha.Stage{sourceID1: {Expect: pb.Stage_Running}})
 	c.Assert(s.TransferSource(sourceID1, workerName1), NotNil)
 	c.Assert(s.bounds[sourceID1], DeepEquals, worker4)
 	c.Assert(worker1.Stage(), Equals, WorkerFree)
