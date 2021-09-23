@@ -22,13 +22,14 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/pingcap/tidb/br/pkg/mock"
+
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
-	"github.com/pingcap/tidb/br/pkg/mock"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
@@ -225,7 +226,7 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 	for i, sql := range sqls {
 		result, err := syncer.parseDDLSQL(sql, p, "test")
 		c.Assert(err, IsNil)
-		c.Assert(result.ignore, IsFalse)
+		c.Assert(result.needSkip, IsFalse)
 		c.Assert(result.isDDL, IsTrue)
 
 		statements, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, "test")
@@ -245,98 +246,98 @@ func (s *testDDLSuite) TestParseDDLSQL(c *C) {
 	cases := []struct {
 		sql      string
 		schema   string
-		ignore   bool
+		needSkip bool
 		isDDL    bool
 		hasError bool
 	}{
 		{
 			sql:      "FLUSH",
 			schema:   "",
-			ignore:   true,
+			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "BEGIN",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "CREATE TABLE do_db.do_table (c1 INT)",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    true,
 			hasError: false,
 		},
 		{
 			sql:      "INSERT INTO do_db.do_table VALUES (1)",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: true,
 		},
 		{
 			sql:      "INSERT INTO ignore_db.ignore_table VALUES (1)",
 			schema:   "",
-			ignore:   true,
+			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "UPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
 			schema:   "ignore_db",
-			ignore:   true,
+			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "DELETE FROM `ignore_table` WHERE c1=2",
 			schema:   "ignore_db",
-			ignore:   true,
+			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "SELECT * FROM ignore_db.ignore_table",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: true,
 		},
 		{
 			sql:      "#",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "# this is a comment",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "# a comment with DDL\nCREATE TABLE do_db.do_table (c1 INT)",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    true,
 			hasError: false,
 		},
 		{
 			sql:      "# a comment with DML\nUPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
 			schema:   "ignore_db",
-			ignore:   true,
+			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "NOT A SQL",
 			schema:   "",
-			ignore:   false,
+			needSkip: false,
 			isDDL:    false,
 			hasError: true,
 		},
@@ -364,7 +365,7 @@ func (s *testDDLSuite) TestParseDDLSQL(c *C) {
 		} else {
 			c.Assert(err, IsNil)
 		}
-		c.Assert(pr.ignore, Equals, cs.ignore)
+		c.Assert(pr.needSkip, Equals, cs.needSkip)
 		c.Assert(pr.isDDL, Equals, cs.isDDL)
 	}
 }
@@ -590,7 +591,17 @@ func (m mockOnlinePlugin) Finish(tctx *tcontext.Context, table *filter.Table) er
 }
 
 func (m mockOnlinePlugin) TableType(table string) onlineddl.TableType {
-	return ""
+	// 5 is _ _gho/ghc/del or _ _old/new
+	if len(table) > 5 && strings.HasPrefix(table, "_") {
+		if strings.HasSuffix(table, "_gho") || strings.HasSuffix(table, "_new") {
+			return onlineddl.GhostTable
+		}
+
+		if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") || strings.HasSuffix(table, "_old") {
+			return onlineddl.TrashTable
+		}
+	}
+	return onlineddl.RealTable
 }
 
 func (m mockOnlinePlugin) RealName(table string) string {
