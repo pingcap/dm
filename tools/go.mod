@@ -3,16 +3,18 @@ module github.com/pingcap/dm/tools
 go 1.16
 
 require (
-	github.com/deepmap/oapi-codegen v1.8.2 // indirect
-	github.com/go-chi/chi v1.5.1 // indirect
-	github.com/gogo/protobuf v1.3.1
+	github.com/deepmap/oapi-codegen v1.8.2
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang/mock v1.5.0
-	github.com/golangci/golangci-lint v1.39.0
-	github.com/grpc-ecosystem/grpc-gateway v1.12.1
+	github.com/golangci/golangci-lint v1.42.1
+	github.com/google/go-cmp v0.5.6 // indirect
+	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/mattn/goveralls v0.0.8
-	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
+	github.com/pingcap/failpoint v0.0.0-20210918120811-547c13e3eb00
 	github.com/rakyll/statik v0.1.7
 	github.com/zhouqiang-cl/gocovmerge v0.0.0-20190125174600-5256314471af
+	golang.org/x/mod v0.5.1 // indirect
+	golang.org/x/tools v0.1.6 // indirect
 	mvdan.cc/gofumpt v0.1.1
-	mvdan.cc/sh/v3 v3.2.4 // indirect
+	mvdan.cc/sh/v3 v3.3.1
 )
