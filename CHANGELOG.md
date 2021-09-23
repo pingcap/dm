@@ -1,6 +1,23 @@
 # DM Changelog
 
 All notable changes to this project will be documented in this file.
+
+## [2.0.7] 2021-09-23
+
+### Bug fixes
+
+- Fix the error that binlog event is purged when switching `enable-gtid` in source configuration from `false` to `true` [#2094](https://github.com/pingcap/dm/pull/2094)
+- Fix the memory leak problem of schema-tracker [#2133](https://github.com/pingcap/dm/pull/2133)
+
+### Improvements
+
+- Disable background statistic job in schema tracker to reduce CPU consumption [#2065](https://github.com/pingcap/dm/pull/2065)
+- Support regular expressions rules for Online DDL shadow and trash tables [#2139](https://github.com/pingcap/dm/pull/2139)
+
+### Known issues
+
+[GitHub issues](https://github.com/pingcap/dm/issues?q=is%3Aissue+label%3Aaffected-v2.0.7)
+
 ## [2.0.6] 2021-08-13
 
 ### Bug fixes
