@@ -31,26 +31,20 @@ import (
 
 // parseDDLResult represents the result of parseDDLSQL.
 type parseDDLResult struct {
-	stmt   ast.StmtNode
-	ignore bool
-	isDDL  bool
+	stmt     ast.StmtNode
+	needSkip bool
+	isDDL    bool
 }
 
 func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (result parseDDLResult, err error) {
 	// check skip before parse (used to skip some un-supported DDLs)
-	ignore, err := s.skipQuery(nil, nil, sql)
-	if err != nil {
+	needSkip, err := s.skipSQLByPattern(sql)
+	if err != nil || needSkip {
 		return parseDDLResult{
-			stmt:   nil,
-			ignore: false,
-			isDDL:  false,
+			stmt:     nil,
+			needSkip: needSkip,
+			isDDL:    false,
 		}, err
-	} else if ignore {
-		return parseDDLResult{
-			stmt:   nil,
-			ignore: true,
-			isDDL:  false,
-		}, nil
 	}
 
 	// We use Parse not ParseOneStmt here, because sometimes we got a commented out ddl which can't be parsed
@@ -60,17 +54,17 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 		// log error rather than fatal, so other defer can be executed
 		s.tctx.L().Error("parse ddl", zap.String("sql", sql))
 		return parseDDLResult{
-			stmt:   nil,
-			ignore: false,
-			isDDL:  false,
+			stmt:     nil,
+			needSkip: false,
+			isDDL:    false,
 		}, terror.ErrSyncerParseDDL.Delegate(err, sql)
 	}
 
 	if len(stmts) == 0 {
 		return parseDDLResult{
-			stmt:   nil,
-			ignore: false,
-			isDDL:  false,
+			stmt:     nil,
+			needSkip: false,
+			isDDL:    false,
 		}, nil
 	}
 
@@ -78,9 +72,9 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 	switch node := stmt.(type) {
 	case ast.DDLNode:
 		return parseDDLResult{
-			stmt:   stmt,
-			ignore: false,
-			isDDL:  true,
+			stmt:     stmt,
+			needSkip: false,
+			isDDL:    true,
 		}, nil
 	case ast.DMLNode:
 		// if DML can be ignored, we do not report an error
@@ -89,27 +83,27 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 			if len(table.Schema) == 0 {
 				table.Schema = schema
 			}
-			ignore, err2 := s.skipDMLEvent(table, replication.QUERY_EVENT)
-			if err2 == nil && ignore {
+			needSkip, err2 := s.skipRowsEvent(table, replication.QUERY_EVENT)
+			if err2 == nil && needSkip {
 				return parseDDLResult{
-					stmt:   nil,
-					ignore: true,
-					isDDL:  false,
+					stmt:     nil,
+					needSkip: true,
+					isDDL:    false,
 				}, nil
 			}
 		}
 		return parseDDLResult{
-			stmt:   nil,
-			ignore: false,
-			isDDL:  false,
+			stmt:     nil,
+			needSkip: false,
+			isDDL:    false,
 		}, terror.Annotatef(terror.ErrSyncUnitDMLStatementFound.Generate(), "query %s", sql)
 	default:
 		// BEGIN statement is included here.
 		// let sqls be empty
 		return parseDDLResult{
-			stmt:   nil,
-			ignore: false,
-			isDDL:  false,
+			stmt:     nil,
+			needSkip: false,
+			isDDL:    false,
 		}, nil
 	}
 }
@@ -149,11 +143,11 @@ func (s *Syncer) splitAndFilterDDL(
 			}
 		}
 
-		shouldSkip, err2 := s.skipQuery(tables, stmt2, sql)
+		needSkip, err2 := s.skipQueryEvent(tables, stmt2, sql)
 		if err2 != nil {
 			return nil, nil, err2
 		}
-		if shouldSkip {
+		if needSkip {
 			metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 			ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", schema))
 			continue
