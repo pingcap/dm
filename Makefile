@@ -143,7 +143,7 @@ fmt: tools_setup
 		echo "gofumports"; \
 		tools/bin/gofumports -w -d -local $(PACKAGE_NAME) $(PACKAGE_DIRECTORIES) 2>&1 | awk "{print} END{if(NR>0) {exit 1}}" ;\
 		echo "golangci-lint"; \
-		tools/bin/golangci-lint run --config=$(CURDIR)/.golangci.yml --fix --issues-exit-code=1 $(PACKAGE_DIRECTORIES) ;\
+		tools/bin/golangci-lint run --config=$(CURDIR)/.golangci.yml --issues-exit-code=1 $(PACKAGE_DIRECTORIES) ;\
 	fi
 
 lint: tools_setup
