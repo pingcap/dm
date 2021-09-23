@@ -10,17 +10,18 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/tikv/pd/pkg/tempurl"
+	"github.com/pingcap/tidb/br/pkg/mock"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/conn"
 )
 
 var _ = Suite(&testPortalSuite{})
@@ -31,6 +32,9 @@ type testPortalSuite struct {
 	allTables []TablesInSchema
 
 	taskConfig *DMTaskConfig
+
+	mockCluster     *mock.Cluster
+	mockClusterPort int
 }
 
 func TestSuite(t *testing.T) {
@@ -56,6 +60,14 @@ func (t *testPortalSuite) SetUpSuite(c *C) {
 	}
 
 	t.initTaskCfg()
+	cluster, err := mock.NewCluster()
+	c.Assert(err, IsNil)
+	t.mockCluster = cluster
+	c.Assert(t.mockCluster.Start(), IsNil)
+	config, err := mysql.ParseDSN(cluster.DSN)
+	c.Assert(err, IsNil)
+	t.mockClusterPort, err = strconv.Atoi(strings.Split(config.Addr, ":")[1])
+	c.Assert(err, IsNil)
 }
 
 func (t *testPortalSuite) initTaskCfg() {
@@ -127,19 +139,10 @@ func (t *testPortalSuite) initTaskCfg() {
 }
 
 func (t *testPortalSuite) TestCheck(c *C) {
-	dbCfg := config.GetDBConfigFromEnv()
-	freePortStr := tempurl.Alloc()[len("http://127.0.0.1:"):]
-	freePort, err := strconv.Atoi(freePortStr)
-	c.Assert(err, IsNil)
-	dbCfg.Port = freePort
-	fakeMysqlServer, err := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
-	c.Assert(err, IsNil)
-	go func() {
-		c.Assert(fakeMysqlServer.Start(), IsNil)
-	}()
-	wrongDBCfg := dbCfg.Clone()
-	wrongDBCfg.Password = "wrong"
-	dbCfgBytes := getTestDBCfgBytes(c, wrongDBCfg)
+	wrongDBCfg := config.GetDBConfigFromEnv()
+	wrongDBCfg.User = "wrong"
+	wrongDBCfg.Port = t.mockClusterPort
+	dbCfgBytes := getTestDBCfgBytes(c, &wrongDBCfg)
 	req := httptest.NewRequest("POST", "/check", bytes.NewReader(dbCfgBytes))
 	resp := httptest.NewRecorder()
 
@@ -150,10 +153,10 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	c.Assert(resp.Code, Equals, http.StatusBadRequest)
 
 	checkResult := &CheckResult{}
-	err = readJSON(resp.Body, checkResult)
+	err := readJSON(resp.Body, checkResult)
 	c.Assert(err, IsNil)
 	c.Assert(checkResult.Result, Equals, failed)
-	c.Assert(checkResult.Error, Matches, "Error 1045: Access denied for user 'root'.*")
+	c.Assert(checkResult.Error, Matches, "Error 1045: Access denied for user 'wrong'.*")
 
 	// don't need connection to database, and will return StatusOK
 	getDBConnFunc = t.getMockDB
@@ -169,20 +172,12 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(checkResult.Result, Equals, success)
 	c.Assert(checkResult.Error, Equals, "")
-	fakeMysqlServer.Close()
 }
 
 func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 	dbCfg := config.GetDBConfigFromEnv()
-	freePortStr := tempurl.Alloc()[len("http://127.0.0.1:"):]
-	freePort, err := strconv.Atoi(freePortStr)
-	c.Assert(err, IsNil)
-	dbCfg.Port = freePort
-	fakeMysqlServer, err := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
-	c.Assert(err, IsNil)
-	go func() {
-		c.Assert(fakeMysqlServer.Start(), IsNil)
-	}()
+	dbCfg.User = "wrong"
+	dbCfg.Port = t.mockClusterPort
 	dbCfgBytes := getTestDBCfgBytes(c, &dbCfg)
 	req := httptest.NewRequest("POST", "/schema", bytes.NewReader(dbCfgBytes))
 	resp := httptest.NewRecorder()
@@ -192,10 +187,10 @@ func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 	c.Assert(resp.Code, Equals, http.StatusBadRequest)
 
 	schemaInfoResult := new(SchemaInfoResult)
-	err = readJSON(resp.Body, schemaInfoResult)
+	err := readJSON(resp.Body, schemaInfoResult)
 	c.Assert(err, IsNil)
 	c.Assert(schemaInfoResult.Result, Equals, failed)
-	c.Assert(schemaInfoResult.Error, Matches, "Error 1045: Access denied for user 'root'.*")
+	c.Assert(schemaInfoResult.Error, Matches, "Error 1045: Access denied for user 'wrong'.*")
 	c.Assert(schemaInfoResult.Tables, IsNil)
 
 	getDBConnFunc = t.getMockDB
@@ -218,7 +213,6 @@ func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 			c.Assert(table, Equals, t.allTables[i].Tables[j])
 		}
 	}
-	fakeMysqlServer.Close()
 }
 
 func (t *testPortalSuite) TestGenerateAndDownloadAndAnalyzeConfig(c *C) {

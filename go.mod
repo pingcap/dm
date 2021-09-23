@@ -8,7 +8,6 @@ require (
 	github.com/coreos/go-semver v0.3.0
 	github.com/deepmap/oapi-codegen v1.8.2
 	github.com/docker/go-units v0.4.0
-	github.com/dolthub/go-mysql-server v0.10.0
 	github.com/dustin/go-humanize v1.0.0
 	github.com/getkin/kin-openapi v0.66.0
 	github.com/go-mysql-org/go-mysql v1.1.3-0.20210705101833-83965e516929

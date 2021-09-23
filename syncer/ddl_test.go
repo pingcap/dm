@@ -19,16 +19,16 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
+	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
-	"github.com/tikv/pd/pkg/tempurl"
+	"github.com/pingcap/tidb/br/pkg/mock"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
@@ -431,11 +431,16 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	ec := eventContext{
 		tctx: tctx,
 	}
-	dbCfg := config.GetDBConfigFromEnv()
-	freePortStr := tempurl.Alloc()[len("http://127.0.0.1:"):]
-	freePort, err := strconv.Atoi(freePortStr)
+	cluster, err := mock.NewCluster()
 	c.Assert(err, IsNil)
-	dbCfg.Port = freePort
+	c.Assert(cluster.Start(), IsNil)
+	mysqlConfig, err := mysql.ParseDSN(cluster.DSN)
+	c.Assert(err, IsNil)
+	mockClusterPort, err := strconv.Atoi(strings.Split(mysqlConfig.Addr, ":")[1])
+	c.Assert(err, IsNil)
+	dbCfg := config.GetDBConfigFromEnv()
+	dbCfg.Port = mockClusterPort
+	dbCfg.Password = ""
 	cfg := &config.SubTaskConfig{
 		From:       dbCfg,
 		To:         dbCfg,
@@ -445,17 +450,6 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		Mode:       config.ModeIncrement,
 		Flavor:     "mysql",
 	}
-	fakeMysqlServer, err := conn.NewMemoryMysqlServer(dbCfg.Host, dbCfg.User, dbCfg.Password, dbCfg.Port)
-	c.Assert(err, IsNil)
-	go func() {
-		c.Assert(fakeMysqlServer.Start(), IsNil)
-	}()
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		db, err := conn.DefaultDBProvider.Apply(dbCfg)
-		c.Assert(err, IsNil)
-		return db.DB.Ping() == nil
-	}), IsTrue)
-	defer fakeMysqlServer.Close()
 	for _, ca := range cases {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
@@ -499,14 +493,8 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		c.Assert(sqls[0], Equals, newSQL)
 		tableName := &filter.Table{Schema: "test", Name: ca.ghostname}
 		c.Assert(tables, DeepEquals, map[string]*filter.Table{tableName.String(): tableName})
-		baseDB, err := conn.DefaultDBProvider.Apply(cfg.To)
-		c.Check(err, IsNil)
-		// we need clean test database manually for fake-mysql-server
-		// other wise it will cause error when we run test case again
-		// Error 1105: Error: index already exists
-		_, err = baseDB.DB.Exec("DROP DATABASE test;")
-		c.Check(err, IsNil)
 	}
+	cluster.Stop()
 }
 
 func (s *testDDLSuite) TestDropSchemaInSharding(c *C) {
