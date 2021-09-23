@@ -34,7 +34,7 @@ function run() {
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"originTable: \`${db1}\`.\`${tb1}\`" 1 \
+		"sourceTable: \`${db1}\`.\`${tb1}\`" 1 \
 		"targetTable: \`${db}\`.\`${tb}\`" 1 \
 		"Column count doesn't match value count" 1
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -63,7 +63,7 @@ function run() {
 	# Column count doesn't match value count
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"originTable: $(${db1}).$(${tb1})" 1 \
+		"sourceTable: $(${db1}).$(${tb1})" 1 \
 		"targetTable: $(${db}).$(${tb})" 1 \
 		"Column count doesn't match value count" 1
 
