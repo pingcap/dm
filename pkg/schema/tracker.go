@@ -510,5 +510,4 @@ func (tr *Tracker) TrackToIndex(targetTables []*filter.Table) {
 			log.L().Info(fmt.Sprintf("Remove downStream schema tracker %s.%s ", db, table))
 		}
 	}
-
 }
