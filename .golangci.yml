@@ -11,7 +11,6 @@ linters:
     - exportloopref
     - gocritic
     - godot
-    - golint
     - goprintffuncname
     - gosimple
     - govet
@@ -111,7 +110,6 @@ linters-settings:
 
 issues:
   include:
-    - EXC0002 # golint
     - EXC0003
 
   exclude-rules:
@@ -122,7 +120,7 @@ issues:
       text: "SA1019:"
 
   # Fix found issues (if it's supported by the linter)
-  fix: false
+  fix: true
 
 run:
   # timeout for analysis, e.g. 30s, 5m, default is 1m
