@@ -59,7 +59,11 @@ func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, wor
 	switch cfg.Mode {
 	case config.ModeAll:
 		us = append(us, dumpling.NewDumpling(cfg))
-		us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
+		if cfg.TiDB.Backend == "" {
+			us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
+		} else {
+			us = append(us, loader.NewLightningLoader(cfg, etcdClient, workerName))
+		}
 		us = append(us, syncer.NewSyncer(cfg, etcdClient))
 	case config.ModeFull:
 		// NOTE: maybe need another checker in the future?

@@ -25,8 +25,8 @@ require (
 	github.com/pingcap/errors v0.11.5-0.20210513014640-40f9a1999b3b
 	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
 	github.com/pingcap/log v0.0.0-20210906054005-afc726e70354
-	github.com/pingcap/parser v0.0.0-20210907051057-948434fa20e4
-	github.com/pingcap/tidb v1.1.0-beta.0.20210914112841-6ebfe8aa4257
+	github.com/pingcap/parser v0.0.0-20210915160042-658edc1dba6a
+	github.com/pingcap/tidb v1.1.0-beta.0.20210923162246-d14566c7ed3e
 	github.com/pingcap/tidb-tools v5.2.0-alpha.0.20210727084616-915b22e4d42c+incompatible
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6

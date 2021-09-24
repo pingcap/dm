@@ -1373,6 +1373,11 @@ func (s *Server) generateSubTask(ctx context.Context, task string, errCnt, warnC
 	sourceCfgs := s.getSourceConfigs(cfg.MySQLInstances)
 
 	stCfgs, err := cfg.SubTaskConfigs(sourceCfgs)
+	if cfg.TiDB != nil {
+		for _, st := range stCfgs {
+			st.TiDB = *cfg.TiDB
+		}
+	}
 	if err != nil {
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
