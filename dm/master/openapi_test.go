@@ -587,7 +587,7 @@ func genShardAndFilterTask() openapi.Task {
 	       schema: "db1"
 	       table: "tbl"
 
-	event-filter:
+	binlog-filter—rule:
 	   -name: "filterA"
 	    ignore-event: ["drop database"]
 	    ignore-sql: ["^Drop"]
