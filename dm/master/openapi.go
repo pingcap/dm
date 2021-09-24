@@ -16,7 +16,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -227,14 +226,14 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		return err
 	}
 	task := req.Task
-	if err := adjustModelTask(&task); err != nil {
+	if err := task.Adjust(); err != nil {
 		return err
 	}
 	// prepare target db config
 	newCtx := ctx.Request().Context()
-	toDBCfg, err := getAndAdjustTaskTargetDBCfg(newCtx, &task)
-	if err != nil {
-		return err
+	toDBCfg := task.GetTargetDBCfg()
+	if adjustDBErr := adjustTargetDB(newCtx, toDBCfg); adjustDBErr != nil {
+		return terror.WithClass(adjustDBErr, terror.ClassDMMaster)
 	}
 	// generate sub task config list
 	subTaskConfigList, err := s.modelToSubTaskConfigList(toDBCfg, &task)
@@ -550,43 +549,6 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 		subTaskCfgList[i] = *subTaskCfg
 	}
 	return subTaskCfgList, nil
-}
-
-func adjustModelTask(task *openapi.Task) error {
-	defaultMetaSchema := "dm_meta"
-	if task.MetaSchema == nil {
-		task.MetaSchema = &defaultMetaSchema
-	}
-	// check some not implemented features
-	if task.OnDuplicate != openapi.TaskOnDuplicateError {
-		return terror.ErrOpenAPICommonError.Generate("`on_duplicate` only supports `error` for now.")
-	}
-	return nil
-}
-
-func getAndAdjustTaskTargetDBCfg(ctx context.Context, task *openapi.Task) (*config.DBConfig, error) {
-	toDBCfg := &config.DBConfig{
-		Host:     task.TargetConfig.Host,
-		Port:     task.TargetConfig.Port,
-		User:     task.TargetConfig.User,
-		Password: task.TargetConfig.Password,
-	}
-	if task.TargetConfig.Security != nil {
-		var certAllowedCn []string
-		if task.TargetConfig.Security.CertAllowedCn != nil {
-			certAllowedCn = append(certAllowedCn, *task.TargetConfig.Security.CertAllowedCn...)
-		}
-		toDBCfg.Security = &config.Security{
-			SSLCABytes:    []byte(task.TargetConfig.Security.SslCaContent),
-			SSLKEYBytes:   []byte(task.TargetConfig.Security.SslKeyContent),
-			SSLCertBytes:  []byte(task.TargetConfig.Security.SslCertContent),
-			CertAllowedCN: certAllowedCn,
-		}
-	}
-	if adjustDBErr := adjustTargetDB(ctx, toDBCfg); adjustDBErr != nil {
-		return nil, terror.WithClass(adjustDBErr, terror.ClassDMMaster)
-	}
-	return toDBCfg, nil
 }
 
 func removeDuplication(in []string) []string {
