@@ -70,7 +70,7 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 		})
 	}
 
-	shouldSkip, err := s.filterQueryEvent(realTables, stmt, sql)
+	shouldSkip, err := s.skipQueryEvent(realTables, stmt, sql)
 	if err != nil {
 		return nil, err
 	}

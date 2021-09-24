@@ -2174,13 +2174,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		log.WrapStringerField("location", ec.currentLocation),
 		zap.Reflect("raw event data", ev.Rows))
 
-	// TODO(ehco) remove heartbeat
-	if s.cfg.EnableHeartbeat {
-		s.heartbeat.TryUpdateTaskTS(s.cfg.Name, originTable.Schema, originTable.Name, ev.Rows)
-	}
-	// ENDTODO
-
-	ignore, err := s.filterRowsEvent(originTable, ec.header.EventType)
+	needSkip, err := s.skipRowsEvent(originTable, ec.header.EventType)
 	if err != nil {
 		return err
 	}
@@ -2202,7 +2196,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 	}
 
-	// TODO(csuzhangxc): check performance of `getTable` from schema tracker.
+	// TODO(csuzhangxc): check performance of `getTableInfo` from schema tracker.
 	tableInfo, err := s.getTableInfo(ec.tctx, originTable, targetTable)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
@@ -2374,7 +2368,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			log.WrapStringerField("location", ec.currentLocation),
 			log.ShortError(err))
 		// return error if parse fail and filter fail
-		needSkip, err2 := s.filterSQL(qec.originSQL)
+		needSkip, err2 := s.skipSQLByPattern(qec.originSQL)
 		if err2 != nil {
 			return err2
 		}
@@ -2397,7 +2391,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			if len(table.Schema) == 0 {
 				table.Schema = qec.ddlSchema
 			}
-			ignore, err2 := s.filterRowsEvent(table, replication.QUERY_EVENT)
+			ignore, err2 := s.skipRowsEvent(table, replication.QUERY_EVENT)
 			if err2 == nil && ignore {
 				return nil
 			}

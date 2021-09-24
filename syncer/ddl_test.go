@@ -16,6 +16,7 @@ package syncer
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
