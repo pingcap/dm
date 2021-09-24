@@ -2307,7 +2307,7 @@ type queryEventContext struct {
 	needHandleDDLs []string // after route
 
 	ddlInfo         *shardingDDLInfo
-	trackInfos      []*trackInfo
+	trackInfos      []*ddlInfo
 	sourceTbls      map[string]map[string]struct{} // db name -> tb name
 	onlineDDLTables map[string]*filter.Table
 }
@@ -2452,7 +2452,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	*/
 
 	qec.needHandleDDLs = make([]string, 0, len(qec.appliedDDLs))
-	qec.trackInfos = make([]*trackInfo, 0, len(qec.appliedDDLs))
+	qec.trackInfos = make([]*ddlInfo, 0, len(qec.appliedDDLs))
 
 	// handle one-schema change DDL
 	for _, sql := range qec.appliedDDLs {
@@ -2522,7 +2522,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 
 		qec.needHandleDDLs = append(qec.needHandleDDLs, sqlDDL)
-		qec.trackInfos = append(qec.trackInfos, &trackInfo{sql: sql, stmt: stmt, sourceTables: sourceTables, targetTables: targetTables})
+		qec.trackInfos = append(qec.trackInfos, &ddlInfo{sql: sql, stmt: stmt, sourceTables: sourceTables, targetTables: targetTables})
 		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
 		//       we should use a better mechanism to combine these operations
 		if s.cfg.ShardMode == "" {
@@ -2834,7 +2834,7 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 }
 
 // trackDDL tracks ddl in schemaTracker.
-func (s *Syncer) trackDDL(usedSchema string, trackInfo *trackInfo, ec *eventContext) error {
+func (s *Syncer) trackDDL(usedSchema string, trackInfo *ddlInfo, ec *eventContext) error {
 	var (
 		srcTables    = trackInfo.sourceTables
 		targetTables = trackInfo.targetTables

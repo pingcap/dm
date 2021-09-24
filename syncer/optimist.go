@@ -27,14 +27,6 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// trackInfo keeps data needed for schema tracker.
-type trackInfo struct {
-	sql          string
-	stmt         ast.StmtNode
-	sourceTables []*filter.Table
-	targetTables []*filter.Table
-}
-
 // initOptimisticShardDDL initializes the shard DDL support in the optimistic mode.
 func (s *Syncer) initOptimisticShardDDL(ctx context.Context) error {
 	// fetch tables from source and filter them

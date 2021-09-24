@@ -1599,7 +1599,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 
 		ca.callback()
 
-		trackInfo := &trackInfo{
+		trackInfo := &ddlInfo{
 			sql:          ddlSQL,
 			stmt:         stmt,
 			sourceTables: sourceTables,

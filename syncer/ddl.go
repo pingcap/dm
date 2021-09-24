@@ -310,3 +310,10 @@ type shardingDDLInfo struct {
 	sourceTables []*filter.Table
 	targetTables []*filter.Table
 }
+
+type ddlInfo struct {
+	sql          string
+	stmt         ast.StmtNode
+	sourceTables []*filter.Table
+	targetTables []*filter.Table
+}
