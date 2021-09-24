@@ -781,6 +781,9 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 			return nil, terror.Annotatef(err, "source %s", inst.SourceID)
 		}
 
+		if c.TiDB != nil {
+			cfg.TiDB = *c.TiDB
+		}
 		cfgs[i] = cfg
 	}
 	return cfgs, nil

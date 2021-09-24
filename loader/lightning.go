@@ -15,25 +15,22 @@ package loader
 
 import (
 	"context"
-	"github.com/pingcap/dm/pkg/binlog"
 	"path/filepath"
 	"sync"
-
-	"github.com/pingcap/failpoint"
-
-	"github.com/pingcap/dm/pkg/conn"
-
-	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/br/pkg/lightning"
 	lcfg "github.com/pingcap/tidb/br/pkg/lightning/config"
+	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
@@ -63,8 +60,8 @@ type LightningLoader struct {
 	cancel context.CancelFunc // for per task context, which maybe different from lightning context
 }
 
-// NewLightningLoader creates a new Loader importing data with lightning.
-func NewLightningLoader(cfg *config.SubTaskConfig, cli *clientv3.Client, workerName string) *LightningLoader {
+// NewLightning creates a new Loader importing data with lightning.
+func NewLightning(cfg *config.SubTaskConfig, cli *clientv3.Client, workerName string) *LightningLoader {
 	lightningCfg := makeGlobalConfig(cfg)
 	core := lightning.New(lightningCfg)
 	loader := &LightningLoader{
