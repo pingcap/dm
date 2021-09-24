@@ -284,10 +284,12 @@ type TaskConfig struct {
 	// we store detail status in meta
 	// don't save configuration into it
 	MetaSchema string `yaml:"meta-schema" toml:"meta-schema" json:"meta-schema"`
-
-	EnableHeartbeat         bool `yaml:"enable-heartbeat" toml:"enable-heartbeat" json:"enable-heartbeat"`
-	HeartbeatUpdateInterval int  `yaml:"heartbeat-update-interval" toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
-	HeartbeatReportInterval int  `yaml:"heartbeat-report-interval" toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
+	// deprecated
+	EnableHeartbeat bool `yaml:"enable-heartbeat" toml:"enable-heartbeat" json:"enable-heartbeat"`
+	// deprecated
+	HeartbeatUpdateInterval int `yaml:"heartbeat-update-interval" toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
+	// deprecated
+	HeartbeatReportInterval int `yaml:"heartbeat-report-interval" toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	// deprecated
 	Timezone string `yaml:"timezone" toml:"timezone" json:"timezone"`
 
@@ -300,6 +302,10 @@ type TaskConfig struct {
 	MySQLInstances []*MySQLInstance `yaml:"mysql-instances" toml:"mysql-instances" json:"mysql-instances"`
 
 	OnlineDDL bool `yaml:"online-ddl" toml:"online-ddl" json:"online-ddl"`
+	// pt/gh-ost name rule,support regex
+	ShadowTableRules []string `yaml:"shadow-table-rules" toml:"shadow-table-rules" json:"shadow-table-rules"`
+	TrashTableRules  []string `yaml:"trash-table-rules" toml:"trash-table-rules" json:"trash-table-rules"`
+
 	// deprecated
 	OnlineDDLScheme string `yaml:"online-ddl-scheme" toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
@@ -685,6 +691,11 @@ func (c *TaskConfig) adjust() error {
 		log.L().Warn("`remove-meta` in task config is deprecated, please use `start-task ... --remove-meta` instead")
 	}
 
+	if c.EnableHeartbeat || c.HeartbeatUpdateInterval != defaultUpdateInterval ||
+		c.HeartbeatReportInterval != defaultReportInterval {
+		c.EnableHeartbeat = false
+		log.L().Warn("heartbeat is deprecated, needn't set it anymore.")
+	}
 	return nil
 }
 
@@ -701,6 +712,8 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.IsSharding = c.IsSharding
 		cfg.ShardMode = c.ShardMode
 		cfg.OnlineDDL = c.OnlineDDL
+		cfg.TrashTableRules = c.TrashTableRules
+		cfg.ShadowTableRules = c.ShadowTableRules
 		cfg.IgnoreCheckingItems = c.IgnoreCheckingItems
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
@@ -1046,9 +1059,11 @@ type TaskConfigForDowngrade struct {
 	EnableANSIQuotes        bool                           `yaml:"ansi-quotes"`
 	RemoveMeta              bool                           `yaml:"remove-meta"`
 	// new config item
-	MySQLInstances []*MySQLInstanceForDowngrade `yaml:"mysql-instances"`
-	ExprFilter     map[string]*ExpressionFilter `yaml:"expression-filter,omitempty"`
-	OnlineDDL      bool                         `yaml:"online-ddl,omitempty"`
+	MySQLInstances   []*MySQLInstanceForDowngrade `yaml:"mysql-instances"`
+	ExprFilter       map[string]*ExpressionFilter `yaml:"expression-filter,omitempty"`
+	OnlineDDL        bool                         `yaml:"online-ddl,omitempty"`
+	ShadowTableRules []string                     `yaml:"shadow-table-rules,omitempty"`
+	TrashTableRules  []string                     `yaml:"trash-table-rules,omitempty"`
 }
 
 // NewTaskConfigForDowngrade create new TaskConfigForDowngrade.
@@ -1081,6 +1096,8 @@ func NewTaskConfigForDowngrade(taskConfig *TaskConfig) *TaskConfigForDowngrade {
 		MySQLInstances:          NewMySQLInstancesForDowngrade(taskConfig.MySQLInstances),
 		ExprFilter:              taskConfig.ExprFilter,
 		OnlineDDL:               taskConfig.OnlineDDL,
+		ShadowTableRules:        taskConfig.ShadowTableRules,
+		TrashTableRules:         taskConfig.TrashTableRules,
 	}
 }
 
@@ -1092,6 +1109,12 @@ func (c *TaskConfigForDowngrade) omitDefaultVals() {
 		if timeZone, ok := c.TargetDB.Session["time_zone"]; ok && timeZone == defaultTimeZone {
 			delete(c.TargetDB.Session, "time_zone")
 		}
+	}
+	if len(c.ShadowTableRules) == 1 && c.ShadowTableRules[0] == DefaultShadowTableRules {
+		c.ShadowTableRules = nil
+	}
+	if len(c.TrashTableRules) == 1 && c.TrashTableRules[0] == DefaultTrashTableRules {
+		c.TrashTableRules = nil
 	}
 }
 

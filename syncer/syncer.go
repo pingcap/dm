@@ -194,8 +194,6 @@ type Syncer struct {
 	// record whether error occurred when execute SQLs
 	execError atomic.Error
 
-	heartbeat *Heartbeat
-
 	readerHub              *streamer.ReaderHub
 	recordedActiveRelayLog bool
 
@@ -406,22 +404,6 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 				return err
 			}
 		}
-	}
-	if s.cfg.EnableHeartbeat {
-		s.heartbeat, err = GetHeartbeat(&HeartbeatConfig{
-			serverID:       s.cfg.ServerID,
-			primaryCfg:     s.cfg.From,
-			updateInterval: int64(s.cfg.HeartbeatUpdateInterval),
-			reportInterval: int64(s.cfg.HeartbeatReportInterval),
-		})
-		if err != nil {
-			return err
-		}
-		err = s.heartbeat.AddTask(s.cfg.Name)
-		if err != nil {
-			return err
-		}
-		rollbackHolder.Add(fr.FuncRollback{Name: "remove-heartbeat", Fn: s.removeHeartbeat})
 	}
 
 	// when Init syncer, set active relay log info
@@ -2202,7 +2184,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	if err != nil {
 		return err
 	}
-	if ignore {
+	if needSkip {
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		// for RowsEvent, we should record lastLocation rather than currentLocation
 		return s.recordSkipSQLsLocation(&ec)
@@ -2210,9 +2192,9 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	if s.cfg.ShardMode == config.ShardPessimistic {
 		if s.sgk.InSyncing(originTable, targetTable, *ec.currentLocation) {
-			// if in unsync stage and not before active DDL, ignore it
-			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), ignore it
-			ec.tctx.L().Debug("replicate sharding DDL, ignore Rows event",
+			// if in unsync stage and not before active DDL, filter it
+			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), filter it
+			ec.tctx.L().Debug("replicate sharding DDL, filter Rows event",
 				zap.String("event", "row"),
 				zap.Stringer("source", originTable),
 				log.WrapStringerField("location", ec.currentLocation))
@@ -2523,7 +2505,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 				}
 				continue
 			case *ast.TruncateTableStmt:
-				qec.tctx.L().Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
+				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
 				continue
 			}
 
@@ -2540,7 +2522,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		} else if s.cfg.ShardMode == config.ShardOptimistic {
 			switch stmt.(type) {
 			case *ast.TruncateTableStmt:
-				qec.tctx.L().Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
+				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
 				continue
 			case *ast.RenameTableStmt:
 				return terror.ErrSyncerUnsupportedStmt.Generate("RENAME TABLE", config.ShardOptimistic)
@@ -3211,8 +3193,6 @@ func (s *Syncer) Close() {
 		return
 	}
 
-	s.removeHeartbeat()
-
 	s.stopSync()
 	s.closeDBs()
 
@@ -3257,15 +3237,6 @@ func (s *Syncer) closeOnlineDDL() {
 	if s.onlineDDL != nil {
 		s.onlineDDL.Close()
 		s.onlineDDL = nil
-	}
-}
-
-func (s *Syncer) removeHeartbeat() {
-	if s.cfg.EnableHeartbeat {
-		err := s.heartbeat.RemoveTask(s.cfg.Name)
-		if err != nil {
-			s.tctx.L().Error("fail to remove task for heartbeat", zap.Error(err))
-		}
 	}
 }
 

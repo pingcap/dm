@@ -142,14 +142,16 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		Dir: loaderDir,
 	}
 	s.cfg = &config.SubTaskConfig{
-		From:         config.GetDBConfigFromEnv(),
-		To:           config.GetDBConfigFromEnv(),
-		ServerID:     101,
-		MetaSchema:   "test",
-		Name:         "syncer_ut",
-		Mode:         config.ModeIncrement,
-		Flavor:       "mysql",
-		LoaderConfig: loaderCfg,
+		From:             config.GetDBConfigFromEnv(),
+		To:               config.GetDBConfigFromEnv(),
+		ServerID:         101,
+		MetaSchema:       "test",
+		Name:             "syncer_ut",
+		ShadowTableRules: []string{config.DefaultShadowTableRules},
+		TrashTableRules:  []string{config.DefaultTrashTableRules},
+		Mode:             config.ModeIncrement,
+		Flavor:           "mysql",
+		LoaderConfig:     loaderCfg,
 	}
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
@@ -311,9 +313,9 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
 
-		r, err := syncer.filterQueryEvent(tables, stmt, query)
+		needSkip, err := syncer.skipQueryEvent(tables, stmt, query)
 		c.Assert(err, IsNil)
-		c.Assert(r, Equals, cs.skip)
+		c.Assert(needSkip, Equals, cs.skip)
 	}
 }
 
@@ -448,9 +450,9 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 
 		tables, err := parserpkg.FetchDDLTables(sql, stmt, syncer.SourceTableNamesFlavor)
 		c.Assert(err, IsNil)
-		r, err := syncer.filterQueryEvent(tables, stmt, sql)
+		needSkip, err := syncer.skipQueryEvent(tables, stmt, sql)
 		c.Assert(err, IsNil)
-		c.Assert(r, Equals, res[i])
+		c.Assert(needSkip, Equals, res[i])
 		i++
 	}
 }
@@ -564,57 +566,57 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 	s.resetEventsGenerator(c)
 
 	type SQLChecker struct {
-		events  []*replication.BinlogEvent
-		isDML   bool
-		skipped bool
+		events   []*replication.BinlogEvent
+		isDML    bool
+		expected bool
 	}
 
 	sqls := make([]SQLChecker, 0, 16)
 
 	evs := s.generateEvents([]mockBinlogEvent{{DBCreate, []interface{}{"foo"}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
 	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo", "create table foo.bar(id int)"}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
 	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: false})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: false})
 
 	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
 	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
 	evs = s.generateEvents([]mockBinlogEvent{{DBDrop, []interface{}{"foo1"}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
 	evs = s.generateEvents([]mockBinlogEvent{{DBCreate, []interface{}{"foo1"}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
 	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo1", "create table foo1.bar1(id int)"}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
 	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: false})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: false})
 
 	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
 	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
 	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo1", "create table foo1.bar2(id int)"}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
 	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: false})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: false})
 
 	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
 	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
@@ -639,9 +641,9 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 					Schema: string(ev.Table.Schema),
 					Name:   string(ev.Table.Table),
 				}
-				r, err := syncer.filterRowsEvent(table, e.Header.EventType)
+				needSkip, err := syncer.skipRowsEvent(table, e.Header.EventType)
 				c.Assert(err, IsNil)
-				c.Assert(r, Equals, sql.skipped)
+				c.Assert(needSkip, Equals, sql.expected)
 			default:
 				continue
 			}
@@ -720,7 +722,8 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 	mapping, err := cm.NewMapping(false, rules)
 	c.Assert(err, IsNil)
 
-	allEvents := append(createEvents, dmlEvents...)
+	allEvents := createEvents
+	allEvents = append(allEvents, dmlEvents...)
 	allEvents = append(allEvents, dropEvents...)
 	dmlIndex := 0
 	for _, e := range allEvents {
@@ -1366,7 +1369,8 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 	}
 	generatedEvents2 := s.generateEvents(events2, c)
 
-	generatedEvents := append(generatedEvents1, generatedEvents2...)
+	generatedEvents := generatedEvents1
+	generatedEvents = append(generatedEvents, generatedEvents2...)
 
 	mockStreamerProducer := &MockStreamProducer{generatedEvents}
 	mockStreamer, err := mockStreamerProducer.generateStreamer(binlog.NewLocation(""))
@@ -1662,7 +1666,7 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 
 				tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
 				c.Assert(err, IsNil)
-				r, err := syncer.filterQueryEvent(tables, stmt, sql)
+				r, err := syncer.skipQueryEvent(tables, stmt, sql)
 				c.Assert(err, IsNil)
 				c.Assert(r, Equals, res[i][j])
 			}
@@ -1671,9 +1675,9 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 				Schema: string(ev.Table.Schema),
 				Name:   string(ev.Table.Table),
 			}
-			r, err := syncer.filterRowsEvent(table, e.Header.EventType)
+			needSkip, err := syncer.skipRowsEvent(table, e.Header.EventType)
 			c.Assert(err, IsNil)
-			c.Assert(r, Equals, res[i][0])
+			c.Assert(needSkip, Equals, res[i][0])
 		default:
 			continue
 		}
@@ -2038,9 +2042,9 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 					Schema: string(ev.Table.Schema),
 					Name:   string(ev.Table.Table),
 				}
-				skip, err := syncer.filterRowsEvent(table, e.Header.EventType)
+				needSkip, err := syncer.skipRowsEvent(table, e.Header.EventType)
 				c.Assert(err, IsNil)
-				if skip {
+				if needSkip {
 					continue
 				}
 

@@ -521,7 +521,17 @@ func (m mockOnlinePlugin) Finish(tctx *tcontext.Context, table *filter.Table) er
 }
 
 func (m mockOnlinePlugin) TableType(table string) onlineddl.TableType {
-	return ""
+	// 5 is _ _gho/ghc/del or _ _old/new
+	if len(table) > 5 && strings.HasPrefix(table, "_") {
+		if strings.HasSuffix(table, "_gho") || strings.HasSuffix(table, "_new") {
+			return onlineddl.GhostTable
+		}
+
+		if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") || strings.HasSuffix(table, "_old") {
+			return onlineddl.TrashTable
+		}
+	}
+	return onlineddl.RealTable
 }
 
 func (m mockOnlinePlugin) RealName(table string) string {
