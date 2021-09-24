@@ -32,6 +32,7 @@ func (t *Task) Adjust() error {
 	return nil
 }
 
+// GetTargetDBCfg gets target db config.
 func (t *Task) GetTargetDBCfg() *config.DBConfig {
 	toDBCfg := &config.DBConfig{
 		Host:     t.TargetConfig.Host,
