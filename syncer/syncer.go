@@ -2433,7 +2433,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	qec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.Strings("appliedDDLs", qec.appliedDDLs), zap.Stringer("queryEventContext", qec))
 
 	if len(qec.onlineDDLTables) > 1 {
-		return terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(string(ev.Query))
+		return terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(qec.originSQL)
 	}
 
 	metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenQuery, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
@@ -2505,7 +2505,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			if qec.shardingDDLInfo == nil {
 				qec.shardingDDLInfo = ddlInfo
 			} else if qec.shardingDDLInfo.sourceTables[0].String() != sourceTable.String() {
-				return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
+				return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(qec.originSQL)
 			}
 		} else if s.cfg.ShardMode == config.ShardOptimistic {
 			switch ddlInfo.stmt.(type) {
@@ -2518,6 +2518,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 
 		qec.needHandleDDLs = append(qec.needHandleDDLs, ddlInfo.sql)
+		ddlInfo.sql = sql
 		qec.trackInfos = append(qec.trackInfos, ddlInfo)
 		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
 		//       we should use a better mechanism to combine these operations
