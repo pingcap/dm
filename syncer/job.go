@@ -122,6 +122,7 @@ func newDDLJob(qec *queryEventContext) *job {
 		jobAddTime:      time.Now(),
 	}
 
+	ddlInfo := qec.shardingDDLInfo
 	if len(qec.sourceTbls) != 0 {
 		j.sourceTbls = make(map[string][]*filter.Table, len(qec.sourceTbls))
 		for schema, tbMap := range qec.sourceTbls {
@@ -132,9 +133,9 @@ func newDDLJob(qec *queryEventContext) *job {
 				j.sourceTbls[schema] = append(j.sourceTbls[schema], &filter.Table{Schema: schema, Name: name})
 			}
 		}
-	} else if qec.ddlInfo != nil && qec.ddlInfo.sourceTables != nil && qec.ddlInfo.targetTables != nil {
-		j.sourceTbls = map[string][]*filter.Table{qec.ddlInfo.sourceTables[0].Schema: {qec.ddlInfo.sourceTables[0]}}
-		j.targetTable = qec.ddlInfo.targetTables[0]
+	} else if ddlInfo != nil && ddlInfo.sourceTables != nil && ddlInfo.targetTables != nil {
+		j.sourceTbls = map[string][]*filter.Table{ddlInfo.sourceTables[0].Schema: {ddlInfo.sourceTables[0]}}
+		j.targetTable = ddlInfo.targetTables[0]
 	}
 
 	return j

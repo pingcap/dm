@@ -2306,7 +2306,7 @@ type queryEventContext struct {
 	appliedDDLs    []string // after onlineDDL apply if onlineDDL != nil and track, before route
 	needHandleDDLs []string // after route
 
-	ddlInfo         *shardingDDLInfo
+	shardingDDLInfo *ddlInfo
 	trackInfos      []*ddlInfo
 	sourceTbls      map[string]map[string]struct{} // db name -> tb name
 	onlineDDLTables map[string]*filter.Table
@@ -2457,13 +2457,13 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	// handle one-schema change DDL
 	for _, sql := range qec.appliedDDLs {
 		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		sqlDDL, sourceTables, targetTables, stmt, err2 := s.routeDDL(qec.p, qec.ddlSchema, sql)
+		ddlInfo, err2 := s.routeDDL(qec.p, qec.ddlSchema, sql)
 		if err2 != nil {
 			return err2
 		}
-		sourceTable := sourceTables[0]
-		targetTable := targetTables[0]
-		if len(sqlDDL) == 0 {
+		sourceTable := ddlInfo.sourceTables[0]
+		targetTable := ddlInfo.targetTables[0]
+		if len(ddlInfo.sql) == 0 {
 			metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 			qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", qec.ddlSchema))
 			continue
@@ -2478,7 +2478,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 		// pre-filter of sharding
 		if s.cfg.ShardMode == config.ShardPessimistic {
-			switch stmt.(type) {
+			switch ddlInfo.stmt.(type) {
 			case *ast.DropDatabaseStmt:
 				err = s.dropSchemaInSharding(qec.tctx, sourceTable.Schema)
 				if err != nil {
@@ -2497,36 +2497,32 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 				}
 				continue
 			case *ast.TruncateTableStmt:
-				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
+				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", ddlInfo.sql))
 				continue
 			}
 
 			// in sharding mode, we only support to do one ddl in one event
-			if qec.ddlInfo == nil {
-				qec.ddlInfo = &shardingDDLInfo{
-					sourceTables: sourceTables,
-					targetTables: targetTables,
-					stmt:         stmt,
-				}
-			} else if qec.ddlInfo.sourceTables[0].String() != sourceTable.String() {
+			if qec.shardingDDLInfo == nil {
+				qec.shardingDDLInfo = ddlInfo
+			} else if qec.shardingDDLInfo.sourceTables[0].String() != sourceTable.String() {
 				return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
 			}
 		} else if s.cfg.ShardMode == config.ShardOptimistic {
-			switch stmt.(type) {
+			switch ddlInfo.stmt.(type) {
 			case *ast.TruncateTableStmt:
-				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
+				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", ddlInfo.sql))
 				continue
 			case *ast.RenameTableStmt:
 				return terror.ErrSyncerUnsupportedStmt.Generate("RENAME TABLE", config.ShardOptimistic)
 			}
 		}
 
-		qec.needHandleDDLs = append(qec.needHandleDDLs, sqlDDL)
-		qec.trackInfos = append(qec.trackInfos, &ddlInfo{sql: sql, stmt: stmt, sourceTables: sourceTables, targetTables: targetTables})
+		qec.needHandleDDLs = append(qec.needHandleDDLs, ddlInfo.sql)
+		qec.trackInfos = append(qec.trackInfos, ddlInfo)
 		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
 		//       we should use a better mechanism to combine these operations
 		if s.cfg.ShardMode == "" {
-			recordSourceTbls(qec.sourceTbls, stmt, sourceTable)
+			recordSourceTbls(qec.sourceTbls, ddlInfo.stmt, sourceTable)
 		}
 	}
 
@@ -2629,9 +2625,9 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 		active             bool
 		remain             int
 
-		sourceTableID  = utils.GenTableID(qec.ddlInfo.sourceTables[0])
+		ddlInfo        = qec.shardingDDLInfo
+		sourceTableID  = utils.GenTableID(ddlInfo.sourceTables[0])
 		needHandleDDLs = qec.needHandleDDLs
-		ddlInfo        = qec.ddlInfo
 		// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
 		// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
 		startLocation   = qec.startLocation
