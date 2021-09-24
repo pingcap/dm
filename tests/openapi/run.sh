@@ -65,6 +65,17 @@ function test_relay() {
 	# create source succesfully
 	openapi_source_check "create_source1_success"
 
+	# we need make sure that source is bounded by worker1 because we will start relay on worker1
+	# todo: use openapi to transfer source
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"transfer-source mysql-01 worker1" \
+		"\"result\": true" 1
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s mysql-01" \
+		"\"result\": true" 2 \
+		"\"worker\": \"worker1\"" 1
+
 	# start relay failed
 	openapi_source_check "start_relay_failed" "mysql-01" "no-worker"
 
