@@ -39,6 +39,7 @@ type CommandMasterFlags struct {
 
 // Reset clears cache of CommandMasterFlags.
 func (c CommandMasterFlags) Reset() {
+	//nolint:staticcheck
 	c.workers = c.workers[:0]
 }
 
