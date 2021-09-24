@@ -152,8 +152,10 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		if err = cfg.Adjust(ctx); err != nil {
 			return err
 		}
+		l.Lock()
 		taskCtx, cancel := context.WithCancel(ctx)
 		l.cancel = cancel
+		l.Unlock()
 		err = l.core.RunOnce(taskCtx, cfg, nil)
 		if err == nil {
 			l.finish.Store(true)
@@ -177,12 +179,18 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 func (l *LightningLoader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	l.logger.Info("lightning load start")
 	errs := make([]*pb.ProcessError, 0, 1)
-	if err := l.restore(ctx); err != nil {
+	if err := l.restore(ctx); err != nil && !utils.IsContextCanceledError(err) {
 		errs = append(errs, unit.NewProcessError(err))
+	}
+	isCanceled := false
+	select {
+	case <-ctx.Done():
+		isCanceled = true
+	default:
 	}
 	l.logger.Info("lightning load end")
 	pr <- pb.ProcessResult{
-		IsCanceled: false,
+		IsCanceled: isCanceled,
 		Errors:     errs,
 	}
 }

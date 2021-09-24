@@ -23,13 +23,12 @@ import (
 	"strconv"
 	"strings"
 
-	lcfg "github.com/pingcap/tidb/br/pkg/lightning/config"
-
 	"github.com/BurntSushi/toml"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	lcfg "github.com/pingcap/tidb/br/pkg/lightning/config"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/dumpling"
@@ -186,7 +185,7 @@ func GetDBConfigFromEnv() DBConfig {
 	}
 }
 
-// TiDBExtraConfig is the extra DB configuration only for TiDb.
+// TiDBExtraConfig is the extra DB configuration only for TiDB.
 type TiDBExtraConfig struct {
 	StatusPort int    `toml:"status-port" json:"status-port" yaml:"status-port"`
 	PdAddr     string `toml:"pd-addr" json:"pd-addr" yaml:"pd-addr"`
