@@ -16,9 +16,7 @@ package loader
 import (
 	"context"
 	"github.com/pingcap/dm/pkg/binlog"
-	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/pingcap/failpoint"
@@ -31,7 +29,6 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 
@@ -124,7 +121,7 @@ func (l *LightningLoader) Init(ctx context.Context) (err error) {
 
 func (l *LightningLoader) restore(ctx context.Context) error {
 	tctx := tcontext.NewContext(ctx, l.logger)
-	if err := l.putLoadTask(); err != nil {
+	if err := putLoadTask(l.cli, l.cfg, l.workerName); err != nil {
 		return err
 	}
 	if err := l.checkPoint.Init(tctx, lightningCheckpointFile, 1); err != nil {
@@ -167,10 +164,12 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		l.finish.Store(true)
 	}
 	if l.cfg.Mode == config.ModeFull {
-		_ = l.delLoadTask()
+		_ = delLoadTask(l.cli, l.cfg, l.workerName)
 	}
-	if l.cfg.CleanDumpFile {
-		l.cleanDumpFiles()
+	if l.finish.Load() {
+		if l.cfg.CleanDumpFile {
+			cleanDumpFiles(l.cfg)
+		}
 	}
 	return err
 }
@@ -274,54 +273,4 @@ func (l *LightningLoader) checkpointID() string {
 		return l.cfg.Dir
 	}
 	return shortSha1(dir)
-}
-
-// cleanDumpFiles is called when finish restoring data, to clean useless files.
-func (l *LightningLoader) cleanDumpFiles() {
-	l.logger.Info("clean dump files")
-	if l.cfg.Mode == config.ModeFull {
-		// in full-mode all files won't be need in the future
-		if err := os.RemoveAll(l.cfg.Dir); err != nil {
-			l.logger.Warn("error when remove loaded dump folder", zap.String("data folder", l.cfg.Dir), zap.Error(err))
-		}
-	} else {
-		// leave metadata file and table structure files, only delete data files
-		files, err := utils.CollectDirFiles(l.cfg.Dir)
-		if err != nil {
-			l.logger.Warn("fail to collect files", zap.String("data folder", l.cfg.Dir), zap.Error(err))
-		}
-		var lastErr error
-		for f := range files {
-			if strings.HasSuffix(f, ".sql") {
-				// TODO: table structure files are not used now, but we plan to used them in future so not delete them
-				if strings.HasSuffix(f, "-schema-create.sql") || strings.HasSuffix(f, "-schema.sql") {
-					continue
-				}
-				lastErr = os.Remove(filepath.Join(l.cfg.Dir, f))
-			}
-		}
-		if lastErr != nil {
-			l.logger.Warn("show last error when remove loaded dump sql files", zap.String("data folder", l.cfg.Dir), zap.Error(lastErr))
-		}
-	}
-}
-
-// putLoadTask is called when start restoring data, to put load worker in etcd.
-func (l *LightningLoader) putLoadTask() error {
-	_, err := ha.PutLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID, l.workerName)
-	if err != nil {
-		return err
-	}
-	l.logger.Info("put load worker in etcd", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
-	return nil
-}
-
-// delLoadTask is called when finish restoring data, to delete load worker in etcd.
-func (l *LightningLoader) delLoadTask() error {
-	_, _, err := ha.DelLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID)
-	if err != nil {
-		return err
-	}
-	l.logger.Info("delete load worker in etcd for full mode", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
-	return nil
 }

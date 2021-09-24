@@ -693,7 +693,7 @@ func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
 
 // Restore begins the restore process.
 func (l *Loader) Restore(ctx context.Context) error {
-	if err := l.putLoadTask(); err != nil {
+	if err := putLoadTask(l.cli, l.cfg, l.workerName); err != nil {
 		return err
 	}
 
@@ -743,12 +743,12 @@ func (l *Loader) Restore(ctx context.Context) error {
 		l.logger.Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
 		if l.checkPoint.AllFinished() {
 			if l.cfg.Mode == config.ModeFull {
-				if err = l.delLoadTask(); err != nil {
+				if err = delLoadTask(l.cli, l.cfg, l.workerName); err != nil {
 					return err
 				}
 			}
 			if l.cfg.CleanDumpFile {
-				l.cleanDumpFiles()
+				cleanDumpFiles(l.cfg)
 			}
 		}
 	} else if errors.Cause(err) != context.Canceled {
@@ -1540,18 +1540,18 @@ func (l *Loader) getMydumpMetadata() error {
 }
 
 // cleanDumpFiles is called when finish restoring data, to clean useless files.
-func (l *Loader) cleanDumpFiles() {
-	l.logger.Info("clean dump files")
-	if l.cfg.Mode == config.ModeFull {
+func cleanDumpFiles(cfg *config.SubTaskConfig) {
+	log.L().Info("clean dump files")
+	if cfg.Mode == config.ModeFull {
 		// in full-mode all files won't be need in the future
-		if err := os.RemoveAll(l.cfg.Dir); err != nil {
-			l.logger.Warn("error when remove loaded dump folder", zap.String("data folder", l.cfg.Dir), zap.Error(err))
+		if err := os.RemoveAll(cfg.Dir); err != nil {
+			log.L().Warn("error when remove loaded dump folder", zap.String("data folder", cfg.Dir), zap.Error(err))
 		}
 	} else {
 		// leave metadata file and table structure files, only delete data files
-		files, err := utils.CollectDirFiles(l.cfg.Dir)
+		files, err := utils.CollectDirFiles(cfg.Dir)
 		if err != nil {
-			l.logger.Warn("fail to collect files", zap.String("data folder", l.cfg.Dir), zap.Error(err))
+			log.L().Warn("fail to collect files", zap.String("data folder", cfg.Dir), zap.Error(err))
 		}
 		var lastErr error
 		for f := range files {
@@ -1560,31 +1560,31 @@ func (l *Loader) cleanDumpFiles() {
 				if strings.HasSuffix(f, "-schema-create.sql") || strings.HasSuffix(f, "-schema.sql") {
 					continue
 				}
-				lastErr = os.Remove(filepath.Join(l.cfg.Dir, f))
+				lastErr = os.Remove(filepath.Join(cfg.Dir, f))
 			}
 		}
 		if lastErr != nil {
-			l.logger.Warn("show last error when remove loaded dump sql files", zap.String("data folder", l.cfg.Dir), zap.Error(lastErr))
+			log.L().Warn("show last error when remove loaded dump sql files", zap.String("data folder", cfg.Dir), zap.Error(lastErr))
 		}
 	}
 }
 
 // putLoadTask is called when start restoring data, to put load worker in etcd.
-func (l *Loader) putLoadTask() error {
-	_, err := ha.PutLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID, l.workerName)
+func putLoadTask(cli *clientv3.Client, cfg *config.SubTaskConfig, workerName string) error {
+	_, err := ha.PutLoadTask(cli, cfg.Name, cfg.SourceID, workerName)
 	if err != nil {
 		return err
 	}
-	l.logger.Info("put load worker in etcd", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
+	log.L().Info("put load worker in etcd", zap.String("task", cfg.Name), zap.String("source", cfg.SourceID), zap.String("worker", workerName))
 	return nil
 }
 
 // delLoadTask is called when finish restoring data, to delete load worker in etcd.
-func (l *Loader) delLoadTask() error {
-	_, _, err := ha.DelLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID)
+func delLoadTask(cli *clientv3.Client, cfg *config.SubTaskConfig, workerName string) error {
+	_, _, err := ha.DelLoadTask(cli, cfg.Name, cfg.SourceID)
 	if err != nil {
 		return err
 	}
-	l.logger.Info("delete load worker in etcd for full mode", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
+	log.L().Info("delete load worker in etcd for full mode", zap.String("task", cfg.Name), zap.String("source", cfg.SourceID), zap.String("worker", workerName))
 	return nil
 }
