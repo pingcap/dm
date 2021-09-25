@@ -80,7 +80,7 @@ All notable changes to this project will be documented in this file.
 - Support limiting the number of errors and warnings that DM reports during the precheck process [#1621](https://github.com/pingcap/dm/pull/1621)
 - Optimize the behavior of the command `query-status` to get the status of upstream binlogs [#1630](https://github.com/pingcap/dm/pull/1630)
 - Optimize the format of sharded tables’ migration status output by the command `query-status` in the pessimistic mode [#1650](https://github.com/pingcap/dm/pull/1650)
-- Print help message first when dmtcl processes commands with the `--help` input [#1637](https://github.com/pingcap/dm/pull/1637)
+- Print help message first when dmctl processes commands with the `--help` input [#1637](https://github.com/pingcap/dm/pull/1637)
 - Automatically remove the related information from monitoring panels after a DDL lock is deleted [#1631](https://github.com/pingcap/dm/pull/1631)
 - Automatically remove the related task status from monitoring panels after a task is stopped or completed [#1614](https://github.com/pingcap/dm/pull/1614)
 
