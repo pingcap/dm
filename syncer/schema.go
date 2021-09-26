@@ -33,7 +33,7 @@ import (
 
 // OperateSchema operates schema for an upstream table.
 func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaRequest) (createTableStr string, err error) {
-	table := &filter.Table{
+	sourceTable := &filter.Table{
 		Schema: req.Database,
 		Name:   req.Table,
 	}
@@ -41,7 +41,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 	case pb.SchemaOp_GetSchema:
 		// we only try to get schema from schema-tracker now.
 		// in other words, we can not get the schema if any DDL/DML has been replicated, or set a schema previously.
-		return s.schemaTracker.GetCreateTable(ctx, table)
+		return s.schemaTracker.GetCreateTable(ctx, sourceTable)
 	case pb.SchemaOp_SetSchema:
 		// for set schema, we must ensure it's a valid `CREATE TABLE` statement.
 		// now, we only set schema for schema-tracker,
@@ -71,9 +71,9 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 		newSQL := newCreateSQLBuilder.String()
 
 		// drop the previous schema first.
-		err = s.schemaTracker.DropTable(table)
+		err = s.schemaTracker.DropTable(sourceTable)
 		if err != nil && !schema.IsTableNotExists(err) {
-			return "", terror.ErrSchemaTrackerCannotDropTable.Delegate(err, table)
+			return "", terror.ErrSchemaTrackerCannotDropTable.Delegate(err, sourceTable)
 		}
 		err = s.schemaTracker.CreateSchemaIfNotExists(req.Database)
 		if err != nil {
@@ -81,23 +81,23 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 		}
 		err = s.schemaTracker.Exec(ctx, req.Database, newSQL)
 		if err != nil {
-			return "", terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, table)
+			return "", terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, sourceTable)
 		}
 
-		s.exprFilterGroup.ResetExprs(table)
+		s.exprFilterGroup.ResetExprs(sourceTable)
 
 		if !req.Flush && !req.Sync {
 			break
 		}
 
-		ti, err := s.schemaTracker.GetTableInfo(table)
+		ti, err := s.schemaTracker.GetTableInfo(sourceTable)
 		if err != nil {
 			return "", err
 		}
 
 		if req.Flush {
 			log.L().Info("flush table info", zap.String("table info", newSQL))
-			err = s.checkpoint.FlushPointWithTableInfo(tcontext.NewContext(ctx, log.L()), table, ti)
+			err = s.checkpoint.FlushPointWithTableInfo(tcontext.NewContext(ctx, log.L()), sourceTable, ti)
 			if err != nil {
 				return "", err
 			}
@@ -108,9 +108,9 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 				log.L().Warn("ignore --sync flag", zap.String("shard mode", s.cfg.ShardMode))
 				break
 			}
-			downTable := s.renameShardingSchema(table)
+			targetTable := s.route(sourceTable)
 			// use new table info as tableInfoBefore, we can also use the origin table from schemaTracker
-			info := s.optimist.ConstructInfo(req.Database, req.Table, downTable.Schema, downTable.Name, []string{""}, ti, []*model.TableInfo{ti})
+			info := s.optimist.ConstructInfo(req.Database, req.Table, targetTable.Schema, targetTable.Name, []string{""}, ti, []*model.TableInfo{ti})
 			info.IgnoreConflict = true
 			log.L().Info("sync info with operate-schema", zap.String("info", info.ShortString()))
 			_, err = s.optimist.PutInfo(info)
@@ -122,7 +122,7 @@ func (s *Syncer) OperateSchema(ctx context.Context, req *pb.OperateWorkerSchemaR
 	case pb.SchemaOp_RemoveSchema:
 		// we only drop the schema in the schema-tracker now,
 		// so if we drop the schema and continue to replicate any DDL/DML, it will try to get schema from downstream again.
-		return "", s.schemaTracker.DropTable(table)
+		return "", s.schemaTracker.DropTable(sourceTable)
 	}
 	return "", nil
 }

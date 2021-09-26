@@ -233,9 +233,9 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 		c.Assert(targetSQLs[i], HasLen, len(statements))
 
 		for j, statement := range statements {
-			s, _, _, err := syncer.routeDDL(p, "test", statement)
+			ddlInfo, err := syncer.routeDDL(p, "test", statement)
 			c.Assert(err, IsNil)
-			c.Assert(s, Equals, targetSQLs[i][j])
+			c.Assert(ddlInfo.sql, Equals, targetSQLs[i][j])
 		}
 	}
 }
