@@ -33,9 +33,9 @@ const (
 )
 
 type batchTaskResult struct {
-	Result       bool                 `json:"result"`
-	Msg          string               `json:"msg"`
-	Tasks []*operateTaskResult `json:"tasks"`
+	Result bool                 `json:"result"`
+	Msg    string               `json:"msg"`
+	Tasks  []*operateTaskResult `json:"tasks"`
 }
 
 type operateTaskResult struct {
@@ -76,7 +76,7 @@ func operateTaskFunc(taskOp pb.TaskOp, cmd *cobra.Command) error {
 
 func addOperateSourceTaskFlags(cmd *cobra.Command) {
 	// control workload to dm-cluster for sources with large number of tasks.
-	cmd.Flags().Int(batchSizeFlag, defaultBatchSize, "batch size")
+	cmd.Flags().Int(batchSizeFlag, defaultBatchSize, "batch size when operating all (sub)tasks bound to a source")
 }
 
 func operateSourceTaskFunc(taskOp pb.TaskOp, cmd *cobra.Command) error {
@@ -99,7 +99,7 @@ func operateSourceTaskFunc(taskOp pb.TaskOp, cmd *cobra.Command) error {
 	}
 
 	if !resp.Result || len(resp.Sources) == 0 {
-		common.PrettyPrintInterface(&batchTaskResult{Result: false, Msg: resp.Msg, BatchResults: []*operateTaskResult{}})
+		common.PrettyPrintInterface(&batchTaskResult{Result: false, Msg: resp.Msg, Tasks: []*operateTaskResult{}})
 		return nil
 	}
 
@@ -110,7 +110,7 @@ func operateSourceTaskFunc(taskOp pb.TaskOp, cmd *cobra.Command) error {
 }
 
 func batchOperateTask(taskOp pb.TaskOp, batchSize int, sources []string, subTaskStatus []*pb.SubTaskStatus) *batchTaskResult {
-	result := batchTaskResult{Result: true, BatchResults: []*operateTaskResult{}}
+	result := batchTaskResult{Result: true, Tasks: []*operateTaskResult{}}
 
 	if len(subTaskStatus) < batchSize {
 		batchSize = len(subTaskStatus)
@@ -153,11 +153,11 @@ func batchOperateTask(taskOp pb.TaskOp, batchSize int, sources []string, subTask
 	}()
 
 	for item := range resultCh {
-		result.BatchResults = append(result.BatchResults, item)
+		result.Tasks = append(result.Tasks, item)
 	}
 
-	sort.Slice(result.BatchResults, func(i, j int) bool {
-		return result.BatchResults[i].TaskName < result.BatchResults[j].TaskName
+	sort.Slice(result.Tasks, func(i, j int) bool {
+		return result.Tasks[i].TaskName < result.Tasks[j].TaskName
 	})
 
 	return &result
