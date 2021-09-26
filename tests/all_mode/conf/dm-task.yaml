@@ -44,6 +44,9 @@ filters:                     # filter rules, mysql instance can ref rules in it
     events: ["truncate table", "drop table"]  # ignore truncate/drop table ddl
     action: Ignore
 
+tidb:
+  backend: "tidb"
+
 mydumpers:
   global:
     threads: 4

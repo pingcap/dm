@@ -15,6 +15,9 @@ package loader
 
 import (
 	"context"
+	"github.com/docker/go-units"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/br/pkg/lightning/common"
 	"path/filepath"
 	"sync"
 
@@ -143,6 +146,18 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 			return err
 		}
 		cfg.Routes = l.cfg.RouteRules
+		cfg.Checkpoint.Schema = "tidb_lightning_checkpoint_" + l.cfg.Name
+		cfg.Checkpoint.Driver = lcfg.CheckpointDriverMySQL
+		param := common.MySQLConnectParam{
+			Host:             cfg.TiDB.Host,
+			Port:             cfg.TiDB.Port,
+			User:             cfg.TiDB.User,
+			Password:         cfg.TiDB.Psw,
+			SQLMode:          mysql.DefaultSQLMode,
+			MaxAllowedPacket: 64 * units.MiB,
+			TLS:              cfg.TiDB.TLS,
+		}
+		cfg.Checkpoint.DSN = param.ToDSN()
 		if err = cfg.Adjust(ctx); err != nil {
 			return err
 		}
