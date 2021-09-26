@@ -2903,7 +2903,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	}
 
 	if shouldTrackToIndex {
-		s.schemaTracker.TrackToIndex(targetTables)
+		s.schemaTracker.ReTrackDownStreamIndex(targetTables)
 	}
 
 	if shouldSchemaExist {

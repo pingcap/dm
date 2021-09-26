@@ -111,7 +111,7 @@ func (s *Syncer) genUpdateSQLs(
 		originalData = param.originalData
 		columns      = param.columns
 		ti           = param.originalTableInfo
-		// defaultIndexColumns = findFitIndex(ti)
+		// defaultIndexColumns = findFitIndex(ti)d
 		replaceSQL string // `REPLACE INTO` SQL
 		sqls       = make([]string, 0, len(data)/2)
 		keys       = make([][]string, 0, len(data)/2)
@@ -119,7 +119,7 @@ func (s *Syncer) genUpdateSQLs(
 	)
 
 	// if downstream pk exits, then use downstream pk
-	defaultIndexColumns, err := s.schemaTracker.GetToIndexInfo(param.schema, param.table, ti, tctx, s.cfg.Name, s.ddlDBConn.BaseConn)
+	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tableID, ti, tctx, s.cfg.Name, s.ddlDBConn.BaseConn)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -175,7 +175,7 @@ RowLoop:
 
 		if defaultIndexColumns == nil {
 			// defaultIndexColumns = getAvailableIndexColumn(ti, oriOldValues)
-			defaultIndexColumns = s.schemaTracker.GetAvailableUKToIndexInfo(param.schema, param.table, ti, oriOldValues)
+			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreanUKIndexInfo(tableID, ti, oriOldValues)
 		}
 
 		ks := genMultipleKeys(ti, oriOldValues, tableID)
@@ -238,7 +238,7 @@ func (s *Syncer) genDeleteSQLs(tctx *tcontext.Context, param *genDMLParam, filte
 	)
 
 	// if downstream pk exits, then use downstream pk
-	defaultIndexColumns, err := s.schemaTracker.GetToIndexInfo(param.schema, param.table, ti, tctx, s.cfg.Name, s.ddlDBConn.BaseConn)
+	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tableID, ti, tctx, s.cfg.Name, s.ddlDBConn.BaseConn)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -264,7 +264,7 @@ RowLoop:
 
 		if defaultIndexColumns == nil {
 			// defaultIndexColumns = getAvailableIndexColumn(ti, value)
-			defaultIndexColumns = s.schemaTracker.GetAvailableUKToIndexInfo(param.schema, param.table, ti, value)
+			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreanUKIndexInfo(tableID, ti, value)
 		}
 		ks := genMultipleKeys(ti, value, tableID)
 
