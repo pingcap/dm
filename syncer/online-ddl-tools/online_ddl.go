@@ -16,7 +16,7 @@ package onlineddl
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
+	"regexp"
 	"sync"
 
 	"github.com/pingcap/failpoint"
@@ -379,13 +379,33 @@ func (s *Storage) CheckAndUpdate(
 // (_*).*_old ghost trash table
 // we don't support `--new-table-name` flag.
 type RealOnlinePlugin struct {
-	storage *Storage
+	storage    *Storage
+	shadowRegs []*regexp.Regexp
+	trashRegs  []*regexp.Regexp
 }
 
 // NewRealOnlinePlugin returns real online plugin.
 func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
+	shadowRegs := make([]*regexp.Regexp, 0, len(cfg.ShadowTableRules))
+	trashRegs := make([]*regexp.Regexp, 0, len(cfg.TrashTableRules))
+	for _, sg := range cfg.ShadowTableRules {
+		shadowReg, err := regexp.Compile(sg)
+		if err != nil {
+			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate("shadow-table-rules", sg, "fail to compile: "+err.Error())
+		}
+		shadowRegs = append(shadowRegs, shadowReg)
+	}
+	for _, tg := range cfg.TrashTableRules {
+		trashReg, err := regexp.Compile(tg)
+		if err != nil {
+			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate("trash-table-rules", tg, "fail to compile: "+err.Error())
+		}
+		trashRegs = append(trashRegs, trashReg)
+	}
 	r := &RealOnlinePlugin{
-		storage: NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
+		storage:    NewOnlineDDLStorage(tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("online ddl", ""))), cfg), // create a context for logger
+		shadowRegs: shadowRegs,
+		trashRegs:  trashRegs,
 	}
 
 	return r, r.storage.Init(tctx)
@@ -487,12 +507,14 @@ func (r *RealOnlinePlugin) Finish(tctx *tcontext.Context, schema, table string) 
 // TableType implements interface.
 func (r *RealOnlinePlugin) TableType(table string) TableType {
 	// 5 is _ _gho/ghc/del or _ _old/new
-	if len(table) > 5 && strings.HasPrefix(table, "_") {
-		if strings.HasSuffix(table, "_gho") || strings.HasSuffix(table, "_new") {
+	for _, shadowReg := range r.shadowRegs {
+		if shadowReg.MatchString(table) {
 			return GhostTable
 		}
+	}
 
-		if strings.HasSuffix(table, "_ghc") || strings.HasSuffix(table, "_del") || strings.HasSuffix(table, "_old") {
+	for _, trashReg := range r.trashRegs {
+		if trashReg.MatchString(table) {
 			return TrashTable
 		}
 	}
@@ -501,9 +523,18 @@ func (r *RealOnlinePlugin) TableType(table string) TableType {
 
 // RealName implements interface.
 func (r *RealOnlinePlugin) RealName(table string) string {
-	tp := r.TableType(table)
-	if tp == GhostTable || tp == TrashTable {
-		table = table[1 : len(table)-4]
+	for _, shadowReg := range r.shadowRegs {
+		shadowRes := shadowReg.FindStringSubmatch(table)
+		if len(shadowRes) > 1 {
+			return shadowRes[1]
+		}
+	}
+
+	for _, trashReg := range r.trashRegs {
+		trashRes := trashReg.FindStringSubmatch(table)
+		if len(trashRes) > 1 {
+			return trashRes[1]
+		}
 	}
 	return table
 }

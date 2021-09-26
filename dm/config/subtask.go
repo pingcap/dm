@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -38,6 +39,9 @@ const (
 	ModeAll       = "all"
 	ModeFull      = "full"
 	ModeIncrement = "incremental"
+
+	DefaultShadowTableRules = "^_(.+)_(?:new|gho)$"
+	DefaultTrashTableRules  = "^_(.+)_(?:ghc|del|old)$"
 )
 
 var defaultMaxIdleConns = 2
@@ -134,6 +138,11 @@ type SubTaskConfig struct {
 	IsSharding bool   `toml:"is-sharding" json:"is-sharding"`
 	ShardMode  string `toml:"shard-mode" json:"shard-mode"`
 	OnlineDDL  bool   `toml:"online-ddl" json:"online-ddl"`
+
+	// pt/gh-ost name rule, support regex
+	ShadowTableRules []string `yaml:"shadow-table-rules" toml:"shadow-table-rules" json:"shadow-table-rules"`
+	TrashTableRules  []string `yaml:"trash-table-rules" toml:"trash-table-rules" json:"trash-table-rules"`
+
 	// deprecated
 	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
@@ -251,6 +260,29 @@ func (c *SubTaskConfig) Decode(data string, verifyDecryptPassword bool) error {
 	return c.Adjust(verifyDecryptPassword)
 }
 
+func adjustOnlineTableRules(ruleType string, rules []string) ([]string, error) {
+	adjustedRules := make([]string, 0, len(rules))
+	for _, r := range rules {
+		if !strings.HasPrefix(r, "^") {
+			r = "^" + r
+		}
+
+		if !strings.HasSuffix(r, "$") {
+			r += "$"
+		}
+
+		p, err := regexp.Compile(r)
+		if err != nil {
+			return rules, terror.ErrConfigOnlineDDLInvalidRegex.Generate(ruleType, r, "fail to compile: "+err.Error())
+		}
+		if p.NumSubexp() != 1 {
+			return rules, terror.ErrConfigOnlineDDLInvalidRegex.Generate(ruleType, r, "rule isn't contains exactly one submatch")
+		}
+		adjustedRules = append(adjustedRules, r)
+	}
+	return adjustedRules, nil
+}
+
 // Adjust adjusts and verifies configs.
 func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if c.Name == "" {
@@ -272,6 +304,26 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 
 	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
 		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)
+	}
+
+	if len(c.ShadowTableRules) == 0 {
+		c.ShadowTableRules = []string{DefaultShadowTableRules}
+	} else {
+		shadowTableRule, err := adjustOnlineTableRules("shadow-table-rules", c.ShadowTableRules)
+		if err != nil {
+			return err
+		}
+		c.ShadowTableRules = shadowTableRule
+	}
+
+	if len(c.TrashTableRules) == 0 {
+		c.TrashTableRules = []string{DefaultTrashTableRules}
+	} else {
+		trashTableRule, err := adjustOnlineTableRules("trash-table-rules", c.TrashTableRules)
+		if err != nil {
+			return err
+		}
+		c.TrashTableRules = trashTableRule
 	}
 
 	if c.MetaSchema == "" {
