@@ -13,7 +13,6 @@ function test_sql_mode() {
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
-	# use sync_diff_inspector to check full dump loader
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
@@ -26,11 +25,11 @@ function test_timezone() {
 	run_sql_source1 "SET @@GLOBAL.SQL_MODE=''"
 	run_sql_file $cur/data/timezone.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
-	run_sql_source1 "SET @@session.time_zone = 'Asia/Shanghai'"
+	run_sql_source1 "SET @@GLOBAL.time_zone = 'Asia/Shanghai'"
 	run_sql_file $cur/data/timezone.Asia-Shanghai.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	run_sql_source1 "SET @@session.time_zone = 'America/Phoenix'"
+	run_sql_source1 "SET @@GLOBAL.time_zone = 'America/Phoenix'"
 	run_sql_file $cur/data/timezone.America-Phoenix.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }

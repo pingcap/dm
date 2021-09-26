@@ -451,7 +451,7 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	c.Assert(err, IsNil)
 	mockClusterPort, err := strconv.Atoi(strings.Split(mysqlConfig.Addr, ":")[1])
 	c.Assert(err, IsNil)
-	dbCfg := config.GetDBConfigFromEnv()
+	dbCfg := config.GetDBConfigForTest()
 	dbCfg.Port = mockClusterPort
 	dbCfg.Password = ""
 	cfg := s.newSubTaskCfg(dbCfg)
@@ -513,7 +513,7 @@ func (s *testDDLSuite) TestDropSchemaInSharding(c *C) {
 		source2  = "`db1`.`tbl2`"
 		tctx     = tcontext.Background()
 	)
-	dbCfg := config.GetDBConfigFromEnv()
+	dbCfg := config.GetDBConfigForTest()
 	cfg := s.newSubTaskCfg(dbCfg)
 	cfg.ShardMode = config.ShardPessimistic
 	syncer := NewSyncer(cfg, nil)
@@ -540,7 +540,7 @@ func (s *testDDLSuite) TestClearOnlineDDL(c *C) {
 		key2    = "db1tbl2"
 		tctx    = tcontext.Background()
 	)
-	dbCfg := config.GetDBConfigFromEnv()
+	dbCfg := config.GetDBConfigForTest()
 	cfg := s.newSubTaskCfg(dbCfg)
 	cfg.ShardMode = config.ShardPessimistic
 	syncer := NewSyncer(cfg, nil)

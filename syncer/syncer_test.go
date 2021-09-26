@@ -137,8 +137,8 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		Dir: loaderDir,
 	}
 	s.cfg = &config.SubTaskConfig{
-		From:             config.GetDBConfigFromEnv(),
-		To:               config.GetDBConfigFromEnv(),
+		From:             config.GetDBConfigForTest(),
+		To:               config.GetDBConfigForTest(),
 		ServerID:         101,
 		MetaSchema:       "test",
 		Name:             "syncer_ut",

@@ -38,8 +38,8 @@ type testDBSuite struct {
 
 func (s *testDBSuite) SetUpSuite(c *C) {
 	s.cfg = &config.SubTaskConfig{
-		From:       config.GetDBConfigFromEnv(),
-		To:         config.GetDBConfigFromEnv(),
+		From:       config.GetDBConfigForTest(),
+		To:         config.GetDBConfigForTest(),
 		ServerID:   102,
 		MetaSchema: "db_test",
 		Name:       "db_ut",

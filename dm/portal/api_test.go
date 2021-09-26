@@ -143,7 +143,7 @@ func (t *testPortalSuite) initTaskCfg() {
 }
 
 func (t *testPortalSuite) TestCheck(c *C) {
-	wrongDBCfg := config.GetDBConfigFromEnv()
+	wrongDBCfg := config.GetDBConfigForTest()
 	wrongDBCfg.User = "wrong"
 	wrongDBCfg.Port = t.mockClusterPort
 	dbCfgBytes := getTestDBCfgBytes(c, &wrongDBCfg)
@@ -178,7 +178,7 @@ func (t *testPortalSuite) TestCheck(c *C) {
 }
 
 func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
-	dbCfg := config.GetDBConfigFromEnv()
+	dbCfg := config.GetDBConfigForTest()
 	dbCfg.User = "wrong"
 	dbCfg.Port = t.mockClusterPort
 	dbCfgBytes := getTestDBCfgBytes(c, &dbCfg)
