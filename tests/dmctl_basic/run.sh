@@ -89,6 +89,77 @@ function recover_max_binlog_size() {
 	run_sql "set @@global.max_binlog_size = $2" $MYSQL_PORT2 $MYSQL_PASSWORD2
 }
 
+function test_operate_task_bound_to_a_source() {
+	echo "############################################################"
+	echo "test case for operate tasks bound to a source"
+	echo "############################################################"
+	#
+	# both foo-task and bar-task have 2 sources
+	#
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "start-task $cur/conf/foo-task.yaml" "\"result\": true" 3
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "start-task $cur/conf/bar-task.yaml" "\"result\": true" 3
+
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "pause-task -s xxx" "haven't been added" 1
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "resume-task -s xxx" "haven't been added" 1
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "stop-task -s xxx" "haven't been added" 1
+
+	# batch pause mysql-replica-01
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "pause-task -s mysql-replica-01" "\"result\": true" 5
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Paused\"" 2
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Running\"" 2
+	# batch pause mysql-replica-02
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "pause-task -s mysql-replica-02" "\"result\": true" 5
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Paused\"" 2
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Paused\"" 2
+
+	# batch resume mysql-replica-01
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "resume-task -s mysql-replica-01" "\"result\": true" 5
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Running\"" 2
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Paused\"" 2
+	# batch resume mysql-replica-02
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "resume-task -s mysql-replica-02" "\"result\": true" 5
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Running\"" 2
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Running\"" 2
+	# stop
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "stop-task -s mysql-replica-01" "\"result\": true" 5
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": " 0
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Running\"" 2
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "stop-task -s mysql-replica-02" "\"result\": true" 5
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": " 0
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": " 0
+
+	#
+	# bar-task has 2 sources, baz-task has 1 sources
+	#
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "start-task $cur/conf/bar-task.yaml" "\"result\": true" 3
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "start-task $cur/conf/baz-task.yaml" "\"result\": true" 2
+
+	# batch pause mysql-replica-01
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "pause-task -s mysql-replica-01" "\"result\": true" 5
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Paused\"" 2
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Running\"" 1
+	# batch pause mysql-replica-02
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "pause-task -s mysql-replica-02" "\"result\": true" 3
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Paused\"" 2
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Paused\"" 1
+
+	# batch resume mysql-replica-01
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "resume-task -s mysql-replica-01" "\"result\": true" 5
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Running\"" 2
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Paused\"" 1
+	# batch resume mysql-replica-02
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "resume-task -s mysql-replica-02" "\"result\": true" 3
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Running\"" 2
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Running\"" 1
+	# stop
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "stop-task -s mysql-replica-01" "\"result\": true" 5
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": " 0
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Running\"" 1
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "stop-task -s mysql-replica-02" "\"result\": true" 3
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": " 0
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": " 0
+}
+
 function run() {
 	inject_points=(
 		"github.com/pingcap/dm/pkg/streamer/SetHeartbeatInterval=return(1)"
@@ -178,40 +249,7 @@ function run() {
 		"\"result\": true" 2 \
 		'"worker": "worker1"' 1
 
-	echo "############################################################"
-	echo "test case for operate tasks bound to a source"
-	echo "############################################################"
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "start-task $cur/conf/foo-task.yaml" "\"result\": true" 3
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "start-task $cur/conf/bar-task.yaml" "\"result\": true" 3
-
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "pause-task -s xxx" "haven't been added" 1
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "resume-task -s xxx" "haven't been added" 1
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "stop-task -s xxx" "haven't been added" 1
-
-	# batch pause mysql-replica-01
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "pause-task -s mysql-replica-01" "\"result\": true" 5
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Paused\"" 2
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Running\"" 2
-	# batch pause mysql-replica-02
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "pause-task -s mysql-replica-02" "\"result\": true" 5
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Paused\"" 2
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Paused\"" 2
-
-	# batch resume mysql-replica-01
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "resume-task -s mysql-replica-01" "\"result\": true" 5
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Running\"" 2
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Paused\"" 2
-	# batch resume mysql-replica-02
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "resume-task -s mysql-replica-02" "\"result\": true" 5
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Running\"" 2
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Running\"" 2
-	# stop
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "stop-task -s mysql-replica-01" "\"result\": true" 5
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": " 0
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Running\"" 2
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "stop-task -s mysql-replica-02" "\"result\": true" 5
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": " 0
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": " 0
+	test_operate_task_bound_to_a_source
 
 	transfer_source_valid $SOURCE_ID1 worker1 # transfer to self
 	transfer_source_invalid $SOURCE_ID1 worker2
