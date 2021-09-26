@@ -48,7 +48,7 @@ func (d *testDumplingSuite) SetUpSuite(c *C) {
 	dir := c.MkDir()
 	d.cfg = &config.SubTaskConfig{
 		Name: "dumpling_ut",
-		From: config.GetDBConfigFromEnv(),
+		From: config.GetDBConfigForTest(),
 		LoaderConfig: config.LoaderConfig{
 			Dir: dir,
 		},

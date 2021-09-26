@@ -176,7 +176,7 @@ func (t *openAPISuite) TestSourceAPI(c *check.C) {
 
 	baseURL := "/api/v1/sources"
 
-	dbCfg := config.GetDBConfigFromEnv()
+	dbCfg := config.GetDBConfigForTest()
 	purgeInterVal := int64(10)
 	source1 := openapi.Source{
 		SourceName: source1Name,

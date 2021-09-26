@@ -18,9 +18,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -161,27 +159,9 @@ func (db *DBConfig) Clone() *DBConfig {
 	return &clone
 }
 
-// GetDBConfigFromEnv is a helper function to read config from environment. It's commonly used in unit tests.
-func GetDBConfigFromEnv() DBConfig {
-	host := os.Getenv("MYSQL_HOST")
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
-	if port == 0 {
-		port = 3306
-	}
-	user := os.Getenv("MYSQL_USER")
-	if user == "" {
-		user = "root"
-	}
-	pswd := os.Getenv("MYSQL_PSWD")
-	return DBConfig{
-		Host:     host,
-		User:     user,
-		Password: pswd,
-		Port:     port,
-	}
+// GetDBConfigForTest is a helper function to get db config for unit test .
+func GetDBConfigForTest() DBConfig {
+	return DBConfig{Host: "localhost", User: "root", Password: "not a real password", Port: 3306}
 }
 
 // SubTaskConfig is the configuration for SubTask.
@@ -374,7 +354,6 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		c.OnlineDDL = true
 		log.L().Warn("'online-ddl-scheme' will be deprecated soon. Recommend that use online-ddl instead of online-ddl-scheme.")
 	}
-
 	if len(c.ShadowTableRules) == 0 {
 		c.ShadowTableRules = []string{DefaultShadowTableRules}
 	} else {
