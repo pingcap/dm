@@ -15,7 +15,6 @@ package syncer
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
@@ -58,13 +57,6 @@ func (s *testDDLSuite) newSubTaskCfg(dbCfg config.DBConfig) *config.SubTaskConfi
 	}
 }
 
-func (s *testDDLSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.Parser, error) {
-	mock.ExpectQuery("SHOW VARIABLES LIKE").
-		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-	return utils.GetParser(context.Background(), db)
-}
-
 func (s *testDDLSuite) TestAnsiQuotes(c *C) {
 	ansiQuotesCases := []string{
 		"create database `test`",
@@ -97,13 +89,8 @@ func (s *testDDLSuite) TestDDLWithDashComments(c *C) {
 --
 CREATE TABLE test.test_table_with_c (id int);
 `
-
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
-
-	_, err = parserpkg.Parse(parser, sql, "", "")
+	parser := parser.New()
+	_, err := parserpkg.Parse(parser, sql, "", "")
 	c.Assert(err, IsNil)
 }
 
@@ -111,10 +98,7 @@ func (s *testDDLSuite) TestCommentQuote(c *C) {
 	sql := "ALTER TABLE schemadb.ep_edu_course_message_auto_reply MODIFY answer JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容';"
 	expectedSQL := "ALTER TABLE `schemadb`.`ep_edu_course_message_auto_reply` MODIFY COLUMN `answer` JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容'"
 
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
+	parser := parser.New()
 
 	stmt, err := parser.ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
@@ -367,10 +351,7 @@ func (s *testDDLSuite) TestParseDDLSQL(c *C) {
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
+	parser := parser.New()
 
 	for _, cs := range cases {
 		pr, err := syncer.parseDDLSQL(cs.sql, parser, cs.schema)
@@ -400,11 +381,7 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 	}
 
 	syncer := &Syncer{}
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
-
+	parser := parser.New()
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveGeneratedColumnSQL")))
 	ec := eventContext{
 		tctx: tctx,

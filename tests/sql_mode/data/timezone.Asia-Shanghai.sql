@@ -1,9 +1,7 @@
 use `sql_mode`;
 
-insert into
-    `sql_mode`.`timezone`(`id`, `a`)
-values
-    (1, '1990-04-15 01:30:12');
+SET @@session.SQL_MODE="";
+set @@session.time_zone = "Asia/Shanghai";
 
 insert into
     `sql_mode`.`timezone`(`id`, `a`)
