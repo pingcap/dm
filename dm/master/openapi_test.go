@@ -376,7 +376,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 }
 
 func (t *openAPISuite) TestTaskAPI(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	s := setupServer(ctx, c)
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/MockSkipAdjustTargetDB", `return(true)`), check.IsNil)
 	checker.CheckSyncConfigFunc = mockCheckSyncConfig
@@ -386,7 +386,7 @@ func (t *openAPISuite) TestTaskAPI(c *check.C) {
 		s.Close()
 	}()
 
-	dbCfg := config.GetDBConfigFromEnv()
+	dbCfg := config.GetDBConfigForTest()
 	source1 := openapi.Source{
 		SourceName: source1Name,
 		EnableGtid: false,
@@ -607,7 +607,7 @@ func genShardAndFilterTask() openapi.Task {
 		BinlogPos:  &shardSource2BinlogPos,
 	}
 
-	eventFilterNameList := []string{shardSource1FilterName}
+	binlogFilterNameList := []string{shardSource1FilterName}
 	ignoreEvent := []string{shardSource1FilterEvent}
 	ignoreSQL := []string{shardSource1FilterSQL}
 	eventFilterRule := openapi.TaskBinLogFilterRule{IgnoreEvent: &ignoreEvent, IgnoreSql: &ignoreSQL}
@@ -615,7 +615,7 @@ func genShardAndFilterTask() openapi.Task {
 	binlogFilterRuleMap.Set(shardSource1FilterName, eventFilterRule)
 
 	tableMigrateRule1 := openapi.TaskTableMigrateRule{
-		BinlogFilterRule: &eventFilterNameList,
+		BinlogFilterRule: &binlogFilterNameList,
 		Source: struct {
 			Schema     string "json:\"schema\""
 			SourceName string "json:\"source_name\""
