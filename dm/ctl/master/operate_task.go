@@ -35,7 +35,7 @@ const (
 type batchTaskResult struct {
 	Result       bool                 `json:"result"`
 	Msg          string               `json:"msg"`
-	BatchResults []*operateTaskResult `json:"batchResults"`
+	Tasks []*operateTaskResult `json:"tasks"`
 }
 
 type operateTaskResult struct {
