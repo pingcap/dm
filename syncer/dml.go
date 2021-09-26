@@ -715,11 +715,7 @@ func (dml *DML) genDeleteSQL() ([]string, [][]interface{}) {
 func (dml *DML) genInsertReplaceSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
 	buf.Grow(256)
-	if dml.safeMode {
-		buf.WriteString("REPLACE INTO")
-	} else {
-		buf.WriteString("INSERT INTO")
-	}
+	buf.WriteString("INSERT INTO")
 
 	buf.WriteString(" " + dml.tableID + " (")
 	for i, column := range dml.columns {
@@ -737,6 +733,16 @@ func (dml *DML) genInsertReplaceSQL() ([]string, [][]interface{}) {
 			buf.WriteString("?,")
 		} else {
 			buf.WriteString("?)")
+		}
+	}
+	if dml.safeMode {
+		buf.WriteString(" ON DUPLICATE KEY UPDATE ")
+		for i, column := range dml.columns {
+			col := strings.ReplaceAll(column.Name.O, "`", "``")
+			buf.WriteString("`" + col + "`=VALUES(`" + col + "`)")
+			if i != len(dml.columns)-1 {
+				buf.WriteByte(',')
+			}
 		}
 	}
 	return []string{buf.String()}, [][]interface{}{dml.values}
@@ -764,11 +770,7 @@ func genMultipleRowsInsertReplace(replace bool, dmls []*DML) ([]string, [][]inte
 
 	var buf strings.Builder
 	buf.Grow(256)
-	if replace {
-		buf.WriteString("REPLACE INTO")
-	} else {
-		buf.WriteString("INSERT INTO")
-	}
+	buf.WriteString("INSERT INTO")
 	buf.WriteString(" " + dmls[0].tableID + " (")
 	for i, column := range dmls[0].columns {
 		if i != len(dmls[0].columns)-1 {
@@ -785,6 +787,17 @@ func genMultipleRowsInsertReplace(replace bool, dmls []*DML) ([]string, [][]inte
 			buf.WriteString(",")
 		}
 		buf.WriteString(holder)
+	}
+
+	if replace {
+		buf.WriteString(" ON DUPLICATE KEY UPDATE ")
+		for i, column := range dmls[0].columns {
+			col := strings.ReplaceAll(column.Name.O, "`", "``")
+			buf.WriteString("`" + col + "`=VALUES(`" + col + "`)")
+			if i != len(dmls[0].columns)-1 {
+				buf.WriteByte(',')
+			}
+		}
 	}
 
 	args := make([]interface{}, 0, len(dmls)*len(dmls[0].columns))
