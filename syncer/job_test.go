@@ -66,29 +66,18 @@ func (t *testJobSuite) TestJobTypeString(c *C) {
 }
 
 func (t *testJobSuite) TestJob(c *C) {
-	ddlInfo := &shardingDDLInfo{
-		tables: [][]*filter.Table{
-			{
-				{
-					Schema: "test1",
-					Name:   "t1",
-				},
-			}, {
-				{
-					Schema: "test2",
-					Name:   "t2",
-				},
-			},
-		},
+	ddlInfo := &ddlInfo{
+		sourceTables: []*filter.Table{{Schema: "test1", Name: "t1"}},
+		targetTables: []*filter.Table{{Schema: "test2", Name: "t2"}},
 	}
 	table := &filter.Table{Schema: "test", Name: "t1"}
 	location := binlog.NewLocation("")
 	ec := &eventContext{startLocation: &location, currentLocation: &location, lastLocation: &location}
 	qec := &queryEventContext{
-		eventContext:   ec,
-		originSQL:      "create database test",
-		needHandleDDLs: []string{"create database test"},
-		ddlInfo:        ddlInfo,
+		eventContext:    ec,
+		originSQL:       "create database test",
+		needHandleDDLs:  []string{"create database test"},
+		shardingDDLInfo: ddlInfo,
 	}
 	testCases := []struct {
 		job    *job
