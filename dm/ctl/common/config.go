@@ -167,7 +167,7 @@ func (c *Config) Adjust() error {
 		c.MasterAddr = os.Getenv("DM_MASTER_ADDR")
 	}
 	if c.MasterAddr == "" {
-		return errors.Errorf("--master-addr not provided, this parameter is required when interacting with the dm-master, you can also use environment variable 'DM_MASTER_ADDR' to specify the value. Use `dmtcl --help` to see more help messages")
+		return errors.Errorf("--master-addr not provided, this parameter is required when interacting with the dm-master, you can also use environment variable 'DM_MASTER_ADDR' to specify the value. Use `dmctl --help` to see more help messages")
 	}
 
 	return errors.Trace(c.adjust())
