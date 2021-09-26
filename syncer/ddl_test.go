@@ -17,7 +17,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+
+	"github.com/go-sql-driver/mysql"
+	"github.com/pingcap/tidb/br/pkg/mock"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -35,7 +39,25 @@ import (
 	"go.uber.org/zap"
 )
 
-func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
+var _ = Suite(&testDDLSuite{})
+
+type testDDLSuite struct{}
+
+func (s *testDDLSuite) newSubTaskCfg(dbCfg config.DBConfig) *config.SubTaskConfig {
+	return &config.SubTaskConfig{
+		From:             dbCfg,
+		To:               dbCfg,
+		ServerID:         101,
+		MetaSchema:       "test",
+		Name:             "syncer_ut",
+		Mode:             config.ModeIncrement,
+		Flavor:           "mysql",
+		ShadowTableRules: []string{config.DefaultShadowTableRules},
+		TrashTableRules:  []string{config.DefaultTrashTableRules},
+	}
+}
+
+func (s *testDDLSuite) TestAnsiQuotes(c *C) {
 	ansiQuotesCases := []string{
 		"create database `test`",
 		"create table `test`.`test`(id int)",
@@ -61,30 +83,22 @@ func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestDDLWithDashComments(c *C) {
+func (s *testDDLSuite) TestDDLWithDashComments(c *C) {
 	sql := `--
 -- this is a comment.
 --
 CREATE TABLE test.test_table_with_c (id int);
 `
-
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
-
-	_, err = parserpkg.Parse(parser, sql, "", "")
+	parser := parser.New()
+	_, err := parserpkg.Parse(parser, sql, "", "")
 	c.Assert(err, IsNil)
 }
 
-func (s *testSyncerSuite) TestCommentQuote(c *C) {
+func (s *testDDLSuite) TestCommentQuote(c *C) {
 	sql := "ALTER TABLE schemadb.ep_edu_course_message_auto_reply MODIFY answer JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容';"
 	expectedSQL := "ALTER TABLE `schemadb`.`ep_edu_course_message_auto_reply` MODIFY COLUMN `answer` JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容'"
 
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
+	parser := parser.New()
 
 	stmt, err := parser.ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
@@ -100,7 +114,7 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	c.Assert(sqls[0], Equals, expectedSQL)
 }
 
-func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
+func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 	// duplicate with pkg/parser
 	sqls := []string{
 		"create schema `s1`",
@@ -226,7 +240,7 @@ func (s *testSyncerSuite) TestResolveDDLSQL(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
+func (s *testDDLSuite) TestParseDDLSQL(c *C) {
 	cases := []struct {
 		sql      string
 		schema   string
@@ -337,10 +351,7 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
+	parser := parser.New()
 
 	for _, cs := range cases {
 		pr, err := syncer.parseDDLSQL(cs.sql, parser, cs.schema)
@@ -354,7 +365,7 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
+func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 	testCases := []struct {
 		sql      string
 		expected string
@@ -370,11 +381,7 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	}
 
 	syncer := &Syncer{}
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
-
+	parser := parser.New()
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveGeneratedColumnSQL")))
 	ec := eventContext{
 		tctx: tctx,
@@ -393,7 +400,7 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
+func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	cases := []struct {
 		onlineType string
 		trashName  string
@@ -413,17 +420,24 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveOnlineDDL")))
 	p := parser.New()
 
-	ec := eventContext{
-		tctx: tctx,
-	}
-
+	ec := eventContext{tctx: tctx}
+	cluster, err := mock.NewCluster()
+	c.Assert(err, IsNil)
+	c.Assert(cluster.Start(), IsNil)
+	mysqlConfig, err := mysql.ParseDSN(cluster.DSN)
+	c.Assert(err, IsNil)
+	mockClusterPort, err := strconv.Atoi(strings.Split(mysqlConfig.Addr, ":")[1])
+	c.Assert(err, IsNil)
+	dbCfg := config.GetDBConfigForTest()
+	dbCfg.Port = mockClusterPort
+	dbCfg.Password = ""
+	cfg := s.newSubTaskCfg(dbCfg)
 	for _, ca := range cases {
-		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, s.cfg)
+		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
-		syncer := NewSyncer(s.cfg, nil)
+		syncer := NewSyncer(cfg, nil)
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
-
 		// real table
 		sql := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
 		stmt, err := p.ParseOneStmt(sql, "", "")
@@ -462,9 +476,10 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 		tableName := &filter.Table{Schema: "test", Name: ca.ghostname}
 		c.Assert(tables, DeepEquals, map[string]*filter.Table{tableName.String(): tableName})
 	}
+	cluster.Stop()
 }
 
-func (s *testSyncerSuite) TestDropSchemaInSharding(c *C) {
+func (s *testDDLSuite) TestDropSchemaInSharding(c *C) {
 	var (
 		targetTable = &filter.Table{
 			Schema: "target_db",
@@ -475,9 +490,10 @@ func (s *testSyncerSuite) TestDropSchemaInSharding(c *C) {
 		source2  = "`db1`.`tbl2`"
 		tctx     = tcontext.Background()
 	)
-	clone, _ := s.cfg.Clone()
-	clone.ShardMode = config.ShardPessimistic
-	syncer := NewSyncer(clone, nil)
+	dbCfg := config.GetDBConfigForTest()
+	cfg := s.newSubTaskCfg(dbCfg)
+	cfg.ShardMode = config.ShardPessimistic
+	syncer := NewSyncer(cfg, nil)
 	// nolint:dogsled
 	_, _, _, _, err := syncer.sgk.AddGroup(targetTable, []string{source1}, nil, true)
 	c.Assert(err, IsNil)
@@ -487,6 +503,38 @@ func (s *testSyncerSuite) TestDropSchemaInSharding(c *C) {
 	c.Assert(syncer.sgk.Groups(), HasLen, 2)
 	c.Assert(syncer.dropSchemaInSharding(tctx, sourceDB), IsNil)
 	c.Assert(syncer.sgk.Groups(), HasLen, 0)
+}
+
+func (s *testDDLSuite) TestClearOnlineDDL(c *C) {
+	var (
+		targetTable = &filter.Table{
+			Schema: "target_db",
+			Name:   "tbl",
+		}
+		source1 = "`db1`.`tbl1`"
+		key1    = "db1tbl1"
+		source2 = "`db1`.`tbl2`"
+		key2    = "db1tbl2"
+		tctx    = tcontext.Background()
+	)
+	dbCfg := config.GetDBConfigForTest()
+	cfg := s.newSubTaskCfg(dbCfg)
+	cfg.ShardMode = config.ShardPessimistic
+	syncer := NewSyncer(cfg, nil)
+	mock := mockOnlinePlugin{
+		map[string]struct{}{key1: {}, key2: {}},
+	}
+	syncer.onlineDDL = mock
+
+	// nolint:dogsled
+	_, _, _, _, err := syncer.sgk.AddGroup(targetTable, []string{source1}, nil, true)
+	c.Assert(err, IsNil)
+	// nolint:dogsled
+	_, _, _, _, err = syncer.sgk.AddGroup(targetTable, []string{source2}, nil, true)
+	c.Assert(err, IsNil)
+
+	c.Assert(syncer.clearOnlineDDL(tctx, targetTable), IsNil)
+	c.Assert(mock.toFinish, HasLen, 0)
 }
 
 type mockOnlinePlugin struct {
@@ -537,35 +585,4 @@ func (m mockOnlinePlugin) Close() {
 
 func (m mockOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
 	return nil
-}
-
-func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
-	var (
-		targetTable = &filter.Table{
-			Schema: "target_db",
-			Name:   "tbl",
-		}
-		source1 = "`db1`.`tbl1`"
-		key1    = "db1tbl1"
-		source2 = "`db1`.`tbl2`"
-		key2    = "db1tbl2"
-		tctx    = tcontext.Background()
-	)
-	clone, _ := s.cfg.Clone()
-	clone.ShardMode = config.ShardPessimistic
-	syncer := NewSyncer(clone, nil)
-	mock := mockOnlinePlugin{
-		map[string]struct{}{key1: {}, key2: {}},
-	}
-	syncer.onlineDDL = mock
-
-	// nolint:dogsled
-	_, _, _, _, err := syncer.sgk.AddGroup(targetTable, []string{source1}, nil, true)
-	c.Assert(err, IsNil)
-	// nolint:dogsled
-	_, _, _, _, err = syncer.sgk.AddGroup(targetTable, []string{source2}, nil, true)
-	c.Assert(err, IsNil)
-
-	c.Assert(syncer.clearOnlineDDL(tctx, targetTable), IsNil)
-	c.Assert(mock.toFinish, HasLen, 0)
 }
