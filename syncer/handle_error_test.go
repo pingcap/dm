@@ -20,6 +20,7 @@ import (
 	. "github.com/pingcap/check"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/syncer/dbconn"
 )
 
@@ -62,7 +63,7 @@ func (s *testSyncerSuite) TestHandleError(c *C) {
 			},
 		}
 	)
-
+	mockDB := conn.InitMockDB(c)
 	var err error
 	syncer.fromDB, err = dbconn.NewUpStreamConn(s.cfg.From) // used to get parser
 	c.Assert(err, IsNil)
@@ -76,4 +77,5 @@ func (s *testSyncerSuite) TestHandleError(c *C) {
 			c.Assert(err.Error(), Matches, cs.errMsg)
 		}
 	}
+	c.Assert(mockDB.ExpectationsWereMet(), IsNil)
 }
