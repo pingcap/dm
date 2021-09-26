@@ -115,19 +115,15 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 }
 
 // routeDDL route DDL from sourceTables to targetTables.
-func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (
-	routedDDL string,
-	sourceTables, targetTables []*filter.Table,
-	stmt ast.StmtNode,
-	err error) {
-	stmt, err = p.ParseOneStmt(sql, "", "")
+func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (*ddlInfo, error) {
+	stmt, err := p.ParseOneStmt(sql, "", "")
 	if err != nil {
-		return "", nil, nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
+		return nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
 	sourceTables, err = parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
-		return "", nil, nil, nil, err
+		return nil, err
 	}
 
 	targetTables = make([]*filter.Table, 0, len(sourceTables))
@@ -136,8 +132,13 @@ func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (
 		targetTables = append(targetTables, renamedTable)
 	}
 
-	routedDDL, err = parserpkg.RenameDDLTable(stmt, targetTables)
-	return
+	routedDDL, err := parserpkg.RenameDDLTable(stmt, targetTables)
+	return &ddlInfo{
+		sql:          routedDDL,
+		stmt:         stmt,
+		sourceTables: sourceTables,
+		targetTables: targetTables,
+	}, err
 }
 
 // renameOnlineDDLTable renames the given ddl sqls by given targetTable.
@@ -225,10 +226,11 @@ func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *filter.Tabl
 	return nil
 }
 
-type shardingDDLInfo struct {
-	name   string
-	tables [][]*filter.Table
-	stmt   ast.StmtNode
+type ddlInfo struct {
+	sql          string
+	stmt         ast.StmtNode
+	sourceTables []*filter.Table
+	targetTables []*filter.Table
 }
 
 // TODO: use ddlInfo to flow
