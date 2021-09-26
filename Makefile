@@ -125,7 +125,7 @@ endef
 unit_test: tools_setup
 	$(call run_unit_test,$(PACKAGES),unit_test)
 
-unit_test_in_verfiy_ci: tools_setup
+unit_test_in_verify_ci: tools_setup
 	$(call run_unit_test_in_verify_ci,$(PACKAGES),unit_test)
 
 # run unit test for the specified pkg only, like `make unit_test_pkg PKG=github.com/pingcap/dm/dm/master`
