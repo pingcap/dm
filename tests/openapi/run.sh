@@ -8,28 +8,28 @@ export PATH=$PATH:$cur/client/
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function prepare_database() {
-	run_sql 'DROP DATABASE if exists openapi;' $MYSQL_PORT1 $MYSQL_PASSWORD1
-	run_sql 'CREATE DATABASE openapi;' $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_source1 'DROP DATABASE if exists openapi;'
+	run_sql_source1 'CREATE DATABASE openapi;'
 
-	run_sql 'DROP DATABASE if exists openapi;' $MYSQL_PORT2 $MYSQL_PASSWORD2
-	run_sql 'CREATE DATABASE openapi;' $MYSQL_PORT2 $MYSQL_PASSWORD2
+	run_sql_source2 'DROP DATABASE if exists openapi;'
+	run_sql_source2 'CREATE DATABASE openapi;'
 }
 
 function init_noshard_data() {
 
-	run_sql "CREATE TABLE openapi.t1(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
-	run_sql "CREATE TABLE openapi.t2(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT2 $MYSQL_PASSWORD2
+	run_sql_source1 "CREATE TABLE openapi.t1(i TINYINT, j INT UNIQUE KEY);"
+	run_sql_source2 "CREATE TABLE openapi.t2(i TINYINT, j INT UNIQUE KEY);"
 
-	run_sql "INSERT INTO openapi.t1(i,j) VALUES (1, 2);" $MYSQL_PORT1 $MYSQL_PASSWORD1
-	run_sql "INSERT INTO openapi.t2(i,j) VALUES (3, 4);" $MYSQL_PORT2 $MYSQL_PASSWORD2
+	run_sql_source1 "INSERT INTO openapi.t1(i,j) VALUES (1, 2);"
+	run_sql_source2 "INSERT INTO openapi.t2(i,j) VALUES (3, 4);"
 }
 
 function init_shard_data() {
-	run_sql "CREATE TABLE openapi.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
-	run_sql "CREATE TABLE openapi.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT2 $MYSQL_PASSWORD2
+	run_sql_source1 "CREATE TABLE openapi.t(i TINYINT, j INT UNIQUE KEY);"
+	run_sql_source2 "CREATE TABLE openapi.t(i TINYINT, j INT UNIQUE KEY);"
 
-	run_sql "INSERT INTO openapi.t(i,j) VALUES (1, 2);" $MYSQL_PORT1 $MYSQL_PASSWORD1
-	run_sql "INSERT INTO openapi.t(i,j) VALUES (3, 4);" $MYSQL_PORT2 $MYSQL_PASSWORD2
+	run_sql_source1 "INSERT INTO openapi.t(i,j) VALUES (1, 2);"
+	run_sql_source2 "INSERT INTO openapi.t(i,j) VALUES (3, 4);"
 }
 
 function test_source() {
@@ -163,7 +163,7 @@ function test_shard_task() {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	# test binlog event filter, this delete will ignored in source-1
-	run_sql "DELETE FROM openapi.t;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_source1 "DELETE FROM openapi.t;"
 	run_sql_tidb_with_retry "select count(1) from openapi.t;" "count(1): 2"
 
 	# test binlog event filter, this ddl will ignored in source-2

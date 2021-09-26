@@ -121,7 +121,7 @@ def start_shard_task_success():
                     "table": "*",
                 },
                 "target": {"schema": "openapi", "table": "t"},
-                "event_filter_name": ["rule-1"],
+                "binlog_filter_rule": ["rule-1"],
             },
             {
                 "source": {
@@ -130,7 +130,7 @@ def start_shard_task_success():
                     "table": "*",
                 },
                 "target": {"schema": "openapi", "table": "t"},
-                "event_filter_name": ["rule-2"],
+                "binlog_filter_rule": ["rule-2"],
             },
         ],
         "source_config": {
@@ -139,16 +139,14 @@ def start_shard_task_success():
                 {"source_name": SOURCE2_NAME},
             ],
         },
-        "binlog_filter_rule": [
-            {
-                "rule_name": "rule-1",
+        "binlog_filter_rule": {
+            "rule-1": {
                 "ignore_event": ["delete"],
             },
-            {
-                "rule_name": "rule-2",
+            "rule-2": {
                 "ignore_sql": ["alter table .* add column `aaa` int"],
             },
-        ],
+        },
     }
     resp = requests.post(url=API_ENDPOINT, json={"remove_meta": True, "task": task})
     print("start_shard_task_success resp=", resp.json())

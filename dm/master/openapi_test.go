@@ -491,7 +491,6 @@ func genNoShardTask() openapi.Task {
 		SourceName: source1Name,
 	}
 	tableMigrateRule := openapi.TaskTableMigrateRule{
-		EventFilterName: nil,
 		Source: struct {
 			Schema     string "json:\"schema\""
 			SourceName string "json:\"source_name\""
@@ -578,7 +577,7 @@ func genShardAndFilterTask() openapi.Task {
 	    target:
 	       schema: "db1"
 	       table: "tbl"
-	    event-filter: ["filterA"]
+	    binlog-filter-rule: ["filterA"]
 	  - source:
 	       source-name: "mysql-replica-02"
 	       schema: "db_*"
@@ -607,17 +606,16 @@ func genShardAndFilterTask() openapi.Task {
 		BinlogName: &shardSource2BinlogName,
 		BinlogPos:  &shardSource2BinlogPos,
 	}
+
+	eventFilterNameList := []string{shardSource1FilterName}
 	ignoreEvent := []string{shardSource1FilterEvent}
 	ignoreSQL := []string{shardSource1FilterSQL}
-	eventFilterRule := openapi.TaskBinLogFilterRule{
-		IgnoreEvent: &ignoreEvent,
-		IgnoreSql:   &ignoreSQL,
-		RuleName:    shardSource1FilterName,
-	}
-	eventFilterNameList := []string{"filterA"}
-	eventFilterList := []openapi.TaskBinLogFilterRule{eventFilterRule}
+	eventFilterRule := openapi.TaskBinLogFilterRule{IgnoreEvent: &ignoreEvent, IgnoreSql: &ignoreSQL}
+	binlogFilterRuleMap := openapi.Task_BinlogFilterRule{}
+	binlogFilterRuleMap.Set(shardSource1FilterName, eventFilterRule)
+
 	tableMigrateRule1 := openapi.TaskTableMigrateRule{
-		EventFilterName: &eventFilterNameList,
+		BinlogFilterRule: &eventFilterNameList,
 		Source: struct {
 			Schema     string "json:\"schema\""
 			SourceName string "json:\"source_name\""
@@ -636,7 +634,6 @@ func genShardAndFilterTask() openapi.Task {
 		},
 	}
 	tableMigrateRule2 := openapi.TaskTableMigrateRule{
-		EventFilterName: nil,
 		Source: struct {
 			Schema     string "json:\"schema\""
 			SourceName string "json:\"source_name\""
@@ -662,7 +659,7 @@ func genShardAndFilterTask() openapi.Task {
 		MetaSchema:                &metaSchema,
 		TaskMode:                  openapi.TaskTaskModeAll,
 		OnDuplicate:               openapi.TaskOnDuplicateError,
-		BinlogFilterRule:          &eventFilterList,
+		BinlogFilterRule:          &binlogFilterRuleMap,
 		TargetConfig: openapi.TaskTargetDataBase{
 			Host:     "root",
 			Password: "123456",

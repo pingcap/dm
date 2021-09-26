@@ -442,7 +442,7 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 	// rule name -> rule template
 	eventFilterTemplateMap := make(map[string]bf.BinlogEventRule)
 	if task.BinlogFilterRule != nil {
-		for _, rule := range *task.BinlogFilterRule {
+		for ruleName, rule := range task.BinlogFilterRule.AdditionalProperties {
 			ruleT := bf.BinlogEventRule{Action: bf.Ignore}
 			if rule.IgnoreEvent != nil {
 				events := make([]bf.EventType, len(*rule.IgnoreEvent))
@@ -454,7 +454,7 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 			if rule.IgnoreSql != nil {
 				ruleT.SQLPattern = *rule.IgnoreSql
 			}
-			eventFilterTemplateMap[rule.RuleName] = ruleT
+			eventFilterTemplateMap[ruleName] = ruleT
 		}
 	}
 	// start to generate sub task configs
@@ -524,8 +524,8 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 				TargetSchema: rule.Target.Schema, TargetTable: rule.Target.Table,
 			})
 			// filter
-			if rule.EventFilterName != nil {
-				for _, name := range *rule.EventFilterName {
+			if rule.BinlogFilterRule != nil {
+				for _, name := range *rule.BinlogFilterRule {
 					filterRule, ok := eventFilterTemplateMap[name] // NOTE: this return a copied value
 					if !ok {
 						return nil, terror.ErrOpenAPICommonError.Generatef("filter rule name %s not found.", name)
