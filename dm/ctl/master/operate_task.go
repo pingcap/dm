@@ -138,7 +138,7 @@ func batchOperateTask(taskOp pb.TaskOp, batchSize int, sources []string, subTask
 					taskResult.Result = false
 					taskResult.Msg = err.Error()
 				} else {
-					taskResult.Result = true
+					taskResult.Result = taskOpResp.Result
 					taskResult.Msg = taskOpResp.Msg
 					taskResult.Sources = taskOpResp.Sources
 				}
