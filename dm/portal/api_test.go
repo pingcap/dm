@@ -9,13 +9,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strconv"
+	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb/br/pkg/mock"
+
+	"github.com/pingcap/dm/dm/config"
 )
 
 var _ = Suite(&testPortalSuite{})
@@ -26,6 +32,9 @@ type testPortalSuite struct {
 	allTables []TablesInSchema
 
 	taskConfig *DMTaskConfig
+
+	mockCluster     *mock.Cluster
+	mockClusterPort int
 }
 
 func TestSuite(t *testing.T) {
@@ -51,6 +60,18 @@ func (t *testPortalSuite) SetUpSuite(c *C) {
 	}
 
 	t.initTaskCfg()
+	cluster, err := mock.NewCluster()
+	c.Assert(err, IsNil)
+	t.mockCluster = cluster
+	c.Assert(t.mockCluster.Start(), IsNil)
+	config, err := mysql.ParseDSN(cluster.DSN)
+	c.Assert(err, IsNil)
+	t.mockClusterPort, err = strconv.Atoi(strings.Split(config.Addr, ":")[1])
+	c.Assert(err, IsNil)
+}
+
+func (t *testPortalSuite) TearDownSuite(c *C) {
+	t.mockCluster.Stop()
 }
 
 func (t *testPortalSuite) initTaskCfg() {
@@ -122,7 +143,10 @@ func (t *testPortalSuite) initTaskCfg() {
 }
 
 func (t *testPortalSuite) TestCheck(c *C) {
-	dbCfgBytes := getTestDBCfgBytes(c)
+	wrongDBCfg := config.GetDBConfigForTest()
+	wrongDBCfg.User = "wrong"
+	wrongDBCfg.Port = t.mockClusterPort
+	dbCfgBytes := getTestDBCfgBytes(c, &wrongDBCfg)
 	req := httptest.NewRequest("POST", "/check", bytes.NewReader(dbCfgBytes))
 	resp := httptest.NewRecorder()
 
@@ -135,7 +159,7 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	err := readJSON(resp.Body, checkResult)
 	c.Assert(err, IsNil)
 	c.Assert(checkResult.Result, Equals, failed)
-	c.Assert(checkResult.Error, Matches, "Error 1045: Access denied for user 'root'.*")
+	c.Assert(checkResult.Error, Matches, "Error 1045: Access denied for user 'wrong'.*")
 
 	// don't need connection to database, and will return StatusOK
 	getDBConnFunc = t.getMockDB
@@ -154,7 +178,10 @@ func (t *testPortalSuite) TestCheck(c *C) {
 }
 
 func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
-	dbCfgBytes := getTestDBCfgBytes(c)
+	dbCfg := config.GetDBConfigForTest()
+	dbCfg.User = "wrong"
+	dbCfg.Port = t.mockClusterPort
+	dbCfgBytes := getTestDBCfgBytes(c, &dbCfg)
 	req := httptest.NewRequest("POST", "/schema", bytes.NewReader(dbCfgBytes))
 	resp := httptest.NewRecorder()
 
@@ -166,7 +193,7 @@ func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 	err := readJSON(resp.Body, schemaInfoResult)
 	c.Assert(err, IsNil)
 	c.Assert(schemaInfoResult.Result, Equals, failed)
-	c.Assert(schemaInfoResult.Error, Matches, "Error 1045: Access denied for user 'root'@.*")
+	c.Assert(schemaInfoResult.Error, Matches, "Error 1045: Access denied for user 'wrong'.*")
 	c.Assert(schemaInfoResult.Tables, IsNil)
 
 	getDBConnFunc = t.getMockDB
@@ -367,15 +394,8 @@ func (t *testPortalSuite) TestGenerateTaskFileName(c *C) {
 	c.Assert(fileName, Equals, "test-task.yaml")
 }
 
-func getTestDBCfgBytes(c *C) []byte {
-	dbCfg := &DBConfig{
-		Host:     "127.0.0.1",
-		Port:     3306,
-		User:     "root",
-		Password: "wrong_password",
-	}
+func getTestDBCfgBytes(c *C, dbCfg *config.DBConfig) []byte {
 	dbCfgBytes, err := json.Marshal(dbCfg)
 	c.Assert(err, IsNil)
-
 	return dbCfgBytes
 }
