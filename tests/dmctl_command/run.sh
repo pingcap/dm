@@ -6,7 +6,7 @@ cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
-help_cnt=46
+help_cnt=45
 
 function run() {
 	# check dmctl output with help flag
@@ -125,43 +125,6 @@ function run() {
 		echo "query status failed with command: $running_task task"
 		exit 1
 	fi
-
-	# stop the task to avoid affecting following cases
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "stop-task test" "\"result\": true" 3
-
-	echo "############################################################"
-	echo "test case for batch-task command"
-	echo "############################################################"
-	# make sure those command exist
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "batch-task" "dmctl batch-task" 2
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "batch-task pause" "dmctl batch-task pause" 1
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "batch-task resume" "dmctl batch-task resume" 1
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "batch-task xx" "dmctl batch-task xx" 0
-
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "start-task $cur/conf/foo-task.yaml" "\"result\": true" 3
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "start-task $cur/conf/bar-task.yaml" "\"result\": true" 3
-
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "batch-task pause xxx" "haven't been added" 1
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "batch-task resume xxx" "haven't been added" 1
-
-	# batch pause mysql-replica-01
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "batch-task pause mysql-replica-01" "\"result\": true" 5
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Paused\"" 2
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Running\"" 2
-	# batch pause mysql-replica-02
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "batch-task pause mysql-replica-02" "\"result\": true" 5
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Paused\"" 2
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Paused\"" 2
-
-	# batch resume mysql-replica-01
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "batch-task resume mysql-replica-01" "\"result\": true" 5
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Running\"" 2
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Paused\"" 2
-	# batch resume mysql-replica-02
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "batch-task resume mysql-replica-02" "\"result\": true" 5
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-01" "\"stage\": \"Running\"" 2
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "query-status -s mysql-replica-02" "\"stage\": \"Running\"" 2
-
 }
 
 cleanup_data dmctl_command
