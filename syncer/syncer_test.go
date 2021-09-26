@@ -28,7 +28,6 @@ import (
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/util/mock"
 
@@ -45,7 +44,6 @@ import (
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/schema"
 	streamer2 "github.com/pingcap/dm/pkg/streamer"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
@@ -93,11 +91,8 @@ const (
 )
 
 type testSyncerSuite struct {
-	db              *sql.DB
 	cfg             *config.SubTaskConfig
 	eventsGenerator *event.Generator
-	syncer          *replication.BinlogSyncer
-	streamer        *replication.BinlogStreamer
 }
 
 type MockStreamer struct {
@@ -141,8 +136,8 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		Dir: loaderDir,
 	}
 	s.cfg = &config.SubTaskConfig{
-		From:             config.GetDBConfigFromEnv(),
-		To:               config.GetDBConfigFromEnv(),
+		From:             config.GetDBConfigForTest(),
+		To:               config.GetDBConfigForTest(),
 		ServerID:         101,
 		MetaSchema:       "test",
 		Name:             "syncer_ut",
@@ -156,15 +151,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	s.cfg.To.Adjust()
 
 	s.cfg.UseRelay = false
-
-	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
-	s.db, err = sql.Open("mysql", dbAddr)
-	c.Assert(err, IsNil)
-
 	s.resetEventsGenerator(c)
-	_, err = s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
-	c.Assert(err, IsNil)
-
 	c.Assert(log.InitLogger(&log.Config{}), IsNil)
 }
 
@@ -242,13 +229,6 @@ func (s *testSyncerSuite) TearDownSuite(c *C) {
 	os.RemoveAll(s.cfg.Dir)
 }
 
-func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.Parser, error) {
-	mock.ExpectQuery("SHOW VARIABLES LIKE").
-		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-	return utils.GetParser(context.Background(), db)
-}
-
 func (s *testSyncerSuite) mockGetServerUnixTS(mock sqlmock.Sqlmock) {
 	ts := time.Now().Unix()
 	rows := sqlmock.NewRows([]string{"UNIX_TIMESTAMP()"}).AddRow(strconv.FormatInt(ts, 10))
@@ -281,11 +261,8 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		})
 	}
 
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
-
+	p := parser.New()
+	var err error
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
@@ -390,11 +367,8 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		{false},
 	}
 
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
-
+	p := parser.New()
+	var err error
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
@@ -428,11 +402,8 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 
 	res := []bool{true, true, false, false, true, true, true, true, true, true, false, false}
 
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
-
+	p := parser.New()
+	var err error
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
@@ -523,11 +494,8 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		{true},
 	}
 
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
-
+	p := parser.New()
+	var err error
 	syncer := NewSyncer(s.cfg, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
@@ -617,10 +585,8 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
+	p := parser.New()
+	var err error
 
 	syncer := NewSyncer(s.cfg, nil)
 	c.Assert(syncer.genRouter(), IsNil)
@@ -713,11 +679,8 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 	}
 	dropEvents := s.generateEvents(events, c)
 
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, mock)
-	c.Assert(err, IsNil)
-
+	p := parser.New()
+	var err error
 	mapping, err := cm.NewMapping(false, rules)
 	c.Assert(err, IsNil)
 
@@ -738,235 +701,6 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 		default:
 			continue
 		}
-	}
-}
-
-func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
-	// TODO Currently mock eventGenerator don't support generate json,varchar field event, so use real mysql binlog event here
-	_, err := s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
-	c.Assert(err, IsNil)
-
-	pos, gset, err := utils.GetMasterStatus(context.Background(), s.db, "mysql")
-	c.Assert(err, IsNil)
-
-	//nolint:errcheck
-	defer s.db.Exec("drop database if exists gctest_1")
-
-	s.cfg.BAList = &filter.Rules{
-		DoDBs: []string{"~^gctest_.*"},
-	}
-
-	createSQLs := []string{
-		"create database if not exists gctest_1 DEFAULT CHARSET=utf8mb4",
-		"create table if not exists gctest_1.t_1(id int, age int, cfg varchar(40), cfg_json json as (cfg) virtual)",
-		"create table if not exists gctest_1.t_2(id int primary key, age int, cfg varchar(40), cfg_json json as (cfg) virtual)",
-		"create table if not exists gctest_1.t_3(id int, cfg varchar(40), gen_id int as (cfg->\"$.id\"), unique key gen_id_unique(`gen_id`))",
-	}
-
-	// if table has json typed generated column but doesn't have primary key or unique key,
-	// update/delete operation will not be replicated successfully because json field can't
-	// compared with raw value in where condition. In unit test we only check generated SQL
-	// and don't check the data replication to downstream.
-	testCases := []struct {
-		sqls     []string
-		expected []string
-		args     [][]interface{}
-	}{
-		{
-			[]string{
-				"insert into gctest_1.t_1(id, age, cfg) values (1, 18, '{}')",
-				"insert into gctest_1.t_1(id, age, cfg) values (2, 19, '{\"key\": \"value\"}')",
-				"insert into gctest_1.t_1(id, age, cfg) values (3, 17, NULL)",
-				"insert into gctest_1.t_2(id, age, cfg) values (1, 18, '{}')",
-				"insert into gctest_1.t_2(id, age, cfg) values (2, 19, '{\"key\": \"value\", \"int\": 123}')",
-				"insert into gctest_1.t_2(id, age, cfg) values (3, 17, NULL)",
-				"insert into gctest_1.t_3(id, cfg) values (1, '{\"id\": 1}')",
-				"insert into gctest_1.t_3(id, cfg) values (2, '{\"id\": 2}')",
-				"insert into gctest_1.t_3(id, cfg) values (3, '{\"id\": 3}')",
-			},
-			[]string{
-				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?)",
-				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?)",
-				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?)",
-				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?)",
-				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?)",
-				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?)",
-				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?)",
-				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?)",
-				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?)",
-			},
-			[][]interface{}{
-				{int32(1), int32(18), "{}"},
-				{int32(2), int32(19), "{\"key\": \"value\"}"},
-				{int32(3), int32(17), nil},
-				{int32(1), int32(18), "{}"},
-				{int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
-				{int32(3), int32(17), nil},
-				{int32(1), "{\"id\": 1}"},
-				{int32(2), "{\"id\": 2}"},
-				{int32(3), "{\"id\": 3}"},
-			},
-		},
-		{
-			[]string{
-				"update gctest_1.t_1 set cfg = '{\"a\": 12}', age = 21 where id = 1",
-				"update gctest_1.t_1 set cfg = '{}' where id = 2 and age = 19",
-				"update gctest_1.t_1 set age = 20 where cfg is NULL",
-				"update gctest_1.t_2 set cfg = '{\"a\": 12}', age = 21 where id = 1",
-				"update gctest_1.t_2 set cfg = '{}' where id = 2 and age = 19",
-				"update gctest_1.t_2 set age = 20 where cfg is NULL",
-				"update gctest_1.t_3 set cfg = '{\"id\": 11}' where id = 1",
-				"update gctest_1.t_3 set cfg = '{\"id\": 12, \"old_id\": 2}' where gen_id = 2",
-			},
-			[]string{
-				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1",
-				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1",
-				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` IS ? AND `cfg_json` IS ? LIMIT 1",
-				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1",
-				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1",
-				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1",
-				"UPDATE `gctest_1`.`t_3` SET `id` = ?, `cfg` = ? WHERE `gen_id` = ? LIMIT 1",
-				"UPDATE `gctest_1`.`t_3` SET `id` = ?, `cfg` = ? WHERE `gen_id` = ? LIMIT 1",
-			},
-			[][]interface{}{
-				{int32(1), int32(21), "{\"a\": 12}", int32(1), int32(18), "{}", []uint8("{}")},
-				{int32(2), int32(19), "{}", int32(2), int32(19), "{\"key\": \"value\"}", []uint8("{\"key\":\"value\"}")},
-				{int32(3), int32(20), nil, int32(3), int32(17), nil, nil},
-				{int32(1), int32(21), "{\"a\": 12}", int32(1)},
-				{int32(2), int32(19), "{}", int32(2)},
-				{int32(3), int32(20), nil, int32(3)},
-				{int32(1), "{\"id\": 11}", int32(1)},
-				{int32(2), "{\"id\": 12, \"old_id\": 2}", int32(2)},
-			},
-		},
-		{
-			[]string{
-				"delete from gctest_1.t_1 where id = 1",
-				"delete from gctest_1.t_1 where id = 2 and age = 19",
-				"delete from gctest_1.t_1 where cfg is NULL",
-				"delete from gctest_1.t_2 where id = 1",
-				"delete from gctest_1.t_2 where id = 2 and age = 19",
-				"delete from gctest_1.t_2 where cfg is NULL",
-				"delete from gctest_1.t_3 where id = 1",
-				"delete from gctest_1.t_3 where gen_id = 12",
-			},
-			[]string{
-				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1",
-				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1",
-				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` IS ? AND `cfg_json` IS ? LIMIT 1",
-				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1",
-				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1",
-				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1",
-				"DELETE FROM `gctest_1`.`t_3` WHERE `gen_id` = ? LIMIT 1",
-				"DELETE FROM `gctest_1`.`t_3` WHERE `gen_id` = ? LIMIT 1",
-			},
-			[][]interface{}{
-				{int32(1), int32(21), "{\"a\": 12}", []uint8("{\"a\":12}")},
-				{int32(2), int32(19), "{}", []uint8("{}")},
-				{int32(3), int32(20), nil, nil},
-				{int32(1)},
-				{int32(2)},
-				{int32(3)},
-				{int32(11)},
-				{int32(12)},
-			},
-		},
-	}
-
-	dropSQLs := []string{
-		"drop table gctest_1.t_1",
-		"drop table gctest_1.t_2",
-		"drop table gctest_1.t_3",
-		"drop database gctest_1",
-	}
-
-	for _, sql := range createSQLs {
-		_, err = s.db.Exec(sql)
-		c.Assert(err, IsNil)
-	}
-
-	syncer := NewSyncer(s.cfg, nil)
-	// use upstream dbConn as mock downstream
-	dbConn, err := s.db.Conn(context.Background())
-	c.Assert(err, IsNil)
-	baseDB := conn.NewBaseDB(s.db, func() {})
-	syncer.fromDB = &dbconn.UpStreamConn{BaseDB: baseDB}
-	syncer.ddlDB = baseDB
-	syncer.ddlDBConn = &dbconn.DBConn{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
-	syncer.toDBConns = []*dbconn.DBConn{{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
-	c.Assert(syncer.setSyncCfg(), IsNil)
-	syncer.schemaTracker, err = schema.NewTracker(context.Background(), s.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.BaseConn)
-	c.Assert(err, IsNil)
-	syncer.reset()
-
-	syncer.streamerController = NewStreamerController(syncer.syncCfg, true, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone)
-	err = syncer.streamerController.Start(tcontext.Background(), binlog.InitLocation(pos, gset))
-	c.Assert(err, IsNil)
-
-	for _, testCase := range testCases {
-		for _, sql := range testCase.sqls {
-			_, err = s.db.Exec(sql)
-			c.Assert(err, IsNil, Commentf("sql: %s", sql))
-		}
-		idx := 0
-		for {
-			if idx >= len(testCase.sqls) {
-				break
-			}
-			var e *replication.BinlogEvent
-			e, err = syncer.streamerController.GetEvent(tcontext.Background())
-			c.Assert(err, IsNil)
-			switch ev := e.Event.(type) {
-			case *replication.RowsEvent:
-				table := &filter.Table{
-					Schema: string(ev.Table.Schema),
-					Name:   string(ev.Table.Table),
-				}
-				var ti *model.TableInfo
-				ti, err = syncer.getTableInfo(tcontext.Background(), table, table)
-				c.Assert(err, IsNil)
-				var (
-					sqls []string
-					args [][]interface{}
-				)
-
-				prunedColumns, prunedRows, err2 := pruneGeneratedColumnDML(ti, ev.Rows)
-				c.Assert(err2, IsNil)
-				param := &genDMLParam{
-					tableID:           utils.GenTableID(table),
-					data:              prunedRows,
-					originalData:      ev.Rows,
-					columns:           prunedColumns,
-					originalTableInfo: ti,
-				}
-				switch e.Header.EventType {
-				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-					sqls, _, args, err = syncer.genInsertSQLs(param, nil)
-					c.Assert(err, IsNil)
-					c.Assert(sqls[0], Equals, testCase.expected[idx])
-					c.Assert(args[0], DeepEquals, testCase.args[idx])
-				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-					// test with sql_mode = false only
-					sqls, _, args, err = syncer.genUpdateSQLs(param, nil, nil)
-					c.Assert(err, IsNil)
-					c.Assert(sqls[0], Equals, testCase.expected[idx])
-					c.Assert(args[0], DeepEquals, testCase.args[idx])
-				case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-					sqls, _, args, err = syncer.genDeleteSQLs(param, nil)
-					c.Assert(err, IsNil)
-					c.Assert(sqls[0], Equals, testCase.expected[idx])
-					c.Assert(args[0], DeepEquals, testCase.args[idx])
-				}
-				idx++
-			default:
-				continue
-			}
-		}
-	}
-
-	for _, sql := range dropSQLs {
-		_, err = s.db.Exec(sql)
-		c.Assert(err, IsNil)
 	}
 }
 
@@ -1925,141 +1659,4 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 	c.Assert(n, Equals, 0)
 
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
-}
-
-func (s *testSyncerSuite) TestTimezone(c *C) {
-	s.cfg.BAList = &filter.Rules{
-		DoDBs:     []string{"~^tztest_.*"},
-		IgnoreDBs: []string{"stest", "~^foo.*"},
-	}
-
-	createSQLs := []string{
-		"create database if not exists tztest_1",
-		"create table if not exists tztest_1.t_1(id int, a timestamp)",
-	}
-
-	testCases := []struct {
-		sqls     []string
-		timezone string
-	}{
-		{
-			[]string{
-				"insert into tztest_1.t_1(id, a) values (1, '1990-04-15 01:30:12')",
-				"insert into tztest_1.t_1(id, a) values (2, '1990-04-15 02:30:12')",
-				"insert into tztest_1.t_1(id, a) values (3, '1990-04-15 03:30:12')",
-			},
-			"Asia/Shanghai",
-		},
-		{
-			[]string{
-				"insert into tztest_1.t_1(id, a) values (4, '1990-04-15 01:30:12')",
-				"insert into tztest_1.t_1(id, a) values (5, '1990-04-15 02:30:12')",
-				"insert into tztest_1.t_1(id, a) values (6, '1990-04-15 03:30:12')",
-			},
-			"America/Phoenix",
-		},
-	}
-	queryTS := "select unix_timestamp(a) from `tztest_1`.`t_1` where id = ?"
-
-	dropSQLs := []string{
-		"drop table tztest_1.t_1",
-		"drop database tztest_1",
-	}
-
-	defer func() {
-		for _, sql := range dropSQLs {
-			_, err := s.db.Exec(sql)
-			c.Assert(err, IsNil)
-		}
-	}()
-
-	for _, sql := range createSQLs {
-		_, err := s.db.Exec(sql)
-		c.Assert(err, IsNil)
-	}
-
-	for _, testCase := range testCases {
-		syncer := NewSyncer(s.cfg, nil)
-		c.Assert(syncer.genRouter(), IsNil)
-		s.resetBinlogSyncer(c)
-
-		// we should not use `sql.DB.Exec` to do query which depends on session variables
-		// because `sql.DB.Exec` will choose a underlying DBConn for every query from the connection pool
-		// and different Conn using different session
-		// ref: `sql.DB.Conn`
-		// and `set @@global` is also not reasonable, because it can not affect sessions already exist
-		// if we must ensure multi queries use the same session, we should use a transaction
-		txn, err := s.db.Begin()
-		c.Assert(err, IsNil)
-		_, err = txn.Exec("set @@session.time_zone = ?", testCase.timezone)
-		c.Assert(err, IsNil)
-		_, err = txn.Exec("set @@session.sql_mode = ''")
-		c.Assert(err, IsNil)
-		for _, sql := range testCase.sqls {
-			_, err = txn.Exec(sql)
-			c.Assert(err, IsNil)
-		}
-		err = txn.Commit()
-		c.Assert(err, IsNil)
-
-		idx := 0
-		for {
-			if idx >= len(testCase.sqls) {
-				break
-			}
-			e, err := s.streamer.GetEvent(context.Background())
-			c.Assert(err, IsNil)
-			switch ev := e.Event.(type) {
-			case *replication.RowsEvent:
-				table := &filter.Table{
-					Schema: string(ev.Table.Schema),
-					Name:   string(ev.Table.Table),
-				}
-				needSkip, err := syncer.skipRowsEvent(table, e.Header.EventType)
-				c.Assert(err, IsNil)
-				if needSkip {
-					continue
-				}
-
-				rowid := ev.Rows[0][0].(int32)
-				var ts sql.NullInt64
-				err2 := s.db.QueryRow(queryTS, rowid).Scan(&ts)
-				c.Assert(err2, IsNil)
-				c.Assert(ts.Valid, IsTrue)
-
-				raw := ev.Rows[0][1].(string)
-				data, err := time.ParseInLocation("2006-01-02 15:04:05", raw, time.UTC)
-				c.Assert(err, IsNil)
-				c.Assert(data.Unix(), DeepEquals, ts.Int64)
-				idx++
-			default:
-				continue
-			}
-		}
-	}
-}
-
-func (s *testSyncerSuite) resetBinlogSyncer(c *C) {
-	cfg := replication.BinlogSyncerConfig{
-		ServerID:       s.cfg.ServerID,
-		Flavor:         "mysql",
-		Host:           s.cfg.From.Host,
-		Port:           uint16(s.cfg.From.Port),
-		User:           s.cfg.From.User,
-		Password:       s.cfg.From.Password,
-		UseDecimal:     false,
-		VerifyChecksum: true,
-	}
-	cfg.TimestampStringLocation = time.UTC
-
-	if s.syncer != nil {
-		s.syncer.Close()
-	}
-
-	pos, _, err := utils.GetMasterStatus(context.Background(), s.db, "mysql")
-	c.Assert(err, IsNil)
-
-	s.syncer = replication.NewBinlogSyncer(cfg)
-	s.streamer, err = s.syncer.StartSync(pos)
-	c.Assert(err, IsNil)
 }

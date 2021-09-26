@@ -182,13 +182,8 @@ Edit some code on the `new-branch-name` branch and save your changes to fix the 
     }
     ```
 
-2. Setup a MySQL server with binlog enabled first and set `GTID_MODE=ON`
 
-    ```sh
-    docker run --rm --name mysql-3306 -p 3306:3306 -e MYSQL_ALLOW_EMPTY_PASSWORD=true mysql:5.7.22 --log-bin=mysql-bin --port=3306 --bind-address=0.0.0.0 --binlog-format=ROW --server-id=1 --gtid_mode=ON --enforce-gtid-consistency=true > mysql.3306.log 2>&1 &
-    ```
-
-3. Run unit test
+2. Run unit test
 
     ```sh
     make unit_test
