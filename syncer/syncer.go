@@ -2844,7 +2844,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		shouldTableExistNum          int  // tableNames[:shouldTableExistNum] should exist
 		shouldRefTableExistNum       int  // tableNames[1:shouldTableExistNum] should exist, since first one is "caller table"
 		tryFetchDownstreamTable      bool // to make sure if not exists will execute correctly
-		shouldTrackToIndex           bool // track toIndex
+		shouldReTrackDownstreamIndex bool // retrack downstreamIndex
 	)
 
 	switch node := stmt.(type) {
@@ -2855,7 +2855,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		shouldSchemaExist = true
 	case *ast.DropDatabaseStmt:
 		shouldExecDDLOnSchemaTracker = true
-		shouldTrackToIndex = true
+		shouldReTrackDownstreamIndex = true
 		if s.cfg.ShardMode == "" {
 			if err := s.checkpoint.DeleteSchemaPoint(ec.tctx, srcTable.Schema); err != nil {
 				return err
@@ -2872,7 +2872,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		tryFetchDownstreamTable = true
 	case *ast.DropTableStmt:
 		shouldExecDDLOnSchemaTracker = true
-		shouldTrackToIndex = true
+		shouldReTrackDownstreamIndex = true
 		if err := s.checkpoint.DeleteTablePoint(ec.tctx, srcTable); err != nil {
 			return err
 		}
@@ -2880,10 +2880,10 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		shouldExecDDLOnSchemaTracker = true
 		shouldSchemaExist = true
 		shouldTableExistNum = 1
-		shouldTrackToIndex = true
+		shouldReTrackDownstreamIndex = true
 	case *ast.AlterTableStmt:
 		shouldSchemaExist = true
-		shouldTrackToIndex = true
+		shouldReTrackDownstreamIndex = true
 		// for DDL that adds FK, since TiDB doesn't fully support it yet, we simply ignore execution of this DDL.
 		switch {
 		case len(node.Specs) == 1 && node.Specs[0].Constraint != nil && node.Specs[0].Constraint.Tp == ast.ConstraintForeignKey:
@@ -2902,7 +2902,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		ec.tctx.L().DPanic("unhandled DDL type cannot be tracked", zap.Stringer("type", reflect.TypeOf(stmt)))
 	}
 
-	if shouldTrackToIndex {
+	if shouldReTrackDownstreamIndex {
 		s.schemaTracker.ReTrackDownStreamIndex(targetTables)
 	}
 
