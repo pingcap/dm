@@ -66,7 +66,7 @@ var (
 	noShardSourceSchema = "some_db"
 	noShardSourceTable  = "*"
 	noShardTargetSchema = "new_name_db"
-	noShardTargetTable  = ""
+	noShardTargetTable  = "*"
 
 	shardSource1BinlogName = "mysql-bin.001"
 	shardSource1BinlogPos  = 0
