@@ -83,9 +83,9 @@ func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, 
 }
 
 // run runs dml workers, return all workers count and flush job channel.
-//			  |‾ causality worker  ‾|
-// causality -|- causality worker	|=> connection pool
-//			  |_ causality worker  _|
+//            |‾ causality worker  ‾|
+// causality -|- causality worker   |=> connection pool
+//            |_ causality worker  _|
 // .
 func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, causalityCh chan *job) (int, chan *job) {
 	w.tctx = tctx
@@ -141,17 +141,18 @@ func (w *DMLWorker) runCausalityDMLWorker() {
 		metrics.QueueSizeGauge.WithLabelValues(w.task, "causality_output", w.source).Set(float64(len(w.causalityCh)))
 		if j.tp == flush || j.tp == conflict {
 			if j.tp == conflict {
+				w.addCountFunc(false, adminQueueName, j.tp, 1, j.targetTable)
 				w.causalityWg.Add(w.workerCount)
 			}
 			// flush for every DML queue
 			for i, causalityJobCh := range causalityJobChs {
-				w.addCountFunc(false, queueBucketMapping[i], j.tp, 1, j.targetTable)
 				startTime := time.Now()
 				causalityJobCh <- j
 				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[i], w.source).Observe(time.Since(startTime).Seconds())
 			}
 			if j.tp == conflict {
 				w.causalityWg.Wait()
+				w.addCountFunc(true, adminQueueName, j.tp, 1, j.targetTable)
 			}
 		} else {
 			queueBucket := int(utils.GenHashKey(j.key)) % w.workerCount
@@ -174,13 +175,14 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 	for {
 		select {
 		case j, ok := <-jobCh:
-			metrics.QueueSizeGauge.WithLabelValues(w.task, queueBucket, w.source).Set(float64(len(jobCh)))
 			if !ok {
 				if len(jobs) > 0 {
 					w.logger.Warn("have unexecuted jobs when close job chan!", zap.Any("rest job", jobs))
 				}
 				return
 			}
+			metrics.QueueSizeGauge.WithLabelValues(w.task, queueBucket, w.source).Set(float64(len(jobCh)))
+
 			if j.tp != flush && j.tp != conflict {
 				if len(jobs) == 0 {
 					// set job TS when received first job of this batch.
