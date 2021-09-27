@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/metrics"
+	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
 
 // parseDDLResult represents the result of parseDDLSQL.
@@ -125,10 +126,22 @@ func (s *Syncer) splitAndFilterDDL(
 
 	statements := make([]string, 0, len(sqls))
 	tableMap = make(map[string]*filter.Table)
-	for _, sql := range sqls {
+	// Online DDL sql example: RENAME TABLE `test`.`t1` TO `test`.`_t1_old`, `test`.`_t1_new` TO `test`.`t1`
+	// We should parse two rename DDL from this DDL, rename real -> trash and rename shadow -> real.
+	// If we only have one of them, that means users may configure a wrong trash/shadow table syntax
+	onlineDDLFinish := len(sqls) == 2 && s.onlineDDL != nil
+	onlineDDLMatched := allTableMatch
+	tableRecords := make([]string, 2)
+
+	for i, sql := range sqls {
 		stmt2, err2 := p.ParseOneStmt(sql, "", "")
 		if err2 != nil {
 			return nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err2.Error()), "ddl %s", sql)
+		}
+		if onlineDDLFinish {
+			if _, ok := stmt2.(*ast.RenameTableStmt); !ok {
+				onlineDDLFinish = false
+			}
 		}
 
 		tables, err2 := parserpkg.FetchDDLTables(schema, stmt2, s.SourceTableNamesFlavor)
@@ -138,6 +151,21 @@ func (s *Syncer) splitAndFilterDDL(
 
 		// get real tableNames before apply block-allow list
 		if s.onlineDDL != nil {
+			if onlineDDLFinish && len(tables) > 1 {
+				tableRecords[i] = tables[i].String()
+				if i == 0 && s.onlineDDL.TableType(tables[0].Name) == onlineddl.RealTable &&
+					s.onlineDDL.TableType(tables[1].Name) == onlineddl.TrashTable {
+					onlineDDLMatched = trashTableMatch
+				}
+				if i == 1 && s.onlineDDL.TableType(tables[0].Name) == onlineddl.GhostTable &&
+					s.onlineDDL.TableType(tables[1].Name) == onlineddl.RealTable {
+					if onlineDDLMatched == allTableMatch {
+						onlineDDLMatched = shadowTableMatch
+					} else {
+						onlineDDLMatched = allTableMatch
+					}
+				}
+			}
 			for _, table := range tables {
 				table.Name = s.onlineDDL.RealName(table.Name)
 			}
@@ -164,6 +192,11 @@ func (s *Syncer) splitAndFilterDDL(
 		}
 
 		statements = append(statements, ss...)
+	}
+	if onlineDDLFinish {
+		if unmatchedOnlineDDLType := unmatchedOnlineDDLRules(onlineDDLMatched); len(unmatchedOnlineDDLType) > 0 {
+			return nil, nil, terror.ErrConfigOnlineDDLMistakeRegex.Generate(stmt.Text(), tableRecords[onlineDDLMatched^1], unmatchedOnlineDDLType)
+		}
 	}
 	return statements, tableMap, nil
 }

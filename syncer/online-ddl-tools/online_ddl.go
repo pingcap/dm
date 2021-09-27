@@ -50,7 +50,7 @@ type OnlinePlugin interface {
 	Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error)
 	// Finish would delete online ddl from memory and storage
 	Finish(tctx *tcontext.Context, table *filter.Table) error
-	// TableType returns ghhost/real table
+	// TableType returns ghost/real table
 	TableType(table string) TableType
 	// RealName returns real table name that removed ghost suffix and handled by table router
 	RealName(table string) string
