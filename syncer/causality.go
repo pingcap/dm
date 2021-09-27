@@ -71,28 +71,6 @@ func (c *Causality) run(in chan *job) chan *job {
 	return c.causalityCh
 }
 
-// add adds keys relation.
-func (c *Causality) add(keys []string) {
-	if len(keys) == 0 {
-		return
-	}
-
-	// find causal key
-	selectedRelation := keys[0]
-	var nonExistKeys []string
-	for _, key := range keys {
-		if val, ok := c.relations[key]; ok {
-			selectedRelation = val
-		} else {
-			nonExistKeys = append(nonExistKeys, key)
-		}
-	}
-	// set causal relations for those non-exist keys
-	for _, key := range nonExistKeys {
-		c.relations[key] = selectedRelation
-	}
-}
-
 // runCausality receives dml jobs and returns causality jobs
 // When meet conflict, returns a conflict job.
 func (c *Causality) runCausality() {
@@ -122,6 +100,28 @@ func (c *Causality) runCausality() {
 		metrics.ConflictDetectDurationHistogram.WithLabelValues(c.task, c.source).Observe(time.Since(startTime).Seconds())
 
 		c.causalityCh <- j
+	}
+}
+
+// add adds keys relation.
+func (c *Causality) add(keys []string) {
+	if len(keys) == 0 {
+		return
+	}
+
+	// find causal key
+	selectedRelation := keys[0]
+	var nonExistKeys []string
+	for _, key := range keys {
+		if val, ok := c.relations[key]; ok {
+			selectedRelation = val
+		} else {
+			nonExistKeys = append(nonExistKeys, key)
+		}
+	}
+	// set causal relations for those non-exist keys
+	for _, key := range nonExistKeys {
+		c.relations[key] = selectedRelation
 	}
 }
 
