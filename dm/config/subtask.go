@@ -18,8 +18,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
-	"strconv"
+	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -40,6 +39,9 @@ const (
 	ModeAll       = "all"
 	ModeFull      = "full"
 	ModeIncrement = "incremental"
+
+	DefaultShadowTableRules = "^_(.+)_(?:new|gho)$"
+	DefaultTrashTableRules  = "^_(.+)_(?:ghc|del|old)$"
 )
 
 var defaultMaxIdleConns = 2
@@ -157,27 +159,9 @@ func (db *DBConfig) Clone() *DBConfig {
 	return &clone
 }
 
-// GetDBConfigFromEnv is a helper function to read config from environment. It's commonly used in unit tests.
-func GetDBConfigFromEnv() DBConfig {
-	host := os.Getenv("MYSQL_HOST")
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
-	if port == 0 {
-		port = 3306
-	}
-	user := os.Getenv("MYSQL_USER")
-	if user == "" {
-		user = "root"
-	}
-	pswd := os.Getenv("MYSQL_PSWD")
-	return DBConfig{
-		Host:     host,
-		User:     user,
-		Password: pswd,
-		Port:     port,
-	}
+// GetDBConfigForTest is a helper function to get db config for unit test .
+func GetDBConfigForTest() DBConfig {
+	return DBConfig{Host: "localhost", User: "root", Password: "not a real password", Port: 3306}
 }
 
 // SubTaskConfig is the configuration for SubTask.
@@ -192,6 +176,11 @@ type SubTaskConfig struct {
 	IsSharding bool   `toml:"is-sharding" json:"is-sharding"`
 	ShardMode  string `toml:"shard-mode" json:"shard-mode"`
 	OnlineDDL  bool   `toml:"online-ddl" json:"online-ddl"`
+
+	// pt/gh-ost name rule, support regex
+	ShadowTableRules []string `yaml:"shadow-table-rules" toml:"shadow-table-rules" json:"shadow-table-rules"`
+	TrashTableRules  []string `yaml:"trash-table-rules" toml:"trash-table-rules" json:"trash-table-rules"`
+
 	// deprecated
 	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
@@ -204,16 +193,21 @@ type SubTaskConfig struct {
 	//  treat it as hidden configuration
 	IgnoreCheckingItems []string `toml:"ignore-checking-items" json:"ignore-checking-items"`
 	// it represents a MySQL/MariaDB instance or a replica group
-	SourceID                string `toml:"source-id" json:"source-id"`
-	ServerID                uint32 `toml:"server-id" json:"server-id"`
-	Flavor                  string `toml:"flavor" json:"flavor"`
-	MetaSchema              string `toml:"meta-schema" json:"meta-schema"`
-	HeartbeatUpdateInterval int    `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
-	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
-	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
-	Meta                    *Meta  `toml:"meta" json:"meta"`
+	SourceID   string `toml:"source-id" json:"source-id"`
+	ServerID   uint32 `toml:"server-id" json:"server-id"`
+	Flavor     string `toml:"flavor" json:"flavor"`
+	MetaSchema string `toml:"meta-schema" json:"meta-schema"`
+	// deprecated
+	HeartbeatUpdateInterval int `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
+	// deprecated
+	HeartbeatReportInterval int `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
+	// deprecated
+	EnableHeartbeat bool `toml:"enable-heartbeat" json:"enable-heartbeat"`
 	// deprecated
 	Timezone string `toml:"timezone" json:"timezone"`
+
+	Meta *Meta `toml:"meta" json:"meta"`
+
 	// RelayDir get value from dm-worker config
 	RelayDir string `toml:"relay-dir" json:"relay-dir"`
 
@@ -312,6 +306,29 @@ func (c *SubTaskConfig) Decode(data string, verifyDecryptPassword bool) error {
 	return c.Adjust(verifyDecryptPassword)
 }
 
+func adjustOnlineTableRules(ruleType string, rules []string) ([]string, error) {
+	adjustedRules := make([]string, 0, len(rules))
+	for _, r := range rules {
+		if !strings.HasPrefix(r, "^") {
+			r = "^" + r
+		}
+
+		if !strings.HasSuffix(r, "$") {
+			r += "$"
+		}
+
+		p, err := regexp.Compile(r)
+		if err != nil {
+			return rules, terror.ErrConfigOnlineDDLInvalidRegex.Generate(ruleType, r, "fail to compile: "+err.Error())
+		}
+		if p.NumSubexp() != 1 {
+			return rules, terror.ErrConfigOnlineDDLInvalidRegex.Generate(ruleType, r, "rule isn't contains exactly one submatch")
+		}
+		adjustedRules = append(adjustedRules, r)
+	}
+	return adjustedRules, nil
+}
+
 // Adjust adjusts and verifies configs.
 func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if c.Name == "" {
@@ -336,6 +353,25 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	} else if c.OnlineDDLScheme == PT || c.OnlineDDLScheme == GHOST {
 		c.OnlineDDL = true
 		log.L().Warn("'online-ddl-scheme' will be deprecated soon. Recommend that use online-ddl instead of online-ddl-scheme.")
+	}
+	if len(c.ShadowTableRules) == 0 {
+		c.ShadowTableRules = []string{DefaultShadowTableRules}
+	} else {
+		shadowTableRule, err := adjustOnlineTableRules("shadow-table-rules", c.ShadowTableRules)
+		if err != nil {
+			return err
+		}
+		c.ShadowTableRules = shadowTableRule
+	}
+
+	if len(c.TrashTableRules) == 0 {
+		c.TrashTableRules = []string{DefaultTrashTableRules}
+	} else {
+		trashTableRule, err := adjustOnlineTableRules("trash-table-rules", c.TrashTableRules)
+		if err != nil {
+			return err
+		}
+		c.TrashTableRules = trashTableRule
 	}
 
 	if c.MetaSchema == "" {

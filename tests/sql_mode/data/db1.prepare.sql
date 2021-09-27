@@ -40,3 +40,10 @@ insert into t_1(num) values(4/0);
 -- test sql_mode NO_AUTO_CREATE_USER
 drop user if exists 'no_auto_create_user';
 grant select on *.* to 'no_auto_create_user';
+
+-- test different timezone
+create table if not exists `sql_mode`.`timezone` (`id` int, `a` timestamp, PRIMARY KEY (id));
+set @@session.time_zone = "Asia/Shanghai";
+insert into `sql_mode`.`timezone`(`id`, `a`) values (1, '1990-04-15 01:30:12');
+set @@session.time_zone = "America/Phoenix";
+insert into `sql_mode`.`timezone`(`id`, `a`) values (4, '1990-04-15 01:30:12');
