@@ -15,11 +15,12 @@ package loader
 
 import (
 	"context"
+	"path/filepath"
+	"sync"
+
 	"github.com/docker/go-units"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/br/pkg/lightning/common"
-	"path/filepath"
-	"sync"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -58,9 +59,11 @@ type LightningLoader struct {
 	toDBConns       []*DBConn
 	lightningConfig *lcfg.GlobalConfig
 
-	finish atomic.Bool
-	closed atomic.Bool
-	cancel context.CancelFunc // for per task context, which maybe different from lightning context
+	finish         atomic.Bool
+	closed         atomic.Bool
+	metaBinlog     atomic.String
+	metaBinlogGTID atomic.String
+	cancel         context.CancelFunc // for per task context, which maybe different from lightning context
 }
 
 // NewLightning creates a new Loader importing data with lightning.
@@ -190,6 +193,21 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 func (l *LightningLoader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	l.logger.Info("lightning load start")
 	errs := make([]*pb.ProcessError, 0, 1)
+	err, binlog, gtid := getMydumpMetadata(l.cli, l.cfg, l.workerName)
+	if err != nil {
+		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Inc()
+		pr <- pb.ProcessResult{
+			Errors: []*pb.ProcessError{unit.NewProcessError(err)},
+		}
+		return
+	}
+	if binlog != "" {
+		l.metaBinlog.Store(binlog)
+	}
+	if gtid != "" {
+		l.metaBinlogGTID.Store(gtid)
+	}
+
 	if err := l.restore(ctx); err != nil && !utils.IsContextCanceledError(err) {
 		errs = append(errs, unit.NewProcessError(err))
 	}
@@ -268,8 +286,8 @@ func (l *LightningLoader) Status(_ *binlog.SourceStatus) interface{} {
 		FinishedBytes:  finished,
 		TotalBytes:     total,
 		Progress:       progress,
-		MetaBinlog:     "0",
-		MetaBinlogGTID: "0",
+		MetaBinlog:     l.metaBinlog.Load(),
+		MetaBinlogGTID: l.metaBinlogGTID.Load(),
 	}
 	return s
 }

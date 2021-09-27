@@ -16,11 +16,21 @@ package loader
 import (
 	"crypto/sha1"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
+	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/dumpling"
+	"github.com/pingcap/dm/pkg/ha"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // SQLReplace works like strings.Replace but only supports one replacement.
@@ -101,4 +111,83 @@ func getDBAndTableFromFilename(filename string) (string, string, error) {
 		return "", "", fmt.Errorf("%s doesn't have correct `.` separator", filename)
 	}
 	return fields[0], fields[1], nil
+}
+
+func getMydumpMetadata(cli *clientv3.Client, cfg *config.SubTaskConfig, workerName string) (error, string, string) {
+	metafile := filepath.Join(cfg.LoaderConfig.Dir, "metadata")
+	loc, _, err := dumpling.ParseMetaData(metafile, cfg.Flavor)
+	if err != nil {
+		if os.IsNotExist(err) {
+			worker, _, err2 := ha.GetLoadTask(cli, cfg.Name, cfg.SourceID)
+			if err2 != nil {
+				log.L().Warn("get load task", log.ShortError(err2))
+			}
+			if worker != "" && worker != workerName {
+				return terror.ErrLoadTaskWorkerNotMatch.Generate(worker, workerName), "", ""
+			}
+		}
+		if terror.ErrMetadataNoBinlogLoc.Equal(err) {
+			log.L().Warn("dumped metadata doesn't have binlog location, it's OK if DM doesn't enter incremental mode")
+			return nil, "", ""
+		}
+
+		toPrint, err2 := ioutil.ReadFile(metafile)
+		if err2 != nil {
+			toPrint = []byte(err2.Error())
+		}
+		log.L().Error("fail to parse dump metadata", log.ShortError(err))
+		return terror.ErrParseMydumperMeta.Generate(err, toPrint), "", ""
+	}
+
+	return nil, loc.Position.String(), loc.GTIDSetStr()
+}
+
+// cleanDumpFiles is called when finish restoring data, to clean useless files.
+func cleanDumpFiles(cfg *config.SubTaskConfig) {
+	log.L().Info("clean dump files")
+	if cfg.Mode == config.ModeFull {
+		// in full-mode all files won't be need in the future
+		if err := os.RemoveAll(cfg.Dir); err != nil {
+			log.L().Warn("error when remove loaded dump folder", zap.String("data folder", cfg.Dir), zap.Error(err))
+		}
+	} else {
+		// leave metadata file and table structure files, only delete data files
+		files, err := utils.CollectDirFiles(cfg.Dir)
+		if err != nil {
+			log.L().Warn("fail to collect files", zap.String("data folder", cfg.Dir), zap.Error(err))
+		}
+		var lastErr error
+		for f := range files {
+			if strings.HasSuffix(f, ".sql") {
+				// TODO: table structure files are not used now, but we plan to used them in future so not delete them
+				if strings.HasSuffix(f, "-schema-create.sql") || strings.HasSuffix(f, "-schema.sql") {
+					continue
+				}
+				lastErr = os.Remove(filepath.Join(cfg.Dir, f))
+			}
+		}
+		if lastErr != nil {
+			log.L().Warn("show last error when remove loaded dump sql files", zap.String("data folder", cfg.Dir), zap.Error(lastErr))
+		}
+	}
+}
+
+// putLoadTask is called when start restoring data, to put load worker in etcd.
+func putLoadTask(cli *clientv3.Client, cfg *config.SubTaskConfig, workerName string) error {
+	_, err := ha.PutLoadTask(cli, cfg.Name, cfg.SourceID, workerName)
+	if err != nil {
+		return err
+	}
+	log.L().Info("put load worker in etcd", zap.String("task", cfg.Name), zap.String("source", cfg.SourceID), zap.String("worker", workerName))
+	return nil
+}
+
+// delLoadTask is called when finish restoring data, to delete load worker in etcd.
+func delLoadTask(cli *clientv3.Client, cfg *config.SubTaskConfig, workerName string) error {
+	_, _, err := ha.DelLoadTask(cli, cfg.Name, cfg.SourceID)
+	if err != nil {
+		return err
+	}
+	log.L().Info("delete load worker in etcd for full mode", zap.String("task", cfg.Name), zap.String("source", cfg.SourceID), zap.String("worker", workerName))
+	return nil
 }
