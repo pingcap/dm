@@ -58,7 +58,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 
 	jobCh := make(chan *job, 10)
 	logger := log.L()
-	causality := newCausality(1024, "task", "source", &logger)
+	causality := newCausality(false, 1024, "task", "source", &logger)
 	causalityCh := causality.run(jobCh)
 	testCases := []struct {
 		op   opType

@@ -28,11 +28,12 @@ import (
 // if some conflicts exist in more than one groups, causality generate a conflict job and reset.
 // this mechanism meets quiescent consistency to ensure correctness.
 type Causality struct {
-	relations   map[string]string
-	causalityCh chan *job
-	in          chan *job
-	logger      log.Logger
-	chanSize    int
+	relations        map[string]string
+	causalityCh      chan *job
+	in               chan *job
+	logger           log.Logger
+	chanSize         int
+	disableCausality bool
 
 	// for metrics
 	task   string
@@ -40,13 +41,14 @@ type Causality struct {
 }
 
 // newCausality creates a causality instance.
-func newCausality(chanSize int, task, source string, pLogger *log.Logger) *Causality {
+func newCausality(disableCausality bool, chanSize int, task, source string, pLogger *log.Logger) *Causality {
 	causality := &Causality{
-		relations: make(map[string]string),
-		task:      task,
-		chanSize:  chanSize,
-		source:    source,
-		logger:    pLogger.WithFields(zap.String("component", "causality")),
+		relations:        make(map[string]string),
+		disableCausality: disableCausality,
+		task:             task,
+		chanSize:         chanSize,
+		source:           source,
+		logger:           pLogger.WithFields(zap.String("component", "causality")),
 	}
 	return causality
 }
@@ -80,27 +82,36 @@ func (c *Causality) runCausality() {
 		startTime := time.Now()
 		if j.tp != flush {
 			keys := j.keys
-			// detectConflict before add
-			if c.detectConflict(keys) {
-				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", keys))
-				c.causalityCh <- newCausalityJob()
-				c.reset()
-			}
-			c.add(keys)
-
 			var key string
 			if len(keys) > 0 {
 				key = keys[0]
 			}
-			j.key = c.get(key)
+
+			if c.disableCausality {
+				j.key = key
+			} else {
+				// detectConflict before add
+				if c.detectConflict(keys) {
+					c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", keys))
+					c.causalityCh <- newCausalityJob()
+					c.reset()
+				}
+				c.add(keys)
+				j.key = c.get(key)
+			}
 			c.logger.Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
-		} else {
+		} else if !c.disableCausality {
 			c.reset()
 		}
 		metrics.ConflictDetectDurationHistogram.WithLabelValues(c.task, c.source).Observe(time.Since(startTime).Seconds())
 
 		c.causalityCh <- j
 	}
+}
+
+// close closes output channel.
+func (c *Causality) close() {
+	close(c.causalityCh)
 }
 
 // add adds keys relation.
@@ -123,11 +134,6 @@ func (c *Causality) add(keys []string) {
 	for _, key := range nonExistKeys {
 		c.relations[key] = selectedRelation
 	}
-}
-
-// close closes output channel.
-func (c *Causality) close() {
-	close(c.causalityCh)
 }
 
 // get gets relation for a key.
