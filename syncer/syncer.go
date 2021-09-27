@@ -242,7 +242,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.binlogSizeCount.Store(0)
 	syncer.lastCount.Store(0)
 	syncer.count.Store(0)
-	syncer.causality = newCausality(false, cfg.WorkerCount*cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
+	syncer.causality = newCausality(cfg.DisableCausality, cfg.WorkerCount*cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
 	syncer.dmlWorker = newDMLWorker(cfg.Batch, cfg.WorkerCount, cfg.QueueSize, &logger, cfg.Name, cfg.SourceID, cfg.WorkerName, syncer.successFunc, syncer.fatalFunc, syncer.updateReplicationJobTS, syncer.addCount)
 	syncer.done = nil
 	syncer.setTimezone()
