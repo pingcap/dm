@@ -372,3 +372,27 @@ func AdjustBinaryProtocolForDatum(data []interface{}, cols []*model.ColumnInfo) 
 	}
 	return ret, nil
 }
+
+// FetchTableTransferColumnRule get table conversion column rules.
+func FetchTableTransferColumnRule(r *router.Table, schema, table string) (string, string) {
+	rules := r.Match(schema, table)
+	for i := range rules {
+		rule, ok := rules[i].(*router.TableRule)
+		if !ok {
+			return "", ""
+		}
+
+		if rule.TableTransferColumn != nil {
+			re := regexp.MustCompile(rule.TableTransferColumn.TableRegular)
+			params := re.FindStringSubmatch(table)
+			var transferVal string
+			for idx, param := range params {
+				if idx > 0 {
+					transferVal += param
+				}
+			}
+			return rule.TableTransferColumn.TargetColumn, transferVal
+		}
+	}
+	return "", ""
+}

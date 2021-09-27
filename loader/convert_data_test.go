@@ -92,6 +92,17 @@ func (t *testConvertDataSuite) TestReassemble(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(expected[i], Equals, query)
 	}
+
+	// test table transfer column
+	expected = []string{
+		// nolint:stylecheck
+		`INSERT INTO t VALUES(10,1,9223372036854775807,123.123,123456789012.1234567890120000000,"\0\0\0\0\0\0\0A","1000-01-01","9999-12-31 23:59:59","1973-12-30 15:30:00","23:59:59",1970,"x","x\"x","blob","text","enum2","a,b",'test1'),(9,1,9223372036854775807,123.123,123456789012.1234567890120000000,"\0\0\0\0\0\0\0A","1000-01-01","9999-12-31 23:59:59","1973-12-30 15:30:00","23:59:59",1970,"x","x\",\nx","blob","text","enum2","a,b",'test1'),(8,1,9223372036854775807,123.123,123456789012.1234567890120000000,"\0\0\0\0\0\0\0A","1000-01-01","9999-12-31 23:59:59","1973-12-30 15:30:00","23:59:59",1970,"x","x\",\nx","blob","text\n","enum2","	a,b ",'test1');`,
+	}
+	table.transferCol = "tname"
+	table.transferVal = "test1"
+	query, err := reassemble([]byte(sql), table, nil)
+	c.Assert(err, IsNil)
+	c.Assert(expected[0], Equals, query)
 }
 
 func (t *testConvertDataSuite) TestReassembleWithGeneratedColumn(c *C) {
@@ -125,6 +136,15 @@ func (t *testConvertDataSuite) TestReassembleWithGeneratedColumn(c *C) {
 	columnMapping, err := cm.NewMapping(false, rules)
 	c.Assert(err, IsNil)
 	query, err := reassemble([]byte(sql), table, columnMapping)
+	c.Assert(err, IsNil)
+	c.Assert(query, Equals, expected)
+
+	table.insertHeadStmt = "INSERT INTO `t` (`id`,`t_json`,`tname`) VALUES"
+	table.transferCol = "tname"
+	table.transferVal = "test1"
+	expected = "INSERT INTO `t` (`id`,`t_json`,`tname`) VALUES(10,'{}','test1'),(9,NULL,'test1'),(8,'{\"a\":123}','test1');"
+	query, err = reassemble([]byte(sql), table, nil)
+
 	c.Assert(err, IsNil)
 	c.Assert(query, Equals, expected)
 }

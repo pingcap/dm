@@ -86,6 +86,9 @@ func parseInsertStmt(sql []byte, table *tableInfo, columnMapping *cm.Mapping) ([
 		if err != nil {
 			return nil, err
 		}
+		if len(table.transferCol) > 0 {
+			row = append(row, "'"+table.transferVal+"'")
+		}
 		rows = append(rows, row)
 
 		s = e + 1
@@ -278,10 +281,14 @@ func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file stri
 			columns = append(columns, col.Name.Name.O)
 		}
 	}
-	if hasGeneragedCols {
+	transferCol, transferVal := utils.FetchTableTransferColumnRule(r, schema, table)
+	if hasGeneragedCols || len(transferCol) > 0 {
 		var escapeColumns []string
 		for _, column := range columns {
 			escapeColumns = append(escapeColumns, fmt.Sprintf("`%s`", column))
+		}
+		if len(transferCol) > 0 {
+			escapeColumns = append(escapeColumns, fmt.Sprintf("`%s`", transferCol))
 		}
 		columnNameFields = "(" + strings.Join(escapeColumns, ",") + ") "
 	}
@@ -294,6 +301,8 @@ func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file stri
 		targetTable:    dstTable,
 		columnNameList: columns,
 		insertHeadStmt: fmt.Sprintf("INSERT INTO `%s` %sVALUES", dstTable, columnNameFields),
+		transferCol:    transferCol,
+		transferVal:    transferVal,
 	}, nil
 }
 
