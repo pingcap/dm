@@ -179,7 +179,7 @@ type MydumperConfig struct {
 	// TODO zxc: combine -B -T --regex with filter rules?
 }
 
-// DefaultMydumperConfig return DefaultMydumperConfig.
+// DefaultMydumperConfig return default mydumper config for task.
 func DefaultMydumperConfig() MydumperConfig {
 	return MydumperConfig{
 		MydumperPath:  defaultMydumperPath,
@@ -209,7 +209,7 @@ type LoaderConfig struct {
 	SQLMode  string `yaml:"-" toml:"-" json:"-"` // wrote by dump unit
 }
 
-// DefaultLoaderConfig return DefaultLoaderConfig.
+// DefaultLoaderConfig return default loader config for task.
 func DefaultLoaderConfig() LoaderConfig {
 	return LoaderConfig{
 		PoolSize: defaultPoolSize,
@@ -251,7 +251,7 @@ type SyncerConfig struct {
 	EnableANSIQuotes bool `yaml:"enable-ansi-quotes" toml:"enable-ansi-quotes" json:"enable-ansi-quotes"`
 }
 
-// DefaultSyncerConfig return DefaultSyncerConfig.
+// DefaultSyncerConfig return default syncer config for task.
 func DefaultSyncerConfig() SyncerConfig {
 	return SyncerConfig{
 		WorkerCount:             defaultWorkerCount,
