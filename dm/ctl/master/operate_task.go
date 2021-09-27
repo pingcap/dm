@@ -80,8 +80,8 @@ func addOperateSourceTaskFlags(cmd *cobra.Command) {
 }
 
 func operateSourceTaskFunc(taskOp pb.TaskOp, cmd *cobra.Command) error {
-	source, batchSize, ok := parseOperateSourceTaskParams(cmd)
-	if !ok {
+	source, batchSize, err := parseOperateSourceTaskParams(cmd)
+	if err != nil {
 		cmd.SetOut(os.Stdout)
 		common.PrintCmdUsage(cmd)
 		return errors.New("please check output to see error")
@@ -163,22 +163,22 @@ func batchOperateTask(taskOp pb.TaskOp, batchSize int, sources []string, subTask
 	return &result
 }
 
-func parseOperateSourceTaskParams(cmd *cobra.Command) (string, int, bool) {
+func parseOperateSourceTaskParams(cmd *cobra.Command) (string, int, error) {
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
-		return "", 0, false
+		return "", 0, err
 	}
 	if len(sources) == 0 {
 		common.PrintLinesf(`must give one source-name when task-name/task-conf is not specified`)
-		return "", 0, false
+		return "", 0, errors.New("missing source")
 	} else if len(sources) > 1 {
 		common.PrintLinesf(`can give only one source-name when task-name/task-conf is not specified`)
-		return "", 0, false
+		return "", 0, errors.New("too many source")
 	}
 	batchSize, err := cmd.Flags().GetInt(batchSizeFlag)
 	if err != nil {
 		common.PrintLinesf("error in parse `--" + batchSizeFlag + "`")
-		return "", 0, false
+		return "", 0, err
 	}
-	return sources[0], batchSize, true
+	return sources[0], batchSize, nil
 }
