@@ -22,42 +22,42 @@ func (t *testCtlMaster) TestParseBatchTaskParameters(c *check.C) {
 	{
 		cmd := prepareTestCmd()
 		_ = cmd.ParseFlags([]string{"task-name"})
-		_, _, ok := parseOperateSourceTaskParams(cmd)
-		c.Assert(ok, check.IsFalse)
+		_, _, err := parseOperateSourceTaskParams(cmd)
+		c.Assert(err, check.Not(check.IsNil))
 	}
 	{
 		cmd := prepareTestCmd()
-		_, _, ok := parseOperateSourceTaskParams(cmd)
-		c.Assert(ok, check.IsFalse)
+		_, _, err := parseOperateSourceTaskParams(cmd)
+		c.Assert(err, check.Not(check.IsNil))
 	}
 	{
 		cmd := prepareTestCmd()
 		_ = cmd.ParseFlags([]string{"-s", "source-name", "-s", "source-name2"})
-		_, _, ok := parseOperateSourceTaskParams(cmd)
-		c.Assert(ok, check.IsFalse)
+		_, _, err := parseOperateSourceTaskParams(cmd)
+		c.Assert(err, check.Not(check.IsNil))
 	}
 	{
 		cmd := prepareTestCmd()
 		_ = cmd.ParseFlags([]string{"-s", "source-name"})
-		source, _, ok := parseOperateSourceTaskParams(cmd)
+		source, _, err := parseOperateSourceTaskParams(cmd)
 		c.Assert(source, check.Equals, "source-name")
-		c.Assert(ok, check.IsTrue)
+		c.Assert(err, check.IsNil)
 	}
 	{
 		cmd := prepareTestCmd()
 		_ = cmd.ParseFlags([]string{"-s", "source-name"})
-		source, batchSize, ok := parseOperateSourceTaskParams(cmd)
+		source, batchSize, err := parseOperateSourceTaskParams(cmd)
 		c.Assert(source, check.Equals, "source-name")
 		c.Assert(batchSize, check.Equals, defaultBatchSize)
-		c.Assert(ok, check.IsTrue)
+		c.Assert(err, check.IsNil)
 	}
 	{
 		cmd := prepareTestCmd()
 		_ = cmd.ParseFlags([]string{"-s", "source-name", "--batch-size", "2"})
-		source, batchSize, ok := parseOperateSourceTaskParams(cmd)
+		source, batchSize, err := parseOperateSourceTaskParams(cmd)
 		c.Assert(source, check.Equals, "source-name")
 		c.Assert(batchSize, check.Equals, 2)
-		c.Assert(ok, check.IsTrue)
+		c.Assert(err, check.IsNil)
 	}
 }
 
