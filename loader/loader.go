@@ -570,7 +570,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	defer cancel()
 
 	l.newFileJobQueue()
-	err, binlog, gtid := getMydumpMetadata(l.cli, l.cfg, l.workerName)
+	binlog, gtid, err := getMydumpMetadata(l.cli, l.cfg, l.workerName)
 	if err != nil {
 		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Inc()
 		pr <- pb.ProcessResult{

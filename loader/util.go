@@ -113,7 +113,7 @@ func getDBAndTableFromFilename(filename string) (string, string, error) {
 	return fields[0], fields[1], nil
 }
 
-func getMydumpMetadata(cli *clientv3.Client, cfg *config.SubTaskConfig, workerName string) (error, string, string) {
+func getMydumpMetadata(cli *clientv3.Client, cfg *config.SubTaskConfig, workerName string) (string, string, error) {
 	metafile := filepath.Join(cfg.LoaderConfig.Dir, "metadata")
 	loc, _, err := dumpling.ParseMetaData(metafile, cfg.Flavor)
 	if err != nil {
@@ -123,12 +123,12 @@ func getMydumpMetadata(cli *clientv3.Client, cfg *config.SubTaskConfig, workerNa
 				log.L().Warn("get load task", log.ShortError(err2))
 			}
 			if worker != "" && worker != workerName {
-				return terror.ErrLoadTaskWorkerNotMatch.Generate(worker, workerName), "", ""
+				return "", "", terror.ErrLoadTaskWorkerNotMatch.Generate(worker, workerName)
 			}
 		}
 		if terror.ErrMetadataNoBinlogLoc.Equal(err) {
 			log.L().Warn("dumped metadata doesn't have binlog location, it's OK if DM doesn't enter incremental mode")
-			return nil, "", ""
+			return "", "", nil
 		}
 
 		toPrint, err2 := ioutil.ReadFile(metafile)
@@ -136,10 +136,10 @@ func getMydumpMetadata(cli *clientv3.Client, cfg *config.SubTaskConfig, workerNa
 			toPrint = []byte(err2.Error())
 		}
 		log.L().Error("fail to parse dump metadata", log.ShortError(err))
-		return terror.ErrParseMydumperMeta.Generate(err, toPrint), "", ""
+		return "", "", terror.ErrParseMydumperMeta.Generate(err, toPrint)
 	}
 
-	return nil, loc.Position.String(), loc.GTIDSetStr()
+	return loc.Position.String(), loc.GTIDSetStr(), nil
 }
 
 // cleanDumpFiles is called when finish restoring data, to clean useless files.

@@ -193,7 +193,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 func (l *LightningLoader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	l.logger.Info("lightning load start")
 	errs := make([]*pb.ProcessError, 0, 1)
-	err, binlog, gtid := getMydumpMetadata(l.cli, l.cfg, l.workerName)
+	binlog, gtid, err := getMydumpMetadata(l.cli, l.cfg, l.workerName)
 	if err != nil {
 		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Inc()
 		pr <- pb.ProcessResult{
