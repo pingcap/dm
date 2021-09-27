@@ -457,7 +457,7 @@ func (t *testWorkerEtcdCompact) TestWatchSubtaskStageEtcdCompact(c *C) {
 	})
 	c.Assert(err, IsNil)
 	sourceCfg := loadSourceConfigWithoutPassword(c)
-	sourceCfg.From = config.GetDBConfigFromEnv()
+	sourceCfg.From = config.GetDBConfigForTest()
 	sourceCfg.EnableRelay = false
 
 	// step 1: start worker

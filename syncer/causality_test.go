@@ -56,7 +56,6 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	ti, err := createTableInfo(p, se, int64(0), schema)
 	c.Assert(err, IsNil)
 
-	location := binlog.NewLocation("")
 	jobCh := make(chan *job, 10)
 	logger := log.L()
 	causality := newCausality(1024, "task", "source", &logger)
@@ -88,13 +87,15 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	}
 	results := []opType{insert, insert, update, del, conflict, insert}
 	table := &filter.Table{Schema: "test", Name: "t1"}
+	location := binlog.NewLocation("")
+	ec := &eventContext{startLocation: &location, currentLocation: &location, lastLocation: &location}
 
 	for _, tc := range testCases {
 		var keys []string
 		for _, val := range tc.vals {
 			keys = append(keys, genMultipleKeys(ti, val, "tb")...)
 		}
-		job := newDMLJob(tc.op, table, table, "", nil, keys, location, location, location, nil)
+		job := newDMLJob(tc.op, table, table, "", nil, keys, ec)
 		jobCh <- job
 	}
 

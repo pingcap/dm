@@ -66,36 +66,25 @@ func (t *testJobSuite) TestJobTypeString(c *C) {
 }
 
 func (t *testJobSuite) TestJob(c *C) {
-	ddlInfo := &shardingDDLInfo{
-		tables: [][]*filter.Table{
-			{
-				{
-					Schema: "test1",
-					Name:   "t1",
-				},
-			}, {
-				{
-					Schema: "test2",
-					Name:   "t2",
-				},
-			},
-		},
+	ddlInfo := &ddlInfo{
+		sourceTables: []*filter.Table{{Schema: "test1", Name: "t1"}},
+		targetTables: []*filter.Table{{Schema: "test2", Name: "t2"}},
 	}
 	table := &filter.Table{Schema: "test", Name: "t1"}
 	location := binlog.NewLocation("")
 	ec := &eventContext{startLocation: &location, currentLocation: &location, lastLocation: &location}
 	qec := &queryEventContext{
-		eventContext:   ec,
-		originSQL:      "create database test",
-		needHandleDDLs: []string{"create database test"},
-		ddlInfo:        ddlInfo,
+		eventContext:    ec,
+		originSQL:       "create database test",
+		needHandleDDLs:  []string{"create database test"},
+		shardingDDLInfo: ddlInfo,
 	}
 	testCases := []struct {
 		job    *job
 		jobStr string
 	}{
 		{
-			newDMLJob(insert, table, table, "insert into test.t1 values(?)", []interface{}{1}, []string{"1"}, location, location, location, ec.header),
+			newDMLJob(insert, table, table, "insert into test.t1 values(?)", []interface{}{1}, []string{"1"}, ec),
 			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: , ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newDDLJob(qec),

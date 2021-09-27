@@ -91,7 +91,7 @@ func (j *job) String() string {
 }
 
 func newDMLJob(tp opType, sourceTable, targetTable *filter.Table, sql string, args []interface{},
-	keys []string, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader) *job {
+	keys []string, ec *eventContext) *job {
 	return &job{
 		tp:          tp,
 		sourceTbls:  map[string][]*filter.Table{sourceTable.Schema: {sourceTable}},
@@ -101,10 +101,10 @@ func newDMLJob(tp opType, sourceTable, targetTable *filter.Table, sql string, ar
 		keys:        keys,
 		retry:       true,
 
-		location:        location,
-		startLocation:   startLocation,
-		currentLocation: cmdLocation,
-		eventHeader:     eventHeader,
+		location:        *ec.lastLocation,
+		startLocation:   *ec.startLocation,
+		currentLocation: *ec.currentLocation,
+		eventHeader:     ec.header,
 		jobAddTime:      time.Now(),
 	}
 }
@@ -126,6 +126,7 @@ func newDDLJob(qec *queryEventContext) *job {
 		jobAddTime:      time.Now(),
 	}
 
+	ddlInfo := qec.shardingDDLInfo
 	if len(qec.sourceTbls) != 0 {
 		j.sourceTbls = make(map[string][]*filter.Table, len(qec.sourceTbls))
 		for schema, tbMap := range qec.sourceTbls {
@@ -136,9 +137,9 @@ func newDDLJob(qec *queryEventContext) *job {
 				j.sourceTbls[schema] = append(j.sourceTbls[schema], &filter.Table{Schema: schema, Name: name})
 			}
 		}
-	} else if qec.ddlInfo != nil && len(qec.ddlInfo.tables) >= 2 {
-		j.sourceTbls = map[string][]*filter.Table{qec.ddlInfo.tables[0][0].Schema: {qec.ddlInfo.tables[0][0]}}
-		j.targetTable = qec.ddlInfo.tables[1][0]
+	} else if ddlInfo != nil && ddlInfo.sourceTables != nil && ddlInfo.targetTables != nil {
+		j.sourceTbls = map[string][]*filter.Table{ddlInfo.sourceTables[0].Schema: {ddlInfo.sourceTables[0]}}
+		j.targetTable = ddlInfo.targetTables[0]
 	}
 
 	return j
