@@ -66,7 +66,7 @@ function test_stop_task_before_checkpoint() {
 		"stop-task test" \
 		"\"result\": true" 3
 
-	cleanup_data all_mode
+	cleanup_data lightning_mode
 	cleanup_process $*
 
 	export GO_FAILPOINTS=''
@@ -199,7 +199,7 @@ function run() {
 	# test block-allow-list by the way
 	run_sql "show databases;" $TIDB_PORT $TIDB_PASSWORD
 	check_not_contains "ignore_db"
-	check_contains "all_mode"
+	check_contains "lightning_mode"
 
 	echo "check dump files have been cleaned"
 	ls $WORK_DIR/worker1/dumped_data.$ILLEGAL_CHAR_NAME && exit 1 || echo "worker1 auto removed dump files"
@@ -214,17 +214,17 @@ function run() {
 	check_log_not_contains $WORK_DIR/worker2/log/dm-worker.log "123456"
 
 	# test drop table if exists
-	run_sql_source1 "drop table if exists \`all_mode\`.\`tb1\`;"
-	run_sql_source1 "drop table if exists \`all_mode\`.\`tb1\`;"
-	run_sql_source2 "drop table if exists \`all_mode\`.\`tb2\`;"
-	run_sql_source2 "drop table if exists \`all_mode\`.\`tb2\`;"
+	run_sql_source1 "drop table if exists \`lightning_mode\`.\`tb1\`;"
+	run_sql_source1 "drop table if exists \`lightning_mode\`.\`tb1\`;"
+	run_sql_source2 "drop table if exists \`lightning_mode\`.\`tb2\`;"
+	run_sql_source2 "drop table if exists \`lightning_mode\`.\`tb2\`;"
 	check_log_not_contains $WORK_DIR/worker1/log/dm-worker.log "Error .* Table .* doesn't exist"
 	check_log_not_contains $WORK_DIR/worker2/log/dm-worker.log "Error .* Table .* doesn't exist"
 
 	# test Db not exists should be reported
 
-	run_sql_tidb "drop database all_mode"
-	run_sql_source1 "create table all_mode.db_error (c int primary key);"
+	run_sql_tidb "drop database lightning_mode"
+	run_sql_source1 "create table lightning_mode.db_error (c int primary key);"
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status $ILLEGAL_CHAR_NAME" \
 		"Error 1049: Unknown database" 1
@@ -250,7 +250,7 @@ function run() {
 	run_sql_both_source "SET @@global.time_zone = 'SYSTEM';"
 }
 
-cleanup_data all_mode
+cleanup_data lightning_mode
 # also cleanup dm processes in case of last run failed
 cleanup_process $*
 run $*
