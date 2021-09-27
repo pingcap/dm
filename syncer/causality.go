@@ -109,7 +109,7 @@ func (c *Causality) runCausality() {
 	}
 }
 
-// close closes output channel.
+// close closes outer channel.
 func (c *Causality) close() {
 	close(c.causalityCh)
 }
