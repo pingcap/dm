@@ -39,11 +39,11 @@ type batchTaskResult struct {
 }
 
 type operateTaskResult struct {
-	TaskName string                     `json:"taskName"`
-	Op       string                     `json:"op"`
-	Result   bool                       `json:"result"`
-	Msg      string                     `json:"msg"`
-	Sources  []*pb.CommonWorkerResponse `json:"sources"`
+	Task    string                     `json:"task"`
+	Op      string                     `json:"op"`
+	Result  bool                       `json:"result"`
+	Msg     string                     `json:"msg"`
+	Sources []*pb.CommonWorkerResponse `json:"sources"`
 }
 
 func operateTaskFunc(taskOp pb.TaskOp, cmd *cobra.Command) error {
@@ -132,7 +132,7 @@ func batchOperateTask(taskOp pb.TaskOp, batchSize int, sources []string, subTask
 			defer wg.Done()
 
 			for name := range workCh {
-				taskResult := operateTaskResult{TaskName: name, Op: taskOp.String()}
+				taskResult := operateTaskResult{Task: name, Op: taskOp.String()}
 				taskOpResp, err := common.OperateTask(taskOp, name, sources)
 				if err != nil {
 					taskResult.Result = false
@@ -157,7 +157,7 @@ func batchOperateTask(taskOp pb.TaskOp, batchSize int, sources []string, subTask
 	}
 
 	sort.Slice(result.Tasks, func(i, j int) bool {
-		return result.Tasks[i].TaskName < result.Tasks[j].TaskName
+		return result.Tasks[i].Task < result.Tasks[j].Task
 	})
 
 	return &result
