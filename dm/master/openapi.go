@@ -22,7 +22,6 @@ import (
 	"github.com/deepmap/oapi-codegen/pkg/middleware"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
-	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
@@ -331,7 +330,7 @@ func terrorHTTPErrorHandler(err error, c echo.Context) {
 		code = int(tErr.Code())
 		msg = tErr.Error()
 	} else {
-		msg = errors.Trace(err).Error()
+		msg = err.Error()
 	}
 	if sendErr := sendHTTPErrorResp(c, code, msg); sendErr != nil {
 		c.Logger().Error(sendErr)
