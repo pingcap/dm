@@ -39,6 +39,7 @@ type Causality struct {
 	source string
 }
 
+// newCausality creates a causality instance.
 func newCausality(chanSize int, task, source string, pLogger *log.Logger) *Causality {
 	causality := &Causality{
 		relations: make(map[string]string),
@@ -50,6 +51,7 @@ func newCausality(chanSize int, task, source string, pLogger *log.Logger) *Causa
 	return causality
 }
 
+// run runs a causality instance.
 func (c *Causality) run(in chan *job) chan *job {
 	c.in = in
 	c.causalityCh = make(chan *job, c.chanSize)
@@ -69,6 +71,7 @@ func (c *Causality) run(in chan *job) chan *job {
 	return c.causalityCh
 }
 
+// add adds keys relation.
 func (c *Causality) add(keys []string) {
 	if len(keys) == 0 {
 		return
@@ -90,26 +93,29 @@ func (c *Causality) add(keys []string) {
 	}
 }
 
+// runCausality receives dml jobs and returns causality jobs
+// When meet conflict, returns a conflict job.
 func (c *Causality) runCausality() {
 	for j := range c.in {
 		metrics.QueueSizeGauge.WithLabelValues(c.task, "causality_input", c.source).Set(float64(len(c.in)))
 
 		startTime := time.Now()
 		if j.tp != flush {
+			keys := j.keys
 			// detectConflict before add
-			if c.detectConflict(j.keys) {
-				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", j.keys))
+			if c.detectConflict(keys) {
+				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", keys))
 				c.causalityCh <- newCausalityJob()
 				c.reset()
 			}
-			c.add(j.keys)
+			c.add(keys)
 
 			var key string
-			if len(j.keys) > 0 {
-				key = j.keys[0]
+			if len(keys) > 0 {
+				key = keys[0]
 			}
 			j.key = c.get(key)
-			c.logger.Debug("key for keys", zap.String("key", j.key), zap.Strings("keys", j.keys))
+			c.logger.Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 		} else {
 			c.reset()
 		}
@@ -119,14 +125,17 @@ func (c *Causality) runCausality() {
 	}
 }
 
+// close closes output channel.
 func (c *Causality) close() {
 	close(c.causalityCh)
 }
 
+// get gets relation for a key.
 func (c *Causality) get(key string) string {
 	return c.relations[key]
 }
 
+// reset resets relations.
 func (c *Causality) reset() {
 	c.relations = make(map[string]string)
 }
