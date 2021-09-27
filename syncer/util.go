@@ -118,3 +118,20 @@ func printServerVersion(tctx *tcontext.Context, db *conn.BaseDB, scope string) {
 	dctx := dcontext.NewContext(tctx.Ctx, logger)
 	export.ParseServerInfo(dctx, versionInfo)
 }
+
+const (
+	shadowTableMatch int = iota
+	trashTableMatch
+	allTableMatch
+)
+
+func unmatchedOnlineDDLRules(match int) string {
+	switch match ^ 1 {
+	case shadowTableMatch:
+		return "shadow-table-rules"
+	case trashTableMatch:
+		return "trash-table-rules"
+	default:
+		return ""
+	}
+}
