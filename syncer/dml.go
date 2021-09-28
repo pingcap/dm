@@ -32,12 +32,12 @@ import (
 
 // genDMLParam stores pruned columns, data as well as the original columns, data, index.
 type genDMLParam struct {
-	tableID           string              // as a key in map like `schema`.`table`
-	safeMode          bool                // only used in update
-	data              [][]interface{}     // pruned data
-	originalData      [][]interface{}     // all data
-	columns           []*model.ColumnInfo // pruned columns
-	originalTableInfo *model.TableInfo    // all table info
+	tableID         string              // as a key in map like `schema`.`table`
+	safeMode        bool                // only used in update
+	data            [][]interface{}     // pruned data
+	originalData    [][]interface{}     // all data
+	columns         []*model.ColumnInfo // pruned columns
+	sourceTableInfo *model.TableInfo    // all table info
 }
 
 func extractValueFromData(data []interface{}, columns []*model.ColumnInfo) []interface{} {
@@ -54,7 +54,7 @@ func (s *Syncer) genInsertSQLs(param *genDMLParam, filterExprs []expression.Expr
 		dataSeq         = param.data
 		originalDataSeq = param.originalData
 		columns         = param.columns
-		ti              = param.originalTableInfo
+		ti              = param.sourceTableInfo
 		sqls            = make([]string, 0, len(dataSeq))
 		keys            = make([][]string, 0, len(dataSeq))
 		values          = make([][]interface{}, 0, len(dataSeq))
@@ -108,7 +108,7 @@ func (s *Syncer) genUpdateSQLs(
 		data                = param.data
 		originalData        = param.originalData
 		columns             = param.columns
-		ti                  = param.originalTableInfo
+		ti                  = param.sourceTableInfo
 		defaultIndexColumns = findFitIndex(ti)
 		replaceSQL          string // `REPLACE INTO` SQL
 		sqls                = make([]string, 0, len(data)/2)
@@ -221,7 +221,7 @@ func (s *Syncer) genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expr
 	var (
 		tableID             = param.tableID
 		dataSeq             = param.originalData
-		ti                  = param.originalTableInfo
+		ti                  = param.sourceTableInfo
 		defaultIndexColumns = findFitIndex(ti)
 		sqls                = make([]string, 0, len(dataSeq))
 		keys                = make([][]string, 0, len(dataSeq))
