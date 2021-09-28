@@ -148,7 +148,6 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 			return err
 		}
 		cfg.Routes = l.cfg.RouteRules
-		cfg.Checkpoint.Schema = "tidb_lightning_checkpoint_" + l.cfg.Name
 		cfg.Checkpoint.Driver = lcfg.CheckpointDriverMySQL
 		param := common.MySQLConnectParam{
 			Host:             cfg.TiDB.Host,
@@ -160,12 +159,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 			TLS:              cfg.TiDB.TLS,
 		}
 		cfg.Checkpoint.DSN = param.ToDSN()
-		sqlMode, err2 := mysql.GetSQLMode(l.cfg.LoaderConfig.SQLMode)
-		if err2 != nil {
-			l.logger.Warn("cannot convert sql_mode compatible", log.ShortError(err2))
-		} else {
-			cfg.TiDB.SQLMode = sqlMode
-		}
+		cfg.TiDB.StrSQLMode = l.cfg.LoaderConfig.SQLMode
 		if err = cfg.Adjust(ctx); err != nil {
 			return err
 		}
