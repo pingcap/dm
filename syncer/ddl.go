@@ -168,7 +168,7 @@ func (s *Syncer) splitAndFilterDDL(
 					} else {
 						onlineDDLMatched = allTable
 					}
-					// record trash table to give users information to check regex
+					// record shadow table to give users information to check regex
 					tableRecords[shadowTable] = tables[0].String()
 				}
 			}
