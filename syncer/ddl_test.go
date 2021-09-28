@@ -558,6 +558,7 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
 		c.Assert(terror.ErrConfigOnlineDDLMistakeRegex.Equal(err), IsTrue)
 		c.Assert(sqls, HasLen, 0)
+		c.Assert(tables, HasLen, 0)
 		c.Assert(err, ErrorMatches, ".*"+sql+".*"+table+".*"+unmatchedOnlineDDLRules(matchRules)+".*")
 	}
 	cluster.Stop()
