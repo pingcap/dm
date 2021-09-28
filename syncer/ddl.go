@@ -152,7 +152,8 @@ func (s *Syncer) splitAndFilterDDL(
 		// get real tableNames before apply block-allow list
 		if s.onlineDDL != nil {
 			if onlineDDLFinish && len(tables) > 1 {
-				tableRecords[i] = tables[i].String()
+				// record trash/shadow table to give users information to check regex
+				tableRecords[i^1] = tables[i^1].String()
 				if i == 0 && s.onlineDDL.TableType(tables[0].Name) == onlineddl.RealTable &&
 					s.onlineDDL.TableType(tables[1].Name) == onlineddl.TrashTable {
 					onlineDDLMatched = trashTableMatch

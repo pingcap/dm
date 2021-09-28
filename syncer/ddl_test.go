@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pingcap/dm/pkg/terror"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/tidb/br/pkg/mock"
 
@@ -466,7 +468,7 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(sqls, HasLen, 0)
 		c.Assert(tables, HasLen, 0)
-		sql = fmt.Sprintf("RENAME TABLE `test`.`%s` TO `test`.`t1`", ca.ghostname)
+		sql = fmt.Sprintf("RENAME TABLE `test`.`t1` TO `test`.`%s`, `test`.`%s` TO `test`.`t1`", ca.trashName, ca.ghostname)
 		stmt, err = p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
 		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
@@ -475,6 +477,88 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		c.Assert(sqls[0], Equals, newSQL)
 		tableName := &filter.Table{Schema: "test", Name: ca.ghostname}
 		c.Assert(tables, DeepEquals, map[string]*filter.Table{tableName.String(): tableName})
+	}
+	cluster.Stop()
+}
+
+func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
+	cases := []struct {
+		onlineType string
+		trashName  string
+		ghostname  string
+		matchGho   bool
+	}{
+		{
+			config.GHOST,
+			"_t1_del",
+			"_t1_gho_invalid",
+			false,
+		},
+		{
+			config.GHOST,
+			"_t1_del_invalid",
+			"_t1_gho",
+			true,
+		},
+		{
+			config.PT,
+			"_t1_old",
+			"_t1_new_invalid",
+			false,
+		},
+		{
+			config.PT,
+			"_t1_old_invalid",
+			"_t1_new",
+			true,
+		},
+	}
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestMistakeOnlineDDLRegex")))
+	p := parser.New()
+
+	ec := eventContext{tctx: tctx}
+	cluster, err := mock.NewCluster()
+	c.Assert(err, IsNil)
+	c.Assert(cluster.Start(), IsNil)
+	mysqlConfig, err := mysql.ParseDSN(cluster.DSN)
+	c.Assert(err, IsNil)
+	mockClusterPort, err := strconv.Atoi(strings.Split(mysqlConfig.Addr, ":")[1])
+	c.Assert(err, IsNil)
+	dbCfg := config.GetDBConfigForTest()
+	dbCfg.Port = mockClusterPort
+	dbCfg.Password = ""
+	cfg := s.newSubTaskCfg(dbCfg)
+	for _, ca := range cases {
+		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
+		c.Assert(err, IsNil)
+		syncer := NewSyncer(cfg, nil)
+		syncer.onlineDDL = plugin
+		c.Assert(plugin.Clear(tctx), IsNil)
+
+		// ghost table
+		sql := fmt.Sprintf("ALTER TABLE `test`.`%s` ADD COLUMN `n` INT", ca.ghostname)
+		stmt, err := p.ParseOneStmt(sql, "", "")
+		c.Assert(err, IsNil)
+		sqls, tables, err := syncer.splitAndFilterDDL(ec, p, stmt, "test")
+		c.Assert(err, IsNil)
+		c.Assert(tables, HasLen, 0)
+		table := ca.ghostname
+		matchRules := trashTableMatch
+		if ca.matchGho {
+			c.Assert(sqls, HasLen, 0)
+			table = ca.trashName
+			matchRules = shadowTableMatch
+		} else {
+			c.Assert(sqls, HasLen, 1)
+			c.Assert(sqls[0], Equals, sql)
+		}
+		sql = fmt.Sprintf("RENAME TABLE `test`.`t1` TO `test`.`%s`, `test`.`%s` TO `test`.`t1`", ca.trashName, ca.ghostname)
+		stmt, err = p.ParseOneStmt(sql, "", "")
+		c.Assert(err, IsNil)
+		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
+		c.Assert(terror.ErrConfigOnlineDDLMistakeRegex.Equal(err), IsTrue)
+		c.Assert(sqls, HasLen, 0)
+		c.Assert(err, ErrorMatches, ".*"+sql+".*"+table+".*"+unmatchedOnlineDDLRules(matchRules)+".*")
 	}
 	cluster.Stop()
 }

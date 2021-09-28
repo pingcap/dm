@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
@@ -128,9 +129,9 @@ const (
 func unmatchedOnlineDDLRules(match int) string {
 	switch match ^ 1 {
 	case shadowTableMatch:
-		return "shadow-table-rules"
+		return config.ShadowTableRules
 	case trashTableMatch:
-		return "trash-table-rules"
+		return config.TrashTableRules
 	default:
 		return ""
 	}

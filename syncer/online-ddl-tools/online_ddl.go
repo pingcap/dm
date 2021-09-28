@@ -391,14 +391,14 @@ func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (Onl
 	for _, sg := range cfg.ShadowTableRules {
 		shadowReg, err := regexp.Compile(sg)
 		if err != nil {
-			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate("shadow-table-rules", sg, "fail to compile: "+err.Error())
+			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate(config.ShadowTableRules, sg, "fail to compile: "+err.Error())
 		}
 		shadowRegs = append(shadowRegs, shadowReg)
 	}
 	for _, tg := range cfg.TrashTableRules {
 		trashReg, err := regexp.Compile(tg)
 		if err != nil {
-			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate("trash-table-rules", tg, "fail to compile: "+err.Error())
+			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate(config.TrashTableRules, tg, "fail to compile: "+err.Error())
 		}
 		trashRegs = append(trashRegs, trashReg)
 	}
