@@ -1417,6 +1417,13 @@ func (s *Scheduler) GetExpectSubTaskStage(task, source string) ha.Stage {
 	return stage
 }
 
+// Started returns if the scheduler is started.
+func (s *Scheduler) Started() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.started
+}
+
 // recoverSourceCfgs recovers history source configs and expectant relay stages from etcd.
 func (s *Scheduler) recoverSources(cli *clientv3.Client) error {
 	// get all source configs.

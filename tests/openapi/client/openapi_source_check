@@ -29,8 +29,8 @@ def create_source1_success():
         "user": "root",
     }
     resp = requests.post(url=API_ENDPOINT, json=req)
-    assert resp.status_code == 201
     print("create_source1_success resp=", resp.json())
+    assert resp.status_code == 201
 
 
 def create_source2_success():
@@ -44,24 +44,24 @@ def create_source2_success():
         "user": "root",
     }
     resp = requests.post(url=API_ENDPOINT, json=req)
-    assert resp.status_code == 201
     print("create_source1_success resp=", resp.json())
+    assert resp.status_code == 201
 
 
 def list_source_success(source_count):
     resp = requests.get(url=API_ENDPOINT)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["total"] == int(source_count)
     print("list_source_by_openapi_success resp=", data)
+    assert data["total"] == int(source_count)
 
 
 def list_source_with_redirect(source_count):
     resp = requests.get(url=API_ENDPOINT_NOT_LEADER)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["total"] == int(source_count)
     print("list_source_by_openapi_redirect resp=", data)
+    assert data["total"] == int(source_count)
 
 
 def delete_source_success(source_name):
@@ -72,8 +72,8 @@ def delete_source_success(source_name):
 
 def delete_source_failed(source_name):
     resp = requests.delete(url=API_ENDPOINT + "/" + source_name)
-    assert resp.status_code == 400
     print("delete_source_failed msg=", resp.json())
+    assert resp.status_code == 400
 
 
 def start_relay_failed(source_name, worker_name):
@@ -82,8 +82,8 @@ def start_relay_failed(source_name, worker_name):
         "worker_name_list": [worker_name],
     }
     resp = requests.patch(url=url, json=req)
-    assert resp.status_code == 400
     print("start_relay_failed resp=", resp.json())
+    assert resp.status_code == 400
 
 
 def start_relay_success(source_name, worker_name):
@@ -109,16 +109,16 @@ def start_relay_success_with_two_worker(source_name, worker1_name, worker2_name)
 def get_source_status_failed(source_name):
     url = API_ENDPOINT + "/" + source_name + "/status"
     resp = requests.get(url=url)
-    assert resp.status_code == 400
     print("get_source_status_failed resp=", resp.json())
+    assert resp.status_code == 400
 
 
 def get_source_status_success(source_name, status_count=1):
     url = API_ENDPOINT + "/" + source_name + "/status"
     resp = requests.get(url=url)
     assert resp.status_code == 200
-    assert int(status_count) == resp.json()["total"]
     print("get_source_status_success resp=", resp.json())
+    assert int(status_count) == resp.json()["total"]
 
 
 def get_source_status_success_with_relay(source_name, source_idx=0):
@@ -126,8 +126,8 @@ def get_source_status_success_with_relay(source_name, source_idx=0):
     resp = requests.get(url=url)
     assert resp.status_code == 200
     res = resp.json()
-    assert res["data"][int(source_idx)]["relay_status"] is not None
     print("get_source_status_success_with_relay resp=", res)
+    assert res["data"][int(source_idx)]["relay_status"] is not None
 
 
 def get_source_status_success_no_relay(source_name, source_idx=0):
@@ -135,8 +135,8 @@ def get_source_status_success_no_relay(source_name, source_idx=0):
     resp = requests.get(url=url)
     assert resp.status_code == 200
     res = resp.json()
-    assert res["data"][int(source_idx)].get("relay_status") is None
     print("get_source_status_success_no_relay resp=", res)
+    assert res["data"][int(source_idx)].get("relay_status") is None
 
 
 def stop_relay_failed(source_name, worker_name):
@@ -145,8 +145,8 @@ def stop_relay_failed(source_name, worker_name):
         "worker_name_list": [worker_name],
     }
     resp = requests.patch(url=url, json=req)
-    assert resp.status_code == 400
     print("stop_relay_failed resp=", resp.json())
+    assert resp.status_code == 400
 
 
 def stop_relay_success(source_name, worker_name):
