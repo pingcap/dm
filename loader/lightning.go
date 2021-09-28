@@ -178,7 +178,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		l.finish.Store(true)
 	}
 	if l.cfg.Mode == config.ModeFull {
-		if err := delLoadTask(l.cli, l.cfg, l.workerName); err != nil {
+		if err = delLoadTask(l.cli, l.cfg, l.workerName); err != nil {
 			return err
 		}
 	}

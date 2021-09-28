@@ -458,10 +458,9 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		return terror.ErrConfigInvalidChunkFileSize.Generate(c.MydumperConfig.ChunkFilesize)
 	}
 
-
 	if c.TiDB.Backend != "" && c.TiDB.Backend != lcfg.BackendLocal && c.TiDB.Backend != lcfg.BackendTiDB {
 		return terror.ErrLoadBackendNotSupport.Generate(c.TiDB.Backend)
-  }
+	}
 	if _, err := bf.NewBinlogEvent(c.CaseSensitive, c.FilterRules); err != nil {
 		return terror.ErrConfigBinlogEventFilter.Delegate(err)
 	}
