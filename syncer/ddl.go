@@ -155,21 +155,26 @@ func (s *Syncer) splitAndFilterDDL(
 		// get real tableNames before apply block-allow list
 		if s.onlineDDL != nil {
 			if onlineDDLFinish && len(tables) > 1 {
-				if i == 0 && s.onlineDDL.TableType(tables[0].Name) == onlineddl.RealTable &&
-					s.onlineDDL.TableType(tables[1].Name) == onlineddl.TrashTable {
-					onlineDDLMatched = trashTable
+				if i == 0 {
 					// record trash table to give users information to check regex
 					tableRecords[trashTable] = tables[1].String()
-				}
-				if i == 1 && s.onlineDDL.TableType(tables[0].Name) == onlineddl.GhostTable &&
-					s.onlineDDL.TableType(tables[1].Name) == onlineddl.RealTable {
-					if onlineDDLMatched == allTable {
-						onlineDDLMatched = shadowTable
-					} else {
-						onlineDDLMatched = allTable
+					if s.onlineDDL.TableType(tables[0].Name) == onlineddl.RealTable &&
+						s.onlineDDL.TableType(tables[1].Name) == onlineddl.TrashTable {
+						onlineDDLMatched = trashTable
 					}
+				} else if i == 1 {
 					// record shadow table to give users information to check regex
 					tableRecords[shadowTable] = tables[0].String()
+					if s.onlineDDL.TableType(tables[0].Name) == onlineddl.GhostTable &&
+						s.onlineDDL.TableType(tables[1].Name) == onlineddl.RealTable {
+						// if no trash table is not matched before, we should record that shadow table is matched here
+						// if shadow table is matched before, we just return all tables are matched and a nil error
+						if onlineDDLMatched == allTable {
+							onlineDDLMatched = shadowTable
+						} else {
+							onlineDDLMatched = allTable
+						}
+					}
 				}
 			}
 			for _, table := range tables {
@@ -199,10 +204,8 @@ func (s *Syncer) splitAndFilterDDL(
 
 		statements = append(statements, ss...)
 	}
-	if onlineDDLFinish {
-		if unmatchedOnlineDDLType := unmatchedOnlineDDLRules(onlineDDLMatched); len(unmatchedOnlineDDLType) > 0 {
-			return nil, nil, terror.ErrConfigOnlineDDLMistakeRegex.Generate(stmt.Text(), tableRecords[onlineDDLMatched^1], unmatchedOnlineDDLType)
-		}
+	if onlineDDLFinish && onlineDDLMatched != allTable {
+		return nil, nil, terror.ErrConfigOnlineDDLMistakeRegex.Generate(stmt.Text(), tableRecords[onlineDDLMatched^1], unmatchedOnlineDDLRules(onlineDDLMatched))
 	}
 	return statements, tableMap, nil
 }
