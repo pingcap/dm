@@ -14,46 +14,23 @@
 package master
 
 import (
-	"errors"
-	"os"
-
 	"github.com/spf13/cobra"
 
-	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 )
 
 // NewResumeTaskCmd creates a ResumeTask command.
 func NewResumeTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "resume-task [-s source ...] <task-name | task-file>",
-		Short: "Resumes a specified paused task",
+		Use:   "resume-task [-s source ...] [task-name | task-file]",
+		Short: "Resumes a specified paused task or all (sub)tasks bound to a source",
 		RunE:  resumeTaskFunc,
 	}
+	addOperateSourceTaskFlags(cmd)
 	return cmd
 }
 
 // resumeTaskFunc does resume task request.
 func resumeTaskFunc(cmd *cobra.Command, _ []string) (err error) {
-	if len(cmd.Flags().Args()) != 1 {
-		cmd.SetOut(os.Stdout)
-		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
-	}
-	name := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0))
-
-	sources, err := common.GetSourceArgs(cmd)
-	if err != nil {
-		return
-	}
-
-	resp, err := common.OperateTask(pb.TaskOp_Resume, name, sources)
-	if err != nil {
-		common.PrintLinesf("can not resume task %s", name)
-		return
-	}
-
-	common.PrettyPrintResponse(resp)
-	return
+	return operateTaskFunc(pb.TaskOp_Resume, cmd)
 }
