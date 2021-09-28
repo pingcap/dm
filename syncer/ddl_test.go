@@ -20,25 +20,23 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/dm/pkg/terror"
-
-	"github.com/go-sql-driver/mysql"
-	"github.com/pingcap/tidb/br/pkg/mock"
-
-	"github.com/pingcap/dm/dm/config"
-	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/log"
-	parserpkg "github.com/pingcap/dm/pkg/parser"
-	"github.com/pingcap/dm/pkg/utils"
-	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
-
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb/br/pkg/mock"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/dm/config"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
+	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
+	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
 
 var _ = Suite(&testDDLSuite{})
@@ -543,11 +541,11 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(tables, HasLen, 0)
 		table := ca.ghostname
-		matchRules := trashTable
+		matchRules := config.ShadowTableRules
 		if ca.matchGho {
 			c.Assert(sqls, HasLen, 0)
 			table = ca.trashName
-			matchRules = shadowTable
+			matchRules = config.TrashTableRules
 		} else {
 			c.Assert(sqls, HasLen, 1)
 			c.Assert(sqls[0], Equals, sql)
@@ -559,7 +557,7 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 		c.Assert(terror.ErrConfigOnlineDDLMistakeRegex.Equal(err), IsTrue)
 		c.Assert(sqls, HasLen, 0)
 		c.Assert(tables, HasLen, 0)
-		c.Assert(err, ErrorMatches, ".*"+sql+".*"+table+".*"+unmatchedOnlineDDLRules(matchRules)+".*")
+		c.Assert(err, ErrorMatches, ".*"+sql+".*"+table+".*"+matchRules+".*")
 	}
 	cluster.Stop()
 }
@@ -669,5 +667,9 @@ func (m mockOnlinePlugin) Close() {
 }
 
 func (m mockOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
+	return nil
+}
+
+func (m mockOnlinePlugin) CheckRegex(stmt ast.StmtNode, schema string, flavor utils.LowerCaseTableNamesFlavor) error {
 	return nil
 }

@@ -27,7 +27,6 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/metrics"
-	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
 
 // parseDDLResult represents the result of parseDDLSQL.
@@ -126,25 +125,16 @@ func (s *Syncer) splitAndFilterDDL(
 
 	statements := make([]string, 0, len(sqls))
 	tableMap = make(map[string]*filter.Table)
-	// Online DDL sql example: RENAME TABLE `test`.`t1` TO `test`.`_t1_old`, `test`.`_t1_new` TO `test`.`t1`
-	// We should parse two rename DDL from this DDL:
-	//         tables[0]         tables[1]
-	// DDL 0  real table  ───►  trash table
-	// DDL 1 shadow table ───►   real table
-	// If we only have one of them, that means users may configure a wrong trash/shadow table regex
-	onlineDDLFinish := len(sqls) == 2 && s.onlineDDL != nil
-	onlineDDLMatched := allTable
-	tableRecords := make([]string, 2)
 
-	for i, sql := range sqls {
+	if s.onlineDDL != nil {
+		if err = s.onlineDDL.CheckRegex(stmt, schema, s.SourceTableNamesFlavor); err != nil {
+			return nil, nil, err
+		}
+	}
+	for _, sql := range sqls {
 		stmt2, err2 := p.ParseOneStmt(sql, "", "")
 		if err2 != nil {
 			return nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err2.Error()), "ddl %s", sql)
-		}
-		if onlineDDLFinish {
-			if _, ok := stmt2.(*ast.RenameTableStmt); !ok {
-				onlineDDLFinish = false
-			}
 		}
 
 		tables, err2 := parserpkg.FetchDDLTables(schema, stmt2, s.SourceTableNamesFlavor)
@@ -154,29 +144,6 @@ func (s *Syncer) splitAndFilterDDL(
 
 		// get real tableNames before apply block-allow list
 		if s.onlineDDL != nil {
-			if onlineDDLFinish && len(tables) > 1 {
-				if i == 0 {
-					// record trash table to give users information to check regex
-					tableRecords[trashTable] = tables[1].String()
-					if s.onlineDDL.TableType(tables[0].Name) == onlineddl.RealTable &&
-						s.onlineDDL.TableType(tables[1].Name) == onlineddl.TrashTable {
-						onlineDDLMatched = trashTable
-					}
-				} else if i == 1 {
-					// record shadow table to give users information to check regex
-					tableRecords[shadowTable] = tables[0].String()
-					if s.onlineDDL.TableType(tables[0].Name) == onlineddl.GhostTable &&
-						s.onlineDDL.TableType(tables[1].Name) == onlineddl.RealTable {
-						// if no trash table is not matched before, we should record that shadow table is matched here
-						// if shadow table is matched before, we just return all tables are matched and a nil error
-						if onlineDDLMatched == allTable {
-							onlineDDLMatched = shadowTable
-						} else {
-							onlineDDLMatched = allTable
-						}
-					}
-				}
-			}
 			for _, table := range tables {
 				table.Name = s.onlineDDL.RealName(table.Name)
 			}
@@ -203,9 +170,6 @@ func (s *Syncer) splitAndFilterDDL(
 		}
 
 		statements = append(statements, ss...)
-	}
-	if onlineDDLFinish && onlineDDLMatched != allTable {
-		return nil, nil, terror.ErrConfigOnlineDDLMistakeRegex.Generate(stmt.Text(), tableRecords[onlineDDLMatched^1], unmatchedOnlineDDLRules(onlineDDLMatched))
 	}
 	return statements, tableMap, nil
 }
