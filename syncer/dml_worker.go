@@ -35,7 +35,7 @@ import (
 type DMLWorker struct {
 	batch          int
 	workerCount    int
-	queueSize      int
+	chanSize       int
 	toDBConns      []*dbconn.DBConn
 	tctx           *tcontext.Context
 	causalityWg    sync.WaitGroup
@@ -60,7 +60,7 @@ type DMLWorker struct {
 }
 
 // newDMLWorker creates new DML Worker.
-func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, source, worker string,
+func newDMLWorker(batch, workerCount, chanSize int, pLogger *log.Logger, task, source, worker string,
 	successFunc func(int, []*job),
 	fatalFunc func(*job, error),
 	lagFunc func(*job, int),
@@ -69,7 +69,7 @@ func newDMLWorker(batch, workerCount, queueSize int, pLogger *log.Logger, task, 
 	return &DMLWorker{
 		batch:          batch,
 		workerCount:    workerCount,
-		queueSize:      queueSize,
+		chanSize:       chanSize,
 		task:           task,
 		source:         source,
 		worker:         worker,
@@ -122,7 +122,7 @@ func (w *DMLWorker) runCausalityDMLWorker() {
 	causalityJobChs := make([]chan *job, w.workerCount)
 
 	for i := 0; i < w.workerCount; i++ {
-		causalityJobChs[i] = make(chan *job, w.queueSize)
+		causalityJobChs[i] = make(chan *job, w.chanSize)
 		go w.executeCausalityJobs(i, causalityJobChs[i])
 	}
 

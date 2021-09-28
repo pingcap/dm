@@ -93,7 +93,7 @@ func (c *Causality) runCausality() {
 				// detectConflict before add
 				if c.detectConflict(keys) {
 					c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", keys))
-					c.causalityCh <- newCausalityJob()
+					c.causalityCh <- newConflictJob()
 					c.reset()
 				}
 				c.add(keys)

@@ -172,10 +172,11 @@ func newFlushJob() *job {
 	}
 }
 
-func newCausalityJob() *job {
+func newConflictJob() *job {
 	return &job{
-		tp:         conflict,
-		jobAddTime: time.Now(),
+		tp:          conflict,
+		targetTable: &filter.Table{},
+		jobAddTime:  time.Now(),
 	}
 }
 

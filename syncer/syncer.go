@@ -242,7 +242,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.binlogSizeCount.Store(0)
 	syncer.lastCount.Store(0)
 	syncer.count.Store(0)
-	syncer.causality = newCausality(cfg.DisableCausality, cfg.WorkerCount*cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
+	syncer.causality = newCausality(cfg.DisableCausality, cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
 	syncer.dmlWorker = newDMLWorker(cfg.Batch, cfg.WorkerCount, cfg.QueueSize, &logger, cfg.Name, cfg.SourceID, cfg.WorkerName, syncer.successFunc, syncer.fatalFunc, syncer.updateReplicationJobTS, syncer.addCount)
 	syncer.done = nil
 	syncer.setTimezone()
@@ -271,7 +271,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 
 func (s *Syncer) newJobChans() {
 	s.closeJobChans()
-	s.dmlJobCh = make(chan *job, s.cfg.QueueSize*s.cfg.WorkerCount)
+	s.dmlJobCh = make(chan *job, s.cfg.QueueSize)
 	s.ddlJobCh = make(chan *job, s.cfg.QueueSize)
 	s.jobsClosed.Store(false)
 }
@@ -1266,7 +1266,7 @@ func (s *Syncer) fatalFunc(job *job, err error) {
 	}
 }
 
-// DML synced in batch by one worker.
+// DML synced with causality.
 func (s *Syncer) syncDML(tctx *tcontext.Context) {
 	defer s.wg.Done()
 
