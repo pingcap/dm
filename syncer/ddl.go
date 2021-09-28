@@ -132,17 +132,13 @@ func (s *Syncer) splitAndFilterDDL(
 	}
 
 	statements := make([]string, 0, len(sqls))
-<<<<<<< HEAD
 	tables = make(map[string]*filter.Table)
-=======
-	tableMap = make(map[string]*filter.Table)
 
 	if s.onlineDDL != nil {
 		if err = s.onlineDDL.CheckRegex(stmt, schema, s.SourceTableNamesFlavor); err != nil {
 			return nil, nil, err
 		}
 	}
->>>>>>> 7419396a0 (onlineddl: report an error when online ddl only matches only one regex (#2182) (#2184))
 	for _, sql := range sqls {
 		stmt2, err2 := p.ParseOneStmt(sql, "", "")
 		if err2 != nil {

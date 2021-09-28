@@ -50,13 +50,8 @@ type OnlinePlugin interface {
 	// returns sqls, replaced/self schema, replaced/self table, error
 	Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error)
 	// Finish would delete online ddl from memory and storage
-<<<<<<< HEAD
 	Finish(tctx *tcontext.Context, schema, table string) error
-	// TableType returns ghhost/real table
-=======
-	Finish(tctx *tcontext.Context, table *filter.Table) error
 	// TableType returns ghost/real table
->>>>>>> 7419396a0 (onlineddl: report an error when online ddl only matches only one regex (#2182) (#2184))
 	TableType(table string) TableType
 	// RealName returns real table name that removed ghost suffix and handled by table router
 	RealName(table string) string

@@ -15,23 +15,16 @@ package syncer
 
 import (
 	"context"
-	"errors"
 	"fmt"
-<<<<<<< HEAD
-=======
-	"strconv"
-	"strings"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/pingcap/tidb/br/pkg/mock"
 	"go.uber.org/zap"
->>>>>>> 7419396a0 (onlineddl: report an error when online ddl only matches only one regex (#2182) (#2184))
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -471,10 +464,7 @@ func (s *testSyncerSuite) TestResolveOnlineDDL(c *C) {
 	}
 }
 
-<<<<<<< HEAD
-func (s *testSyncerSuite) TestDropSchemaInSharding(c *C) {
-=======
-func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
+func (s *testSyncerSuite) TestMistakeOnlineDDLRegex(c *C) {
 	cases := []struct {
 		onlineType string
 		trashName  string
@@ -510,21 +500,10 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 	p := parser.New()
 
 	ec := eventContext{tctx: tctx}
-	cluster, err := mock.NewCluster()
-	c.Assert(err, IsNil)
-	c.Assert(cluster.Start(), IsNil)
-	mysqlConfig, err := mysql.ParseDSN(cluster.DSN)
-	c.Assert(err, IsNil)
-	mockClusterPort, err := strconv.Atoi(strings.Split(mysqlConfig.Addr, ":")[1])
-	c.Assert(err, IsNil)
-	dbCfg := config.GetDBConfigForTest()
-	dbCfg.Port = mockClusterPort
-	dbCfg.Password = ""
-	cfg := s.newSubTaskCfg(dbCfg)
 	for _, ca := range cases {
-		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
+		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, s.cfg)
 		c.Assert(err, IsNil)
-		syncer := NewSyncer(cfg, nil)
+		syncer := NewSyncer(s.cfg, nil)
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
 
@@ -554,11 +533,9 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 		c.Assert(tables, HasLen, 0)
 		c.Assert(err, ErrorMatches, ".*"+sql+".*"+table+".*"+matchRules+".*")
 	}
-	cluster.Stop()
 }
 
-func (s *testDDLSuite) TestDropSchemaInSharding(c *C) {
->>>>>>> 7419396a0 (onlineddl: report an error when online ddl only matches only one regex (#2182) (#2184))
+func (s *testSyncerSuite) TestDropSchemaInSharding(c *C) {
 	var (
 		targetDB  = "target_db"
 		targetTbl = "tbl"
@@ -621,7 +598,10 @@ func (m mockOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[str
 	return nil
 }
 
-<<<<<<< HEAD
+func (m mockOnlinePlugin) CheckRegex(stmt ast.StmtNode, schema string, flavor utils.LowerCaseTableNamesFlavor) error {
+	return nil
+}
+
 func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
 	var (
 		targetDB  = "target_db"
@@ -649,8 +629,4 @@ func (s *testSyncerSuite) TestClearOnlineDDL(c *C) {
 
 	c.Assert(syncer.clearOnlineDDL(tctx, targetDB, targetTbl), IsNil)
 	c.Assert(mock.toFinish, HasLen, 0)
-=======
-func (m mockOnlinePlugin) CheckRegex(stmt ast.StmtNode, schema string, flavor utils.LowerCaseTableNamesFlavor) error {
-	return nil
->>>>>>> 7419396a0 (onlineddl: report an error when online ddl only matches only one regex (#2182) (#2184))
 }
