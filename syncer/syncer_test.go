@@ -29,7 +29,6 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/util/mock"
 
@@ -1353,7 +1352,13 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 
 		ca.callback()
 
-		c.Assert(syncer.trackDDL(testDB, sqlDDL, [][]*filter.Table{originTables, routedTables}, stmt, ec), IsNil)
+		ddlInfo := &ddlInfo{
+			sql:          sqlDDL,
+			stmt:         stmt,
+			sourceTables: originTables,
+			targetTables: routedTables,
+		}
+		c.Assert(syncer.trackDDL(testDB, ddlInfo, ec), IsNil)
 		c.Assert(syncer.schemaTracker.Reset(), IsNil)
 		c.Assert(mock.ExpectationsWereMet(), IsNil)
 		c.Assert(checkPointMock.ExpectationsWereMet(), IsNil)

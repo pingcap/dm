@@ -51,15 +51,15 @@ func (s *Syncer) parseDDLSQL(qec *queryEventContext) (stmt ast.StmtNode, err err
 //    * specially, if skip, apply empty string;
 // 4. handle online ddl SQL by handleOnlineDDL.
 func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string, error) {
-	_, sourceTables, targetTables, stmt, err := s.routeDDL(qec.p, qec.ddlSchema, sql)
+	ddlInfo, err := s.routeDDL(qec.p, qec.ddlSchema, sql)
 	if err != nil {
 		return nil, err
 	}
 	// TODO: add track ddl
 
 	// get real tables before apply block-allow list
-	realTables := make([]*filter.Table, 0, len(targetTables))
-	for _, table := range targetTables {
+	realTables := make([]*filter.Table, 0, len(ddlInfo.sourceTables))
+	for _, table := range ddlInfo.sourceTables {
 		realName := table.Name
 		if s.onlineDDL != nil {
 			realName = s.onlineDDL.RealName(table.Name)
@@ -70,7 +70,7 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 		})
 	}
 
-	shouldSkip, err := s.skipQueryEvent(realTables, stmt, sql)
+	shouldSkip, err := s.skipQueryEvent(realTables, ddlInfo.stmt, sql)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 	sqls := []string{sql}
 	if s.onlineDDL != nil {
 		// filter and save ghost table ddl
-		sqls, err = s.onlineDDL.Apply(qec.tctx, sourceTables, sql, stmt)
+		sqls, err = s.onlineDDL.Apply(qec.tctx, ddlInfo.sourceTables, sql, ddlInfo.stmt)
 		if err != nil {
 			return nil, err
 		}
@@ -101,13 +101,13 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 		// In there, stmt must be a `RenameTableStmt`. See details in OnlinePlugin.Apply.
 		// So tables is [old1, new1], which new1 is the OnlinePlugin.RealTable. See details in FetchDDLTables.
 		// Rename ddl's table to RealTable.
-		sqls, err = s.renameOnlineDDLTable(qec, sourceTables[1], sqls)
+		sqls, err = s.renameOnlineDDLTable(qec, ddlInfo.sourceTables[1], sqls)
 		if err != nil {
 			return sqls, err
 		}
 		if qec.onlineDDLTable == nil {
-			qec.onlineDDLTable = sourceTables[0]
-		} else if qec.onlineDDLTable.String() != sourceTables[0].String() {
+			qec.onlineDDLTable = ddlInfo.sourceTables[0]
+		} else if qec.onlineDDLTable.String() != ddlInfo.sourceTables[0].String() {
 			return nil, terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(qec.originSQL)
 		}
 	}
@@ -116,17 +116,18 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 
 // routeDDL route DDL from sourceTables to targetTables.
 func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (*ddlInfo, error) {
+	s.tctx.L().Debug("route ddl", zap.String("event", "query"), zap.String("statement", sql))
 	stmt, err := p.ParseOneStmt(sql, "", "")
 	if err != nil {
 		return nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
-	sourceTables, err = parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
+	sourceTables, err := parserpkg.FetchDDLTables(schema, stmt, s.SourceTableNamesFlavor)
 	if err != nil {
 		return nil, err
 	}
 
-	targetTables = make([]*filter.Table, 0, len(sourceTables))
+	targetTables := make([]*filter.Table, 0, len(sourceTables))
 	for i := range sourceTables {
 		renamedTable := s.route(sourceTables[i])
 		targetTables = append(targetTables, renamedTable)
@@ -226,16 +227,6 @@ func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *filter.Tabl
 	return nil
 }
 
-type ddlInfo struct {
-	sql          string
-	stmt         ast.StmtNode
-	sourceTables []*filter.Table
-	targetTables []*filter.Table
-}
-
-// TODO: use ddlInfo to flow
-// fetch from routeDDL, saved in onlineDDL, used for trackDDL
-// nolint: no used
 type ddlInfo struct {
 	sql          string
 	stmt         ast.StmtNode

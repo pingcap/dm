@@ -203,14 +203,16 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		return nil
 	}
 
-	s.tctx.L().Info("finish online ddl and clear online ddl metadata in optimistic shard mode",
-		zap.String("event", "query"),
-		zap.Strings("ddls", qec.needHandleDDLs),
-		zap.String("raw statement", qec.originSQL),
-		zap.Stringer("table", qec.onlineDDLTable))
-	err = s.onlineDDL.Finish(qec.tctx, qec.onlineDDLTable)
-	if err != nil {
-		return terror.Annotatef(err, "finish online ddl on %s.%s", qec.onlineDDLTable.Schema, qec.onlineDDLTable.Name)
+	if qec.onlineDDLTable != nil {
+		s.tctx.L().Info("finish online ddl and clear online ddl metadata in optimistic shard mode",
+			zap.String("event", "query"),
+			zap.Strings("ddls", qec.needHandleDDLs),
+			zap.String("raw statement", qec.originSQL),
+			zap.Stringer("table", qec.onlineDDLTable))
+		err = s.onlineDDL.Finish(qec.tctx, qec.onlineDDLTable)
+		if err != nil {
+			return terror.Annotatef(err, "finish online ddl on %s.%s", qec.onlineDDLTable.Schema, qec.onlineDDLTable.Name)
+		}
 	}
 
 	s.tctx.L().Info("finish to handle ddls in optimistic shard mode", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))

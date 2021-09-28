@@ -2309,7 +2309,7 @@ type queryEventContext struct {
 	shardingDDLInfo *ddlInfo
 	trackInfos      []*ddlInfo
 	sourceTbls      map[string]map[string]struct{} // db name -> tb name
-	onlineDDLTables map[string]*filter.Table
+	onlineDDLTable  *filter.Table
 }
 
 func (qec *queryEventContext) String() string {
@@ -2459,6 +2459,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 	// handle one-schema change DDL
 	for _, sql := range qec.appliedDDLs {
+		if len(sql) == 0 {
+			continue
+		}
 		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 		ddlInfo, err2 := s.routeDDL(qec.p, qec.ddlSchema, sql)
 		if err2 != nil {
@@ -2605,14 +2608,16 @@ func (s *Syncer) handleQueryEventNoSharding(qec *queryEventContext) error {
 
 	qec.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))
 
-	qec.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode",
-		zap.String("event", "query"),
-		zap.Strings("ddls", qec.needHandleDDLs),
-		zap.String("raw statement", qec.originSQL),
-		zap.Stringer("table", qec.onlineDDLTable))
-	err2 := s.onlineDDL.Finish(qec.tctx, qec.onlineDDLTable)
-	if err2 != nil {
-		return terror.Annotatef(err2, "finish online ddl on %v", qec.onlineDDLTable)
+	if qec.onlineDDLTable != nil {
+		qec.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode",
+			zap.String("event", "query"),
+			zap.Strings("ddls", qec.needHandleDDLs),
+			zap.String("raw statement", qec.originSQL),
+			zap.Stringer("table", qec.onlineDDLTable))
+		err2 := s.onlineDDL.Finish(qec.tctx, qec.onlineDDLTable)
+		if err2 != nil {
+			return terror.Annotatef(err2, "finish online ddl on %v", qec.onlineDDLTable)
+		}
 	}
 
 	return nil
