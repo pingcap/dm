@@ -8,17 +8,9 @@ target-database:
   user: "root"
   password: ""
 
-routes:
-  route-rule-1:
-    schema-pattern: "test"
-    table-pattern: "baz*"
-    target-schema: "test"
-    target-table: "baz"
-
 mysql-instances:
   - source-id: "mysql-replica-01"
     block-allow-list:  "instance"
-    route-rules: ["route-rule-1"]
 
 block-allow-list:
   instance:
