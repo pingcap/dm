@@ -121,17 +121,17 @@ func printServerVersion(tctx *tcontext.Context, db *conn.BaseDB, scope string) {
 }
 
 const (
-	shadowTableMatch int = iota
-	trashTableMatch
-	allTableMatch
+	shadowTable int = iota
+	trashTable
+	allTable
 )
 
 func unmatchedOnlineDDLRules(match int) string {
-	switch match ^ 1 {
-	case shadowTableMatch:
-		return config.ShadowTableRules
-	case trashTableMatch:
+	switch match {
+	case shadowTable:
 		return config.TrashTableRules
+	case trashTable:
+		return config.ShadowTableRules
 	default:
 		return ""
 	}

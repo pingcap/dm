@@ -543,11 +543,11 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(tables, HasLen, 0)
 		table := ca.ghostname
-		matchRules := trashTableMatch
+		matchRules := trashTable
 		if ca.matchGho {
 			c.Assert(sqls, HasLen, 0)
 			table = ca.trashName
-			matchRules = shadowTableMatch
+			matchRules = shadowTable
 		} else {
 			c.Assert(sqls, HasLen, 1)
 			c.Assert(sqls[0], Equals, sql)
