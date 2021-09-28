@@ -23,7 +23,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 
-	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
@@ -118,21 +117,4 @@ func printServerVersion(tctx *tcontext.Context, db *conn.BaseDB, scope string) {
 	}
 	dctx := dcontext.NewContext(tctx.Ctx, logger)
 	export.ParseServerInfo(dctx, versionInfo)
-}
-
-const (
-	shadowTable int = iota
-	trashTable
-	allTable
-)
-
-func unmatchedOnlineDDLRules(match int) string {
-	switch match {
-	case shadowTable:
-		return config.TrashTableRules
-	case trashTable:
-		return config.ShadowTableRules
-	default:
-		return ""
-	}
 }
