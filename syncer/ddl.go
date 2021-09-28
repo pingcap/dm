@@ -127,10 +127,13 @@ func (s *Syncer) splitAndFilterDDL(
 	statements := make([]string, 0, len(sqls))
 	tableMap = make(map[string]*filter.Table)
 	// Online DDL sql example: RENAME TABLE `test`.`t1` TO `test`.`_t1_old`, `test`.`_t1_new` TO `test`.`t1`
-	// We should parse two rename DDL from this DDL, rename real -> trash and rename shadow -> real.
-	// If we only have one of them, that means users may configure a wrong trash/shadow table syntax
+	// We should parse two rename DDL from this DDL:
+	//         tables[0]         tables[1]
+	// DDL 0  real table  ───►  trash table
+	// DDL 1 shadow table ───►   real table
+	// If we only have one of them, that means users may configure a wrong trash/shadow table regex
 	onlineDDLFinish := len(sqls) == 2 && s.onlineDDL != nil
-	onlineDDLMatched := allTableMatch
+	onlineDDLMatched := allTable
 	tableRecords := make([]string, 2)
 
 	for i, sql := range sqls {
@@ -152,19 +155,21 @@ func (s *Syncer) splitAndFilterDDL(
 		// get real tableNames before apply block-allow list
 		if s.onlineDDL != nil {
 			if onlineDDLFinish && len(tables) > 1 {
-				// record trash/shadow table to give users information to check regex
-				tableRecords[i^1] = tables[i^1].String()
 				if i == 0 && s.onlineDDL.TableType(tables[0].Name) == onlineddl.RealTable &&
 					s.onlineDDL.TableType(tables[1].Name) == onlineddl.TrashTable {
-					onlineDDLMatched = trashTableMatch
+					onlineDDLMatched = trashTable
+					// record trash table to give users information to check regex
+					tableRecords[trashTable] = tables[1].String()
 				}
 				if i == 1 && s.onlineDDL.TableType(tables[0].Name) == onlineddl.GhostTable &&
 					s.onlineDDL.TableType(tables[1].Name) == onlineddl.RealTable {
-					if onlineDDLMatched == allTableMatch {
-						onlineDDLMatched = shadowTableMatch
+					if onlineDDLMatched == allTable {
+						onlineDDLMatched = shadowTable
 					} else {
-						onlineDDLMatched = allTableMatch
+						onlineDDLMatched = allTable
 					}
+					// record trash table to give users information to check regex
+					tableRecords[shadowTable] = tables[0].String()
 				}
 			}
 			for _, table := range tables {
