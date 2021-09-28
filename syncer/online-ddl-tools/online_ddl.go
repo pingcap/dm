@@ -567,12 +567,11 @@ func (r *RealOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[st
 	return r.storage.CheckAndUpdate(tctx, schemas, tables, r.RealName)
 }
 
-// CheckRegex checks the regex of shadow/trash table rules and reports an error if a ddl event matches only either of the rules
+// CheckRegex checks the regex of shadow/trash table rules and reports an error if a ddl event matches only either of the rules.
 func (r *RealOnlinePlugin) CheckRegex(stmt ast.StmtNode, schema string, flavor utils.LowerCaseTableNamesFlavor) error {
 	var (
-		schemaName = model.NewCIStr(schema) // fill schema name
-		v          *ast.RenameTableStmt
-		ok         bool
+		v  *ast.RenameTableStmt
+		ok bool
 	)
 	if v, ok = stmt.(*ast.RenameTableStmt); !ok {
 		return nil
@@ -583,16 +582,8 @@ func (r *RealOnlinePlugin) CheckRegex(stmt ast.StmtNode, schema string, flavor u
 	}
 	onlineDDLMatched := allTable
 	tableRecords := make([]*filter.Table, 2)
+	schemaName := model.NewCIStr(schema) // fill schema name
 
-	fetchTable := func(t *ast.TableName) *filter.Table {
-		var tb *filter.Table
-		if flavor == utils.LCTableNamesSensitive {
-			tb = &filter.Table{Schema: t.Schema.O, Name: t.Name.O}
-		} else {
-			tb = &filter.Table{Schema: t.Schema.L, Name: t.Name.L}
-		}
-		return tb
-	}
 	// Online DDL sql example: RENAME TABLE `test`.`t1` TO `test`.`_t1_old`, `test`.`_t1_new` TO `test`.`t1`
 	// We should parse two rename DDL from this DDL:
 	//         tables[0]         tables[1]
@@ -610,14 +601,13 @@ func (r *RealOnlinePlugin) CheckRegex(stmt ast.StmtNode, schema string, flavor u
 		v.TableToTables = []*ast.TableToTable{t2t}
 
 		if i == 0 {
-			tableRecords[trashTable] = fetchTable(t2t.NewTable)
+			tableRecords[trashTable] = fetchTable(t2t.NewTable, flavor)
 			if r.TableType(t2t.OldTable.Name.String()) == RealTable &&
 				r.TableType(t2t.NewTable.Name.String()) == TrashTable {
 				onlineDDLMatched = trashTable
 			}
-		}
-		if i == 1 {
-			tableRecords[shadowTable] = fetchTable(t2t.OldTable)
+		} else {
+			tableRecords[shadowTable] = fetchTable(t2t.OldTable, flavor)
 			if r.TableType(t2t.OldTable.Name.String()) == GhostTable &&
 				r.TableType(t2t.NewTable.Name.String()) == RealTable {
 				// if no trash table is not matched before, we should record that shadow table is matched here
@@ -645,4 +635,14 @@ func unmatchedOnlineDDLRules(match int) string {
 	default:
 		return ""
 	}
+}
+
+func fetchTable(t *ast.TableName, flavor utils.LowerCaseTableNamesFlavor) *filter.Table {
+	var tb *filter.Table
+	if flavor == utils.LCTableNamesSensitive {
+		tb = &filter.Table{Schema: t.Schema.O, Name: t.Name.O}
+	} else {
+		tb = &filter.Table{Schema: t.Schema.L, Name: t.Name.L}
+	}
+	return tb
 }
