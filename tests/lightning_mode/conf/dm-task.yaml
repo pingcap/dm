@@ -34,7 +34,7 @@ mysql-instances:
 
 black-white-list: # compatible with deprecated config
   instance:
-    do-dbs: ["all_mode"]
+    do-dbs: ["lightning_mode"]
     ignore-dbs: ["ignore_db"]
 
 tidb:

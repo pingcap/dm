@@ -1,6 +1,6 @@
-drop database if exists `all_mode`;
-create database `all_mode`;
-use `all_mode`;
+drop database if exists `lightning_mode`;
+create database `lightning_mode`;
+use `lightning_mode`;
 create table t1 (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(20),

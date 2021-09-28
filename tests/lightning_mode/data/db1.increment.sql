@@ -1,4 +1,4 @@
-use all_mode;
+use lightning_mode;
 insert into t1 (id, name) values (3, 'Eddard Stark');
 update t1 set name = 'Arya Stark' where id = 1;
 update t1 set name = 'Catelyn Stark' where name = 'catelyn';
@@ -26,7 +26,7 @@ delete from t1 where gen_id > 124;
 
 -- test alter database
 -- tidb doesn't support alter character set from latin1 to utf8m64 so we comment this now
--- alter database all_mode CHARACTER SET = utf8mb4;
+-- alter database lightning_mode CHARACTER SET = utf8mb4;
 
 -- test decimal type
 alter table t1 add column lat decimal(9,6) default '0.000000';

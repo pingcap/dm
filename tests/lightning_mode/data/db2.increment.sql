@@ -1,4 +1,4 @@
-use all_mode;
+use lightning_mode;
 delete from t2 where name = 'Sansa';
 
 -- test sql_mode=NO_AUTO_VALUE_ON_ZERO
