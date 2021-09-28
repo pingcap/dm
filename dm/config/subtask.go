@@ -428,6 +428,10 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		return terror.ErrConfigInvalidChunkFileSize.Generate(c.MydumperConfig.ChunkFilesize)
 	}
 
+	if _, err := bf.NewBinlogEvent(c.CaseSensitive, c.FilterRules); err != nil {
+		return terror.ErrConfigBinlogEventFilter.Delegate(err)
+	}
+
 	// TODO: check every member
 	// TODO: since we checked here, we could remove other terror like ErrSyncerUnitGenBAList
 	// TODO: or we should check at task config and source config rather than this subtask config, to reduce duplication
