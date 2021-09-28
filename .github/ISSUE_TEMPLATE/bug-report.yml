@@ -24,7 +24,7 @@ body:
     attributes:
       label: What did you see instead?
     validations:
-      required: true
+      required: false
   - type: textarea
     id: version
     attributes:
@@ -42,7 +42,7 @@ body:
              ```console
              (paste TiDB cluster version here)
              ```
-             How did you deploy DM: DM-Ansible or manually?
+             How did you deploy DM: tiup or manually?
              ```console
              (leave DM-Ansible or manually here)
              ```
@@ -62,7 +62,7 @@ body:
              (paste current status of DM cluster here)
              ```
     validations:
-      required: true
+      required: false
   - type: markdown
     attributes:
       value: |
