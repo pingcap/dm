@@ -111,8 +111,22 @@ define run_unit_test
 	$(FAILPOINT_DISABLE)
 endef
 
+define run_unit_test_in_verify_ci
+	@echo "running unit test for packages:" $(1)
+	mkdir -p $(TEST_DIR)
+	$(FAILPOINT_ENABLE)
+	@export log_level=error; \
+	$(GOTEST)  -timeout 5m -covermode=atomic -coverprofile="$(TEST_DIR)/cov.$(2).out" $(TEST_RACE_FLAG) $(1) | tools/bin/go-junit-report > test.xml \
+	|| { $(FAILPOINT_DISABLE); exit 1; }
+	tools/bin/gocov convert "$(TEST_DIR)/cov.$(2).out" | tools/bin/gocov-xml > coverage.xml
+	$(FAILPOINT_DISABLE)
+endef
+
 unit_test: tools_setup
 	$(call run_unit_test,$(PACKAGES),unit_test)
+
+unit_test_in_verify_ci: tools_setup
+	$(call run_unit_test_in_verify_ci,$(PACKAGES),unit_test)
 
 # run unit test for the specified pkg only, like `make unit_test_pkg PKG=github.com/pingcap/dm/dm/master`
 unit_test_pkg: tools_setup
