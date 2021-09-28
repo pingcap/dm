@@ -1079,7 +1079,7 @@ workaround = "Please check if params is correctly in the configuration file."
 tags = ["internal", "high"]
 
 [error.DM-config-20049]
-message = "online ddl sql '%s' invalid, table '%s' fail to match '%s' online ddl regex"
+message = "online ddl sql '%s' invalid, table %s fail to match '%s' online ddl regex"
 description = ""
 workaround = "Please update your shadow-table-rules or trash-table-rules in the configuration file."
 tags = ["internal", "high"]
