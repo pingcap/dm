@@ -1,4 +1,4 @@
-// Copyright 2019 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/docker/go-units"
-	"github.com/pingcap/parser/mysql"
-	"github.com/pingcap/tidb/br/pkg/lightning/common"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
@@ -31,8 +27,11 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 
+	"github.com/docker/go-units"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/br/pkg/lightning"
+	"github.com/pingcap/tidb/br/pkg/lightning/common"
 	lcfg "github.com/pingcap/tidb/br/pkg/lightning/config"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
@@ -179,7 +178,9 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		l.finish.Store(true)
 	}
 	if l.cfg.Mode == config.ModeFull {
-		_ = delLoadTask(l.cli, l.cfg, l.workerName)
+		if err := delLoadTask(l.cli, l.cfg, l.workerName); err != nil {
+			return err
+		}
 	}
 	if l.finish.Load() {
 		if l.cfg.CleanDumpFile {

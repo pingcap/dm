@@ -59,7 +59,6 @@ syncers:
 clean-dump-file: false
 ansi-quotes: false
 remove-meta: false
-tidb: null
 mysql-instances:
 - source-id: mysql-replica-01
   meta: null
