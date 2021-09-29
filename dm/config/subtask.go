@@ -42,6 +42,9 @@ const (
 
 	DefaultShadowTableRules = "^_(.+)_(?:new|gho)$"
 	DefaultTrashTableRules  = "^_(.+)_(?:ghc|del|old)$"
+
+	ShadowTableRules = "shadow-table-rules"
+	TrashTableRules  = "trash-table-rules"
 )
 
 var defaultMaxIdleConns = 2
@@ -357,7 +360,7 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if len(c.ShadowTableRules) == 0 {
 		c.ShadowTableRules = []string{DefaultShadowTableRules}
 	} else {
-		shadowTableRule, err := adjustOnlineTableRules("shadow-table-rules", c.ShadowTableRules)
+		shadowTableRule, err := adjustOnlineTableRules(ShadowTableRules, c.ShadowTableRules)
 		if err != nil {
 			return err
 		}
@@ -367,7 +370,7 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if len(c.TrashTableRules) == 0 {
 		c.TrashTableRules = []string{DefaultTrashTableRules}
 	} else {
-		trashTableRule, err := adjustOnlineTableRules("trash-table-rules", c.TrashTableRules)
+		trashTableRule, err := adjustOnlineTableRules(TrashTableRules, c.TrashTableRules)
 		if err != nil {
 			return err
 		}
@@ -423,6 +426,10 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	}
 	if _, err := dumpling.ParseFileSize(c.MydumperConfig.ChunkFilesize, 0); err != nil {
 		return terror.ErrConfigInvalidChunkFileSize.Generate(c.MydumperConfig.ChunkFilesize)
+	}
+
+	if _, err := bf.NewBinlogEvent(c.CaseSensitive, c.FilterRules); err != nil {
+		return terror.ErrConfigBinlogEventFilter.Delegate(err)
 	}
 
 	// TODO: check every member

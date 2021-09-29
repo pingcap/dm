@@ -1160,6 +1160,10 @@ func adjustTargetDB(ctx context.Context, dbConfig *config.DBConfig) error {
 		cfg.Password = utils.DecryptOrPlaintext(cfg.Password)
 	}
 
+	failpoint.Inject("MockSkipAdjustTargetDB", func() {
+		failpoint.Return(nil)
+	})
+
 	toDB, err := conn.DefaultDBProvider.Apply(cfg)
 	if err != nil {
 		return err
