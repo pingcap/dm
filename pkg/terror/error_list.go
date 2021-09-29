@@ -240,6 +240,7 @@ const (
 	codeConfigGenColumnMapping
 	codeConfigInvalidChunkFileSize
 	codeConfigOnlineDDLInvalidRegex
+	codeConfigOnlineDDLMistakeRegex
 )
 
 // Binlog operation error code list.
@@ -865,6 +866,8 @@ var (
 	ErrConfigInvalidChunkFileSize   = New(codeConfigInvalidChunkFileSize, ClassConfig, ScopeInternal, LevelHigh, "invalid `chunk-filesize` %v", "Please check the `chunk-filesize` config in task configuration file.")
 	ErrConfigOnlineDDLInvalidRegex  = New(codeConfigOnlineDDLInvalidRegex, ClassConfig, ScopeInternal, LevelHigh,
 		"config '%s' regex pattern '%s' invalid, reason: %s", "Please check if params is correctly in the configuration file.")
+	ErrConfigOnlineDDLMistakeRegex = New(codeConfigOnlineDDLMistakeRegex, ClassConfig, ScopeInternal, LevelHigh,
+		"online ddl sql '%s' invalid, table %s fail to match '%s' online ddl regex", "Please update your `shadow-table-rules` or `trash-table-rules` in the configuration file.")
 
 	// Binlog operation error.
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "", "")
