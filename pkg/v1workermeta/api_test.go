@@ -15,7 +15,6 @@ package v1workermeta
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -119,7 +118,7 @@ func copyDir(c *C, dst, src string) {
 	err = os.MkdirAll(dst, si.Mode())
 	c.Assert(err, IsNil)
 
-	entries, err := ioutil.ReadDir(src)
+	entries, err := os.ReadDir(src)
 	c.Assert(err, IsNil)
 
 	for _, entry := range entries {
@@ -129,8 +128,10 @@ func copyDir(c *C, dst, src string) {
 		if entry.IsDir() {
 			copyDir(c, dstPath, srcPath)
 		} else {
+			info, err := entry.Info()
+			c.Assert(err, IsNil)
 			// Skip symlinks.
-			if entry.Mode()&os.ModeSymlink != 0 {
+			if info.Mode()&os.ModeSymlink != 0 {
 				continue
 			}
 			copyFile(c, dstPath, srcPath)

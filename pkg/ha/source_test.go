@@ -17,7 +17,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"testing"
 
@@ -102,20 +102,20 @@ func createTestFixture(c *C) {
 	dir := c.MkDir()
 
 	caFilePath = path.Join(dir, caFile)
-	err := ioutil.WriteFile(caFilePath, []byte(caFileContent), 0o644)
+	err := os.WriteFile(caFilePath, []byte(caFileContent), 0o644)
 	c.Assert(err, IsNil)
 
 	certFilePath = path.Join(dir, certFile)
-	err = ioutil.WriteFile(certFilePath, []byte(certFileContent), 0o644)
+	err = os.WriteFile(certFilePath, []byte(certFileContent), 0o644)
 	c.Assert(err, IsNil)
 
 	keyFilePath = path.Join(dir, keyFile)
-	err = ioutil.WriteFile(keyFilePath, []byte(keyFileContent), 0o644)
+	err = os.WriteFile(keyFilePath, []byte(keyFileContent), 0o644)
 	c.Assert(err, IsNil)
 
 	sourceSampleFilePath = path.Join(dir, sourceSampleFile)
 	sourceFileContent := fmt.Sprintf(sourceFileContent, caFilePath, certFilePath, keyFilePath)
-	err = ioutil.WriteFile(sourceSampleFilePath, []byte(sourceFileContent), 0o644)
+	err = os.WriteFile(sourceSampleFilePath, []byte(sourceFileContent), 0o644)
 	c.Assert(err, IsNil)
 }
 

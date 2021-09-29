@@ -16,7 +16,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -32,15 +32,15 @@ func createSources(ctx context.Context, cli pb.MasterClient, cfg *config) error 
 	s2Path := filepath.Join(cfg.ConfigDir, "source2.yaml")
 	s3Path := filepath.Join(cfg.ConfigDir, "source3.yaml")
 
-	s1Content, err := ioutil.ReadFile(s1Path)
+	s1Content, err := os.ReadFile(s1Path)
 	if err != nil {
 		return err
 	}
-	s2Content, err := ioutil.ReadFile(s2Path)
+	s2Content, err := os.ReadFile(s2Path)
 	if err != nil {
 		return err
 	}
-	s3Content, err := ioutil.ReadFile(s3Path)
+	s3Content, err := os.ReadFile(s3Path)
 	if err != nil {
 		return err
 	}
