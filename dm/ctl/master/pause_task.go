@@ -14,46 +14,23 @@
 package master
 
 import (
-	"errors"
-	"os"
-
 	"github.com/spf13/cobra"
 
-	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 )
 
 // NewPauseTaskCmd creates a PauseTask command.
 func NewPauseTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pause-task [-s source ...] <task-name | task-file>",
-		Short: "Pauses a specified running task",
+		Use:   `pause-task [-s source ...] [task-name | task-file]`,
+		Short: "Pauses a specified running task or all (sub)tasks bound to a source",
 		RunE:  pauseTaskFunc,
 	}
+	addOperateSourceTaskFlags(cmd)
 	return cmd
 }
 
 // pauseTaskFunc does pause task request.
 func pauseTaskFunc(cmd *cobra.Command, _ []string) (err error) {
-	if len(cmd.Flags().Args()) != 1 {
-		cmd.SetOut(os.Stdout)
-		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
-	}
-	name := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0))
-
-	sources, err := common.GetSourceArgs(cmd)
-	if err != nil {
-		return
-	}
-
-	resp, err := common.OperateTask(pb.TaskOp_Pause, name, sources)
-	if err != nil {
-		common.PrintLinesf("can not pause task %s", name)
-		return
-	}
-
-	common.PrettyPrintResponse(resp)
-	return
+	return operateTaskFunc(pb.TaskOp_Pause, cmd)
 }
