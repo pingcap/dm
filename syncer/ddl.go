@@ -125,6 +125,12 @@ func (s *Syncer) splitAndFilterDDL(
 
 	statements := make([]string, 0, len(sqls))
 	tableMap = make(map[string]*filter.Table)
+
+	if s.onlineDDL != nil {
+		if err = s.onlineDDL.CheckRegex(stmt, schema, s.SourceTableNamesFlavor); err != nil {
+			return nil, nil, err
+		}
+	}
 	for _, sql := range sqls {
 		stmt2, err2 := p.ParseOneStmt(sql, "", "")
 		if err2 != nil {
