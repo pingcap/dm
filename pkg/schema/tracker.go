@@ -18,10 +18,12 @@ import (
 	"fmt"
 	"strings"
 
+	dterror "github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	tidbConfig "github.com/pingcap/tidb/config"
@@ -32,6 +34,8 @@ import (
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/store/mockstore"
+	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/mock"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/conn"
@@ -56,19 +60,24 @@ var (
 
 // Tracker is used to track schema locally.
 type Tracker struct {
-	store           kv.Storage
-	dom             *domain.Domain
-	se              session.Session
-	downstreamTrack map[string]*ast.CreateTableStmt // downstream tracker tableid -> createTableStmt
+	store             kv.Storage
+	dom               *domain.Domain
+	se                session.Session
+	downstreamTracker *DownstreamTracker // downstream tracker tableid -> createTableStmt
 }
 
 // ToIndexes is downstream pk/uk info.
-// type ToIndexes struct {
-// 	tableID string
-// 	pks     []string // include multiple primary key
-// 	uks     []string // uk/uks
-// 	// uksIsNull  []bool   // uk/uks is null?
-// }
+type DownstreamTracker struct {
+	stmtParser *parser.Parser                  // statement parser
+	tableInfos map[string]*downstreamTableInfo // downstream table infos
+}
+
+// downstreamTableInfo contains tableinfo and index cache
+type downstreamTableInfo struct {
+	tableInfo        *model.TableInfo   // tableInfo which comes from parse create statement syntaxtree
+	indexCache       *model.IndexInfo   // index cache include pk/uk(not null)
+	availableUKCache []*model.IndexInfo // index cache include uks(data not null)
+}
 
 // NewTracker creates a new tracker. `sessionCfg` will be set as tracker's session variables if specified, or retrieve
 // some variable from downstream TiDB using `tidbConn`.
@@ -166,10 +175,29 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 		return nil, err
 	}
 
+	// init downstreamTracker
+	downstreamTracker, err := initDownStreamTracker(sessionCfg["sql_mode"])
+	if err != nil {
+		return nil, err
+	}
+
 	return &Tracker{
-		store: store,
-		dom:   dom,
-		se:    se,
+		store:             store,
+		dom:               dom,
+		se:                se,
+		downstreamTracker: downstreamTracker,
+	}, nil
+}
+
+// initDownStreamTracker init downstream tracker by sql_mode str which comes from "SHOW VARIABLES like %SQL_MODE".
+func initDownStreamTracker(sqlmode string) (*DownstreamTracker, error) {
+	stmtParser, err := utils.GetParserFromSQLModeStr(sqlmode)
+	if err != nil {
+		return nil, err
+	}
+	return &DownstreamTracker{
+		stmtParser: stmtParser,
+		tableInfos: make(map[string]*downstreamTableInfo),
 	}, nil
 }
 
@@ -343,205 +371,222 @@ func (tr *Tracker) GetSystemVar(name string) (string, bool) {
 
 // GetDownStreamIndexInfo gets downstream PK/UK(not null) Index.
 // note. this function will init downstreamTrack's table info.
-func (tr *Tracker) GetDownStreamIndexInfo(tableID string, originTi *model.TableInfo, tctx *tcontext.Context, task string, tidbConn *conn.BaseConn) (*model.IndexInfo, error) {
-	if tr.downstreamTrack == nil {
-		tr.downstreamTrack = make(map[string]*ast.CreateTableStmt)
-	}
-	createTableStmt := tr.downstreamTrack[tableID]
-	if createTableStmt == nil {
-
-		log.L().Info(fmt.Sprintf("DownStream schema tracker init: %s", tableID))
-
-		rows, err := tidbConn.QuerySQL(tctx, fmt.Sprintf("SHOW CREATE TABLE %s", tableID))
+func (tr *Tracker) GetDownStreamIndexInfo(tctx *tcontext.Context, tableID string, originTi *model.TableInfo, downstreamConn *conn.BaseConn) (*model.IndexInfo, error) {
+	dti, ok := tr.downstreamTracker.tableInfos[tableID]
+	if !ok {
+		log.L().Info("DownStream schema tracker init. ", zap.String("tableID", tableID))
+		ti, err := tr.getTiByCreateStmt(tctx, tableID, downstreamConn)
 		if err != nil {
 			return nil, err
 		}
-
-		var tableName string
-		var createStr string
-
-		for rows.Next() {
-			if err3 := rows.Scan(&tableName, &createStr); err3 != nil {
-				return nil, err3
-			}
-			// parse create table stmt.
-			parser := parser.New()
-
-			stmtNode, err := parser.ParseOneStmt(createStr, "", "")
-			if err != nil {
-				return nil, err
-			}
-			createTableStmt = stmtNode.(*ast.CreateTableStmt)
-		}
-
-		if err := rows.Close(); err != nil {
-			return nil, err
-		}
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
-		tr.downstreamTrack[tableID] = createTableStmt
+		dti = getDownStreamTi(ti, originTi)
+		tr.downstreamTracker.tableInfos[tableID] = dti
 	}
-
-	// get PK/UK from  Constraints.
-	var index *model.IndexInfo
-	for _, constraint := range createTableStmt.Constraints {
-		var keys []*ast.IndexPartSpecification
-
-		switch constraint.Tp {
-		case ast.ConstraintPrimaryKey: // pk.
-			keys = constraint.Keys
-		case ast.ConstraintUniq, ast.ConstraintUniqKey, ast.ConstraintUniqIndex: // unique,unique key,unique index.
-
-			if index == nil {
-				keys = constraint.Keys
-			} else {
-				// if index has been found, uk should be jump.
-				continue
-			}
-		default:
-			continue
-		}
-
-		if keys != nil {
-			columns := make([]*model.IndexColumn, 0, len(keys))
-			isAllNotNull := true // pk is true, uk should check.
-			for _, key := range keys {
-
-				// UK should check not null.
-				if constraint.Tp != ast.ConstraintPrimaryKey {
-
-					for _, column := range createTableStmt.Cols {
-						if key.Column.Name.String() == column.Name.String() {
-							hasNotNull := false
-							for _, option := range column.Options {
-								if option.Tp == ast.ColumnOptionNotNull {
-									hasNotNull = true
-									break
-								}
-							}
-							if !hasNotNull {
-								isAllNotNull = false
-							}
-							break
-						}
-					}
-				}
-
-				if !isAllNotNull {
-					break
-				}
-
-				if orginColumn := model.FindColumnInfo(originTi.Columns, key.Column.Name.O); orginColumn != nil {
-					column := &model.IndexColumn{
-						Name:   key.Column.Name,
-						Offset: orginColumn.Offset,
-						Length: key.Length,
-					}
-					columns = append(columns, column)
-				}
-			}
-
-			if !isAllNotNull {
-				continue
-			}
-
-			if len(columns) != 0 {
-				if constraint.Tp == ast.ConstraintPrimaryKey {
-					index = &model.IndexInfo{
-						Table:   createTableStmt.Table.Name,
-						Unique:  true,
-						Primary: true,
-						State:   model.StatePublic,
-						Tp:      model.IndexTypeBtree,
-						Columns: columns,
-					}
-					log.L().Debug(fmt.Sprintf("Find DownStream table %s pk %s", tableID, constraint.Name))
-					return index, nil // pk > uk.
-				}
-				// uk should continiue to find pk.
-				index = &model.IndexInfo{
-					Table:   createTableStmt.Table.Name,
-					Unique:  true,
-					Primary: false,
-					State:   model.StatePublic,
-					Tp:      model.IndexTypeBtree,
-					Columns: columns,
-				}
-				log.L().Debug(fmt.Sprintf("Find DownStream table %s uk(not null) %s", tableID, constraint.Name))
-			}
-		}
-	}
-
-	if index == nil {
-		log.L().Debug(fmt.Sprintf("DownStream table %s has no pk/uk(not null)!", tableID))
-	}
-
-	return index, nil
+	return dti.indexCache, nil
 }
 
 // GetAvailableDownStreanUKIndexInfo gets available downstream UK whose data is not null.
 // note. this function will not init downstreamTrack.
 func (tr *Tracker) GetAvailableDownStreanUKIndexInfo(tableID string, originTi *model.TableInfo, data []interface{}) *model.IndexInfo {
-	if tr.downstreamTrack == nil || tr.downstreamTrack[tableID] == nil {
+	dti, ok := tr.downstreamTracker.tableInfos[tableID]
+	if !ok || dti.availableUKCache == nil || len(dti.availableUKCache) == 0 {
 		return nil
 	}
-	createTableStmt := tr.downstreamTrack[tableID]
-	for _, constraint := range createTableStmt.Constraints {
 
-		if constraint.Tp == ast.ConstraintUniq || constraint.Tp == ast.ConstraintUniqKey || constraint.Tp == ast.ConstraintUniqIndex {
-			columns := make([]*model.IndexColumn, 0, len(constraint.Keys))
-			for _, key := range constraint.Keys {
-				if orginColumn := model.FindColumnInfo(originTi.Columns, key.Column.Name.O); orginColumn != nil {
-					// check data is null.
-					if columnData := data[orginColumn.Offset]; columnData != nil {
-						column := &model.IndexColumn{
-							Name:   key.Column.Name,
-							Offset: orginColumn.Offset,
-							Length: key.Length,
-						}
-						columns = append(columns, column)
-					}
-				}
+	// func for check data is not null
+	fn := func(i int) bool {
+		return data[i] != nil
+	}
+
+	for i, uk := range dti.availableUKCache {
+		// check uk's column data is not null
+		if isSpecifiedIndexColumn(uk, fn) {
+			if i != 0 {
+				// exchange available uk to the first of the arry to reduce judgements for next row
+				temp := dti.availableUKCache[0]
+				dti.availableUKCache[0] = uk
+				dti.availableUKCache[i] = temp
 			}
-			if len(constraint.Keys) == len(columns) {
-				log.L().Debug(fmt.Sprintf("Find DownStream table %s uk(data not null) %s", tableID, constraint.Name))
-				return &model.IndexInfo{
-					Table:   createTableStmt.Table.Name,
-					Unique:  true,
-					Primary: false,
-					State:   model.StatePublic,
-					Tp:      model.IndexTypeBtree,
-					Columns: columns,
-				}
-			}
+			return uk
 		}
 	}
-	log.L().Debug(fmt.Sprintf("DownStream table %s has no pk/uk(even data not null)!", tableID))
 	return nil
 }
 
 // ReTrackDownStreamIndex just remove schema or table in downstreamTrack.
 func (tr *Tracker) ReTrackDownStreamIndex(targetTables []*filter.Table) {
-	if tr.downstreamTrack == nil || targetTables == nil {
+	if targetTables == nil {
 		return
 	}
 
 	for i := 0; i < len(targetTables); i++ {
 		tableID := utils.GenTableID(targetTables[i])
-		if tr.downstreamTrack[tableID] == nil {
+		if tr.downstreamTracker.tableInfos[tableID] == nil {
 			// handle just have schema
 			if targetTables[i].Schema != "" && targetTables[i].Name == "" {
-				for k := range tr.downstreamTrack {
+				for k := range tr.downstreamTracker.tableInfos {
 					if strings.HasPrefix(k, tableID+".") {
-						delete(tr.downstreamTrack, k)
+						delete(tr.downstreamTracker.tableInfos, k)
 					}
 				}
-				log.L().Info(fmt.Sprintf("Remove downStream schema tracker %s ", targetTables[i].Schema))
+				log.L().Info("Remove downStream schema tracker.", zap.String("schema", targetTables[i].Schema))
 			}
 		} else {
-			delete(tr.downstreamTrack, tableID)
-			log.L().Info(fmt.Sprintf("Remove downStream schema tracker %s ", tableID))
+			delete(tr.downstreamTracker.tableInfos, tableID)
+			log.L().Info("Remove downStream schema tracker.", zap.String("tableID", tableID))
 		}
 	}
+}
+
+// getTiByCreateStmt get downstream tableInfo by "SHOW CREATE TABLE" stmt.
+func (tr *Tracker) getTiByCreateStmt(tctx *tcontext.Context, tableID string, downstreamConn *conn.BaseConn) (*model.TableInfo, error) {
+	querySQL := fmt.Sprintf("SHOW CREATE TABLE %s", tableID)
+	rows, err := downstreamConn.QuerySQL(tctx, querySQL)
+	if err != nil {
+		return nil, dterror.DBErrorAdapt(err, dterror.ErrDBDriverError)
+	}
+	var tableName, createStr string
+	if rows.Next() {
+		if err = rows.Scan(&tableName, &createStr); err != nil {
+			return nil, dterror.DBErrorAdapt(rows.Err(), dterror.ErrDBDriverError)
+		}
+		if err = rows.Close(); err != nil {
+			return nil, dterror.DBErrorAdapt(rows.Err(), dterror.ErrDBDriverError)
+		}
+		if err = rows.Err(); err != nil {
+			return nil, dterror.DBErrorAdapt(rows.Err(), dterror.ErrDBDriverError)
+		}
+	}
+
+	log.L().Info("Show create table info", zap.String("tableID", tableID), zap.String("create string", createStr))
+	// parse create table stmt.
+	stmtNode, err := tr.downstreamTracker.stmtParser.ParseOneStmt(createStr, "", "")
+	if err != nil {
+		// maybe sql_mode is not matching,Reacquire a parser
+		newParser, err := utils.GetParserForConn(tctx.Ctx, downstreamConn.DBConn)
+		if err != nil {
+			return nil, dterror.ErrParseSQL.Delegate(err, createStr)
+		} else {
+			stmtNode, err = newParser.ParseOneStmt(createStr, "", "")
+			if err != nil {
+				return nil, dterror.ErrParseSQL.Delegate(err, createStr)
+			}
+			tr.downstreamTracker.stmtParser = newParser
+		}
+	}
+
+	ti, err := ddl.MockTableInfo(mock.NewContext(), stmtNode.(*ast.CreateTableStmt), 111)
+	if err != nil {
+		return nil, dterror.ErrParseSQL.Delegate(err, createStr)
+	}
+	return ti, nil
+}
+
+// getDownStreamTi  constructs downstreamTable index cache by tableinfo
+func getDownStreamTi(ti *model.TableInfo, originTi *model.TableInfo) *downstreamTableInfo {
+	var (
+		indexCache       *model.IndexInfo
+		availableUKCache []*model.IndexInfo = make([]*model.IndexInfo, 0, len(ti.Indices))
+		hasPk            bool               = false
+	)
+
+	// func for check not null constraint
+	fn := func(i int) bool {
+		return mysql.HasNotNullFlag(ti.Columns[i].Flag)
+	}
+
+	for _, idx := range ti.Indices {
+		if idx.Primary {
+			indexCache = idx
+			hasPk = true
+		} else if idx.Unique {
+			// second check not null unique key
+			if isSpecifiedIndexColumn(idx, fn) {
+				indexCache = idx
+			} else {
+				availableUKCache = append(availableUKCache, idx)
+			}
+		}
+	}
+
+	// handle pk exceptional case.
+	// e.g. "create table t(a int primary key, b int)".
+	if !hasPk {
+		exPk := handlePkExCase(ti)
+		if exPk != nil {
+			indexCache = exPk
+		}
+	}
+
+	// redirect column offset as originTi
+	indexCache = redirectIndexKeys(indexCache, originTi)
+	for i, uk := range availableUKCache {
+		availableUKCache[i] = redirectIndexKeys(uk, originTi)
+	}
+
+	return &downstreamTableInfo{
+		tableInfo:        ti,
+		indexCache:       indexCache,
+		availableUKCache: availableUKCache,
+	}
+}
+
+// redirectIndexKeys redirect index's columns offset in origin tableinfo
+func redirectIndexKeys(index *model.IndexInfo, originTi *model.TableInfo) *model.IndexInfo {
+	if index == nil || originTi == nil {
+		return nil
+	}
+
+	columns := make([]*model.IndexColumn, 0, len(index.Columns))
+	for _, key := range index.Columns {
+		if originColumn := model.FindColumnInfo(originTi.Columns, key.Name.O); originColumn != nil {
+			column := &model.IndexColumn{
+				Name:   key.Name,
+				Offset: originColumn.Offset,
+				Length: key.Length,
+			}
+			columns = append(columns, column)
+		}
+	}
+	if len(columns) == len(index.Columns) {
+		return &model.IndexInfo{
+			Table:   index.Table,
+			Unique:  index.Unique,
+			Primary: index.Primary,
+			State:   index.State,
+			Tp:      index.Tp,
+			Columns: columns,
+		}
+	}
+	return nil
+}
+
+// handlePkExCase is handle pk exceptional case.
+// e.g. "create table t(a int primary key, b int)".
+func handlePkExCase(ti *model.TableInfo) *model.IndexInfo {
+	if pk := ti.GetPkColInfo(); pk != nil {
+		return &model.IndexInfo{
+			Table:   ti.Name,
+			Unique:  true,
+			Primary: true,
+			State:   model.StatePublic,
+			Tp:      model.IndexTypeBtree,
+			Columns: []*model.IndexColumn{{
+				Name:   pk.Name,
+				Offset: pk.Offset,
+				Length: types.UnspecifiedLength,
+			}},
+		}
+	}
+	return nil
+}
+
+// isSpecifiedIndexColumn checks all of index's columns are matching 'fn'
+func isSpecifiedIndexColumn(index *model.IndexInfo, fn func(i int) bool) bool {
+	for _, col := range index.Columns {
+		if !fn(col.Offset) {
+			return false
+		}
+	}
+	return true
 }

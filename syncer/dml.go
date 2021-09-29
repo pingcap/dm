@@ -111,15 +111,14 @@ func (s *Syncer) genUpdateSQLs(
 		originalData = param.originalData
 		columns      = param.columns
 		ti           = param.originalTableInfo
-		// defaultIndexColumns = findFitIndex(ti)d
-		replaceSQL string // `REPLACE INTO` SQL
-		sqls       = make([]string, 0, len(data)/2)
-		keys       = make([][]string, 0, len(data)/2)
-		values     = make([][]interface{}, 0, len(data)/2)
+		replaceSQL   string // `REPLACE INTO` SQL
+		sqls         = make([]string, 0, len(data)/2)
+		keys         = make([][]string, 0, len(data)/2)
+		values       = make([][]interface{}, 0, len(data)/2)
 	)
 
-	// if downstream pk exits, then use downstream pk
-	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tableID, ti, tctx, s.cfg.Name, s.ddlDBConn.BaseConn)
+	// if downstream pk/uk(not null) exits, then use downstream pk/uk(not null)
+	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tctx, tableID, ti, s.ddlDBConn.BaseConn)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -174,7 +173,6 @@ RowLoop:
 		}
 
 		if defaultIndexColumns == nil {
-			// defaultIndexColumns = getAvailableIndexColumn(ti, oriOldValues)
 			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreanUKIndexInfo(tableID, ti, oriOldValues)
 		}
 
@@ -231,14 +229,13 @@ func (s *Syncer) genDeleteSQLs(tctx *tcontext.Context, param *genDMLParam, filte
 		tableID = param.tableID
 		dataSeq = param.originalData
 		ti      = param.originalTableInfo
-		// defaultIndexColumns = findFitIndex(ti)
-		sqls   = make([]string, 0, len(dataSeq))
-		keys   = make([][]string, 0, len(dataSeq))
-		values = make([][]interface{}, 0, len(dataSeq))
+		sqls    = make([]string, 0, len(dataSeq))
+		keys    = make([][]string, 0, len(dataSeq))
+		values  = make([][]interface{}, 0, len(dataSeq))
 	)
 
-	// if downstream pk exits, then use downstream pk
-	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tableID, ti, tctx, s.cfg.Name, s.ddlDBConn.BaseConn)
+	// if downstream pk/uk(not null) exits, then use downstream pk/uk(not null)
+	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tctx, tableID, ti, s.ddlDBConn.BaseConn)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -263,7 +260,6 @@ RowLoop:
 		}
 
 		if defaultIndexColumns == nil {
-			// defaultIndexColumns = getAvailableIndexColumn(ti, value)
 			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreanUKIndexInfo(tableID, ti, value)
 		}
 		ks := genMultipleKeys(ti, value, tableID)
@@ -513,13 +509,13 @@ func findFitIndex(ti *model.TableInfo) *model.IndexInfo {
 	return getSpecifiedIndexColumn(ti, fn)
 }
 
-// func getAvailableIndexColumn(ti *model.TableInfo, data []interface{}) *model.IndexInfo {
-// 	fn := func(i int) bool {
-// 		return data[i] == nil
-// 	}
+func getAvailableIndexColumn(ti *model.TableInfo, data []interface{}) *model.IndexInfo {
+	fn := func(i int) bool {
+		return data[i] == nil
+	}
 
-// 	return getSpecifiedIndexColumn(ti, fn)
-// }
+	return getSpecifiedIndexColumn(ti, fn)
+}
 
 func getSpecifiedIndexColumn(ti *model.TableInfo, fn func(i int) bool) *model.IndexInfo {
 	for _, indexCols := range ti.Indices {
