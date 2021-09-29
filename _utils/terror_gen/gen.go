@@ -19,7 +19,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/ioutil"
 	"os"
 	"strings"
 	"text/template"
@@ -71,7 +70,7 @@ func genFile(names []string) {
 		content     []byte
 		err         error
 	)
-	content, err = ioutil.ReadFile(templateCheckerFile)
+	content, err = os.ReadFile(templateCheckerFile)
 	if err != nil {
 		panic(err)
 	}
@@ -89,7 +88,7 @@ func genFile(names []string) {
 	if err != nil {
 		panic(err)
 	}
-	err = ioutil.WriteFile(generatedCheckerFile, genBuf.Bytes(), 0644)
+	err = os.WriteFile(generatedCheckerFile, genBuf.Bytes(), 0644)
 	if err != nil {
 		panic(err)
 	}

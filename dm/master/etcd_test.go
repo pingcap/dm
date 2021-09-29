@@ -16,7 +16,6 @@ package master
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -104,7 +103,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	cfgBefore.Join = joinCluster
 
 	// join with persistent data
-	c.Assert(ioutil.WriteFile(joinFP, []byte(joinCluster), privateDirMode), check.IsNil)
+	c.Assert(os.WriteFile(joinFP, []byte(joinCluster), privateDirMode), check.IsNil)
 	cfgAfter = t.cloneConfig(cfgBefore)
 	c.Assert(prepareJoinEtcd(cfgAfter), check.IsNil)
 	c.Assert(cfgAfter.InitialCluster, check.Equals, joinCluster)
@@ -164,7 +163,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	c.Assert(obtainClusters, check.DeepEquals, expectedClusters)
 
 	// join data should exist now
-	joinData, err := ioutil.ReadFile(joinFP)
+	joinData, err := os.ReadFile(joinFP)
 	c.Assert(err, check.IsNil)
 	c.Assert(string(joinData), check.Equals, cfgAfter.InitialCluster)
 
@@ -218,7 +217,7 @@ func (t *testEtcdSuite) TestIsDirExist(c *check.C) {
 	// data exists in the directory
 	for i := 1; i <= 3; i++ {
 		fp := filepath.Join(d, fmt.Sprintf("file.%d", i))
-		c.Assert(ioutil.WriteFile(fp, nil, privateDirMode), check.IsNil)
+		c.Assert(os.WriteFile(fp, nil, privateDirMode), check.IsNil)
 		c.Assert(isDirExist(d), check.IsTrue)
 		c.Assert(isDirExist(fp), check.IsFalse) // not a directory
 	}

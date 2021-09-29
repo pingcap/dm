@@ -17,7 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -282,7 +282,7 @@ func PrettyPrintResponseWithCheckTask(resp proto.Message, subStr string) bool {
 
 // GetFileContent reads and returns file's content.
 func GetFileContent(fpath string) ([]byte, error) {
-	content, err := ioutil.ReadFile(fpath)
+	content, err := os.ReadFile(fpath)
 	if err != nil {
 		return nil, errors.Annotate(err, "error in get file content")
 	}

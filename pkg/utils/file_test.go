@@ -14,7 +14,7 @@
 package utils
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	. "github.com/pingcap/check"
@@ -51,7 +51,7 @@ func (t *testFileSuite) TestFile(c *C) {
 	c.Assert(size, Equals, int64(0))
 
 	// create a file
-	c.Assert(ioutil.WriteFile(f, []byte("some content"), 0o644), IsNil)
+	c.Assert(os.WriteFile(f, []byte("some content"), 0o644), IsNil)
 	c.Assert(IsFileExists(f), IsTrue)
 	c.Assert(IsDirExists(f), IsFalse)
 	size, err = GetFileSize(f)
