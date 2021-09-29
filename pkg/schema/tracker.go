@@ -66,7 +66,7 @@ type Tracker struct {
 	downstreamTracker *DownstreamTracker // downstream tracker tableid -> createTableStmt
 }
 
-// ToIndexes is downstream pk/uk info.
+// DownstreamTracker tracks downstream schema.
 type DownstreamTracker struct {
 	stmtParser *parser.Parser                  // statement parser
 	tableInfos map[string]*downstreamTableInfo // downstream table infos
@@ -466,13 +466,15 @@ func (tr *Tracker) getTiByCreateStmt(tctx *tcontext.Context, tableID string, dow
 		newParser, err := utils.GetParserForConn(tctx.Ctx, downstreamConn.DBConn)
 		if err != nil {
 			return nil, dterror.ErrParseSQL.Delegate(err, createStr)
-		} else {
-			stmtNode, err = newParser.ParseOneStmt(createStr, "", "")
-			if err != nil {
-				return nil, dterror.ErrParseSQL.Delegate(err, createStr)
-			}
-			tr.downstreamTracker.stmtParser = newParser
 		}
+
+		stmtNode, err = newParser.ParseOneStmt(createStr, "", "")
+		if err != nil {
+			return nil, dterror.ErrParseSQL.Delegate(err, createStr)
+		}
+
+		tr.downstreamTracker.stmtParser = newParser
+
 	}
 
 	ti, err := ddl.MockTableInfo(mock.NewContext(), stmtNode.(*ast.CreateTableStmt), 111)
