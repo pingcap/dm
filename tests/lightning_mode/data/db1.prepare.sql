@@ -4,11 +4,9 @@ use `lightning_mode`;
 create table t1 (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(20),
-    dt datetime,
-    ts timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id));
 -- test ANSI_QUOTES works with quote in string
-insert into t1 (id, name, dt, ts) values (1, 'ar"ya', now(), now()), (2, 'catelyn', '2021-05-11 10:01:05', '2021-05-11 10:01:05');
+insert into t1 (id, name) values (1, 'ar"ya'), (2, 'catelyn');
 
 -- test sql_mode=NO_AUTO_VALUE_ON_ZERO
 insert into t1 (id, name) values (0, 'lalala');
