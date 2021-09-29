@@ -410,8 +410,8 @@ type tableInfo struct {
 	targetTable    string
 	columnNameList []string
 	insertHeadStmt string
-	transferCol    string
-	transferVal    string
+	transferCol    []string
+	transferVal    []string
 }
 
 // Loader can load your mydumper data into TiDB database.
@@ -1411,7 +1411,7 @@ tblSchemaLoop:
 		for table := range l.db2Tables[db] {
 			schemaFile := l.cfg.Dir + "/" + db + "." + table + "-schema.sql" // cache friendly
 			if _, ok := l.tableInfos[tableName(db, table)]; !ok {
-				l.tableInfos[tableName(db, table)], err = parseTable(tctx, l.tableRouter, db, table, schemaFile, l.cfg.LoaderConfig.SQLMode)
+				l.tableInfos[tableName(db, table)], err = parseTable(tctx, l.tableRouter, db, table, schemaFile, l.cfg.LoaderConfig.SQLMode, l.cfg.SourceID)
 				if err != nil {
 					err = terror.Annotatef(err, "parse table %s/%s", db, table)
 					break tblSchemaLoop

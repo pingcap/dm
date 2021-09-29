@@ -86,9 +86,6 @@ func parseInsertStmt(sql []byte, table *tableInfo, columnMapping *cm.Mapping) ([
 		if err != nil {
 			return nil, err
 		}
-		if len(table.transferCol) > 0 {
-			row = append(row, "'"+table.transferVal+"'")
-		}
 		rows = append(rows, row)
 
 		s = e + 1
@@ -183,7 +180,11 @@ func parseRowValues(str []byte, table *tableInfo, columnMapping *cm.Mapping) ([]
 			row = append(row, val)
 		}
 	}
-
+	if len(table.transferCol) > 0 {
+		for _, v := range table.transferVal {
+			row = append(row, "'"+v+"'")
+		}
+	}
 	return row, nil
 }
 
@@ -233,7 +234,7 @@ func tableName(schema, table string) string {
 	return fmt.Sprintf("`%s`.`%s`", schema, table)
 }
 
-func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file string, sqlMode string) (*tableInfo, error) {
+func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file, sqlMode, sourceID string) (*tableInfo, error) {
 	statement, err := exportStatement(file)
 	if err != nil {
 		return nil, err
@@ -281,14 +282,14 @@ func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file stri
 			columns = append(columns, col.Name.Name.O)
 		}
 	}
-	transferCol, transferVal := utils.FetchTableTransferColumnRule(r, schema, table)
+	transferCol, transferVal := utils.FetchTableTransferColumnRule(r, schema, table, sourceID)
+	if len(transferCol) > 0 {
+		columns = append(columns, transferCol...)
+	}
 	if hasGeneragedCols || len(transferCol) > 0 {
 		var escapeColumns []string
 		for _, column := range columns {
 			escapeColumns = append(escapeColumns, fmt.Sprintf("`%s`", column))
-		}
-		if len(transferCol) > 0 {
-			escapeColumns = append(escapeColumns, fmt.Sprintf("`%s`", transferCol))
 		}
 		columnNameFields = "(" + strings.Join(escapeColumns, ",") + ") "
 	}

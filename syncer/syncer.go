@@ -2209,7 +2209,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return err2
 	}
 
-	transferCol, transferVal := utils.FetchTableTransferColumnRule(s.tableRouter, sourceTable.Schema, sourceTable.Name)
+	transferCol, transferVal := utils.FetchTableTransferColumnRule(s.tableRouter, sourceTable.Schema, sourceTable.Name, s.cfg.SourceID)
 	genrateTransferColumn(rows, transferCol, transferVal)
 
 	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(tableInfo, rows)
@@ -2337,10 +2337,12 @@ func (qec *queryEventContext) String() string {
 		qec.ddlSchema, qec.originSQL, startLocation, currentLocation, lastLocation, shardingReSync, needHandleDDLs)
 }
 
-func genrateTransferColumn(rows [][]interface{}, transferCol, transferVal string) {
+func genrateTransferColumn(rows [][]interface{}, transferCol, transferVal []string) {
 	if len(transferCol) > 0 {
-		for i, r := range rows {
-			rows[i] = append(r, transferVal)
+		for i := range rows {
+			for _, v := range transferVal {
+				rows[i] = append(rows[i], v)
+			}
 		}
 	}
 }
