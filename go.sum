@@ -651,8 +651,6 @@ github.com/pingcap/tidb-dashboard v0.0.0-20210716172320-2226872e3296/go.mod h1:O
 github.com/pingcap/tidb-tools v5.0.3+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
 github.com/pingcap/tidb-tools v5.2.0-alpha.0.20210727084616-915b22e4d42c+incompatible h1:3UusiiE+cbOYzjMT3oxk2gN3lUT0ccjMiul51EEvZZc=
 github.com/pingcap/tidb-tools v5.2.0-alpha.0.20210727084616-915b22e4d42c+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
-github.com/pingcap/tidb-tools v5.2.1+incompatible h1:sq9okKGXylb8guU03lGHAEXFee5IFMxiX+FLMiBa9jg=
-github.com/pingcap/tidb-tools v5.2.1+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
 github.com/pingcap/tipb v0.0.0-20210802080519-94b831c6db55 h1:oxOovwOzm7VD37XpDo9NUtfGddZMwLpjtaQOxAq6HKg=
 github.com/pingcap/tipb v0.0.0-20210802080519-94b831c6db55/go.mod h1:A7mrd7WHBl1o63LE2bIBGEJMTNWXqhgmYiOvMLxozfs=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
