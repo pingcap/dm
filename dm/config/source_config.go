@@ -5,9 +5,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"io/ioutil"
 	"math"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -334,7 +334,7 @@ func (c *SourceConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
 // LoadFromFile loads config from file.
 func LoadFromFile(path string) (*SourceConfig, error) {
 	c := newSourceConfig()
-	content, err := ioutil.ReadFile(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, terror.ErrConfigReadCfgFromFile.Delegate(err, path)
 	}

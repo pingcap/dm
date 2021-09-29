@@ -16,7 +16,6 @@ package master
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path"
 	"sort"
@@ -280,7 +279,7 @@ func importCfgsFunc(cmd *cobra.Command, args []string) error {
 }
 
 func collectDirCfgs(dir string) ([]string, error) {
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +356,7 @@ func writeSourceCfgs(sourceDir string, sourceCfgsMap map[string]*config.SourceCo
 			common.PrintLinesf("fail to marshal source config of `%s`", source)
 			return err
 		}
-		err = ioutil.WriteFile(sourceFile, []byte(fileContent), 0o644)
+		err = os.WriteFile(sourceFile, []byte(fileContent), 0o644)
 		if err != nil {
 			common.PrintLinesf("fail to write source config to file `%s`", sourceFile)
 			return err
@@ -388,7 +387,7 @@ func writeTaskCfgs(taskDir string, subTaskCfgsMap map[string]map[string]config.S
 		if err != nil {
 			common.PrintLinesf("fail to marshal source config of `%s`", task)
 		}
-		if err := ioutil.WriteFile(taskFile, []byte(taskContent), 0o644); err != nil {
+		if err := os.WriteFile(taskFile, []byte(taskContent), 0o644); err != nil {
 			common.PrintLinesf("can not write task config to file `%s`", taskFile)
 			return err
 		}
@@ -418,7 +417,7 @@ func writeRelayWorkers(relayWorkersFile string, relayWorkersSet map[string]map[s
 		return err
 	}
 
-	err = ioutil.WriteFile(relayWorkersFile, content, 0o644)
+	err = os.WriteFile(relayWorkersFile, content, 0o644)
 	if err != nil {
 		common.PrintLinesf("can not write relay workers to file `%s`", relayWorkersFile)
 		return err

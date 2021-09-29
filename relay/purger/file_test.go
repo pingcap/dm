@@ -14,7 +14,6 @@
 package purger
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -36,7 +35,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFile(c *C) {
 	c.Assert(files, IsNil)
 
 	// create relay log dir
-	baseDir, err := ioutil.TempDir("", "test_get_relay_files_before_file")
+	baseDir, err := os.MkdirTemp("", "test_get_relay_files_before_file")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(baseDir)
 	// empty relay log dirs
@@ -106,7 +105,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFile(c *C) {
 
 	// write a fake meta file to first sub dir
 	fakeMeta := filepath.Join(relayDirsPath[0], utils.MetaFilename)
-	c.Assert(ioutil.WriteFile(fakeMeta, []byte{}, 0o666), IsNil)
+	c.Assert(os.WriteFile(fakeMeta, []byte{}, 0o666), IsNil)
 
 	// purge all relay log files in first and second sub dir, and some in third sub dir
 	err = purgeRelayFilesBeforeFile(log.L(), baseDir, t.uuids, safeRelay)
@@ -121,7 +120,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFile(c *C) {
 
 func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFileAndTime(c *C) {
 	// create relay log dir
-	baseDir, err := ioutil.TempDir("", "test_get_relay_files_before_file_and_time")
+	baseDir, err := os.MkdirTemp("", "test_get_relay_files_before_file_and_time")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(baseDir)
 
@@ -165,7 +164,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFileAndTime(c *C) {
 
 	// write a fake meta file to first sub dir
 	fakeMeta := filepath.Join(relayDirsPath[0], utils.MetaFilename)
-	c.Assert(ioutil.WriteFile(fakeMeta, []byte{}, 0o666), IsNil)
+	c.Assert(os.WriteFile(fakeMeta, []byte{}, 0o666), IsNil)
 
 	// purge all relay log files in first and second sub dir, and some in third sub dir
 	err = purgeRelayFilesBeforeFileAndTime(log.L(), baseDir, t.uuids, safeRelay, safeTime)
