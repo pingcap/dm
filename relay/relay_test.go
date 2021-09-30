@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -182,7 +181,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	c.Assert(err, IsNil)
 	f.Close()
 	c.Assert(r.PurgeRelayDir(), IsNil)
-	files, err := ioutil.ReadDir(r.cfg.RelayDir)
+	files, err := os.ReadDir(r.cfg.RelayDir)
 	c.Assert(err, IsNil)
 	c.Assert(files, HasLen, 0)
 
@@ -207,7 +206,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	g, events, data := genBinlogEventsWithGTIDs(c, relayCfg.Flavor, previousGTIDSet, latestGTID1, latestGTID2)
 
 	// write events into relay log file
-	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0o600)
+	err = os.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0o600)
 	c.Assert(err, IsNil)
 
 	// all events/transactions are complete, no need to recover
@@ -285,7 +284,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	g, _, data := genBinlogEventsWithGTIDs(c, relayCfg.Flavor, previousGTIDSet, latestGTID1, latestGTID2)
 
 	// write events into relay log file
-	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0o600)
+	err = os.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0o600)
 	c.Assert(err, IsNil)
 	// write some invalid data into the relay log file to trigger a recover.
 	f, err := os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0o600)

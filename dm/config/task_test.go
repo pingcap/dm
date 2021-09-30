@@ -14,7 +14,7 @@
 package config
 
 import (
-	"io/ioutil"
+	"os"
 	"path"
 	"reflect"
 	"sort"
@@ -323,7 +323,7 @@ meta-schema: "dm_meta"
 enable-heartbeat: true
 ignore-checking-items: ["all"]
 `)
-	err = ioutil.WriteFile(filepath, configContent, 0o644)
+	err = os.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, IsNil)
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
@@ -339,7 +339,7 @@ meta-schema: "dm_meta"
 enable-heartbeat: true
 ignore-checking-items: ["all"]
 `)
-	err = ioutil.WriteFile(filepath, configContent, 0o644)
+	err = os.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, IsNil)
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
@@ -353,7 +353,7 @@ meta-schema: "dm_meta"
 enable-heartbeat: true
 ignore-checking-items: ["all"]
 `)
-	err = ioutil.WriteFile(filepath, configContent, 0o644)
+	err = os.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, IsNil)
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
@@ -419,7 +419,7 @@ syncers:
     batch: 100
 `)
 
-	err = ioutil.WriteFile(filepath, configContent, 0o644)
+	err = os.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, IsNil)
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
@@ -474,7 +474,7 @@ filters:
   filter-rule-4:
 `)
 
-	err = ioutil.WriteFile(filepath, configContent, 0o644)
+	err = os.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, IsNil)
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)

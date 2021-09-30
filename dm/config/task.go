@@ -17,7 +17,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 	"strings"
 
@@ -380,7 +380,7 @@ func (c *TaskConfig) JSON() string {
 
 // DecodeFile loads and decodes config from file.
 func (c *TaskConfig) DecodeFile(fpath string) error {
-	bs, err := ioutil.ReadFile(fpath)
+	bs, err := os.ReadFile(fpath)
 	if err != nil {
 		return terror.ErrConfigReadCfgFromFile.Delegate(err, fpath)
 	}

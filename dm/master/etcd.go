@@ -15,7 +15,6 @@ package master
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -112,7 +111,7 @@ func prepareJoinEtcd(cfg *Config) error {
 
 	// join with persistent data
 	joinFP := filepath.Join(cfg.DataDir, "join")
-	if s, err := ioutil.ReadFile(joinFP); err != nil {
+	if s, err := os.ReadFile(joinFP); err != nil {
 		if !os.IsNotExist(err) {
 			return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, "read persistent join data")
 		}
@@ -188,7 +187,7 @@ func prepareJoinEtcd(cfg *Config) error {
 	if err = os.MkdirAll(cfg.DataDir, privateDirMode); err != nil && !os.IsExist(err) {
 		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, "make directory")
 	}
-	if err = ioutil.WriteFile(joinFP, []byte(cfg.InitialCluster), privateDirMode); err != nil {
+	if err = os.WriteFile(joinFP, []byte(cfg.InitialCluster), privateDirMode); err != nil {
 		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, "write persistent join data")
 	}
 

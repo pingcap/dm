@@ -19,7 +19,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"sync"
 	"time"
@@ -1026,7 +1026,7 @@ func (cp *RemoteCheckPoint) parseMetaData() (*binlog.Location, *binlog.Location,
 
 	loc, loc2, err := dumpling.ParseMetaData(filename, cp.cfg.Flavor)
 	if err != nil {
-		toPrint, err2 := ioutil.ReadFile(filename)
+		toPrint, err2 := os.ReadFile(filename)
 		if err2 != nil {
 			toPrint = []byte(err2.Error())
 		}

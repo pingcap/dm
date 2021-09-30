@@ -15,7 +15,7 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 )
 
 // Security config.
@@ -49,21 +49,21 @@ func (s *Security) LoadTLSContent() error {
 	}
 
 	if s.SSLCA != "" {
-		dat, err := ioutil.ReadFile(s.SSLCA)
+		dat, err := os.ReadFile(s.SSLCA)
 		if err != nil {
 			return err
 		}
 		s.SSLCABytes = dat
 	}
 	if s.SSLCert != "" {
-		dat, err := ioutil.ReadFile(s.SSLCert)
+		dat, err := os.ReadFile(s.SSLCert)
 		if err != nil {
 			return err
 		}
 		s.SSLCertBytes = dat
 	}
 	if s.SSLKey != "" {
-		dat, err := ioutil.ReadFile(s.SSLKey)
+		dat, err := os.ReadFile(s.SSLKey)
 		if err != nil {
 			return err
 		}

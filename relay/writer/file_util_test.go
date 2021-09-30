@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -44,28 +43,28 @@ func (t *testFileUtilSuite) TestCheckBinlogHeaderExist(c *check.C) {
 	c.Assert(exist, check.IsFalse)
 
 	// empty file
-	err = ioutil.WriteFile(filename, nil, 0o644)
+	err = os.WriteFile(filename, nil, 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkBinlogHeaderExist(filename)
 	c.Assert(err, check.IsNil)
 	c.Assert(exist, check.IsFalse)
 
 	// no enough data
-	err = ioutil.WriteFile(filename, replication.BinLogFileHeader[:len(replication.BinLogFileHeader)-1], 0o644)
+	err = os.WriteFile(filename, replication.BinLogFileHeader[:len(replication.BinLogFileHeader)-1], 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkBinlogHeaderExist(filename)
 	c.Assert(err, check.ErrorMatches, ".*has no enough data.*")
 	c.Assert(exist, check.IsFalse)
 
 	// equal
-	err = ioutil.WriteFile(filename, replication.BinLogFileHeader, 0o644)
+	err = os.WriteFile(filename, replication.BinLogFileHeader, 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkBinlogHeaderExist(filename)
 	c.Assert(err, check.IsNil)
 	c.Assert(exist, check.IsTrue)
 
 	// more data
-	err = ioutil.WriteFile(filename, bytes.Repeat(replication.BinLogFileHeader, 2), 0o644)
+	err = os.WriteFile(filename, bytes.Repeat(replication.BinLogFileHeader, 2), 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkBinlogHeaderExist(filename)
 	c.Assert(err, check.IsNil)
@@ -75,7 +74,7 @@ func (t *testFileUtilSuite) TestCheckBinlogHeaderExist(c *check.C) {
 	invalidData := make([]byte, len(replication.BinLogFileHeader))
 	copy(invalidData, replication.BinLogFileHeader)
 	invalidData[0]++
-	err = ioutil.WriteFile(filename, invalidData, 0o644)
+	err = os.WriteFile(filename, invalidData, 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkBinlogHeaderExist(filename)
 	c.Assert(err, check.ErrorMatches, ".*header not valid.*")
@@ -101,14 +100,14 @@ func (t *testFileUtilSuite) TestCheckFormatDescriptionEventExist(c *check.C) {
 	c.Assert(exist, check.IsFalse)
 
 	// empty file
-	err = ioutil.WriteFile(filename, nil, 0o644)
+	err = os.WriteFile(filename, nil, 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkFormatDescriptionEventExist(filename)
 	c.Assert(err, check.ErrorMatches, ".*no binlog file header at the beginning.*")
 	c.Assert(exist, check.IsFalse)
 
 	// only file header
-	err = ioutil.WriteFile(filename, replication.BinLogFileHeader, 0o644)
+	err = os.WriteFile(filename, replication.BinLogFileHeader, 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkFormatDescriptionEventExist(filename)
 	c.Assert(err, check.IsNil)
@@ -118,7 +117,7 @@ func (t *testFileUtilSuite) TestCheckFormatDescriptionEventExist(c *check.C) {
 	var buff bytes.Buffer
 	buff.Write(replication.BinLogFileHeader)
 	buff.Write(formatDescEv.RawData[:replication.EventHeaderSize-1])
-	err = ioutil.WriteFile(filename, buff.Bytes(), 0o644)
+	err = os.WriteFile(filename, buff.Bytes(), 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkFormatDescriptionEventExist(filename)
 	c.Assert(errors.Cause(err), check.Equals, io.EOF)
@@ -128,7 +127,7 @@ func (t *testFileUtilSuite) TestCheckFormatDescriptionEventExist(c *check.C) {
 	buff.Reset()
 	buff.Write(replication.BinLogFileHeader)
 	buff.Write(formatDescEv.RawData[:replication.EventHeaderSize])
-	err = ioutil.WriteFile(filename, buff.Bytes(), 0o644)
+	err = os.WriteFile(filename, buff.Bytes(), 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkFormatDescriptionEventExist(filename)
 	c.Assert(err, check.ErrorMatches, ".*get event err EOF.*")
@@ -138,7 +137,7 @@ func (t *testFileUtilSuite) TestCheckFormatDescriptionEventExist(c *check.C) {
 	buff.Reset()
 	buff.Write(replication.BinLogFileHeader)
 	buff.Write(formatDescEv.RawData[:replication.EventHeaderSize+1])
-	err = ioutil.WriteFile(filename, buff.Bytes(), 0o644)
+	err = os.WriteFile(filename, buff.Bytes(), 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkFormatDescriptionEventExist(filename)
 	c.Assert(err, check.ErrorMatches, ".*get event err EOF.*")
@@ -150,7 +149,7 @@ func (t *testFileUtilSuite) TestCheckFormatDescriptionEventExist(c *check.C) {
 	buff.Write(formatDescEv.RawData)
 	dataCopy := make([]byte, buff.Len())
 	copy(dataCopy, buff.Bytes())
-	err = ioutil.WriteFile(filename, buff.Bytes(), 0o644)
+	err = os.WriteFile(filename, buff.Bytes(), 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkFormatDescriptionEventExist(filename)
 	c.Assert(err, check.IsNil)
@@ -158,7 +157,7 @@ func (t *testFileUtilSuite) TestCheckFormatDescriptionEventExist(c *check.C) {
 
 	// more than the event
 	buff.Write([]byte("more data"))
-	err = ioutil.WriteFile(filename, buff.Bytes(), 0o644)
+	err = os.WriteFile(filename, buff.Bytes(), 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkFormatDescriptionEventExist(filename)
 	c.Assert(err, check.IsNil)
@@ -170,7 +169,7 @@ func (t *testFileUtilSuite) TestCheckFormatDescriptionEventExist(c *check.C) {
 	buff.Reset()
 	buff.Write(replication.BinLogFileHeader)
 	buff.Write(queryEv.RawData)
-	err = ioutil.WriteFile(filename, buff.Bytes(), 0o644)
+	err = os.WriteFile(filename, buff.Bytes(), 0o644)
 	c.Assert(err, check.IsNil)
 	exist, err = checkFormatDescriptionEventExist(filename)
 	c.Assert(err, check.ErrorMatches, ".*expect FormatDescriptionEvent.*")
@@ -214,7 +213,7 @@ func (t *testFileUtilSuite) TestCheckIsDuplicateEvent(c *check.C) {
 	}
 	// write the events to a file
 	filename := filepath.Join(c.MkDir(), "test-mysql-bin.000001")
-	err = ioutil.WriteFile(filename, allData.Bytes(), 0o644)
+	err = os.WriteFile(filename, allData.Bytes(), 0o644)
 	c.Assert(err, check.IsNil)
 
 	// all events in the file
@@ -319,7 +318,7 @@ func (t *testFileUtilSuite) testGetTxnPosGTIDs(c *check.C, filename, flavor, pre
 	c.Assert(err, check.IsNil)
 
 	// write the events to a file
-	err = ioutil.WriteFile(filename, baseData, 0o644)
+	err = os.WriteFile(filename, baseData, 0o644)
 	c.Assert(err, check.IsNil)
 
 	// not extra data exists

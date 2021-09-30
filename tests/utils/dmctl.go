@@ -15,7 +15,7 @@ package utils
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -38,7 +38,7 @@ func CreateDmCtl(addr string) (pb.MasterClient, error) {
 
 // StartTask starts a task with the specified config.
 func StartTask(ctx context.Context, cli pb.MasterClient, configFile string, workers []string) error {
-	content, err := ioutil.ReadFile(configFile)
+	content, err := os.ReadFile(configFile)
 	if err != nil {
 		return errors.Trace(err)
 	}
