@@ -14,7 +14,6 @@
 package dumpling
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -34,7 +33,7 @@ func TestSuite(t *testing.T) {
 type testSuite struct{}
 
 func (t *testSuite) TestParseMetaData(c *C) {
-	f, err := ioutil.TempFile("", "metadata")
+	f, err := os.CreateTemp("", "metadata")
 	c.Assert(err, IsNil)
 	defer os.Remove(f.Name())
 
@@ -232,7 +231,7 @@ Finished dump at: 2020-09-30 12:16:49
 	}
 
 	for _, tc := range testCases {
-		err2 := ioutil.WriteFile(f.Name(), []byte(tc.source), 0o644)
+		err2 := os.WriteFile(f.Name(), []byte(tc.source), 0o644)
 		c.Assert(err2, IsNil)
 		loc, loc2, err2 := ParseMetaData(f.Name(), "mysql")
 		c.Assert(err2, IsNil)
@@ -251,7 +250,7 @@ Finished dump at: 2020-09-30 12:16:49
 	noBinlogLoc := `Started dump at: 2020-12-02 17:13:56
 Finished dump at: 2020-12-02 17:13:56
 `
-	err = ioutil.WriteFile(f.Name(), []byte(noBinlogLoc), 0o644)
+	err = os.WriteFile(f.Name(), []byte(noBinlogLoc), 0o644)
 	c.Assert(err, IsNil)
 	_, _, err = ParseMetaData(f.Name(), "mysql")
 	c.Assert(terror.ErrMetadataNoBinlogLoc.Equal(err), IsTrue)

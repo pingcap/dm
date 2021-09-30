@@ -17,7 +17,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -130,7 +129,7 @@ func (mp *MockStreamProducer) generateStreamer(location binlog.Location) (stream
 }
 
 func (s *testSyncerSuite) SetUpSuite(c *C) {
-	loaderDir, err := ioutil.TempDir("", "loader")
+	loaderDir, err := os.MkdirTemp("", "loader")
 	c.Assert(err, IsNil)
 	loaderCfg := config.LoaderConfig{
 		Dir: loaderDir,
@@ -1209,11 +1208,11 @@ func (s *testSyncerSuite) TestRemoveMetadataIsFine(c *C) {
 	c.Assert(fresh, IsTrue)
 
 	filename := filepath.Join(s.cfg.Dir, "metadata")
-	err = ioutil.WriteFile(filename, []byte("SHOW MASTER STATUS:\n\tLog: BAD METADATA"), 0o644)
+	err = os.WriteFile(filename, []byte("SHOW MASTER STATUS:\n\tLog: BAD METADATA"), 0o644)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.checkpoint.LoadMeta(), NotNil)
 
-	err = ioutil.WriteFile(filename, []byte("SHOW MASTER STATUS:\n\tLog: mysql-bin.000003\n\tPos: 1234\n\tGTID:\n\n"), 0o644)
+	err = os.WriteFile(filename, []byte("SHOW MASTER STATUS:\n\tLog: mysql-bin.000003\n\tPos: 1234\n\tGTID:\n\n"), 0o644)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.checkpoint.LoadMeta(), IsNil)
 
