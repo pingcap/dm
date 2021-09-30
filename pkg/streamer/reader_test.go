@@ -822,7 +822,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 	s, err := r.StartSyncByGTID(startGTID.Origin().Clone())
 	c.Assert(err, IsNil)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var obtainBaseEvents []*replication.BinlogEvent
 	for {
@@ -939,6 +939,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 	_, err = r.StartSyncByGTID(excludeGset)
 	// error because subdir has been purge
 	c.Assert(err, ErrorMatches, ".*no such file or directory.*")
+	cancel()
 }
 
 func (t *testReaderSuite) TestStartSyncError(c *C) {
