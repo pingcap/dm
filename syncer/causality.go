@@ -74,8 +74,8 @@ func (c *causality) run(inCh chan *job) chan *job {
 // runcausality receives dml jobs and returns causality jobs
 // When meet conflict, returns a conflict job.
 func (c *causality) runcausality() {
-	for j := range c.outCh {
-		metrics.QueueSizeGauge.WithLabelValues(c.task, "causality_input", c.source).Set(float64(len(c.outCh)))
+	for j := range c.inCh {
+		metrics.QueueSizeGauge.WithLabelValues(c.task, "causality_input", c.source).Set(float64(len(c.inCh)))
 
 		startTime := time.Now()
 		if j.tp == flush {
