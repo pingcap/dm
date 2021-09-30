@@ -516,7 +516,7 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	}
 	cluster.Stop()
 }
- 
+
 func (s *testDDLSuite) TestDropSchemaInSharding(c *C) {
 	var (
 		targetTable = &filter.Table{
