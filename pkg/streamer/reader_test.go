@@ -78,8 +78,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 		baseEvents, _, _ = t.genBinlogEvents(c, t.lastPos, t.lastGTID)
 		s                = newLocalStreamer()
 	)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// no valid currentUUID provide, failed
@@ -253,6 +252,8 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 		}
 	}
 	t.verifyNoEventsInStreamer(c, s)
+
+	cancel()
 }
 
 func (t *testReaderSuite) TestParseFileRelayLogUpdatedOrNewCreated(c *C) {
