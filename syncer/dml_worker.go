@@ -281,9 +281,9 @@ func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job, clearFunc func())
 			time.Sleep(time.Duration(t) * time.Second)
 		})
 		// use background context to execute sqls as much as possible
-		ctctx, cancel := w.tctx.WithTimeout(maxDMLExecutionDuration)
+		ctx, cancel := w.tctx.WithTimeout(maxDMLExecutionDuration)
 		defer cancel()
-		affect, err = db.ExecuteSQL(ctctx, queries, args...)
+		affect, err = db.ExecuteSQL(ctx, queries, args...)
 		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
 			if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
 				w.logger.Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))

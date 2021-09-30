@@ -152,7 +152,7 @@ type Syncer struct {
 	isTransactionEnd    bool
 	waitTransactionLock sync.Mutex
 
-	causality *Causality
+	causality *causality
 	dmlWorker *DMLWorker
 
 	tableRouter     *router.Table
@@ -242,7 +242,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.binlogSizeCount.Store(0)
 	syncer.lastCount.Store(0)
 	syncer.count.Store(0)
-	syncer.causality = newCausality(cfg.DisableCausality, cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
+	syncer.causality = newCausality(cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
 	syncer.dmlWorker = newDMLWorker(cfg.Batch, cfg.WorkerCount, cfg.QueueSize, &logger, cfg.Name, cfg.SourceID, cfg.WorkerName, syncer.successFunc, syncer.fatalFunc, syncer.updateReplicationJobTS, syncer.addCount)
 	syncer.done = nil
 	syncer.setTimezone()

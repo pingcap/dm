@@ -27,7 +27,7 @@ import (
 )
 
 func (s *testSyncerSuite) TestDetectConflict(c *C) {
-	ca := &Causality{
+	ca := &causality{
 		relations: make(map[string]string),
 	}
 	caseData := []string{"test_1", "test_2", "test_3"}
@@ -58,7 +58,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 
 	jobCh := make(chan *job, 10)
 	logger := log.L()
-	causality := newCausality(false, 1024, "task", "source", &logger)
+	causality := newCausality(1024, "task", "source", &logger)
 	causalityCh := causality.run(jobCh)
 	testCases := []struct {
 		op   opType
@@ -100,7 +100,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	}
 
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return len(causality.causalityCh) == len(results)
+		return len(causality.outCh) == len(results)
 	}), IsTrue)
 
 	for _, op := range results {

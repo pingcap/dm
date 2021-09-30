@@ -760,7 +760,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.Batch = 1000
 	s.cfg.WorkerCount = 2
 	s.cfg.MaxRetry = 1
-	s.cfg.DisableCausality = false
 
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
