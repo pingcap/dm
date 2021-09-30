@@ -2384,6 +2384,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		return s.recordSkipSQLsLocation(&ec)
 	}
 
+	// QA: Could DMLNode come here?
 	if node, ok := stmt.(ast.DMLNode); ok {
 		// if DML can be ignored, we do not report an error
 		table, err2 := getTableByDML(node)
@@ -2397,6 +2398,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			}
 		}
 		return terror.Annotatef(terror.ErrSyncUnitDMLStatementFound.Generate(), "query %s", qec.originSQL)
+	}
+
+	if _, ok := stmt.(ast.DDLNode); !ok {
+		return nil
 	}
 
 	if qec.shardingReSync != nil {
@@ -2417,7 +2422,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		return nil
 	}
 
-	qec.tctx.L().Info("", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))
+	qec.tctx.L().Info("ready to split ddl", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))
 	*qec.lastLocation = *qec.currentLocation // update lastLocation, because we have checked `isDDL`
 
 	qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
