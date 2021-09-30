@@ -17,7 +17,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -1520,7 +1520,7 @@ func (t *testMaster) testHTTPInterface(c *check.C, url string, contain []byte) {
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, check.Equals, 200)
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	c.Assert(err, check.IsNil)
 	c.Assert(bytes.Contains(body, contain), check.IsTrue)
 }

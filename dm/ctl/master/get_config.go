@@ -17,7 +17,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -104,7 +103,7 @@ func sendGetConfigRequest(tp pb.CfgType, name, output string) error {
 	}
 
 	if resp.Result && len(output) != 0 {
-		err = ioutil.WriteFile(output, []byte(resp.Cfg), 0o644)
+		err = os.WriteFile(output, []byte(resp.Cfg), 0o644)
 		if err != nil {
 			common.PrintLinesf("can not write config to file %s", output)
 			return err

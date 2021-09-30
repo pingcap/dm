@@ -17,7 +17,6 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -57,7 +56,7 @@ func (t *testConfigSuite) TestPrintSampleConfig(c *check.C) {
 
 	// test valid sample config
 	out = capturer.CaptureStdout(func() {
-		buf, err = ioutil.ReadFile(defaultConfigFile)
+		buf, err = os.ReadFile(defaultConfigFile)
 		c.Assert(err, check.IsNil)
 		encode = base64.StdEncoding.EncodeToString(buf)
 		SampleConfigFile = encode
@@ -155,7 +154,7 @@ func (t *testConfigSuite) TestInvalidConfig(c *check.C) {
 master-addr = ":8261"
 advertise-addr = "127.0.0.1:8261"
 aaa = "xxx"`)
-	err = ioutil.WriteFile(filepath, configContent, 0o644)
+	err = os.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, check.IsNil)
 	err = cfg.configFromFile(filepath)
 	c.Assert(err, check.NotNil)
@@ -164,7 +163,7 @@ aaa = "xxx"`)
 	// invalid `master-addr`
 	filepath2 := path.Join(c.MkDir(), "test_invalid_config.toml")
 	configContent2 := []byte(`master-addr = ""`)
-	err = ioutil.WriteFile(filepath2, configContent2, 0o644)
+	err = os.WriteFile(filepath2, configContent2, 0o644)
 	c.Assert(err, check.IsNil)
 	err = cfg.configFromFile(filepath2)
 	c.Assert(err, check.IsNil)
