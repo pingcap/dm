@@ -256,6 +256,7 @@ func (s *testCommonSuite) TestNonRepeatStringsEqual(c *C) {
 	c.Assert(NonRepeatStringsEqual([]string{}, []string{"1"}), IsFalse)
 	c.Assert(NonRepeatStringsEqual([]string{"1", "2"}, []string{"2", "3"}), IsFalse)
 }
+
 func (s *testCommonSuite) TestFetchTableTransferColumnRule(c *C) {
 	rules := []*router.TableRule{
 		{

@@ -2209,10 +2209,9 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return err2
 	}
 
-	transferCol, transferVal := utils.FetchTableTransferColumnRule(s.tableRouter, sourceTable.Schema, sourceTable.Name, s.cfg.SourceID)
-	genrateTransferColumn(rows, transferCol, transferVal)
+	extRows := genrateExtendedColumn(rows, s.tableRouter, sourceTable, s.cfg.SourceID)
 
-	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(tableInfo, rows)
+	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(tableInfo, extRows)
 	if err != nil {
 		return err
 	}
@@ -2337,14 +2336,21 @@ func (qec *queryEventContext) String() string {
 		qec.ddlSchema, qec.originSQL, startLocation, currentLocation, lastLocation, shardingReSync, needHandleDDLs)
 }
 
-func genrateTransferColumn(rows [][]interface{}, transferCol, transferVal []string) {
-	if len(transferCol) > 0 {
-		for i := range rows {
-			for _, v := range transferVal {
-				rows[i] = append(rows[i], v)
-			}
+// genrateExtendedColumn generate extended columns by extractor.
+func genrateExtendedColumn(data [][]interface{}, r *router.Table, table *filter.Table, source string) [][]interface{} {
+	transferCol, transferVal := utils.FetchTableTransferColumnRule(r, table.Schema, table.Name, source)
+	if len(transferCol) == 0 {
+		return data
+	}
+
+	rows := make([][]interface{}, len(data))
+	for i := range data {
+		rows[i] = data[i]
+		for _, v := range transferVal {
+			rows[i] = append(rows[i], v)
 		}
 	}
+	return rows
 }
 
 func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, originSQL string) (err error) {
