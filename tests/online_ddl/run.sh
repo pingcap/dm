@@ -89,7 +89,7 @@ function run() {
 	run_sql_file_online_ddl $cur/data/pt.db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1 online_ddl pt
 	run_sql_file_online_ddl $cur/data/pt.db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2 online_ddl pt
 
-	for ((k = 0; k < 10; k++)); do
+	for ((k = 0; k < 20; k++)); do
 		run_sql_tidb "show create table online_ddl.pt_t_target"
 		check_contains "info_json" && break || true
 		sleep 1
