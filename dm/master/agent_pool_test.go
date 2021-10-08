@@ -55,8 +55,8 @@ func (t *testMaster) testPool(c *C) {
 		select {
 		case agent := <-pc:
 			c.Assert(agent.ID, Equals, i+burst)
-		case <-time.After(time.Millisecond * 150):
-			// add 50ms time drift here
+		case <-time.After(time.Millisecond * 200):
+			// add 100ms time drift here
 			c.Error("get agent timeout")
 		}
 	}
