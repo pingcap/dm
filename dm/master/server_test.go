@@ -1618,7 +1618,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 }
 
 func (t *testMaster) TestOperateSource(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
@@ -1776,6 +1776,8 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(scm, check.HasLen, 0)
 	t.clearSchedulerEnv(c, cancel, &wg)
+
+	cancel()
 }
 
 func (t *testMaster) TestOfflineMember(c *check.C) {
