@@ -66,3 +66,16 @@ So the processing flow of DML will look like the following diagram.
 - DMLWorker receives a group of compact jobs from Compactor, splits jobs to CompactorWorkers by batch size, executes them concurrently and then wait for next group of compact jobs.
 - DMLWorker receives DML jobs from Causality in streaming, distribute them to the CausalityWorkers by hash key, each CausalityWorker executes batch jobs and wait for next batch of causality jobs.
 - Executor called by CompactorWorker and CausalityWorker, it receives batch of jobs, get connection from connection pool and then generate, merge and execute DMLs to downstream.
+
+### Benchmark
+
+Through a demo, it is measured that under a specific environment, merge multiple DMLs into a multi value DML has 9%, 100%, 15%, 18% row QPS improvement respectively in bulk insert, no index update, index update and delete.
+
+| unit: k QPS	| Normal | Compact | Multiple Rows | Compact & Multiple Rows |
+| :-----------: | :----: | :-----: | :-----------: | :---------------------: |
+| INSERT	| 71 | 69 | 78 | 75 |
+| UPDATE NO INDEX | 140 | 290 | 270 |
+| UPDATE INDEX	| 40 | 37 | 46 | 43 |
+| DELETE	| 64 | 62 | 77 | 72 |
+
+![benchmark](../media/dml-execution-optimization-benchmark.png)
