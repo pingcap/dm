@@ -14,45 +14,23 @@
 package master
 
 import (
-	"errors"
-	"os"
-
 	"github.com/spf13/cobra"
 
-	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 )
 
 // NewStopTaskCmd creates a StopTask command.
 func NewStopTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "stop-task [-s source ...] <task-name | task-file>",
-		Short: "Stops a specified task",
+		Use:   "stop-task [-s source ...] [task-name | task-file]",
+		Short: "Stops a specified task or all (sub)tasks bound to a source",
 		RunE:  stopTaskFunc,
 	}
+	addOperateSourceTaskFlags(cmd)
 	return cmd
 }
 
 // stopTaskFunc does stop task request.
 func stopTaskFunc(cmd *cobra.Command, _ []string) (err error) {
-	if len(cmd.Flags().Args()) != 1 {
-		cmd.SetOut(os.Stdout)
-		common.PrintCmdUsage(cmd)
-		err = errors.New("please check output to see error")
-		return
-	}
-	name := common.GetTaskNameFromArgOrFile(cmd.Flags().Arg(0))
-
-	sources, err := common.GetSourceArgs(cmd)
-	if err != nil {
-		return
-	}
-
-	resp, err := common.OperateTask(pb.TaskOp_Stop, name, sources)
-	if err != nil {
-		return
-	}
-
-	common.PrettyPrintResponse(resp)
-	return
+	return operateTaskFunc(pb.TaskOp_Stop, cmd)
 }

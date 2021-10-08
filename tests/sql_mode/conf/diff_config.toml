@@ -33,6 +33,12 @@ instance-id = "source-1"
 schema = "sql_mode"
 table  = "t_1"
 
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "sql_mode"
+table  = "timezone"
+
 [[source-db]]
 host = "127.0.0.1"
 port = 3307

@@ -1,4 +1,4 @@
-all: failpoint-ctl gocovmerge goveralls golangci-lint mockgen protoc-gen-gogofaster protoc-gen-grpc-gateway statik gofumports shfmt oapi-codegen
+all: failpoint-ctl gocovmerge goveralls golangci-lint mockgen protoc-gen-gogofaster protoc-gen-grpc-gateway statik gofumports shfmt oapi-codegen gocov gocov-xml go-junit-report
 
 failpoint-ctl:
 	go build -o bin/$@ github.com/pingcap/failpoint/failpoint-ctl
@@ -32,3 +32,12 @@ shfmt:
 
 oapi-codegen:
 	go build -o bin/$@ github.com/deepmap/oapi-codegen/cmd/oapi-codegen
+
+gocov:
+	go build -o bin/$@  github.com/axw/gocov/gocov
+
+gocov-xml:
+	go build -o bin/$@ github.com/AlekSi/gocov-xml
+
+go-junit-report:
+	go build -o bin/$@ github.com/jstemmer/go-junit-report

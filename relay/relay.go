@@ -856,6 +856,8 @@ func (r *Relay) SaveMeta(pos mysql.Position, gset gtid.Set) error {
 
 // ResetMeta reset relay meta.
 func (r *Relay) ResetMeta() {
+	r.Lock()
+	defer r.Unlock()
 	r.meta = NewLocalMeta(r.cfg.Flavor, r.cfg.RelayDir)
 }
 
@@ -897,6 +899,8 @@ func (r *Relay) Close() {
 
 // Status implements the dm.Unit interface.
 func (r *Relay) Status(sourceStatus *binlog.SourceStatus) interface{} {
+	r.RLock()
+	defer r.RUnlock()
 	uuid, relayPos := r.meta.Pos()
 
 	rs := &pb.RelayStatus{
@@ -1070,7 +1074,6 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 		return nil, terror.Annotate(err, "fail to get random server id when relay adjust gtid")
 	}
 	syncCfg.ServerID = randomServerID
-
 	tcpReader := binlogReader.NewTCPReader(syncCfg)
 	resultGs, err := binlogReader.GetPreviousGTIDFromGTIDSet(ctx, tcpReader, gset)
 	if err != nil {
