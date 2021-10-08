@@ -90,17 +90,14 @@ function test_query_timeout() {
 
 	# there's only 2 rows in result, one for dm-worker's source-level status, one for SHOW PROCESSLIST
 	run_sql_source1 'SHOW PROCESSLIST;'
-	check_contains '2. row'
-	check_not_contains '3. row'
+	check_rows_equal 2
 
 	run_sql_source2 'SHOW PROCESSLIST;'
-	check_contains '2. row'
-	check_not_contains '3. row'
+	check_rows_equal 2
 
 	# there's only 1 row in result, which is for SHOW PROCESSLIST
 	run_sql_tidb 'SHOW PROCESSLIST;'
-	check_contains '1. row'
-	check_not_contains '2. row'
+	check_rows_equal 1
 
 	# start DM task only
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
@@ -127,17 +124,14 @@ function test_query_timeout() {
 
 	# there's only 2 rows in result, one for dm-worker's source-level status, one for SHOW PROCESSLIST
 	run_sql_source1 'SHOW PROCESSLIST;'
-	check_contains '2. row'
-	check_not_contains '3. row'
+	check_rows_equal 2
 
 	run_sql_source2 'SHOW PROCESSLIST;'
-	check_contains '2. row'
-	check_not_contains '3. row'
+	check_rows_equal 2
 
 	# there's only 1 row in result, which is for SHOW PROCESSLIST
 	run_sql_tidb 'SHOW PROCESSLIST;'
-	check_contains '1. row'
-	check_not_contains '2. row'
+	check_rows_equal 1
 
 	cleanup_data all_mode
 	cleanup_process
