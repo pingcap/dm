@@ -55,7 +55,7 @@ By combining multiple update statements into a single `INSERT ON DUPLICATE UPDAT
 
 ### DML Flow
 
-Now, all the DMLs compact by compactor can be executed in parallel since they all have different primary and unique keys. But since some tables do not have primary/unique keys to be compacted, we still need conflict detection.
+Now, all the DMLs compacted by compactor can be executed in parallel since they all have different primary and unique keys. But since some tables do not have primary/unique keys to be compacted, we still need conflict detection.
 
 So the processing flow of DML will look like the following diagram.
 
@@ -63,9 +63,17 @@ So the processing flow of DML will look like the following diagram.
 
 - Compactor compacts DMLs, output a ***batch*** of INSERT/DELETE/UPDATE jobs and flush job(receive from input channel)
 - Causality detects conflict for DMLs, output INSERT/DELETE/UPDATE jobs, conflict job(conflict detected) and flush job(receive from input channel) in ***streaming***
-- DMLWorker receives a group of compact jobs from Compactor, splits jobs to CompactorWorkers by batch size, executes them concurrently and then wait for next group of compact jobs.
+- DMLWorker receives a group of compact jobs from Compactor, splits jobs to CompactorWorkers by batch size, executes them in parallel and then wait for next group of compact jobs.
 - DMLWorker receives DML jobs from Causality in streaming, distribute them to the CausalityWorkers by hash key, each CausalityWorker executes batch jobs and wait for next batch of causality jobs.
 - Executor called by CompactorWorker and CausalityWorker, it receives batch of jobs, get connection from connection pool and then generate, merge and execute DMLs to downstream.
+
+> **Notice**
+> 
+> The difference between CompactorWorker and CausalityWorker is that:
+>  1. The number of CompactorWorker is determined by the number of compacted jobs and batch-size while the number of CausalityWorker is specific at the beginning.
+>  2. CompactorWorker is in batch mode, which will start receiving the next batch of compacted jobs only after all of them have finished executing previous jobs. CausalityWorker is in streaming mode, which wait for the others only when receive conflict job, otherwise execute jobs individually.
+>  3. CompactorWorker has no ID because each of them is stateless. CausalityWorker has ID since each of them should execute jobs with same hash key.
+> 
 
 ### Benchmark
 
