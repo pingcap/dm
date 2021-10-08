@@ -57,7 +57,7 @@ function test_session_config() {
 		"\"result\": true" 3
 
 	cleanup_data all_mode
-	cleanup_process $*
+	cleanup_process
 }
 
 function test_query_timeout() {
@@ -88,6 +88,20 @@ function test_query_timeout() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
+	# there's only 2 rows in result, one for dm-worker's source-level status, one for SHOW PROCESSLIST
+	run_sql_source1 'SHOW PROCESSLIST;'
+	check_contains '2. row'
+	check_not_contains '3. row'
+
+	run_sql_source2 'SHOW PROCESSLIST;'
+	check_contains '2. row'
+	check_not_contains '3. row'
+
+	# there's only 1 row in result, which is for SHOW PROCESSLIST
+	run_sql_tidb 'SHOW PROCESSLIST;'
+	check_contains '1. row'
+	check_not_contains '2. row'
+
 	# start DM task only
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 	sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
@@ -111,8 +125,22 @@ function test_query_timeout() {
 		"stop-task $ILLEGAL_CHAR_NAME" \
 		"\"result\": true" 3
 
+	# there's only 2 rows in result, one for dm-worker's source-level status, one for SHOW PROCESSLIST
+	run_sql_source1 'SHOW PROCESSLIST;'
+	check_contains '2. row'
+	check_not_contains '3. row'
+
+	run_sql_source2 'SHOW PROCESSLIST;'
+	check_contains '2. row'
+	check_not_contains '3. row'
+
+	# there's only 1 row in result, which is for SHOW PROCESSLIST
+	run_sql_tidb 'SHOW PROCESSLIST;'
+	check_contains '1. row'
+	check_not_contains '2. row'
+
 	cleanup_data all_mode
-	cleanup_process $*
+	cleanup_process
 
 	export GO_FAILPOINTS=''
 }
@@ -176,7 +204,7 @@ function test_stop_task_before_checkpoint() {
 		"\"result\": true" 3
 
 	cleanup_data all_mode
-	cleanup_process $*
+	cleanup_process
 
 	export GO_FAILPOINTS=''
 }
@@ -234,7 +262,7 @@ function test_fail_job_between_event() {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	cleanup_data all_mode
-	cleanup_process $*
+	cleanup_process
 
 	export GO_FAILPOINTS=''
 }
@@ -279,16 +307,16 @@ function test_expression_filter() {
 		"\"result\": true" 3
 
 	cleanup_data all_mode
-	cleanup_process $*
+	cleanup_process
 }
 
 function run() {
-	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
-	run_sql_source1 "SET @@global.time_zone = '+01:00';"
-	run_sql_source2 "SET @@global.time_zone = '+02:00';"
-	test_expression_filter
-	test_fail_job_between_event
-	test_session_config
+	#	run_sql_both_source "SET @@GLOBAL.SQL_MODE='ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO'"
+	#	run_sql_source1 "SET @@global.time_zone = '+01:00';"
+	#	run_sql_source2 "SET @@global.time_zone = '+02:00';"
+	#	test_expression_filter
+	#	test_fail_job_between_event
+	#	test_session_config
 	test_query_timeout
 	test_stop_task_before_checkpoint
 
