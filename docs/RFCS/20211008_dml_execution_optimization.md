@@ -74,7 +74,7 @@ Through a demo, it is measured that under a specific environment, merge multiple
 | unit: k QPS	| Normal | Compact | Multiple Rows | Compact & Multiple Rows |
 | :-----------: | :----: | :-----: | :-----------: | :---------------------: |
 | INSERT	| 71 | 69 | 78 | 75 |
-| UPDATE NO INDEX | 140 | 290 | 270 |
+| UPDATE NO INDEX | 140 | 140 | 290 | 270 |
 | UPDATE INDEX	| 40 | 37 | 46 | 43 |
 | DELETE	| 64 | 62 | 77 | 72 |
 
