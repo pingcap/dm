@@ -21,7 +21,9 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/util/mock"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -57,9 +59,17 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	c.Assert(err, IsNil)
 
 	jobCh := make(chan *job, 10)
-	logger := log.L()
-	causality := newCausality(1024, "task", "source", &logger)
-	causalityCh := causality.run(jobCh)
+	syncer := &Syncer{
+		cfg: &config.SubTaskConfig{
+			SyncerConfig: config.SyncerConfig{
+				QueueSize: 1024,
+			},
+			Name:     "task",
+			SourceID: "source",
+		},
+		tctx: tcontext.Background().WithLogger(log.L()),
+	}
+	causalityCh := causalityWrap(jobCh, syncer)
 	testCases := []struct {
 		op   opType
 		vals [][]interface{}
@@ -100,7 +110,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	}
 
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return len(causality.outCh) == len(results)
+		return len(causalityCh) == len(results)
 	}), IsTrue)
 
 	for _, op := range results {

@@ -59,44 +59,38 @@ type DMLWorker struct {
 	flushCh     chan *job
 }
 
-// newDMLWorker creates new DML Worker.
-func newDMLWorker(batch, workerCount, chanSize int, pLogger *log.Logger, task, source, worker string,
-	successFunc func(int, []*job),
-	fatalFunc func(*job, error),
-	lagFunc func(*job, int),
-	addCountFunc func(bool, string, opType, int64, *filter.Table),
-) *DMLWorker {
-	return &DMLWorker{
-		batch:          batch,
-		workerCount:    workerCount,
-		chanSize:       chanSize,
-		task:           task,
-		source:         source,
-		worker:         worker,
-		connectionPool: brutils.NewWorkerPool(uint(workerCount), "dml_connection_pool"),
-		logger:         pLogger.WithFields(zap.String("component", "dml_worker")),
-		successFunc:    successFunc,
-		fatalFunc:      fatalFunc,
-		lagFunc:        lagFunc,
-		addCountFunc:   addCountFunc,
+// dmlWorkerWrap creates and runs a dmlWorker instance and return all workers count and flush job channel.
+func dmlWorkerWrap(causalityCh chan *job, syncer *Syncer) (int, chan *job) {
+	dmlWorker := &DMLWorker{
+		batch:          syncer.cfg.Batch,
+		workerCount:    syncer.cfg.WorkerCount,
+		chanSize:       syncer.cfg.QueueSize,
+		task:           syncer.cfg.Name,
+		source:         syncer.cfg.SourceID,
+		worker:         syncer.cfg.WorkerName,
+		connectionPool: brutils.NewWorkerPool(uint(syncer.cfg.WorkerCount), "dml_connection_pool"),
+		logger:         syncer.tctx.Logger.WithFields(zap.String("component", "dml_worker")),
+		successFunc:    syncer.successFunc,
+		fatalFunc:      syncer.fatalFunc,
+		lagFunc:        syncer.updateReplicationJobTS,
+		addCountFunc:   syncer.addCount,
+		tctx:           syncer.tctx,
+		toDBConns:      syncer.toDBConns,
+		causalityCh:    causalityCh,
+		flushCh:        make(chan *job),
 	}
+	dmlWorker.run()
+	// flushCount is as many as workerCount
+	return dmlWorker.workerCount, dmlWorker.flushCh
 }
 
-// run runs dml workers, return all workers count and flush job channel.
+// run runs dml workers
 //            |‾ causality worker  ‾|
 // causality -|- causality worker   |=> connection pool
 //            |_ causality worker  _|
 // .
-func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, causalityCh chan *job) (int, chan *job) {
-	w.tctx = tctx
-	w.toDBConns = toDBConns
-	w.causalityCh = causalityCh
-	w.flushCh = make(chan *job)
-
+func (w *DMLWorker) run() {
 	var wg sync.WaitGroup
-
-	// flushCount is as many as workerCount
-	flushCount := w.workerCount
 
 	wg.Add(1)
 	go func() {
@@ -108,8 +102,6 @@ func (w *DMLWorker) run(tctx *tcontext.Context, toDBConns []*dbconn.DBConn, caus
 		defer w.close()
 		wg.Wait()
 	}()
-
-	return flushCount, w.flushCh
 }
 
 // close closes outer channel.

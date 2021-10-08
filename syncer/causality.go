@@ -32,30 +32,28 @@ type causality struct {
 	outCh     chan *job
 	inCh      chan *job
 	logger    log.Logger
-	chanSize  int
 
 	// for metrics
 	task   string
 	source string
 }
 
-// newCausality creates a causality instance.
-func newCausality(chanSize int, task, source string, pLogger *log.Logger) *causality {
+// causalityWrap creates and runs a causality instance.
+func causalityWrap(inCh chan *job, syncer *Syncer) chan *job {
 	causality := &causality{
 		relations: make(map[string]string),
-		task:      task,
-		chanSize:  chanSize,
-		source:    source,
-		logger:    pLogger.WithFields(zap.String("component", "causality")),
+		task:      syncer.cfg.Name,
+		source:    syncer.cfg.SourceID,
+		logger:    syncer.tctx.Logger.WithFields(zap.String("component", "causality")),
+		inCh:      inCh,
+		outCh:     make(chan *job, syncer.cfg.QueueSize),
 	}
-	return causality
+	causality.run()
+	return causality.outCh
 }
 
 // run runs a causality instance.
-func (c *causality) run(inCh chan *job) chan *job {
-	c.inCh = inCh
-	c.outCh = make(chan *job, c.chanSize)
-
+func (c *causality) run() {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -68,7 +66,6 @@ func (c *causality) run(inCh chan *job) chan *job {
 		defer c.close()
 		wg.Wait()
 	}()
-	return c.outCh
 }
 
 // runcausality receives dml jobs and returns causality jobs

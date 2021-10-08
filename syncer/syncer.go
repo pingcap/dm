@@ -152,9 +152,6 @@ type Syncer struct {
 	isTransactionEnd    bool
 	waitTransactionLock sync.Mutex
 
-	causality *causality
-	dmlWorker *DMLWorker
-
 	tableRouter     *router.Table
 	binlogFilter    *bf.BinlogEvent
 	columnMapping   *cm.Mapping
@@ -242,8 +239,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.binlogSizeCount.Store(0)
 	syncer.lastCount.Store(0)
 	syncer.count.Store(0)
-	syncer.causality = newCausality(cfg.QueueSize, cfg.Name, cfg.SourceID, &logger)
-	syncer.dmlWorker = newDMLWorker(cfg.Batch, cfg.WorkerCount, cfg.QueueSize, &logger, cfg.Name, cfg.SourceID, cfg.WorkerName, syncer.successFunc, syncer.fatalFunc, syncer.updateReplicationJobTS, syncer.addCount)
 	syncer.done = nil
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
@@ -1267,7 +1262,7 @@ func (s *Syncer) fatalFunc(job *job, err error) {
 }
 
 // DML synced with causality.
-func (s *Syncer) syncDML(tctx *tcontext.Context) {
+func (s *Syncer) syncDML() {
 	defer s.wg.Done()
 
 	failpoint.Inject("changeTickerInterval", func(val failpoint.Value) {
@@ -1277,8 +1272,8 @@ func (s *Syncer) syncDML(tctx *tcontext.Context) {
 	})
 
 	// TODO: add compactor
-	causalityCh := s.causality.run(s.dmlJobCh)
-	flushCount, flushCh := s.dmlWorker.run(tctx, s.toDBConns, causalityCh)
+	causalityCh := causalityWrap(s.dmlJobCh, s)
+	flushCount, flushCh := dmlWorkerWrap(causalityCh, s)
 
 	// wait all worker flushed
 	// use counter is enough since we only add new flush job after previous flush job done
@@ -1438,7 +1433,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 
 	s.wg.Add(1)
-	go s.syncDML(tctx)
+	go s.syncDML()
 
 	s.wg.Add(1)
 	go s.syncDDL(tctx, adminQueueName, s.ddlDBConn, s.ddlJobCh)
