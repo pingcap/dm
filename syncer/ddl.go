@@ -70,13 +70,13 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 		})
 	}
 
-	shouldSkip, err := s.skipQueryEvent(realTables, ddlInfo.stmt, sql)
+	shouldSkip, err := s.skipQueryEvent(realTables, ddlInfo.stmt, qec.originSQL)
 	if err != nil {
 		return nil, err
 	}
 	if shouldSkip {
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
-		qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", qec.ddlSchema))
+		qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("schema", qec))
 		// when skip ddl, apply empty ddl for onlineDDL
 		// otherwise it cause an error once meet the rename ddl of onlineDDL
 		sql = ""
