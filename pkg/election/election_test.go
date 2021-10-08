@@ -102,7 +102,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	cli, err := etcdutil.CreateClient([]string{t.endPoint}, nil)
 	c.Assert(err, IsNil)
 	defer cli.Close()
-	ctx0, cancel0 := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx0, cancel0 := context.WithCancel(context.Background())
 	defer cancel0()
 	_, err = cli.Delete(ctx0, key, clientv3.WithPrefix())
 	c.Assert(err, IsNil)
@@ -211,6 +211,7 @@ func testElection2After1(t *testElectionSuite, c *C, normalExit bool) {
 	_, err = NewElection(ctx5, cli, sessionTTL, key, ID3, addr3, t.notifyBlockTime)
 	c.Assert(terror.ErrElectionCampaignFail.Equal(err), IsTrue)
 	c.Assert(err, ErrorMatches, ".*, Message: fail to campaign leader: create the initial session, RawCause: context canceled.*")
+	cancel0()
 }
 
 func (t *testElectionSuite) TestElection2After1(c *C) {

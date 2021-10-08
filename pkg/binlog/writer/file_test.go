@@ -16,7 +16,7 @@ package writer
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -115,7 +115,7 @@ func (t *testFileWriterSuite) TestWrite(c *C) {
 	c.Assert(w.Flush(), NotNil)
 
 	// try to read the data back
-	dataInFile, err := ioutil.ReadFile(filename)
+	dataInFile, err := os.ReadFile(filename)
 	c.Assert(err, IsNil)
 	c.Assert(dataInFile, DeepEquals, allData.Bytes())
 }

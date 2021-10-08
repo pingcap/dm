@@ -1072,6 +1072,18 @@ description = ""
 workaround = "Please check the `chunk-filesize` config in task configuration file."
 tags = ["internal", "high"]
 
+[error.DM-config-20048]
+message = "config '%s' regex pattern '%s' invalid, reason: %s"
+description = ""
+workaround = "Please check if params is correctly in the configuration file."
+tags = ["internal", "high"]
+
+[error.DM-config-20049]
+message = "online ddl sql '%s' invalid, table %s fail to match '%s' online ddl regex"
+description = ""
+workaround = "Please update your `shadow-table-rules` or `trash-table-rules` in the configuration file."
+tags = ["internal", "high"]
+
 [error.DM-binlog-op-22001]
 message = ""
 description = ""
@@ -1787,7 +1799,7 @@ workaround = "Please check the `column-mappings` config in task configuration fi
 tags = ["internal", "high"]
 
 [error.DM-sync-unit-36033]
-message = "mapping row data %v for table `%s`.`%s`"
+message = "mapping row data %v for table %v"
 description = ""
 workaround = ""
 tags = ["internal", "high"]
@@ -3086,6 +3098,12 @@ tags = ["internal", "high"]
 message = "when %s, resource %s is in use by other client"
 description = ""
 workaround = "Please try again later"
+tags = ["internal", "low"]
+
+[error.DM-scheduler-46025]
+message = "source can only update relay-log related parts for now"
+description = ""
+workaround = ""
 tags = ["internal", "low"]
 
 [error.DM-dmctl-48001]

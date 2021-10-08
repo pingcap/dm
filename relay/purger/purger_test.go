@@ -16,7 +16,6 @@ package purger
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,7 +65,7 @@ func (t *testPurgerSuite) EarliestActiveRelayLog() *streamer.RelayLogInfo {
 
 func (t *testPurgerSuite) TestPurgeManuallyInactive(c *C) {
 	// create relay log dir
-	baseDir, err := ioutil.TempDir("", "test_purge_manually_inactive")
+	baseDir, err := os.MkdirTemp("", "test_purge_manually_inactive")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(baseDir)
 
@@ -105,7 +104,7 @@ func (t *testPurgerSuite) TestPurgeManuallyInactive(c *C) {
 
 func (t *testPurgerSuite) TestPurgeManuallyTime(c *C) {
 	// create relay log dir
-	baseDir, err := ioutil.TempDir("", "test_purge_manually_time")
+	baseDir, err := os.MkdirTemp("", "test_purge_manually_time")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(baseDir)
 
@@ -144,7 +143,7 @@ func (t *testPurgerSuite) TestPurgeManuallyTime(c *C) {
 
 func (t *testPurgerSuite) TestPurgeManuallyFilename(c *C) {
 	// create relay log dir
-	baseDir, err := ioutil.TempDir("", "test_purge_manually_filename")
+	baseDir, err := os.MkdirTemp("", "test_purge_manually_filename")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(baseDir)
 
@@ -187,7 +186,7 @@ func (t *testPurgerSuite) TestPurgeManuallyFilename(c *C) {
 
 func (t *testPurgerSuite) TestPurgeAutomaticallyTime(c *C) {
 	// create relay log dir
-	baseDir, err := ioutil.TempDir("", "test_purge_automatically_time")
+	baseDir, err := os.MkdirTemp("", "test_purge_automatically_time")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(baseDir)
 
@@ -234,7 +233,7 @@ func (t *testPurgerSuite) TestPurgeAutomaticallyTime(c *C) {
 
 func (t *testPurgerSuite) TestPurgeAutomaticallySpace(c *C) {
 	// create relay log dir
-	baseDir, err := ioutil.TempDir("", "test_purge_automatically_space")
+	baseDir, err := os.MkdirTemp("", "test_purge_automatically_space")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(baseDir)
 
@@ -292,7 +291,7 @@ func (t *testPurgerSuite) genRelayLogFiles(c *C, baseDir string, safeTimeIdxI, s
 		relayFilesPath = append(relayFilesPath, []string{})
 		for j, fn := range t.relayFiles[i] {
 			fp := filepath.Join(dir, fn)
-			err2 := ioutil.WriteFile(fp, []byte("meaningless file content"), 0o644)
+			err2 := os.WriteFile(fp, []byte("meaningless file content"), 0o644)
 			c.Assert(err2, IsNil)
 			relayFilesPath[i] = append(relayFilesPath[i], fp)
 

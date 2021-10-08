@@ -194,8 +194,6 @@ type Syncer struct {
 	// record whether error occurred when execute SQLs
 	execError atomic.Error
 
-	heartbeat *Heartbeat
-
 	readerHub              *streamer.ReaderHub
 	recordedActiveRelayLog bool
 
@@ -407,22 +405,6 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 			}
 		}
 	}
-	if s.cfg.EnableHeartbeat {
-		s.heartbeat, err = GetHeartbeat(&HeartbeatConfig{
-			serverID:       s.cfg.ServerID,
-			primaryCfg:     s.cfg.From,
-			updateInterval: int64(s.cfg.HeartbeatUpdateInterval),
-			reportInterval: int64(s.cfg.HeartbeatReportInterval),
-		})
-		if err != nil {
-			return err
-		}
-		err = s.heartbeat.AddTask(s.cfg.Name)
-		if err != nil {
-			return err
-		}
-		rollbackHolder.Add(fr.FuncRollback{Name: "remove-heartbeat", Fn: s.removeHeartbeat})
-	}
 
 	// when Init syncer, set active relay log info
 	err = s.setInitActiveRelayLog(ctx)
@@ -496,7 +478,7 @@ func (s *Syncer) initShardingGroups(ctx context.Context, needCheck bool) error {
 	for schema, tables := range sourceTables {
 		for _, table := range tables {
 			sourceTable := &filter.Table{Schema: schema, Name: table}
-			targetTable := s.renameShardingSchema(sourceTable)
+			targetTable := s.route(sourceTable)
 			targetID := utils.GenTableID(targetTable)
 			sourceID := utils.GenTableID(sourceTable)
 			_, ok := mapper[targetID]
@@ -692,31 +674,31 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 }
 
-func (s *Syncer) getTable(tctx *tcontext.Context, origTable, targetTable *filter.Table) (*model.TableInfo, error) {
-	ti, err := s.schemaTracker.GetTable(origTable)
+func (s *Syncer) getTableInfo(tctx *tcontext.Context, sourceTable, targetTable *filter.Table) (*model.TableInfo, error) {
+	ti, err := s.schemaTracker.GetTableInfo(sourceTable)
 	if err == nil {
 		return ti, nil
 	}
 	if !schema.IsTableNotExists(err) {
-		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origTable)
+		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, sourceTable)
 	}
 
-	if err = s.schemaTracker.CreateSchemaIfNotExists(origTable.Schema); err != nil {
-		return nil, terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, origTable.Schema)
+	if err = s.schemaTracker.CreateSchemaIfNotExists(sourceTable.Schema); err != nil {
+		return nil, terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, sourceTable.Schema)
 	}
 
 	// if table already exists in checkpoint, create it in schema tracker
-	if ti = s.checkpoint.GetFlushedTableInfo(origTable); ti != nil {
-		if err = s.schemaTracker.CreateTableIfNotExists(origTable, ti); err != nil {
-			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origTable)
+	if ti = s.checkpoint.GetFlushedTableInfo(sourceTable); ti != nil {
+		if err = s.schemaTracker.CreateTableIfNotExists(sourceTable, ti); err != nil {
+			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, sourceTable)
 		}
-		tctx.L().Debug("lazy init table info in schema tracker", zap.Stringer("table", origTable))
+		tctx.L().Debug("lazy init table info in schema tracker", zap.Stringer("table", sourceTable))
 		return ti, nil
 	}
 
 	// in optimistic shard mode, we should try to get the init schema (the one before modified by other tables) first.
 	if s.cfg.ShardMode == config.ShardOptimistic {
-		ti, err = s.trackInitTableInfoOptimistic(origTable, targetTable)
+		ti, err = s.trackInitTableInfoOptimistic(sourceTable, targetTable)
 		if err != nil {
 			return nil, err
 		}
@@ -724,31 +706,31 @@ func (s *Syncer) getTable(tctx *tcontext.Context, origTable, targetTable *filter
 
 	// if the table does not exist (IsTableNotExists(err)), continue to fetch the table from downstream and create it.
 	if ti == nil {
-		err = s.trackTableInfoFromDownstream(tctx, origTable, targetTable)
+		err = s.trackTableInfoFromDownstream(tctx, sourceTable, targetTable)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	ti, err = s.schemaTracker.GetTable(origTable)
+	ti, err = s.schemaTracker.GetTableInfo(sourceTable)
 	if err != nil {
-		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, origTable)
+		return nil, terror.ErrSchemaTrackerCannotGetTable.Delegate(err, sourceTable)
 	}
 	return ti, nil
 }
 
 // trackTableInfoFromDownstream tries to track the table info from the downstream. It will not overwrite existing table.
-func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origTable, targetTable *filter.Table) error {
+func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, sourceTable, targetTable *filter.Table) error {
 	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly if HTTP port is available
 	// use parser for downstream.
 	parser2, err := utils.GetParserForConn(tctx.Ctx, s.ddlDBConn.BaseConn.DBConn)
 	if err != nil {
-		return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, origTable)
+		return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, sourceTable)
 	}
 
 	rows, err := s.ddlDBConn.QuerySQL(tctx, "SHOW CREATE TABLE "+targetTable.String())
 	if err != nil {
-		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, targetTable, origTable)
+		return terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, targetTable, sourceTable)
 	}
 	defer rows.Close()
 
@@ -762,12 +744,12 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origTable,
 		var createNode ast.StmtNode
 		createNode, err = parser2.ParseOneStmt(createSQL, "", "")
 		if err != nil {
-			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, origTable)
+			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, sourceTable)
 		}
 		createStmt := createNode.(*ast.CreateTableStmt)
 		createStmt.IfNotExists = true
-		createStmt.Table.Schema = model.NewCIStr(origTable.Schema)
-		createStmt.Table.Name = model.NewCIStr(origTable.Name)
+		createStmt.Table.Schema = model.NewCIStr(sourceTable.Schema)
+		createStmt.Table.Name = model.NewCIStr(sourceTable.Name)
 
 		// schema tracker sets non-clustered index, so can't handle auto_random.
 		if v, _ := s.schemaTracker.GetSystemVar(schema.TiDBClusteredIndex); v == "OFF" {
@@ -786,16 +768,16 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origTable,
 		var newCreateSQLBuilder strings.Builder
 		restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &newCreateSQLBuilder)
 		if err = createStmt.Restore(restoreCtx); err != nil {
-			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, origTable)
+			return terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, targetTable, sourceTable)
 		}
 		newCreateSQL := newCreateSQLBuilder.String()
 		tctx.L().Debug("reverse-synchronized table schema",
-			zap.Stringer("origTable", origTable),
+			zap.Stringer("sourceTable", sourceTable),
 			zap.Stringer("targetTable", targetTable),
 			zap.String("sql", newCreateSQL),
 		)
-		if err = s.schemaTracker.Exec(tctx.Ctx, origTable.Schema, newCreateSQL); err != nil {
-			return terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origTable)
+		if err = s.schemaTracker.Exec(tctx.Ctx, sourceTable.Schema, newCreateSQL); err != nil {
+			return terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, sourceTable)
 		}
 	}
 
@@ -805,7 +787,7 @@ func (s *Syncer) trackTableInfoFromDownstream(tctx *tcontext.Context, origTable,
 	return nil
 }
 
-func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64, targetSchema, targetTable string) {
+func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64, targetTable *filter.Table) {
 	m := metrics.AddedJobsTotal
 	if isFinished {
 		s.count.Add(n)
@@ -813,7 +795,7 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 	}
 	switch tp {
 	case insert, update, del, ddl, flush:
-		m.WithLabelValues(tp.String(), s.cfg.Name, queueBucket, s.cfg.SourceID, s.cfg.WorkerName, targetSchema, targetTable).Add(float64(n))
+		m.WithLabelValues(tp.String(), s.cfg.Name, queueBucket, s.cfg.SourceID, s.cfg.WorkerName, targetTable.Schema, targetTable.Name).Add(float64(n))
 	case skip, xid:
 		// ignore skip/xid jobs
 	default:
@@ -879,7 +861,7 @@ func (s *Syncer) checkWait(job *job) bool {
 }
 
 func (s *Syncer) saveTablePoint(table *filter.Table, location binlog.Location) {
-	ti, err := s.schemaTracker.GetTable(table)
+	ti, err := s.schemaTracker.GetTableInfo(table)
 	if err != nil && table.Name != "" {
 		s.tctx.L().DPanic("table info missing from schema tracker",
 			zap.Stringer("table", table),
@@ -959,7 +941,7 @@ func (s *Syncer) addJob(job *job) error {
 	case skip:
 		s.updateReplicationJobTS(job, skipJobIdx)
 	case flush:
-		s.addCount(false, adminQueueName, job.tp, 1, job.targetSchema, job.targetTable)
+		s.addCount(false, adminQueueName, job.tp, 1, job.targetTable)
 		// ugly code addJob and sync, refine it later
 		s.jobWg.Add(s.cfg.WorkerCount)
 		for i := 0; i < s.cfg.WorkerCount; i++ {
@@ -969,11 +951,11 @@ func (s *Syncer) addJob(job *job) error {
 			metrics.AddJobDurationHistogram.WithLabelValues("flush", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 		}
 		s.jobWg.Wait()
-		s.addCount(true, adminQueueName, job.tp, 1, job.targetSchema, job.targetTable)
+		s.addCount(true, adminQueueName, job.tp, 1, job.targetTable)
 		return s.flushCheckPoints()
 	case ddl:
 		s.jobWg.Wait()
-		s.addCount(false, adminQueueName, job.tp, 1, job.targetSchema, job.targetTable)
+		s.addCount(false, adminQueueName, job.tp, 1, job.targetTable)
 		s.updateReplicationJobTS(job, ddlJobIdx)
 		s.jobWg.Add(1)
 		queueBucket = s.cfg.WorkerCount
@@ -983,7 +965,7 @@ func (s *Syncer) addJob(job *job) error {
 	case insert, update, del:
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
-		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1, job.targetSchema, job.targetTable)
+		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1, job.targetTable)
 		startTime := time.Now()
 		s.tctx.L().Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", job.key))
 		s.jobs[queueBucket] <- job
@@ -1029,24 +1011,24 @@ func (s *Syncer) addJob(job *job) error {
 		})
 		// only save checkpoint for DDL and XID (see above)
 		s.saveGlobalPoint(job.location)
-		for sourceSchema, tbs := range job.sourceTbl {
+		for sourceSchema, tbs := range job.sourceTbls {
 			if len(sourceSchema) == 0 {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(&filter.Table{Schema: sourceSchema, Name: sourceTable}, job.location)
+				s.saveTablePoint(sourceTable, job.location)
 			}
 		}
 		// reset sharding group after checkpoint saved
-		s.resetShardingGroup(job.targetSchema, job.targetTable)
+		s.resetShardingGroup(job.targetTable)
 	case insert, update, del:
 		// save job's current pos for DML events
-		for sourceSchema, tbs := range job.sourceTbl {
+		for sourceSchema, tbs := range job.sourceTbls {
 			if len(sourceSchema) == 0 {
 				continue
 			}
 			for _, sourceTable := range tbs {
-				s.saveTablePoint(&filter.Table{Schema: sourceSchema, Name: sourceTable}, job.currentLocation)
+				s.saveTablePoint(sourceTable, job.currentLocation)
 			}
 		}
 	}
@@ -1074,10 +1056,10 @@ func (s *Syncer) saveGlobalPoint(globalLocation binlog.Location) {
 	s.checkpoint.SaveGlobalPoint(globalLocation)
 }
 
-func (s *Syncer) resetShardingGroup(schema, table string) {
+func (s *Syncer) resetShardingGroup(table *filter.Table) {
 	if s.cfg.ShardMode == config.ShardPessimistic {
 		// for DDL sharding group, reset group after checkpoint saved
-		group := s.sgk.Group(&filter.Table{Schema: schema, Name: table})
+		group := s.sgk.Group(table)
 		if group != nil {
 			group.Reset()
 		}
@@ -1268,7 +1250,7 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *dbconn.
 			continue
 		}
 		s.jobWg.Done()
-		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)), ddlJob.targetSchema, ddlJob.targetTable)
+		s.addCount(true, queueBucket, ddlJob.tp, int64(len(ddlJob.ddls)), ddlJob.targetTable)
 		// reset job TS when this ddl is finished.
 		s.updateReplicationJobTS(nil, ddlJobIdx)
 	}
@@ -1317,7 +1299,7 @@ func (s *Syncer) syncDML(
 		for dbSchema, tableM := range tpCnt {
 			for dbTable, tpM := range tableM {
 				for tpName, cnt := range tpM {
-					s.addCount(true, queueBucket, tpName, cnt, dbSchema, dbTable)
+					s.addCount(true, queueBucket, tpName, cnt, &filter.Table{Schema: dbSchema, Name: dbTable})
 				}
 			}
 		}
@@ -1419,13 +1401,14 @@ func (s *Syncer) syncDML(
 					s.updateReplicationJobTS(sqlJob, workerJobIdx)
 				}
 				jobs = append(jobs, sqlJob)
-				if _, ok := tpCnt[sqlJob.targetSchema]; !ok {
-					tpCnt[sqlJob.targetSchema] = make(map[string]map[opType]int64)
+				schemaName, tableName := sqlJob.targetTable.Schema, sqlJob.targetTable.Name
+				if _, ok := tpCnt[schemaName]; !ok {
+					tpCnt[schemaName] = make(map[string]map[opType]int64)
 				}
-				if _, ok := tpCnt[sqlJob.targetSchema][sqlJob.targetTable]; !ok {
-					tpCnt[sqlJob.targetSchema][sqlJob.targetTable] = make(map[opType]int64)
+				if _, ok := tpCnt[schemaName][tableName]; !ok {
+					tpCnt[schemaName][tableName] = make(map[opType]int64)
 				}
-				tpCnt[sqlJob.targetSchema][sqlJob.targetTable][sqlJob.tp]++
+				tpCnt[schemaName][tableName][sqlJob.tp]++
 			}
 
 			if idx >= count || sqlJob.tp == flush {
@@ -2147,11 +2130,11 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 }
 
 func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) error {
-	originTable := &filter.Table{
+	sourceTable := &filter.Table{
 		Schema: string(ev.Table.Schema),
 		Name:   string(ev.Table.Table),
 	}
-	targetTable := s.renameShardingSchema(originTable)
+	targetTable := s.route(sourceTable)
 
 	*ec.currentLocation = binlog.InitLocation(
 		mysql.Position{
@@ -2176,55 +2159,49 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	// For DML position before table checkpoint, ignore it. When the position equals to table checkpoint, this event may
 	// be partially replicated to downstream, we rely on safe-mode to handle it.
-	if s.checkpoint.IsOlderThanTablePoint(originTable, *ec.currentLocation, false) {
+	if s.checkpoint.IsOlderThanTablePoint(sourceTable, *ec.currentLocation, false) {
 		ec.tctx.L().Debug("ignore obsolete event that is old than table checkpoint",
 			zap.String("event", "row"),
 			log.WrapStringerField("location", ec.currentLocation),
-			zap.Stringer("origin table", originTable))
+			zap.Stringer("source table", sourceTable))
 		return nil
 	}
 
 	ec.tctx.L().Debug("",
 		zap.String("event", "row"),
-		zap.Stringer("origin table", originTable),
+		zap.Stringer("source table", sourceTable),
 		zap.Stringer("target table", targetTable),
 		log.WrapStringerField("location", ec.currentLocation),
 		zap.Reflect("raw event data", ev.Rows))
 
-	// TODO(ehco) remove heartbeat
-	if s.cfg.EnableHeartbeat {
-		s.heartbeat.TryUpdateTaskTS(s.cfg.Name, originTable.Schema, originTable.Name, ev.Rows)
-	}
-	// ENDTODO
-
-	ignore, err := s.skipDMLEvent(originTable, ec.header.EventType)
+	needSkip, err := s.skipRowsEvent(sourceTable, ec.header.EventType)
 	if err != nil {
 		return err
 	}
-	if ignore {
+	if needSkip {
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("rows", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		// for RowsEvent, we should record lastLocation rather than currentLocation
 		return s.recordSkipSQLsLocation(&ec)
 	}
 
 	if s.cfg.ShardMode == config.ShardPessimistic {
-		if s.sgk.InSyncing(originTable, targetTable, *ec.currentLocation) {
-			// if in unsync stage and not before active DDL, ignore it
-			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), ignore it
-			ec.tctx.L().Debug("replicate sharding DDL, ignore Rows event",
+		if s.sgk.InSyncing(sourceTable, targetTable, *ec.currentLocation) {
+			// if in unsync stage and not before active DDL, filter it
+			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), filter it
+			ec.tctx.L().Debug("replicate sharding DDL, filter Rows event",
 				zap.String("event", "row"),
-				zap.Stringer("source", originTable),
+				zap.Stringer("source", sourceTable),
 				log.WrapStringerField("location", ec.currentLocation))
 			return nil
 		}
 	}
 
 	// TODO(csuzhangxc): check performance of `getTable` from schema tracker.
-	ti, err := s.getTable(ec.tctx, originTable, targetTable)
+	tableInfo, err := s.getTableInfo(ec.tctx, sourceTable, targetTable)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
-	rows, err := s.mappingDML(originTable.Schema, originTable.Name, ti, ev.Rows)
+	rows, err := s.mappingDML(sourceTable, tableInfo, ev.Rows)
 	if err != nil {
 		return err
 	}
@@ -2232,7 +2209,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return err2
 	}
 
-	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(ti, rows)
+	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(tableInfo, rows)
 	if err != nil {
 		return err
 	}
@@ -2245,17 +2222,16 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	)
 
 	param := &genDMLParam{
-		schema:            targetTable.Schema,
-		table:             targetTable.Name,
-		data:              prunedRows,
-		originalData:      rows,
-		columns:           prunedColumns,
-		originalTableInfo: ti,
+		tableID:         utils.GenTableID(targetTable),
+		data:            prunedRows,
+		originalData:    rows,
+		columns:         prunedColumns,
+		sourceTableInfo: tableInfo,
 	}
 
 	switch ec.header.EventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(originTable.Schema, originTable.Name, ti)
+		exprFilter, err2 := s.exprFilterGroup.GetInsertExprs(sourceTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
@@ -2263,13 +2239,13 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		param.safeMode = ec.safeMode
 		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen insert sqls failed, originTable: %v, targetTable: %v", originTable, targetTable)
+			return terror.Annotatef(err, "gen insert sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
 		metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenWriteRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = insert
 
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(originTable.Schema, originTable.Name, ti)
+		oldExprFilter, newExprFilter, err2 := s.exprFilterGroup.GetUpdateExprs(sourceTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
@@ -2277,20 +2253,20 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		param.safeMode = ec.safeMode
 		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen update sqls failed, originTable: %v, targetTable: %v", originTable, targetTable)
+			return terror.Annotatef(err, "gen update sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
 		metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenUpdateRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = update
 
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(originTable.Schema, originTable.Name, ti)
+		exprFilter, err2 := s.exprFilterGroup.GetDeleteExprs(sourceTable, tableInfo)
 		if err2 != nil {
 			return err2
 		}
 
 		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
 		if err != nil {
-			return terror.Annotatef(err, "gen delete sqls failed, originTable: %v, targetTable: %v", originTable, targetTable)
+			return terror.Annotatef(err, "gen delete sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
 		metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenDeleteRows, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		jobType = del
@@ -2310,7 +2286,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if keys != nil {
 			key = keys[i]
 		}
-		err = s.commitJob(jobType, originTable.Schema, originTable.Name, targetTable.Schema, targetTable.Name, sqls[i], arg, key, &ec)
+		err = s.commitJob(jobType, sourceTable, targetTable, sqls[i], arg, key, &ec)
 		if err != nil {
 			return err
 		}
@@ -2330,8 +2306,8 @@ type queryEventContext struct {
 	appliedDDLs    []string // after onlineDDL apply if onlineDDL != nil and track, before route
 	needHandleDDLs []string // after route
 
-	ddlInfo         *shardingDDLInfo
-	needTrackDDLs   []trackedDDL
+	shardingDDLInfo *ddlInfo
+	trackInfos      []*ddlInfo
 	sourceTbls      map[string]map[string]struct{} // db name -> tb name
 	onlineDDLTables map[string]*filter.Table
 }
@@ -2390,7 +2366,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		return err
 	}
 
-	if parseResult.ignore {
+	if parseResult.needSkip {
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 		qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))
 		*qec.lastLocation = *qec.currentLocation // before record skip location, update lastLocation
@@ -2457,7 +2433,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	qec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.Strings("appliedDDLs", qec.appliedDDLs), zap.Stringer("queryEventContext", qec))
 
 	if len(qec.onlineDDLTables) > 1 {
-		return terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(string(ev.Query))
+		return terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(qec.originSQL)
 	}
 
 	metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenQuery, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
@@ -2476,79 +2452,78 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	*/
 
 	qec.needHandleDDLs = make([]string, 0, len(qec.appliedDDLs))
-	qec.needTrackDDLs = make([]trackedDDL, 0, len(qec.appliedDDLs))
+	qec.trackInfos = make([]*ddlInfo, 0, len(qec.appliedDDLs))
 
 	// handle one-schema change DDL
 	for _, sql := range qec.appliedDDLs {
 		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		sqlDDL, tables, stmt, handleErr := s.routeDDL(qec.p, qec.ddlSchema, sql)
-		if handleErr != nil {
-			return handleErr
+		ddlInfo, err2 := s.routeDDL(qec.p, qec.ddlSchema, sql)
+		if err2 != nil {
+			return err2
 		}
-		if len(sqlDDL) == 0 {
+		sourceTable := ddlInfo.sourceTables[0]
+		targetTable := ddlInfo.targetTables[0]
+		if len(ddlInfo.sql) == 0 {
 			metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 			qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", qec.ddlSchema))
 			continue
 		}
 
 		// DDL is sequentially synchronized in this syncer's main process goroutine
-		// ignore DDL that is older or same as table checkpoint, to avoid sync again for already synced DDLs
-		if s.checkpoint.IsOlderThanTablePoint(tables[0][0], *qec.currentLocation, true) {
-			qec.tctx.L().Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", qec.currentLocation))
+		// filter DDL that is older or same as table checkpoint, to avoid sync again for already synced DDLs
+		if s.checkpoint.IsOlderThanTablePoint(sourceTable, *qec.currentLocation, true) {
+			qec.tctx.L().Info("filter obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), log.WrapStringerField("location", qec.currentLocation))
 			continue
 		}
 
 		// pre-filter of sharding
 		if s.cfg.ShardMode == config.ShardPessimistic {
-			switch stmt.(type) {
+			switch ddlInfo.stmt.(type) {
 			case *ast.DropDatabaseStmt:
-				err = s.dropSchemaInSharding(qec.tctx, tables[0][0].Schema)
+				err = s.dropSchemaInSharding(qec.tctx, sourceTable.Schema)
 				if err != nil {
 					return err
 				}
 				continue
 			case *ast.DropTableStmt:
-				sourceTableID := utils.GenTableID(tables[0][0])
-				err = s.sgk.LeaveGroup(tables[1][0], []string{sourceTableID})
+				sourceTableID := utils.GenTableID(sourceTable)
+				err = s.sgk.LeaveGroup(targetTable, []string{sourceTableID})
 				if err != nil {
 					return err
 				}
-				err = s.checkpoint.DeleteTablePoint(qec.tctx, tables[0][0])
+				err = s.checkpoint.DeleteTablePoint(qec.tctx, sourceTable)
 				if err != nil {
 					return err
 				}
 				continue
 			case *ast.TruncateTableStmt:
-				qec.tctx.L().Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
+				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", ddlInfo.sql))
 				continue
 			}
 
 			// in sharding mode, we only support to do one ddl in one event
-			if qec.ddlInfo == nil {
-				qec.ddlInfo = &shardingDDLInfo{
-					name:   tables[0][0].String(),
-					tables: tables,
-					stmt:   stmt,
-				}
-			} else if qec.ddlInfo.name != tables[0][0].String() {
-				return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(string(ev.Query))
+			if qec.shardingDDLInfo == nil {
+				qec.shardingDDLInfo = ddlInfo
+			} else if qec.shardingDDLInfo.sourceTables[0].String() != sourceTable.String() {
+				return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(qec.originSQL)
 			}
 		} else if s.cfg.ShardMode == config.ShardOptimistic {
-			switch stmt.(type) {
+			switch ddlInfo.stmt.(type) {
 			case *ast.TruncateTableStmt:
-				qec.tctx.L().Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
+				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", ddlInfo.sql))
 				continue
 			case *ast.RenameTableStmt:
 				return terror.ErrSyncerUnsupportedStmt.Generate("RENAME TABLE", config.ShardOptimistic)
 			}
 		}
 
-		qec.needHandleDDLs = append(qec.needHandleDDLs, sqlDDL)
-		qec.needTrackDDLs = append(qec.needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tables: tables})
+		qec.needHandleDDLs = append(qec.needHandleDDLs, ddlInfo.sql)
+		ddlInfo.sql = sql
+		qec.trackInfos = append(qec.trackInfos, ddlInfo)
 		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
 		//       we should use a better mechanism to combine these operations
 		if s.cfg.ShardMode == "" {
-			recordSourceTbls(qec.sourceTbls, stmt, tables[0][0])
+			recordSourceTbls(qec.sourceTbls, ddlInfo.stmt, sourceTable)
 		}
 	}
 
@@ -2595,8 +2570,8 @@ func (s *Syncer) handleQueryEventNoSharding(qec *queryEventContext) error {
 	})
 
 	// run trackDDL before add ddl job to make sure checkpoint can be flushed
-	for _, td := range qec.needTrackDDLs {
-		if err := s.trackDDL(qec.ddlSchema, td.rawSQL, td.tables, td.stmt, qec.eventContext); err != nil {
+	for _, trackInfo := range qec.trackInfos {
+		if err := s.trackDDL(qec.ddlSchema, trackInfo, qec.eventContext); err != nil {
 			return err
 		}
 	}
@@ -2632,11 +2607,10 @@ func (s *Syncer) handleQueryEventNoSharding(qec *queryEventContext) error {
 			zap.String("event", "query"),
 			zap.Strings("ddls", qec.needHandleDDLs),
 			zap.String("raw statement", qec.originSQL),
-			zap.String("schema", table.Schema),
-			zap.String("table", table.Name))
-		err2 := s.onlineDDL.Finish(qec.tctx, table.Schema, table.Name)
+			zap.Stringer("table", table))
+		err2 := s.onlineDDL.Finish(qec.tctx, table)
 		if err2 != nil {
-			return terror.Annotatef(err2, "finish online ddl on %s.%s", table.Schema, table.Name)
+			return terror.Annotatef(err2, "finish online ddl on %v", table)
 		}
 	}
 
@@ -2652,9 +2626,9 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 		active             bool
 		remain             int
 
-		sourceTableID  = utils.GenTableID(qec.ddlInfo.tables[0][0])
+		ddlInfo        = qec.shardingDDLInfo
+		sourceTableID  = utils.GenTableID(ddlInfo.sourceTables[0])
 		needHandleDDLs = qec.needHandleDDLs
-		ddlInfo        = qec.ddlInfo
 		// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
 		// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
 		startLocation   = qec.startLocation
@@ -2667,13 +2641,13 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 		// for CREATE DATABASE, we do nothing. when CREATE TABLE under this DATABASE, sharding groups will be added
 	case *ast.CreateTableStmt:
 		// for CREATE TABLE, we add it to group
-		needShardingHandle, group, synced, remain, err = s.sgk.AddGroup(ddlInfo.tables[1][0], []string{sourceTableID}, nil, true)
+		needShardingHandle, group, synced, remain, err = s.sgk.AddGroup(ddlInfo.targetTables[0], []string{sourceTableID}, nil, true)
 		if err != nil {
 			return err
 		}
 		annotate = "add table to shard group"
 	default:
-		needShardingHandle, group, synced, active, remain, err = s.sgk.TrySync(ddlInfo.tables[0][0], ddlInfo.tables[1][0], *startLocation, *qec.currentLocation, needHandleDDLs)
+		needShardingHandle, group, synced, active, remain, err = s.sgk.TrySync(ddlInfo.sourceTables[0], ddlInfo.targetTables[0], *startLocation, *qec.currentLocation, needHandleDDLs)
 		if err != nil {
 			return err
 		}
@@ -2707,15 +2681,15 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 		}
 	})
 
-	for _, td := range qec.needTrackDDLs {
-		if err = s.trackDDL(qec.ddlSchema, td.rawSQL, td.tables, td.stmt, qec.eventContext); err != nil {
+	for _, trackInfo := range qec.trackInfos {
+		if err = s.trackDDL(qec.ddlSchema, trackInfo, qec.eventContext); err != nil {
 			return err
 		}
 	}
 
 	if needShardingHandle {
-		metrics.UnsyncedTableGauge.WithLabelValues(s.cfg.Name, ddlInfo.tables[1][0].String(), s.cfg.SourceID).Set(float64(remain))
-		err = s.safeMode.IncrForTable(qec.tctx, ddlInfo.tables[1][0].Schema, ddlInfo.tables[1][0].Name) // try enable safe-mode when starting syncing for sharding group
+		metrics.UnsyncedTableGauge.WithLabelValues(s.cfg.Name, ddlInfo.targetTables[0].String(), s.cfg.SourceID).Set(float64(remain))
+		err = s.safeMode.IncrForTable(qec.tctx, ddlInfo.targetTables[0]) // try enable safe-mode when starting syncing for sharding group
 		if err != nil {
 			return err
 		}
@@ -2728,7 +2702,7 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 			zap.String("sourceTableID", sourceTableID),
 			zap.Stringer("start location", startLocation),
 			log.WrapStringerField("end location", currentLocation))
-		s.saveTablePoint(ddlInfo.tables[0][0], *currentLocation)
+		s.saveTablePoint(ddlInfo.sourceTables[0], *currentLocation)
 		if !synced {
 			qec.tctx.L().Info("source shard group is not synced",
 				zap.String("event", "query"),
@@ -2743,7 +2717,7 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 			zap.String("sourceTableID", sourceTableID),
 			zap.Stringer("start location", startLocation),
 			log.WrapStringerField("end location", currentLocation))
-		err = s.safeMode.DescForTable(qec.tctx, ddlInfo.tables[1][0].Schema, ddlInfo.tables[1][0].Name) // try disable safe-mode after sharding group synced
+		err = s.safeMode.DescForTable(qec.tctx, ddlInfo.targetTables[0]) // try disable safe-mode after sharding group synced
 		if err != nil {
 			return err
 		}
@@ -2756,14 +2730,14 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 			return terror.ErrSyncerUnitFirstEndPosNotFound.Generate(sourceTableID)
 		}
 
-		allResolved, err2 := s.sgk.ResolveShardingDDL(ddlInfo.tables[1][0])
+		allResolved, err2 := s.sgk.ResolveShardingDDL(ddlInfo.targetTables[0])
 		if err2 != nil {
 			return err2
 		}
 		*qec.shardingReSyncCh <- &ShardingReSync{
 			currLocation:   *firstEndLocation,
 			latestLocation: *currentLocation,
-			targetTable:    ddlInfo.tables[1][0],
+			targetTable:    ddlInfo.targetTables[0],
 			allResolved:    allResolved,
 		}
 
@@ -2774,7 +2748,7 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 		// we should add another config item to differ, and do not save DDLInfo, and not wait for ddlExecInfo
 
 		// construct & send shard DDL info into etcd, DM-master will handle it.
-		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tables[1][0].Schema, ddlInfo.tables[1][0].Name, needHandleDDLs)
+		shardInfo := s.pessimist.ConstructInfo(ddlInfo.targetTables[0].Schema, ddlInfo.targetTables[0].Name, needHandleDDLs)
 		rev, err2 := s.pessimist.PutInfo(qec.tctx.Ctx, shardInfo)
 		if err2 != nil {
 			return err2
@@ -2796,7 +2770,7 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 				utils.OsExit(1)
 			})
 			failpoint.Inject("SequenceShardSyncedExecutionExit", func() {
-				group := s.sgk.Group(ddlInfo.tables[1][0])
+				group := s.sgk.Group(ddlInfo.targetTables[0])
 				if group != nil {
 					// exit in the first round sequence sharding DDL only
 					if group.meta.ActiveIdx() == 1 {
@@ -2846,7 +2820,7 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 	}
 
 	if len(qec.onlineDDLTables) > 0 {
-		err = s.clearOnlineDDL(qec.tctx, ddlInfo.tables[1][0])
+		err = s.clearOnlineDDL(qec.tctx, ddlInfo.targetTables[0])
 		if err != nil {
 			return err
 		}
@@ -2856,11 +2830,13 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 	return nil
 }
 
-// input `sql` should be a single DDL, which came from parserpkg.SplitDDL
-// tableNames[0] is source (upstream) tableNames, tableNames[1] is target (downstream) tableNames.
-func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.Table, stmt ast.StmtNode, ec *eventContext) error {
-	srcTables, targetTables := tableNames[0], tableNames[1]
-	srcTable := srcTables[0]
+// trackDDL tracks ddl in schemaTracker.
+func (s *Syncer) trackDDL(usedSchema string, trackInfo *ddlInfo, ec *eventContext) error {
+	var (
+		srcTables    = trackInfo.sourceTables
+		targetTables = trackInfo.targetTables
+		srcTable     = srcTables[0]
+	)
 
 	// Make sure the needed tables are all loaded into the schema tracker.
 	var (
@@ -2871,7 +2847,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		tryFetchDownstreamTable      bool // to make sure if not exists will execute correctly
 	)
 
-	switch node := stmt.(type) {
+	switch node := trackInfo.stmt.(type) {
 	case *ast.CreateDatabaseStmt:
 		shouldExecDDLOnSchemaTracker = true
 	case *ast.AlterDatabaseStmt:
@@ -2919,7 +2895,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 	case *ast.LockTablesStmt, *ast.UnlockTablesStmt, *ast.CleanupTableLockStmt, *ast.TruncateTableStmt:
 		break
 	default:
-		ec.tctx.L().DPanic("unhandled DDL type cannot be tracked", zap.Stringer("type", reflect.TypeOf(stmt)))
+		ec.tctx.L().DPanic("unhandled DDL type cannot be tracked", zap.Stringer("type", reflect.TypeOf(trackInfo.stmt)))
 	}
 
 	if shouldSchemaExist {
@@ -2928,7 +2904,7 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		}
 	}
 	for i := 0; i < shouldTableExistNum; i++ {
-		if _, err := s.getTable(ec.tctx, srcTables[i], targetTables[i]); err != nil {
+		if _, err := s.getTableInfo(ec.tctx, srcTables[i], targetTables[i]); err != nil {
 			return err
 		}
 	}
@@ -2942,28 +2918,32 @@ func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.
 		if err := s.schemaTracker.CreateSchemaIfNotExists(srcTables[i].Schema); err != nil {
 			return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, srcTables[i].Schema)
 		}
-		if _, err := s.getTable(ec.tctx, srcTables[i], targetTables[i]); err != nil {
+		if _, err := s.getTableInfo(ec.tctx, srcTables[i], targetTables[i]); err != nil {
 			return err
 		}
 	}
 
 	if tryFetchDownstreamTable {
 		// ignore table not exists error, just try to fetch table from downstream.
-		_, _ = s.getTable(ec.tctx, srcTables[0], targetTables[0])
+		_, _ = s.getTableInfo(ec.tctx, srcTables[0], targetTables[0])
 	}
 
 	if shouldExecDDLOnSchemaTracker {
-		if err := s.schemaTracker.Exec(ec.tctx.Ctx, usedSchema, sql); err != nil {
-			ec.tctx.L().Error("cannot track DDL", zap.String("schema", usedSchema), zap.String("statement", sql), log.WrapStringerField("location", ec.currentLocation), log.ShortError(err))
-			return terror.ErrSchemaTrackerCannotExecDDL.Delegate(err, sql)
+		if err := s.schemaTracker.Exec(ec.tctx.Ctx, usedSchema, trackInfo.sql); err != nil {
+			ec.tctx.L().Error("cannot track DDL",
+				zap.String("schema", usedSchema),
+				zap.String("statement", trackInfo.sql),
+				log.WrapStringerField("location", ec.currentLocation),
+				log.ShortError(err))
+			return terror.ErrSchemaTrackerCannotExecDDL.Delegate(err, trackInfo.sql)
 		}
-		s.exprFilterGroup.ResetExprs(srcTable.Schema, srcTable.Name)
+		s.exprFilterGroup.ResetExprs(srcTable)
 	}
 
 	return nil
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, ec *eventContext) error {
+func (s *Syncer) commitJob(tp opType, sourceTable, targetTable *filter.Table, sql string, args []interface{}, keys []string, ec *eventContext) error {
 	startTime := time.Now()
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
@@ -2972,7 +2952,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	s.tctx.L().Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 	metrics.ConflictDetectDurationHistogram.WithLabelValues(s.cfg.Name, s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
 
-	job := newDMLJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
+	job := newDMLJob(tp, sql, sourceTable, targetTable, args, key, *ec.lastLocation, *ec.startLocation, *ec.currentLocation, ec.header)
 	return s.addJobFunc(job)
 }
 
@@ -3179,7 +3159,7 @@ func (s *Syncer) reSyncBinlog(tctx tcontext.Context, location binlog.Location) e
 	return s.streamerController.ReopenWithRetry(&tctx, location)
 }
 
-func (s *Syncer) renameShardingSchema(table *filter.Table) *filter.Table {
+func (s *Syncer) route(table *filter.Table) *filter.Table {
 	if table.Schema == "" {
 		return table
 	}
@@ -3209,8 +3189,6 @@ func (s *Syncer) Close() {
 	if s.isClosed() {
 		return
 	}
-
-	s.removeHeartbeat()
 
 	s.stopSync()
 	s.closeDBs()
@@ -3256,15 +3234,6 @@ func (s *Syncer) closeOnlineDDL() {
 	if s.onlineDDL != nil {
 		s.onlineDDL.Close()
 		s.onlineDDL = nil
-	}
-}
-
-func (s *Syncer) removeHeartbeat() {
-	if s.cfg.EnableHeartbeat {
-		err := s.heartbeat.RemoveTask(s.cfg.Name)
-		if err != nil {
-			s.tctx.L().Error("fail to remove task for heartbeat", zap.Error(err))
-		}
 	}
 }
 

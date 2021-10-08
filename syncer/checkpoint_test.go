@@ -17,7 +17,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -259,12 +258,12 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(cp.FlushedGlobalPoint().Position, Equals, binlog.MinPosition)
 
 	// try load from mydumper's output
-	dir, err := ioutil.TempDir("", "test_global_checkpoint")
+	dir, err := os.MkdirTemp("", "test_global_checkpoint")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(dir)
 
 	filename := filepath.Join(dir, "metadata")
-	err = ioutil.WriteFile(filename, []byte(
+	err = os.WriteFile(filename, []byte(
 		fmt.Sprintf("SHOW MASTER STATUS:\n\tLog: %s\n\tPos: %d\n\tGTID:\n\nSHOW SLAVE STATUS:\n\tHost: %s\n\tLog: %s\n\tPos: %d\n\tGTID:\n\n", pos1.Name, pos1.Pos, "slave_host", pos1.Name, pos1.Pos+1000)),
 		0o644)
 	c.Assert(err, IsNil)
@@ -291,7 +290,7 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(err, IsNil)
 
 	// check dumpling write exitSafeModeLocation in metadata
-	err = ioutil.WriteFile(filename, []byte(
+	err = os.WriteFile(filename, []byte(
 		fmt.Sprintf(`SHOW MASTER STATUS:
 	Log: %s
 	Pos: %d
@@ -395,7 +394,7 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(s.tracker.CreateSchemaIfNotExists(schemaName), IsNil)
 	err = s.tracker.Exec(ctx, schemaName, "create table "+tableName+" (c int);")
 	c.Assert(err, IsNil)
-	ti, err := s.tracker.GetTable(table)
+	ti, err := s.tracker.GetTableInfo(table)
 	c.Assert(err, IsNil)
 	cp.SaveTablePoint(table, binlog.Location{Position: pos1}, ti)
 	rcp := cp.(*RemoteCheckPoint)
@@ -407,13 +406,13 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(rcp.points[schemaName][tableName].TableInfo(), IsNil)
 	c.Assert(rcp.points[schemaName][tableName].flushedTI, IsNil)
 
-	_, err = s.tracker.GetTable(table)
+	_, err = s.tracker.GetTableInfo(table)
 	c.Assert(strings.Contains(err.Error(), "doesn't exist"), IsTrue)
 
 	// test save, flush and rollback to not nil table info
 	err = s.tracker.Exec(ctx, schemaName, "create table "+tableName+" (c int);")
 	c.Assert(err, IsNil)
-	ti, err = s.tracker.GetTable(table)
+	ti, err = s.tracker.GetTableInfo(table)
 	c.Assert(err, IsNil)
 	cp.SaveTablePoint(table, binlog.Location{Position: pos1}, ti)
 	tiBytes, _ := json.Marshal(ti)
@@ -423,11 +422,11 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(cp.FlushPointsExcept(tctx, nil, nil, nil), IsNil)
 	err = s.tracker.Exec(ctx, schemaName, "alter table "+tableName+" add c2 int;")
 	c.Assert(err, IsNil)
-	ti2, err := s.tracker.GetTable(table)
+	ti2, err := s.tracker.GetTableInfo(table)
 	c.Assert(err, IsNil)
 	cp.SaveTablePoint(table, binlog.Location{Position: pos2}, ti2)
 	cp.Rollback(s.tracker)
-	ti11, err := s.tracker.GetTable(table)
+	ti11, err := s.tracker.GetTableInfo(table)
 	c.Assert(err, IsNil)
 	c.Assert(ti11.Columns, HasLen, 1)
 

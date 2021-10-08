@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/hex"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1526,7 +1525,7 @@ func (l *Loader) getMydumpMetadata() error {
 			return nil
 		}
 
-		toPrint, err2 := ioutil.ReadFile(metafile)
+		toPrint, err2 := os.ReadFile(metafile)
 		if err2 != nil {
 			toPrint = []byte(err2.Error())
 		}

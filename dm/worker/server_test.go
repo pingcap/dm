@@ -15,7 +15,7 @@ package worker
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"sync"
@@ -64,10 +64,12 @@ func (t *testServer) SetUpSuite(c *C) {
 	c.Assert(err, IsNil)
 
 	getMinLocForSubTaskFunc = getFakeLocForSubTask
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD", `return(true)`), IsNil)
 }
 
 func (t *testServer) TearDownSuite(c *C) {
 	getMinLocForSubTaskFunc = getMinLocForSubTask
+	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/worker/MockGetSourceCfgFromETCD"), IsNil)
 }
 
 func createMockETCD(dir string, host string) (*embed.Etcd, error) {
@@ -446,7 +448,7 @@ func (t *testServer) testHTTPInterface(c *C, uri string) {
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, Equals, 200)
-	_, err = ioutil.ReadAll(resp.Body)
+	_, err = io.ReadAll(resp.Body)
 	c.Assert(err, IsNil)
 }
 

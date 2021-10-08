@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -63,7 +62,7 @@ func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 
 	// create all valid binlog files
 	for _, fn := range valid {
-		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0o600)
+		err = os.WriteFile(filepath.Join(dir, fn), nil, 0o600)
 		c.Assert(err, IsNil)
 	}
 	files, err = CollectAllBinlogFiles(dir)
@@ -72,7 +71,7 @@ func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 
 	// create some invalid binlog files
 	for _, fn := range invalid {
-		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0o600)
+		err = os.WriteFile(filepath.Join(dir, fn), nil, 0o600)
 		c.Assert(err, IsNil)
 	}
 	files, err = CollectAllBinlogFiles(dir)
@@ -81,7 +80,7 @@ func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 
 	// create some invalid meta files
 	for _, fn := range meta {
-		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0o600)
+		err = os.WriteFile(filepath.Join(dir, fn), nil, 0o600)
 		c.Assert(err, IsNil)
 	}
 	files, err = CollectAllBinlogFiles(dir)
@@ -151,7 +150,7 @@ func (t *testFileSuite) TestCollectBinlogFilesCmp(c *C) {
 
 	// create a meta file
 	filename := filepath.Join(dir, utils.MetaFilename)
-	err = ioutil.WriteFile(filename, nil, 0o600)
+	err = os.WriteFile(filename, nil, 0o600)
 	c.Assert(err, IsNil)
 
 	// invalid base filename, is a meta filename
@@ -162,7 +161,7 @@ func (t *testFileSuite) TestCollectBinlogFilesCmp(c *C) {
 	// create some binlog files
 	for _, f := range binlogFiles {
 		filename = filepath.Join(dir, f)
-		err = ioutil.WriteFile(filename, nil, 0o600)
+		err = os.WriteFile(filename, nil, 0o600)
 		c.Assert(err, IsNil)
 	}
 
@@ -193,7 +192,7 @@ func (t *testFileSuite) TestCollectBinlogFilesCmp(c *C) {
 
 	// add a basename mismatch binlog file
 	filename = filepath.Join(dir, "bin-mysql.100000")
-	err = ioutil.WriteFile(filename, nil, 0o600)
+	err = os.WriteFile(filename, nil, 0o600)
 	c.Assert(err, IsNil)
 
 	// test again, should ignore it
@@ -233,7 +232,7 @@ func (t *testFileSuite) TestGetFirstBinlogName(c *C) {
 
 	// has file, but not a valid binlog file. Now the error message is binlog files not found
 	filename := "invalid.bin"
-	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0o600)
+	err = os.WriteFile(filepath.Join(subDir, filename), nil, 0o600)
 	c.Assert(err, IsNil)
 	_, err = getFirstBinlogName(baseDir, uuid)
 	c.Assert(err, ErrorMatches, ".*not found.*")
@@ -242,7 +241,7 @@ func (t *testFileSuite) TestGetFirstBinlogName(c *C) {
 
 	// has a valid binlog file
 	filename = "z-mysql-bin.000002" // z prefix, make it become not the _first_ if possible.
-	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0o600)
+	err = os.WriteFile(filepath.Join(subDir, filename), nil, 0o600)
 	c.Assert(err, IsNil)
 	name, err = getFirstBinlogName(baseDir, uuid)
 	c.Assert(err, IsNil)
@@ -250,14 +249,14 @@ func (t *testFileSuite) TestGetFirstBinlogName(c *C) {
 
 	// has one more earlier binlog file
 	filename = "z-mysql-bin.000001"
-	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0o600)
+	err = os.WriteFile(filepath.Join(subDir, filename), nil, 0o600)
 	c.Assert(err, IsNil)
 	name, err = getFirstBinlogName(baseDir, uuid)
 	c.Assert(err, IsNil)
 	c.Assert(name, Equals, filename)
 
 	// has a meta file
-	err = ioutil.WriteFile(filepath.Join(subDir, utils.MetaFilename), nil, 0o600)
+	err = os.WriteFile(filepath.Join(subDir, utils.MetaFilename), nil, 0o600)
 	c.Assert(err, IsNil)
 	name, err = getFirstBinlogName(baseDir, uuid)
 	c.Assert(err, IsNil)
@@ -278,7 +277,7 @@ func (t *testFileSuite) TestFileSizeUpdated(c *C) {
 	c.Assert(cmp, Equals, 0)
 
 	// create and write the file
-	err = ioutil.WriteFile(filePath, data, 0o600)
+	err = os.WriteFile(filePath, data, 0o600)
 	c.Assert(err, IsNil)
 
 	// equal
@@ -339,7 +338,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	c.Assert(err, ErrorMatches, ".*no such file or directory*")
 
 	// create the first relay file
-	err = ioutil.WriteFile(relayPaths[0], nil, 0o600)
+	err = os.WriteFile(relayPaths[0], nil, 0o600)
 	c.Assert(err, IsNil)
 
 	// write meta file
@@ -358,7 +357,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	c.Assert(err, ErrorMatches, ".*(no such file or directory|The system cannot find the file specified).*")
 
 	// 1. file increased
-	err = ioutil.WriteFile(relayPaths[0], data, 0o600)
+	err = os.WriteFile(relayPaths[0], data, 0o600)
 	c.Assert(err, IsNil)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -373,7 +372,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	wg.Wait()
 
 	// 2. file decreased when adding watching
-	err = ioutil.WriteFile(relayPaths[0], nil, 0o600)
+	err = os.WriteFile(relayPaths[0], nil, 0o600)
 	c.Assert(err, IsNil)
 	wg.Add(1)
 	go func() {
@@ -387,7 +386,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	wg.Wait()
 
 	// 3. new binlog file created
-	err = ioutil.WriteFile(relayPaths[1], nil, 0o600)
+	err = os.WriteFile(relayPaths[1], nil, 0o600)
 	c.Assert(err, IsNil)
 	wg.Add(1)
 	go func() {
@@ -421,7 +420,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 		c.Assert(err4, IsNil)
 		curSize := fi.Size()
 		// write old binlog file
-		err5 := ioutil.WriteFile(relayPaths[1], data, 0o600)
+		err5 := os.WriteFile(relayPaths[1], data, 0o600)
 		c.Assert(err5, IsNil)
 		c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/CMPAlwaysReturn0", `return(true)`), IsNil)
 		//nolint:errcheck
@@ -513,7 +512,7 @@ func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
 	nextBinlogPath := filepath.Join(relayDir, UUIDs[1], "mysql-bin.000001")
 	err = os.MkdirAll(filepath.Dir(nextBinlogPath), 0o700)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(nextBinlogPath, nil, 0o600)
+	err = os.WriteFile(nextBinlogPath, nil, 0o600)
 	c.Assert(err, IsNil)
 
 	// switch to the next
@@ -537,7 +536,7 @@ func (t *testFileSuite) writeUUIDs(c *C, relayDir string, uuids []string) []byte
 	}
 
 	// write the index file
-	err := ioutil.WriteFile(indexPath, buf.Bytes(), 0o600)
+	err := os.WriteFile(indexPath, buf.Bytes(), 0o600)
 	c.Assert(err, IsNil)
 	return buf.Bytes()
 }
@@ -551,7 +550,7 @@ func (t *testFileSuite) TestReadSortedBinlogFromDir(c *C) {
 		"bin.000001", "bin.000002", "bin.100000", "bin.100001", "bin.999999", "bin.1000000", "bin.1000001",
 	}
 	for _, f := range filenames {
-		c.Assert(ioutil.WriteFile(filepath.Join(dir, f), nil, 0o600), IsNil)
+		c.Assert(os.WriteFile(filepath.Join(dir, f), nil, 0o600), IsNil)
 	}
 	ret, err := readSortedBinlogFromDir(dir)
 	c.Assert(err, IsNil)
