@@ -2374,7 +2374,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 		// don't return error if parse fail and filter success
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
-		ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("query event context", qec))
+		ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.Stringer("query event context", qec))
 		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
 		return s.recordSkipSQLsLocation(&ec)
 	}
