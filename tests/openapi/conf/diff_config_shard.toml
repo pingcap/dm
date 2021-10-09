@@ -15,7 +15,22 @@ fix-sql-file = "fix.sql"
 # tables need to check.
 [[check-tables]]
 schema = "openapi"
-tables = ["~t.*"]
+tables = ["~^*"]
+
+[[table-config]]
+is-sharding = true
+schema = "openapi"
+table = "t"
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "openapi"
+table = "t"
+
+[[table-config.source-tables]]
+instance-id = "source-2"
+schema = "openapi"
+table = "t"
 
 [[source-db]]
 host = "127.0.0.1"
