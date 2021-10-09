@@ -31,6 +31,21 @@ DELETE + DELETE => X
 
 Now we can then compact all DMLs with the same primary and unique key to a single DML (INSERT/UPDATE/DELETE), which can be executed in parallel since they all have different primary and unique keys.
 
+> **Notice**
+>
+> We can only compact DMLs for those tables with PK or Not NULL UK.
+> If a table only has a unique key which can be NULL, we cannot compact it.
+> e.g.
+> ```
+> INSERT INTO tb(a,b) VALUES(NULL,1);
+> FLUSH COMPACTOR
+> // cannot compact these two to INSERT because it update two rows
+> INSERT INTO tb(a,b) VALUES(NULL,1);
+> UPDATE tb SET a=NULL, b=2 WHERE a IS NULL AND b=1;
+> ```
+> But we can still detect causality for it as we do now, because NULL can be regarded as a special value and can be hashed to a special worker.
+>
+
 ### Merge
 
 Users may use single SQL statement to update a large amount of data, because DM is a row-based replication, it will turn the upstream range update into multiple row update, such as one `UPDATE WHERE id>=1 and id<=10` statement will be converted into ten `update where id=x` statemnets, which has a big impact on the write performance, so consider merging multiple single value DMLs into one multi value DML. By generating SQL with multiple values, we expect to reduce TiDB parsing statement time, network interaction latency, TiDB CPU and TiKV gRPC usage.
