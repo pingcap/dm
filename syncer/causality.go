@@ -14,7 +14,6 @@
 package syncer
 
 import (
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -48,28 +47,17 @@ func causalityWrap(inCh chan *job, syncer *Syncer) chan *job {
 		inCh:      inCh,
 		outCh:     make(chan *job, syncer.cfg.QueueSize),
 	}
-	causality.run()
+
+	go func() {
+		causality.runcausality()
+		causality.close()
+	}()
+
 	return causality.outCh
 }
 
-// run runs a causality instance.
-func (c *causality) run() {
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		c.runcausality()
-	}()
-
-	go func() {
-		defer c.close()
-		wg.Wait()
-	}()
-}
-
-// runcausality receives dml jobs and returns causality jobs
-// When meet conflict, returns a conflict job.
+// runcausality receives dml jobs and send causality jobs by adding causality key.
+// When meet conflict, sends a conflict job.
 func (c *causality) runcausality() {
 	for j := range c.inCh {
 		metrics.QueueSizeGauge.WithLabelValues(c.task, "causality_input", c.source).Set(float64(len(c.inCh)))
@@ -90,8 +78,7 @@ func (c *causality) runcausality() {
 				c.outCh <- newConflictJob()
 				c.reset()
 			}
-			c.add(keys)
-			j.key = c.get(key)
+			j.key = c.add(keys)
 			c.logger.Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
 		}
 		metrics.ConflictDetectDurationHistogram.WithLabelValues(c.task, c.source).Observe(time.Since(startTime).Seconds())
@@ -105,10 +92,10 @@ func (c *causality) close() {
 	close(c.outCh)
 }
 
-// add adds keys relation.
-func (c *causality) add(keys []string) {
+// add adds keys relation and return the relation. The keys must `detectConflict` first to ensure correctness.
+func (c *causality) add(keys []string) string {
 	if len(keys) == 0 {
-		return
+		return ""
 	}
 
 	// find causal key
@@ -125,11 +112,8 @@ func (c *causality) add(keys []string) {
 	for _, key := range nonExistKeys {
 		c.relations[key] = selectedRelation
 	}
-}
 
-// get gets relation for a key.
-func (c *causality) get(key string) string {
-	return c.relations[key]
+	return selectedRelation
 }
 
 // reset resets relations.
