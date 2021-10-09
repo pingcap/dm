@@ -2362,10 +2362,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	if err != nil {
 		ec.tctx.L().Error("fail to parse statement",
 			zap.String("event", "query"),
-			zap.String("statement", qec.originSQL),
-			zap.String("schema", qec.ddlSchema),
-			zap.Stringer("last location", ec.lastLocation),
-			log.WrapStringerField("location", ec.currentLocation),
+			zap.Stringer("query event context", qec),
 			log.ShortError(err))
 		// return error if parse fail and filter fail
 		needSkip, err2 := s.skipSQLByPattern(qec.originSQL)
