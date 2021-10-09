@@ -88,6 +88,9 @@ function test_query_timeout() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
+	# don't know why CI has turned on Event Scheduler
+	run_sql_both_source 'SET GLOBAL event_scheduler = OFF;'
+
 	# there's only 2 rows in result, one for dm-worker's source-level status, one for SHOW PROCESSLIST
 	run_sql_source1 'SHOW PROCESSLIST;'
 	check_rows_equal 2
