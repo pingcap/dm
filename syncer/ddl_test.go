@@ -16,7 +16,6 @@ package syncer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -98,10 +97,6 @@ func (s *testDDLSuite) TestCommentQuote(c *C) {
 	sql := "ALTER TABLE schemadb.ep_edu_course_message_auto_reply MODIFY answer JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容';"
 	expectedSQL := "ALTER TABLE `schemadb`.`ep_edu_course_message_auto_reply` MODIFY COLUMN `answer` JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容'"
 
-	parser := parser.New()
-
-	stmt, err := parser.ParseOneStmt(sql, "", "")
-	c.Assert(err, IsNil)
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestCommentQuote")))
 	ec := &eventContext{
 		tctx: tctx,
@@ -109,12 +104,20 @@ func (s *testDDLSuite) TestCommentQuote(c *C) {
 	qec := &queryEventContext{
 		eventContext: ec,
 		ddlSchema:    "schemadb",
-		p:            parser,
+		originSQL:    sql,
+		p:            parser.New(),
 	}
+	stmt, err := parseDDLSQL(qec)
+	c.Assert(err, IsNil)
 
-	syncer := &Syncer{}
 	qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 	c.Assert(err, IsNil)
+
+	syncer := NewSyncer(&config.SubTaskConfig{}, nil)
+	syncer.tctx = tctx
+	err = syncer.genRouter()
+	c.Assert(err, IsNil)
+
 	for _, sql := range qec.splitedDDLs {
 		sqls, err := syncer.processSplitedDDL(qec, sql)
 		c.Assert(err, IsNil)
@@ -206,6 +209,7 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 		{"ALTER TABLE `xs1`.`t1` ADD COLUMN `c1` INT"},
 		{"ALTER TABLE `xs1`.`t1` ADD COLUMN `c1` INT"},
 	}
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveDDLSQL")))
 
 	cfg := &config.SubTaskConfig{
 		BAList: &filter.Rules{
@@ -214,6 +218,7 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 	}
 	var err error
 	syncer := NewSyncer(cfg, nil)
+	syncer.tctx = tctx
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 
@@ -225,7 +230,6 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveDDLSQL")))
 	ec := &eventContext{
 		tctx: tctx,
 	}
@@ -238,20 +242,28 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 			appliedDDLs:  make([]string, 0),
 			p:            parser.New(),
 		}
-		stmt, err := syncer.parseDDLSQL(qec)
+		stmt, err := parseDDLSQL(qec)
 		c.Assert(err, IsNil)
-		_, ok := stmt.(ast.DDLNode)
-		c.Assert(ok, IsTrue)
 
 		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		for _, sql := range qec.splitedDDLs {
-			sqls, err := syncer.processSplitedDDL(qec, sql)
+		for _, sql2 := range qec.splitedDDLs {
+			sqls, err := syncer.processSplitedDDL(qec, sql2)
 			c.Assert(err, IsNil)
-			qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+			for _, sql3 := range sqls {
+				if len(sql3) == 0 {
+					continue
+				}
+				qec.appliedDDLs = append(qec.appliedDDLs, sql3)
+			}
 		}
 		c.Assert(qec.appliedDDLs, DeepEquals, expectedSQLs[i])
 		c.Assert(targetSQLs[i], HasLen, len(qec.appliedDDLs))
+		for j, sql2 := range qec.appliedDDLs {
+			ddlInfo, err2 := syncer.routeDDL(qec.p, qec.ddlSchema, sql2)
+			c.Assert(err2, IsNil)
+			c.Assert(targetSQLs[i][j], Equals, ddlInfo.sql)
+		}
 	}
 }
 
@@ -328,19 +340,16 @@ func (s *testDDLSuite) TestParseDDLSQL(c *C) {
 		},
 	}
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestParseDDLSQL")))
-	syncer := &Syncer{
-		tctx: tctx,
+	qec := &queryEventContext{
+		eventContext: &eventContext{
+			tctx: tctx,
+		},
+		p: parser.New(),
 	}
-	var err error
-	syncer := NewSyncer(cfg, nil)
-	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
-	c.Assert(err, IsNil)
-
-	parser := parser.New()
 
 	for _, cs := range cases {
 		qec.originSQL = cs.sql
-		stmt, err := syncer.parseDDLSQL(qec)
+		stmt, err := parseDDLSQL(qec)
 		if cs.hasError {
 			c.Assert(err, NotNil)
 		} else {
@@ -366,22 +375,24 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 		},
 	}
 
-	syncer := &Syncer{}
-	parser := parser.New()
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveGeneratedColumnSQL")))
+	syncer := NewSyncer(&config.SubTaskConfig{}, nil)
+	syncer.tctx = tctx
+	err := syncer.genRouter()
+	c.Assert(err, IsNil)
+	parser := parser.New()
 	for _, tc := range testCases {
 		qec := &queryEventContext{
 			eventContext: &eventContext{
 				tctx: tctx,
 			},
+			originSQL:   tc.sql,
 			appliedDDLs: make([]string, 0),
 			ddlSchema:   "test",
 			p:           parser,
 		}
-		stmt, err := syncer.parseDDLSQL(qec)
+		stmt, err := parseDDLSQL(qec)
 		c.Assert(err, IsNil)
-		_, ok := stmt.(ast.DDLNode)
-		c.Assert(ok, IsTrue)
 
 		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
@@ -398,59 +409,42 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 
 func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	cases := []struct {
-		needNew   bool
 		sql       string
 		expectSQL string
 	}{
-		// ghost
+		// *****GHOST*****
 		// real table
 		{
-			needNew:   true,
 			sql:       "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
 			expectSQL: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
 		},
 		// trash table
 		{
-			needNew: true,
-			sql:     "CREATE TABLE IF NOT EXISTS `test`.`_t1_del` (`n` INT)",
+			sql: "CREATE TABLE IF NOT EXISTS `test`.`_t1_del` (`n` INT)",
 		},
 		// ghost table
 		{
-			needNew: true,
-			sql:     "ALTER TABLE `test`.`_t1_gho` ADD COLUMN `n` INT",
+			sql: "ALTER TABLE `test`.`_t1_gho` ADD COLUMN `n` INT",
 		},
-		{
-			needNew:   false,
-			sql:       "RENAME TABLE `test`.`_t1_gho` TO `test`.`t1`",
-			expectSQL: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
-		},
-		// pt
+		// *****PT*****
 		// real table
 		{
-			needNew:   true,
 			sql:       "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
 			expectSQL: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
 		},
 		// trash table
 		{
-			needNew: true,
-			sql:     "CREATE TABLE IF NOT EXISTS `test`.`_t1_old` (`n` INT)",
+			sql: "CREATE TABLE IF NOT EXISTS `test`.`_t1_old` (`n` INT)",
 		},
 		// ghost table
 		{
-			needNew: true,
-			sql:     "ALTER TABLE `test`.`_t1_new` ADD COLUMN `n` INT",
-		},
-		{
-			needNew:   false,
-			sql:       "RENAME TABLE `test`.`_t1_new` TO `test`.`t1`",
-			expectSQL: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+			sql: "ALTER TABLE `test`.`_t1_new` ADD COLUMN `n` INT",
 		},
 	}
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveOnlineDDL")))
 	p := parser.New()
 
-	ec := eventContext{tctx: tctx}
+	ec := &eventContext{tctx: tctx}
 	cluster, err := mock.NewCluster()
 	c.Assert(err, IsNil)
 	c.Assert(cluster.Start(), IsNil)
@@ -462,43 +456,25 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	dbCfg.Port = mockClusterPort
 	dbCfg.Password = ""
 	cfg := s.newSubTaskCfg(dbCfg)
+
+	var qec *queryEventContext
 	for _, ca := range cases {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
 		syncer := NewSyncer(cfg, nil)
+		syncer.tctx = tctx
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
-		// real table
-		sql := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
-		stmt, err := p.ParseOneStmt(sql, "", "")
-		c.Assert(err, IsNil)
-		sqls, tables, err := syncer.splitAndFilterDDL(ec, p, stmt, "test")
-		c.Assert(err, IsNil)
-		c.Assert(sqls, HasLen, 1)
-		c.Assert(sqls[0], Equals, sql)
-		c.Assert(tables, HasLen, 0)
-
-		// trash table
-		sql = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `test`.`%s` (`n` INT)", ca.trashName)
-		stmt, err = p.ParseOneStmt(sql, "", "")
-		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
-		c.Assert(err, IsNil)
-		c.Assert(sqls, HasLen, 0)
-		c.Assert(tables, HasLen, 0)
-
-	// real table
-	for _, ca := range cases {
-		if ca.needNew {
-			qec = &queryEventContext{
-				eventContext: ec,
-				ddlSchema:    "test",
-				appliedDDLs:  make([]string, 0),
-				p:            parser.New(),
-			}
+		err2 := syncer.genRouter()
+		c.Assert(err2, IsNil)
+		qec = &queryEventContext{
+			eventContext: ec,
+			ddlSchema:    "test",
+			appliedDDLs:  make([]string, 0),
+			p:            p,
 		}
 		qec.originSQL = ca.sql
-		stmt, err := syncer.parseDDLSQL(qec)
+		stmt, err := parseDDLSQL(qec)
 		c.Assert(err, IsNil)
 		_, ok := stmt.(ast.DDLNode)
 		c.Assert(ok, IsTrue)
@@ -509,8 +485,8 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 			c.Assert(err, IsNil)
 			qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
 		}
-		c.Assert(qec.appliedDDLs, HasLen, 1)
 		if len(ca.expectSQL) != 0 {
+			c.Assert(qec.appliedDDLs, HasLen, 1)
 			c.Assert(qec.appliedDDLs[0], Equals, ca.expectSQL)
 		}
 	}
