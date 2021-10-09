@@ -367,7 +367,7 @@ type TaskTableMigrateRule struct {
 		SourceName string `json:"source_name"`
 
 		// table name, wildcard support
-		Table string `json:"table"`
+		Table *string `json:"table,omitempty"`
 	} `json:"source"`
 
 	// downstream-related configuration
@@ -376,7 +376,7 @@ type TaskTableMigrateRule struct {
 		Schema string `json:"schema"`
 
 		// table name, does not support wildcards
-		Table string `json:"table"`
+		Table *string `json:"table,omitempty"`
 	} `json:"target"`
 }
 

@@ -548,7 +548,6 @@ components:
           required:
             - "source_name"
             - "schema"
-            - "table"
         target:
           type: object
           description: downstream-related configuration
@@ -563,7 +562,6 @@ components:
               example: "tb1"
           required:
             - "schema"
-            - "table"
         binlog_filter_rule:
           type: array
           description: "filter rule name"
