@@ -57,7 +57,7 @@ function test_session_config() {
 		"\"result\": true" 3
 
 	cleanup_data all_mode
-	cleanup_process $*
+	cleanup_process
 }
 
 function test_query_timeout() {
@@ -83,6 +83,24 @@ function test_query_timeout() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
+<<<<<<< HEAD
+=======
+
+	# don't know why CI has turned on Event Scheduler
+	run_sql_both_source 'SET GLOBAL event_scheduler = OFF;'
+
+	# there's only 2 rows in result, one for dm-worker's source-level status, one for SHOW PROCESSLIST
+	run_sql_source1 'SHOW PROCESSLIST;'
+	check_rows_equal 2
+
+	run_sql_source2 'SHOW PROCESSLIST;'
+	check_rows_equal 2
+
+	# there's only 1 row in result, which is for SHOW PROCESSLIST
+	run_sql_tidb 'SHOW PROCESSLIST;'
+	check_rows_equal 1
+
+>>>>>>> 902928461 (dep: update dumpling to fix connection leak (#2195))
 	# start DM task only
 	cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task.yaml
 	sed -i "s/name: test/name: $ILLEGAL_CHAR_NAME/g" $WORK_DIR/dm-task.yaml
@@ -104,8 +122,26 @@ function test_query_timeout() {
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"stop-task $ILLEGAL_CHAR_NAME" \
 		"\"result\": true" 3
+<<<<<<< HEAD
 	cleanup_data all_mode
 	cleanup_process $*
+=======
+
+	# there's only 2 rows in result, one for dm-worker's source-level status, one for SHOW PROCESSLIST
+	run_sql_source1 'SHOW PROCESSLIST;'
+	check_rows_equal 2
+
+	run_sql_source2 'SHOW PROCESSLIST;'
+	check_rows_equal 2
+
+	# there's only 1 row in result, which is for SHOW PROCESSLIST
+	run_sql_tidb 'SHOW PROCESSLIST;'
+	check_rows_equal 1
+
+	cleanup_data all_mode
+	cleanup_process
+
+>>>>>>> 902928461 (dep: update dumpling to fix connection leak (#2195))
 	export GO_FAILPOINTS=''
 }
 
@@ -168,7 +204,7 @@ function test_stop_task_before_checkpoint() {
 		"\"result\": true" 3
 
 	cleanup_data all_mode
-	cleanup_process $*
+	cleanup_process
 
 	export GO_FAILPOINTS=''
 }
@@ -226,7 +262,7 @@ function test_fail_job_between_event() {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	cleanup_data all_mode
-	cleanup_process $*
+	cleanup_process
 
 	export GO_FAILPOINTS=''
 }
@@ -271,7 +307,7 @@ function test_expression_filter() {
 		"\"result\": true" 3
 
 	cleanup_data all_mode
-	cleanup_process $*
+	cleanup_process
 }
 
 function run() {

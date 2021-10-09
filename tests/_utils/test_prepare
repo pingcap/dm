@@ -298,3 +298,10 @@ function check_master_port_offline() {
     check_port_offline ${master_ports_1_indexed[$idx]} 20
     check_port_offline ${master_peer_ports_1_indexed[$idx]} 20
 }
+
+function check_rows_equal() {
+    num=$1
+    check_contains "$num. row"
+    ((num++))
+    check_not_contains "$num. row"
+}
