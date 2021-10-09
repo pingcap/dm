@@ -49,6 +49,11 @@ type SwitchPath struct {
 	nextBinlogName string
 }
 
+// EventNotifier notifies
+type EventNotifier interface {
+	Notified() chan bool
+}
+
 // CollectAllBinlogFiles collects all valid binlog files in dir, and returns filenames in binlog ascending order.
 func CollectAllBinlogFiles(dir string) ([]string, error) {
 	if dir == "" {
@@ -207,12 +212,15 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 // so we need to check relay meta file to see if the new relay log is created.
 // this func will be blocked until current filesize changed or meta file updated or context cancelled.
 // we need to make sure that only one channel (updatePathCh or errCh) has events written to it.
-func relayLogUpdatedOrNewCreated(ctx context.Context, watcherInterval time.Duration, dir string,
+func relayLogUpdatedOrNewCreated(n EventNotifier, ctx context.Context, watcherInterval time.Duration, dir string,
 	latestFilePath, latestFile string, latestFileSize int64, updatePathCh chan string, errCh chan error) {
 	ticker := time.NewTicker(watcherInterval)
 	defer ticker.Stop()
 	for {
 		select {
+		case <-n.Notified():
+			updatePathCh <- latestFilePath
+			return
 		case <-ctx.Done():
 			errCh <- terror.Annotate(ctx.Err(), "context meet error")
 			return

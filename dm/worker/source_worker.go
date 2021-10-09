@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/replication"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -320,7 +322,7 @@ func (w *SourceWorker) EnableRelay() (err error) {
 	}
 
 	// 2. initial relay holder, the cfg's password need decrypt
-	w.relayHolder = NewRelayHolder(w.cfg)
+	w.relayHolder = NewRelayHolder(w)
 	relayPurger, err := w.relayHolder.Init(w.relayCtx, []purger.PurgeInterceptor{
 		w,
 	})
@@ -1037,4 +1039,10 @@ func (w *SourceWorker) HandleError(ctx context.Context, req *pb.HandleWorkerErro
 	}
 
 	return st.HandleError(ctx, req)
+}
+
+func (w *SourceWorker) OnEvent(e *replication.BinlogEvent) {
+	for _, s := range w.subTaskHolder.getAllSubTasks() {
+		s.relayNotify()
+	}
 }

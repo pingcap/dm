@@ -100,6 +100,7 @@ type SubTask struct {
 	units    []unit.Unit // units do job one by one
 	currUnit unit.Unit
 	prevUnit unit.Unit
+	syncer   *syncer.Syncer
 	resultWg sync.WaitGroup
 
 	stage  pb.Stage          // stage of current sub task
@@ -190,6 +191,11 @@ func (st *SubTask) initUnits() error {
 
 	needCloseUnits = st.units[:skipIdx]
 	st.units = st.units[skipIdx:]
+	for _, u := range st.units {
+		if s, ok := u.(*syncer.Syncer); ok {
+			st.syncer = s
+		}
+	}
 
 	st.setCurrUnit(st.units[0])
 	return nil
@@ -722,5 +728,14 @@ func updateTaskMetric(task, sourceID string, stage pb.Stage, workerName string) 
 		taskState.DeleteAllAboutLabels(prometheus.Labels{"task": task, "source_id": sourceID})
 	} else {
 		taskState.WithLabelValues(task, sourceID, workerName).Set(float64(stage))
+	}
+}
+
+func (st *SubTask) relayNotify() {
+	if st.syncer != nil {
+		select {
+		case st.syncer.RelayNotifyCh <- true:
+		default:
+		}
 	}
 }

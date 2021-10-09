@@ -76,13 +76,13 @@ type realRelayHolder struct {
 }
 
 // NewRealRelayHolder creates a new RelayHolder.
-func NewRealRelayHolder(sourceCfg *config.SourceConfig) RelayHolder {
-	cfg := relay.FromSourceCfg(sourceCfg)
+func NewRealRelayHolder(w *SourceWorker) RelayHolder {
+	cfg := relay.FromSourceCfg(w.cfg)
 
 	h := &realRelayHolder{
-		cfg:   sourceCfg,
+		cfg:   w.cfg,
 		stage: pb.Stage_New,
-		relay: relay.NewRelay(cfg),
+		relay: relay.NewRelay(w, cfg),
 		l:     log.With(zap.String("component", "relay holder")),
 	}
 	h.closed.Store(true)

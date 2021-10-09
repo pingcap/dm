@@ -69,6 +69,12 @@ var NewRelay = NewRealRelay
 
 var _ Process = &Relay{}
 
+// EventListener defines a binlog event listener of relay
+type EventListener interface {
+	// OnEvent get called when relay processed an event successfully.
+	OnEvent(e *replication.BinlogEvent)
+}
+
 // Process defines mysql-like relay log process unit.
 type Process interface {
 	// Init initial relat log unit
@@ -117,14 +123,16 @@ type Relay struct {
 		sync.RWMutex
 		info *pkgstreamer.RelayLogInfo
 	}
+	el EventListener
 }
 
 // NewRealRelay creates an instance of Relay.
-func NewRealRelay(cfg *Config) Process {
+func NewRealRelay(el EventListener, cfg *Config) Process {
 	return &Relay{
 		cfg:    cfg,
 		meta:   NewLocalMeta(cfg.Flavor, cfg.RelayDir),
 		logger: log.With(zap.String("component", "relay log")),
+		el:     el,
 	}
 }
 
@@ -562,7 +570,9 @@ func (r *Relay) handleEvents(
 		if err != nil {
 			relayLogWriteErrorCounter.Inc()
 			return eventIndex, err
-		} else if wResult.Ignore {
+		}
+		r.el.OnEvent(e)
+		if wResult.Ignore {
 			r.logger.Info("ignore event by writer",
 				zap.Reflect("header", e.Header),
 				zap.String("reason", wResult.IgnoreReason))

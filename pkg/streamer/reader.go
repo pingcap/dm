@@ -79,10 +79,11 @@ type BinlogReader struct {
 
 	usingGTID          bool
 	prevGset, currGset mysql.GTIDSet
+	en                 EventNotifier
 }
 
 // NewBinlogReader creates a new BinlogReader.
-func NewBinlogReader(logger log.Logger, cfg *BinlogReaderConfig) *BinlogReader {
+func NewBinlogReader(en EventNotifier, logger log.Logger, cfg *BinlogReaderConfig) *BinlogReader {
 	ctx, cancel := context.WithCancel(context.Background()) // only can be canceled in `Close`
 	parser := replication.NewBinlogParser()
 	parser.SetVerifyChecksum(true)
@@ -100,6 +101,7 @@ func NewBinlogReader(logger log.Logger, cfg *BinlogReaderConfig) *BinlogReader {
 		indexPath: path.Join(cfg.RelayDir, utils.UUIDIndexFilename),
 		cancel:    cancel,
 		tctx:      newtctx,
+		en:        en,
 	}
 }
 
@@ -595,7 +597,7 @@ func (r *BinlogReader) parseFile(
 	wg.Add(1)
 	go func(latestPos int64) {
 		defer wg.Done()
-		relayLogUpdatedOrNewCreated(newCtx, watcherInterval, relayLogDir, fullPath, relayLogFile, latestPos, updatePathCh, updateErrCh)
+		relayLogUpdatedOrNewCreated(r.en, newCtx, watcherInterval, relayLogDir, fullPath, relayLogFile, latestPos, updatePathCh, updateErrCh)
 	}(latestPos)
 
 	select {

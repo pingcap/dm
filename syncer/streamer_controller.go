@@ -121,10 +121,11 @@ type StreamerController struct {
 
 	// whether the server id is updated
 	serverIDUpdated bool
+	s               *Syncer
 }
 
 // NewStreamerController creates a new streamer controller.
-func NewStreamerController(
+func NewStreamerController(s *Syncer,
 	syncCfg replication.BinlogSyncerConfig,
 	enableGTID bool,
 	fromDB *dbconn.UpStreamConn,
@@ -154,6 +155,7 @@ func NewStreamerController(
 		timezone:          timezone,
 		fromDB:            fromDB,
 		closed:            true,
+		s:                 s,
 	}
 
 	return streamerController
@@ -232,7 +234,7 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, loca
 	if c.currentBinlogType == RemoteBinlog {
 		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), tctx, c.syncCfg.Flavor, c.enableGTID}
 	} else {
-		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(tctx.L(), &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone, Flavor: c.syncCfg.Flavor}), c.enableGTID}
+		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(c.s, tctx.L(), &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone, Flavor: c.syncCfg.Flavor}), c.enableGTID}
 	}
 
 	c.streamer, err = c.streamerProducer.generateStreamer(location)
