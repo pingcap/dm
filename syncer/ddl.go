@@ -143,7 +143,7 @@ func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (*ddlInfo, error
 
 // renameOnlineDDLTable renames the given ddl sqls by given targetTable.
 func (s *Syncer) renameOnlineDDLTable(qec *queryEventContext, targetTable *filter.Table, sqls []string) ([]string, error) {
-	renamedSqls := make([]string, 0, len(sqls))
+	renamedSQLs := make([]string, 0, len(sqls))
 	targetTables := []*filter.Table{targetTable}
 	for _, sql := range sqls {
 		// remove empty sqls which inserted because online DDL is filtered
@@ -159,9 +159,9 @@ func (s *Syncer) renameOnlineDDLTable(qec *queryEventContext, targetTable *filte
 		if err != nil {
 			return nil, err
 		}
-		renamedSqls = append(renamedSqls, sql)
+		renamedSQLs = append(renamedSQLs, sql)
 	}
-	return renamedSqls, nil
+	return renamedSQLs, nil
 }
 
 func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema string) error {
