@@ -27,7 +27,6 @@ import (
 // TaskConfigToSubTaskConfigs generates sub task configs by TaskConfig.
 func TaskConfigToSubTaskConfigs(c *TaskConfig, sources map[string]DBConfig) ([]*SubTaskConfig, error) {
 	cfgs := make([]*SubTaskConfig, len(c.MySQLInstances))
-	needLogHeartBeat := false
 	for i, inst := range c.MySQLInstances {
 		dbCfg, exist := sources[inst.SourceID]
 		if !exist {
@@ -46,9 +45,6 @@ func TaskConfigToSubTaskConfigs(c *TaskConfig, sources map[string]DBConfig) ([]*
 		cfg.CaseSensitive = c.CaseSensitive
 		cfg.MetaSchema = c.MetaSchema
 		cfg.EnableHeartbeat = false
-		if c.EnableHeartbeat {
-			needLogHeartBeat = true
-		}
 		cfg.HeartbeatUpdateInterval = c.HeartbeatUpdateInterval
 		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval
 		cfg.Meta = inst.Meta
@@ -99,7 +95,7 @@ func TaskConfigToSubTaskConfigs(c *TaskConfig, sources map[string]DBConfig) ([]*
 		}
 		cfgs[i] = cfg
 	}
-	if needLogHeartBeat {
+	if c.EnableHeartbeat {
 		log.L().Warn("DM 2.0 does not support heartbeat feature, will overwrite it to false")
 	}
 	return cfgs, nil
