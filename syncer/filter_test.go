@@ -200,7 +200,6 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 			SQLPattern:    []string{"^create\\s+table"},
 			Action:        bf.Ignore,
 		},
-		// TODO: add single sql-pattern test
 	}
 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, filterRules)
 	c.Assert(err, IsNil)
