@@ -27,7 +27,6 @@ import (
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/util/mock"
 
@@ -40,7 +39,6 @@ import (
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
-	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/schema"
 	streamer2 "github.com/pingcap/dm/pkg/streamer"
@@ -1333,29 +1331,10 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	}
 
 	for _, ca := range cases {
-		stmt, err := qec.p.ParseOneStmt(ca.sql, "", "")
+		ddlInfo, err := syncer.routeDDL(qec.p, qec.ddlSchema, ca.sql)
 		c.Assert(err, IsNil)
-
-		originTables, err := parserpkg.FetchDDLTables(qec.ddlSchema, stmt, syncer.SourceTableNamesFlavor)
-		c.Assert(err, IsNil)
-
-		routedTables := make([]*filter.Table, 0, len(originTables))
-		for i := range originTables {
-			routedTable := syncer.route(originTables[i])
-			routedTables = append(routedTables, routedTable)
-		}
-
-		sqlDDL, err := parserpkg.RenameDDLTable(stmt, routedTables)
-		c.Assert(err, IsNil)
-
 		ca.callback()
 
-		ddlInfo := &ddlInfo{
-			sql:          sqlDDL,
-			stmt:         stmt,
-			sourceTables: originTables,
-			targetTables: routedTables,
-		}
 		c.Assert(syncer.trackDDL(testDB, ddlInfo, ec), IsNil)
 		c.Assert(syncer.schemaTracker.Reset(), IsNil)
 		c.Assert(mock.ExpectationsWereMet(), IsNil)
@@ -1363,65 +1342,65 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	}
 }
 
-func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.BinlogEvent, p *parser.Parser, res [][]bool) {
-	i := 0
-	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "checkEventWithTableResult")))
-	ec := &eventContext{
-		tctx: tctx,
-	}
-	for _, e := range allEvents {
-		switch ev := e.Event.(type) {
-		case *replication.QueryEvent:
-			qec := &queryEventContext{
-				eventContext: ec,
-				originSQL:    string(ev.Query),
-				ddlSchema:    string(ev.Schema),
-				p:            p,
-			}
-			stmt, err := parseDDLSQL(qec)
-			c.Assert(err, IsNil)
+// func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.BinlogEvent, p *parser.Parser, res [][]bool) {
+// 	i := 0
+// 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "checkEventWithTableResult")))
+// 	ec := &eventContext{
+// 		tctx: tctx,
+// 	}
+// 	for _, e := range allEvents {
+// 		switch ev := e.Event.(type) {
+// 		case *replication.QueryEvent:
+// 			qec := &queryEventContext{
+// 				eventContext: ec,
+// 				originSQL:    string(ev.Query),
+// 				ddlSchema:    string(ev.Schema),
+// 				p:            p,
+// 			}
+// 			stmt, err := parseDDLSQL(qec)
+// 			c.Assert(err, IsNil)
 
-			if _, ok := stmt.(ast.DDLNode); !ok {
-				continue // BEGIN event
-			}
-			qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
-			c.Assert(err, IsNil)
-			for _, sql := range qec.splitedDDLs {
-				sqls, err := syncer.processSplitedDDL(qec, sql)
-				c.Assert(err, IsNil)
-				qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
-			}
-			if len(qec.appliedDDLs) == 0 {
-				c.Assert(res[i], HasLen, 1)
-				c.Assert(res[i][0], Equals, true)
-				i++
-				continue
-			}
+// 			if _, ok := stmt.(ast.DDLNode); !ok {
+// 				continue // BEGIN event
+// 			}
+// 			qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
+// 			c.Assert(err, IsNil)
+// 			for _, sql := range qec.splitedDDLs {
+// 				sqls, err := syncer.processSplitedDDL(qec, sql)
+// 				c.Assert(err, IsNil)
+// 				qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+// 			}
+// 			if len(qec.appliedDDLs) == 0 {
+// 				c.Assert(res[i], HasLen, 1)
+// 				c.Assert(res[i][0], Equals, true)
+// 				i++
+// 				continue
+// 			}
 
-			for j, sql := range qec.appliedDDLs {
-				stmt, err := p.ParseOneStmt(sql, "", "")
-				c.Assert(err, IsNil)
+// 			for j, sql := range qec.appliedDDLs {
+// 				stmt, err := p.ParseOneStmt(sql, "", "")
+// 				c.Assert(err, IsNil)
 
-				tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
-				c.Assert(err, IsNil)
-				needSkip, err := syncer.skipQueryEvent(tables, stmt, sql)
-				c.Assert(err, IsNil)
-				c.Assert(needSkip, Equals, res[i][j])
-			}
-		case *replication.RowsEvent:
-			table := &filter.Table{
-				Schema: string(ev.Table.Schema),
-				Name:   string(ev.Table.Table),
-			}
-			needSkip, err := syncer.skipRowsEvent(table, e.Header.EventType)
-			c.Assert(err, IsNil)
-			c.Assert(needSkip, Equals, res[i][0])
-		default:
-			continue
-		}
-		i++
-	}
-}
+// 				tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
+// 				c.Assert(err, IsNil)
+// 				needSkip, err := syncer.skipQueryEvent(tables, stmt, sql)
+// 				c.Assert(err, IsNil)
+// 				c.Assert(needSkip, Equals, res[i][j])
+// 			}
+// 		case *replication.RowsEvent:
+// 			table := &filter.Table{
+// 				Schema: string(ev.Table.Schema),
+// 				Name:   string(ev.Table.Table),
+// 			}
+// 			needSkip, err := syncer.skipRowsEvent(table, e.Header.EventType)
+// 			c.Assert(err, IsNil)
+// 			c.Assert(needSkip, Equals, res[i][0])
+// 		default:
+// 			continue
+// 		}
+// 		i++
+// 	}
+// }
 
 func executeSQLAndWait(expectJobNum int) {
 	for i := 0; i < 10; i++ {
