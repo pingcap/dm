@@ -560,8 +560,6 @@ components:
               type: string
               description: table name, does not support wildcards
               example: "tb1"
-          required:
-            - "schema"
         binlog_filter_rule:
           type: array
           description: "filter rule name"

@@ -501,10 +501,10 @@ func genNoShardTask() openapi.Task {
 			Table:      &noShardSourceTable,
 		},
 		Target: struct {
-			Schema string  "json:\"schema\""
+			Schema *string `json:"schema,omitempty"`
 			Table  *string `json:"table,omitempty"`
 		}{
-			Schema: noShardTargetSchema,
+			Schema: &noShardTargetSchema,
 			Table:  &noShardTargetTable,
 		},
 	}
@@ -626,10 +626,10 @@ func genShardAndFilterTask() openapi.Task {
 			Table:      &shardSource1Table,
 		},
 		Target: struct {
-			Schema string  "json:\"schema\""
+			Schema *string `json:"schema,omitempty"`
 			Table  *string `json:"table,omitempty"`
 		}{
-			Schema: shardTargetSchema,
+			Schema: &shardTargetSchema,
 			Table:  &shardTargetTable,
 		},
 	}
@@ -644,10 +644,10 @@ func genShardAndFilterTask() openapi.Task {
 			Table:      &shardSource2Table,
 		},
 		Target: struct {
-			Schema string  "json:\"schema\""
+			Schema *string `json:"schema,omitempty"`
 			Table  *string `json:"table,omitempty"`
 		}{
-			Schema: shardTargetSchema,
+			Schema: &shardTargetSchema,
 			Table:  &shardTargetTable,
 		},
 	}
