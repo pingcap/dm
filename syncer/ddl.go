@@ -56,6 +56,7 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 		return nil, err
 	}
 	// TODO: add track ddl
+	// will implement in https://github.com/pingcap/dm/pull/1975
 
 	// get real tables before apply block-allow list
 	realTables := make([]*filter.Table, 0, len(ddlInfo.sourceTables))
