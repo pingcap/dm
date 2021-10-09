@@ -44,7 +44,7 @@ Users may use single SQL statement to update a large amount of data, because DM 
 
   UPDATE tb SET a=1, b=1 WHERE a=1;
 + UPDATE tb SET a=2, b=2 WHERE a=2;
-= INSERT tb(a,b) VALUES(1,1),(2,2) ON DUPLICATE UPDATE a=VALUES(a), b=VALUES(b)
+= INSERT tb(a,b) VALUES(1,1),(2,2) ON DUPLICATE UPDATE a=VALUES(a), b=VALUES(b);
 
   DELETE tb WHERE a=1
 + DELETE tb WHERE a=2
