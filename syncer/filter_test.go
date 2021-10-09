@@ -275,7 +275,6 @@ func (s *testFilterSuite) TestSkipByTable(c *C) {
 			&filter.Table{Schema: "s2", Name: "test"},
 			false,
 		},
-		// TODO: add single sql-pattern test
 	}
 	for _, ca := range cases {
 		needSkip := syncer.skipByTable(ca.table)
