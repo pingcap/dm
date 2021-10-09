@@ -17,7 +17,7 @@ Some users' write logic is: one INSERT statement followed by multiple UPDATE sta
 # Assuming that UPDATE statement does not update the primary/unique key.
 # If UPDATE statement update the primary/unique key, split it into one DELETE AND one INSERT statement.
 # For multiple unique keys, treat all primary keys and unique keys as one big primary key.
-# X means this situation will not happen
+# X means this situation will not happen.
 INSERT + INSERT => X
 INSERT + UPDATE => INSERT
 INSERT + DELETE => NULL(DELETE)
