@@ -59,16 +59,14 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 	// will implement in https://github.com/pingcap/dm/pull/1975
 
 	// get real tables before apply block-allow list
-	realTables := make([]*filter.Table, 0, len(ddlInfo.sourceTables))
-	for _, table := range ddlInfo.sourceTables {
-		realName := table.Name
-		if s.onlineDDL != nil {
-			realName = s.onlineDDL.RealName(table.Name)
+	realTables := ddlInfo.sourceTables
+	if s.onlineDDL != nil {
+		for i, table := range ddlInfo.sourceTables {
+			realTables[i] = &filter.Table{
+				Schema: table.Schema,
+				Name:   s.onlineDDL.RealName(table.Name),
+			}
 		}
-		realTables = append(realTables, &filter.Table{
-			Schema: table.Schema,
-			Name:   realName,
-		})
 	}
 
 	shouldSkip, err := s.skipQueryEvent(realTables, ddlInfo.stmt, qec.originSQL)
