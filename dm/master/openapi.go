@@ -519,9 +519,16 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 		filterRules := []*bf.BinlogEventRule{}
 		for _, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
 			// route
+			var sourceTable, targetTable string
+			if rule.Source.Table != nil {
+				sourceTable = *rule.Source.Table
+			}
+			if rule.Target.Table != nil {
+				targetTable = *rule.Target.Table
+			}
 			routeRules = append(routeRules, &router.TableRule{
-				SchemaPattern: rule.Source.Schema, TablePattern: rule.Source.Table,
-				TargetSchema: rule.Target.Schema, TargetTable: rule.Target.Table,
+				SchemaPattern: rule.Source.Schema, TablePattern: sourceTable,
+				TargetSchema: rule.Target.Schema, TargetTable: targetTable,
 			})
 			// filter
 			if rule.BinlogFilterRule != nil {
@@ -531,13 +538,13 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 						return nil, terror.ErrOpenAPICommonError.Generatef("filter rule name %s not found.", name)
 					}
 					filterRule.SchemaPattern = rule.Source.Schema
-					filterRule.TablePattern = rule.Source.Table
+					filterRule.TablePattern = sourceTable
 					filterRules = append(filterRules, &filterRule)
 				}
 			}
 			// BlockAllowList
 			doDBs = append(doDBs, rule.Source.Schema)
-			doTables = append(doTables, &filter.Table{Schema: rule.Source.Schema, Name: rule.Source.Table})
+			doTables = append(doTables, &filter.Table{Schema: rule.Source.Schema, Name: sourceTable})
 		}
 		subTaskCfg.RouteRules = routeRules
 		subTaskCfg.FilterRules = filterRules
