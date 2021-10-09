@@ -2376,8 +2376,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(ec.startTime).Seconds())
 		ec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", qec.originSQL), zap.String("schema", qec.ddlSchema))
 		*ec.lastLocation = *ec.currentLocation // before record skip location, update lastLocation
-		// Q&A: If parse fail, ok must be false. Can we delete it?
-		// Q&A: Former logic will postpone to filterAndApply
 		return s.recordSkipSQLsLocation(&ec)
 	}
 
