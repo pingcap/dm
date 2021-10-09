@@ -492,19 +492,19 @@ func genNoShardTask() openapi.Task {
 	}
 	tableMigrateRule := openapi.TaskTableMigrateRule{
 		Source: struct {
-			Schema     string  "json:\"schema\""
-			SourceName string  "json:\"source_name\""
-			Table      *string `json:"table,omitempty"`
+			Schema     string "json:\"schema\""
+			SourceName string "json:\"source_name\""
+			Table      string `json:"table"`
 		}{
 			Schema:     noShardSourceSchema,
 			SourceName: source1Name,
-			Table:      &noShardSourceTable,
+			Table:      noShardSourceTable,
 		},
 		Target: struct {
-			Schema *string `json:"schema,omitempty"`
+			Schema string  `json:"schema"`
 			Table  *string `json:"table,omitempty"`
 		}{
-			Schema: &noShardTargetSchema,
+			Schema: noShardTargetSchema,
 			Table:  &noShardTargetTable,
 		},
 	}
@@ -617,37 +617,37 @@ func genShardAndFilterTask() openapi.Task {
 	tableMigrateRule1 := openapi.TaskTableMigrateRule{
 		BinlogFilterRule: &binlogFilterNameList,
 		Source: struct {
-			Schema     string  "json:\"schema\""
-			SourceName string  "json:\"source_name\""
-			Table      *string `json:"table,omitempty"`
+			Schema     string "json:\"schema\""
+			SourceName string "json:\"source_name\""
+			Table      string `json:"table"`
 		}{
 			Schema:     shardSource1Schema,
 			SourceName: source1Name,
-			Table:      &shardSource1Table,
+			Table:      shardSource1Table,
 		},
 		Target: struct {
-			Schema *string `json:"schema,omitempty"`
+			Schema string  `json:"schema"`
 			Table  *string `json:"table,omitempty"`
 		}{
-			Schema: &shardTargetSchema,
+			Schema: shardTargetSchema,
 			Table:  &shardTargetTable,
 		},
 	}
 	tableMigrateRule2 := openapi.TaskTableMigrateRule{
 		Source: struct {
-			Schema     string  "json:\"schema\""
-			SourceName string  "json:\"source_name\""
-			Table      *string `json:"table,omitempty"`
+			Schema     string "json:\"schema\""
+			SourceName string "json:\"source_name\""
+			Table      string `json:"table"`
 		}{
 			Schema:     shardSource2Schema,
 			SourceName: source2Name,
-			Table:      &shardSource2Table,
+			Table:      shardSource2Table,
 		},
 		Target: struct {
-			Schema *string `json:"schema,omitempty"`
+			Schema string  `json:"schema"`
 			Table  *string `json:"table,omitempty"`
 		}{
-			Schema: &shardTargetSchema,
+			Schema: shardTargetSchema,
 			Table:  &shardTargetTable,
 		},
 	}
