@@ -51,7 +51,7 @@ Users may use single SQL statement to update a large amount of data, because DM 
 = DELETE tb WHERE (a) IN (1),(2);
 ```
 
-By combining multiple update statements into a single `INSERT ON DUPLICATE UPDATE` statement, TiDB can use batch get rather than point get, which will reduct grpc usage.
+By combining multiple update statements into a single `INSERT ON DUPLICATE UPDATE` statement, TiDB can use batch get rather than point get, which will reduct gRPC usage.
 
 ### DML Flow
 
