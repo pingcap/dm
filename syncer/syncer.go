@@ -256,7 +256,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
 	syncer.recordedActiveRelayLog = false
-	syncer.workerJobTSArray = make([]*atomic.Int64, cfg.WorkerCount+workerJobTSArrayInitSize)
+	syncer.workerJobTSArray = make([]*atomic.Int64, cfg.WorkerCount+workerJobTSArrayInitSize+1)
 	for i := range syncer.workerJobTSArray {
 		syncer.workerJobTSArray[i] = atomic.NewInt64(0)
 	}
@@ -1271,9 +1271,18 @@ func (s *Syncer) syncDML() {
 		s.tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
 	})
 
-	// TODO: add compactor
-	causalityCh := causalityWrap(s.dmlJobCh, s)
-	flushCount, flushCh := dmlWorkerWrap(causalityCh, s)
+	var (
+		compactedCh    chan map[opType][]*job
+		nonCompactedCh chan *job
+		drainCh        chan struct{}
+	)
+	if s.cfg.Compact {
+		compactedCh, nonCompactedCh, drainCh = compactorWrap(s.dmlJobCh, s)
+	} else {
+		nonCompactedCh = s.dmlJobCh
+	}
+	causalityCh := causalityWrap(nonCompactedCh, s)
+	flushCount, flushCh := dmlWorkerWrap(compactedCh, drainCh, causalityCh, s)
 
 	// wait all worker flushed
 	// use counter is enough since we only add new flush job after previous flush job done
@@ -2047,9 +2056,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	var (
-		sqls    []string
-		keys    [][]string
-		args    [][]interface{}
+		dmls    []*DML
 		jobType opType
 	)
 
@@ -2069,7 +2076,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode
-		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
+		dmls, err = s.genAndFilterInsertdmls(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen insert sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
@@ -2083,7 +2090,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode
-		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
+		dmls, err = s.genAndFilterUpdatedmls(param, oldExprFilter, newExprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen update sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
@@ -2096,7 +2103,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err2
 		}
 
-		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
+		dmls, err = s.genAndFilterDeletedmls(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen delete sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
@@ -2109,17 +2116,8 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	startTime := time.Now()
-	for i := range sqls {
-		var arg []interface{}
-		var key []string
-		if args != nil {
-			arg = args[i]
-		}
-		if keys != nil {
-			key = keys[i]
-		}
-
-		job := newDMLJob(jobType, sourceTable, targetTable, sqls[i], arg, key, &ec)
+	for i := range dmls {
+		job := newDMLJob(jobType, sourceTable, targetTable, dmls[i], &ec)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err

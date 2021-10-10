@@ -36,6 +36,7 @@ type DMLWorker struct {
 	batch          int
 	workerCount    int
 	chanSize       int
+	multipleRows   bool
 	toDBConns      []*dbconn.DBConn
 	tctx           *tcontext.Context
 	causalityWg    sync.WaitGroup
@@ -55,16 +56,19 @@ type DMLWorker struct {
 	addCountFunc func(bool, string, opType, int64, *filter.Table)
 
 	// channel
+	compactedCh chan map[opType][]*job
+	pullCh      chan struct{}
 	causalityCh chan *job
 	flushCh     chan *job
 }
 
 // dmlWorkerWrap creates and runs a dmlWorker instance and return all workers count and flush job channel.
-func dmlWorkerWrap(causalityCh chan *job, syncer *Syncer) (int, chan *job) {
+func dmlWorkerWrap(compactedCh chan map[opType][]*job, pullCh chan struct{}, causalityCh chan *job, syncer *Syncer) (int, chan *job) {
 	dmlWorker := &DMLWorker{
 		batch:          syncer.cfg.Batch,
 		workerCount:    syncer.cfg.WorkerCount,
 		chanSize:       syncer.cfg.QueueSize,
+		multipleRows:   syncer.cfg.MultipleRows,
 		task:           syncer.cfg.Name,
 		source:         syncer.cfg.SourceID,
 		worker:         syncer.cfg.WorkerName,
@@ -76,21 +80,38 @@ func dmlWorkerWrap(causalityCh chan *job, syncer *Syncer) (int, chan *job) {
 		addCountFunc:   syncer.addCount,
 		tctx:           syncer.tctx,
 		toDBConns:      syncer.toDBConns,
+		compactedCh:    compactedCh,
+		pullCh:         pullCh,
 		causalityCh:    causalityCh,
 		flushCh:        make(chan *job),
 	}
+	flushCount := dmlWorker.workerCount
+	if compactedCh != nil {
+		flushCount++
+	}
 	dmlWorker.run()
-	// flushCount is as many as workerCount
-	return dmlWorker.workerCount, dmlWorker.flushCh
+	return flushCount, dmlWorker.flushCh
 }
 
 // run runs dml workers
-//            |‾ causality worker  ‾|
-// causality -|- causality worker   |=> connection pool
-//            |_ causality worker  _|
+//			  |‾ causality worker  ‾|
+// causality -|- causality worker	|
+//			  |_ causality worker   |
+//									|=> connection pool
+//			  |‾ delete			    |
+// compactor -|- insert				|
+//			  |_ update			   _|
 // .
 func (w *DMLWorker) run() {
 	var wg sync.WaitGroup
+
+	if w.compactedCh != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w.runCompactedDMLWorker()
+		}()
+	}
 
 	wg.Add(1)
 	go func() {
@@ -107,6 +128,27 @@ func (w *DMLWorker) run() {
 // close closes outer channel.
 func (w *DMLWorker) close() {
 	close(w.flushCh)
+}
+
+// runCompactedDMLWorker receive compacted jobs and execute concurrently.
+// All jobs have been compacted, so one identify key has only one SQL.
+// Execute SQLs in the order of (delete, insert, update).
+func (w *DMLWorker) runCompactedDMLWorker() {
+	w.pullCh <- struct{}{}
+	for jobsMap := range w.compactedCh {
+		w.executeCompactedJobsWithOpType(del, jobsMap)
+		w.executeCompactedJobsWithOpType(insert, jobsMap)
+		w.executeCompactedJobsWithOpType(update, jobsMap)
+
+		if jobs, ok := jobsMap[flush]; ok {
+			j := jobs[0]
+			w.addCountFunc(false, "q_-1", j.tp, 1, j.targetTable)
+			startTime := time.Now()
+			w.flushCh <- j
+			metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, "q_-1", w.source).Observe(time.Since(startTime).Seconds())
+		}
+		w.pullCh <- struct{}{}
+	}
 }
 
 // runCausalityDMLWorker distribute jobs by queueBucket.
@@ -147,14 +189,70 @@ func (w *DMLWorker) runCausalityDMLWorker() {
 				w.addCountFunc(true, adminQueueName, j.tp, 1, j.targetTable)
 			}
 		} else {
-			queueBucket := int(utils.GenHashKey(j.key)) % w.workerCount
+			queueBucket := int(utils.GenHashKey(j.dml.key)) % w.workerCount
 			w.addCountFunc(false, queueBucketMapping[queueBucket], j.tp, 1, j.targetTable)
 			startTime := time.Now()
-			w.logger.Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.key))
+			w.logger.Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.dml.key))
 			causalityJobChs[queueBucket] <- j
 			metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[queueBucket], w.source).Observe(time.Since(startTime).Seconds())
 		}
 	}
+}
+
+// genMultipleRowsSQL generate multiple row values SQL by different opType.
+// insert into tb values(1,1)	‾|
+// insert into tb values(2,2)	 |=> insert into tb values (1,1),(2,2),(3,3)
+// insert into tb values(3,3)	_|
+// update tb set b=1 where a=1	‾|
+// update tb set b=2 where a=2	 |=> replace into tb values(1,1),(2,2),(3,3)
+// update tb set b=3 where a=3	_|
+// delete from tb where a=1,b=1	‾|
+// delete from tb where a=2,b=2	 |=> delete from tb where (a,b) in (1,1),(2,2),(3,3)
+// delete from tb where a=3,b=3	_|
+// group by [opType => table name => columns].
+func genMultipleRowsSQL(op opType, dmls []*DML) ([]string, [][]interface{}) {
+	// for compacted jobs, all dmlParmas already has same opType
+	// so group by table
+	if op != null {
+		return gendmlsWithSameTable(op, dmls)
+	}
+	// for causality jobs, group dmls with opType
+	return gendmlsWithSameTp(dmls)
+}
+
+// genSingleRowSQL generate single row value SQL.
+func genSingleRowSQL(dmls []*DML) ([]string, [][]interface{}) {
+	queries := make([]string, 0, len(dmls))
+	args := make([][]interface{}, 0, len(dmls))
+	for _, dml := range dmls {
+		query, arg := dml.genSQL()
+		queries = append(queries, query...)
+		args = append(args, arg...)
+	}
+	return queries, args
+}
+
+// executeCompactedJobsWithOpType execute special opType of compacted jobs.
+func (w *DMLWorker) executeCompactedJobsWithOpType(op opType, jobsMap map[opType][]*job) {
+	jobs, ok := jobsMap[op]
+	if !ok {
+		return
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < len(jobs); i += w.batch {
+		j := i + w.batch
+		if j >= len(jobs) {
+			j = len(jobs)
+		}
+		wg.Add(1)
+		batchJobs := jobs[i:j]
+		// for update jobs, regard it as replace jobs
+		if op == update {
+			op = replace
+		}
+		w.connectionPool.ApplyWithID(w.executeBatchJobs(-1, op, batchJobs, func() { wg.Done() }))
+	}
+	wg.Wait()
 }
 
 // executeCausalityJobs execute jobs in same queueBucket
@@ -192,12 +290,12 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 			wg.Add(1)
 
 			if j.tp == conflict {
-				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() {
+				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, null, batchJobs, func() {
 					wg.Done()
 					w.causalityWg.Done()
 				}))
 			} else {
-				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))
+				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, null, batchJobs, func() { wg.Done() }))
 			}
 
 			if j.tp == flush {
@@ -214,7 +312,7 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 				wg.Wait()
 				batchJobs := jobs
 				wg.Add(1)
-				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, batchJobs, func() { wg.Done() }))
+				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, null, batchJobs, func() { wg.Done() }))
 				jobs = make([]*job, 0, w.batch)
 			} else {
 				failpoint.Inject("noJobInQueueLog", func() {
@@ -228,7 +326,7 @@ func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
 }
 
 // executeBatchJobs execute jobs with batch size.
-func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job, clearFunc func()) func(uint64) {
+func (w *DMLWorker) executeBatchJobs(queueID int, op opType, jobs []*job, clearFunc func()) func(uint64) {
 	executeJobs := func(id uint64) {
 		var (
 			affect int
@@ -262,11 +360,16 @@ func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job, clearFunc func())
 			}
 		})
 
+		dmls := make([]*DML, 0, len(jobs))
+		for _, j := range jobs {
+			dmls = append(dmls, j.dml)
+		}
 		var queries []string
 		var args [][]interface{}
-		for _, j := range jobs {
-			queries = append(queries, j.sql)
-			args = append(args, j.args)
+		if w.multipleRows {
+			queries, args = genMultipleRowsSQL(op, dmls)
+		} else {
+			queries, args = genSingleRowSQL(dmls)
 		}
 		failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
 			t := v.(int)
