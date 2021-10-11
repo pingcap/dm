@@ -44,8 +44,8 @@ const (
 	DefaultShadowTableRules = "^_(.+)_(?:new|gho)$"
 	DefaultTrashTableRules  = "^_(.+)_(?:ghc|del|old)$"
 
-	ShadowTableRules = "shadow-table-rules"
-	TrashTableRules  = "trash-table-rules"
+	ShadowTableRules              = "shadow-table-rules"
+	TrashTableRules               = "trash-table-rules"
 	TiDBLightningCheckpointPrefix = "tidb_lightning_checkpoint_"
 )
 

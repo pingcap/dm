@@ -15,9 +15,10 @@ package loader
 
 import (
 	"context"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"path/filepath"
 	"sync"
+
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -118,7 +119,15 @@ func (l *LightningLoader) Init(ctx context.Context) (err error) {
 		err = nil
 	})
 	l.checkPoint = checkpoint
-	l.toDB, l.toDBConns, err = createConns(tctx, l.cfg, 1)
+	toCfg, err := l.cfg.Clone()
+	if err != nil {
+		return err
+	}
+	if toCfg.To.Session == nil {
+		toCfg.To.Session = make(map[string]string)
+	}
+	toCfg.To.Session["time_zone"] = "+00:00"
+	l.toDB, l.toDBConns, err = createConns(tctx, toCfg, 1)
 	return err
 }
 
@@ -150,7 +159,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		}
 		cfg.Routes = l.cfg.RouteRules
 		cfg.Checkpoint.Driver = lcfg.CheckpointDriverMySQL
-		cfg.Checkpoint.Schema = config.TiDBLightningCheckpointPrefix + dbutil.ColumnName(l.workerName)
+		cfg.Checkpoint.Schema = config.TiDBLightningCheckpointPrefix + dbutil.TableName(l.cfg.Name, l.checkpointID())
 		param := common.MySQLConnectParam{
 			Host:             cfg.TiDB.Host,
 			Port:             cfg.TiDB.Port,
@@ -161,6 +170,13 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 			TLS:              cfg.TiDB.TLS,
 		}
 		cfg.Checkpoint.DSN = param.ToDSN()
+		cfg.TiDB.Vars = make(map[string]string)
+		if l.cfg.To.Session != nil {
+			for k, v := range l.cfg.To.Session {
+				cfg.TiDB.Vars[k] = v
+			}
+		}
+		cfg.TiDB.Vars["time_zone"] = "+00:00"
 		cfg.TiDB.StrSQLMode = l.cfg.LoaderConfig.SQLMode
 		if err = cfg.Adjust(ctx); err != nil {
 			return err
