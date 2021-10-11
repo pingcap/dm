@@ -572,7 +572,6 @@ components:
             example: rule-1
       required:
         - "source"
-        - "target"
 
     TaskFullMigrateConf:
       description: configuration of full migrate tasks
