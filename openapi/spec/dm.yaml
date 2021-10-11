@@ -563,6 +563,7 @@ components:
               example: "tb1"
           required:
             - "schema"
+            - "table"
         binlog_filter_rule:
           type: array
           description: "filter rule name"
@@ -571,7 +572,6 @@ components:
             example: rule-1
       required:
         - "source"
-        - "target"
 
     TaskFullMigrateConf:
       description: configuration of full migrate tasks

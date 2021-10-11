@@ -519,15 +519,12 @@ func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openap
 		filterRules := []*bf.BinlogEventRule{}
 		for _, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
 			// route
-			var targetTable string
-
-			if rule.Target.Table != nil {
-				targetTable = *rule.Target.Table
+			if rule.Target != nil {
+				routeRules = append(routeRules, &router.TableRule{
+					SchemaPattern: rule.Source.Schema, TablePattern: rule.Source.Table,
+					TargetSchema: rule.Target.Schema, TargetTable: rule.Target.Table,
+				})
 			}
-			routeRules = append(routeRules, &router.TableRule{
-				SchemaPattern: rule.Source.Schema, TablePattern: rule.Source.Table,
-				TargetSchema: rule.Target.Schema, TargetTable: targetTable,
-			})
 			// filter
 			if rule.BinlogFilterRule != nil {
 				for _, name := range *rule.BinlogFilterRule {

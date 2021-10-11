@@ -15,7 +15,7 @@ fix-sql-file = "fix.sql"
 # tables need to check.
 [[check-tables]]
 schema = "openapi"
-tables = ["~^*"]
+tables = ["~^.*"]
 
 [[table-config]]
 schema = "openapi"

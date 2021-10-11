@@ -76,7 +76,6 @@ def start_noshard_task_success():
                     "schema": "openapi",
                     "table": "*",
                 },
-                "target": {"schema": "openapi"},
             },
             {
                 "source": {
@@ -84,7 +83,6 @@ def start_noshard_task_success():
                     "schema": "openapi",
                     "table": "*",
                 },
-                "target": {"schema": "openapi"},
             },
         ],
         "source_config": {
