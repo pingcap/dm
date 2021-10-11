@@ -217,10 +217,12 @@ func OpenAPITaskToSubTaskConfigs(task *openapi.Task, toDBCfg *DBConfig, sourceCf
 		filterRules := []*bf.BinlogEventRule{}
 		for _, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
 			// route
-			routeRules = append(routeRules, &router.TableRule{
-				SchemaPattern: rule.Source.Schema, TablePattern: rule.Source.Table,
-				TargetSchema: rule.Target.Schema, TargetTable: rule.Target.Table,
-			})
+			if rule.Target != nil {
+				routeRules = append(routeRules, &router.TableRule{
+					SchemaPattern: rule.Source.Schema, TablePattern: rule.Source.Table,
+					TargetSchema: rule.Target.Schema, TargetTable: rule.Target.Table,
+				})
+			}
 			// filter
 			if rule.BinlogFilterRule != nil {
 				for _, name := range *rule.BinlogFilterRule {

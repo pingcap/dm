@@ -91,9 +91,6 @@ func GenNoShardOpenAPITaskForTest() openapi.Task {
 	       source-name: "mysql-replica-01"
 	       schema: "some_db"
 	       table: "*"
-	    target:
-	       schema: "new_name_db"
-		   table: "*"
 	*/
 	taskSourceConf := openapi.TaskSourceConf{
 		SourceName: source1Name,
@@ -108,7 +105,7 @@ func GenNoShardOpenAPITaskForTest() openapi.Task {
 			SourceName: source1Name,
 			Table:      noShardSourceTable,
 		},
-		Target: struct {
+		Target: &struct {
 			Schema string "json:\"schema\""
 			Table  string "json:\"table\""
 		}{
@@ -233,7 +230,7 @@ func GenShardAndFilterOpenAPITaskForTest() openapi.Task {
 			SourceName: source1Name,
 			Table:      shardSource1Table,
 		},
-		Target: struct {
+		Target: &struct {
 			Schema string "json:\"schema\""
 			Table  string "json:\"table\""
 		}{
@@ -251,7 +248,7 @@ func GenShardAndFilterOpenAPITaskForTest() openapi.Task {
 			SourceName: source2Name,
 			Table:      shardSource2Table,
 		},
-		Target: struct {
+		Target: &struct {
 			Schema string "json:\"schema\""
 			Table  string "json:\"table\""
 		}{
