@@ -32,7 +32,7 @@ var _ = check.Suite(&testElectionSuite{})
 type testElectionSuite struct{}
 
 func (t *testElectionSuite) TestFailToStartLeader(c *check.C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// create a new cluster
@@ -99,4 +99,6 @@ func (t *testElectionSuite) TestFailToStartLeader(c *check.C) {
 	_, leaderID, _, err = s2.election.LeaderInfo(ctx)
 	c.Assert(err, check.IsNil)
 	c.Assert(leaderID, check.Equals, cfg2.Name)
+
+	cancel()
 }

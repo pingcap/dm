@@ -14,7 +14,6 @@
 package relay
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -37,7 +36,7 @@ type MetaTestCase struct {
 }
 
 func (r *testMetaSuite) TestLocalMeta(c *C) {
-	dir, err := ioutil.TempDir("", "test_local_meta")
+	dir, err := os.MkdirTemp("", "test_local_meta")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(dir)
 

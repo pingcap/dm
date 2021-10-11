@@ -16,7 +16,6 @@ package master
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,7 +162,7 @@ func (s *Server) importFromV10x(ctx context.Context) error {
 
 // collectSourceConfigFilesV1Import tries to collect source config files for v1.0.x importing.
 func (s *Server) collectSourceConfigFilesV1Import(tctx *tcontext.Context) (map[string]*config.SourceConfig, error) {
-	files, err := ioutil.ReadDir(s.cfg.V1SourcesPath)
+	files, err := os.ReadDir(s.cfg.V1SourcesPath)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +174,7 @@ func (s *Server) collectSourceConfigFilesV1Import(tctx *tcontext.Context) (map[s
 		}
 
 		fp := filepath.Join(s.cfg.V1SourcesPath, f.Name())
-		content, err := ioutil.ReadFile(fp)
+		content, err := os.ReadFile(fp)
 		if err != nil {
 			return nil, err
 		}
