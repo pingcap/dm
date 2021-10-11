@@ -483,9 +483,6 @@ func genNoShardTask() openapi.Task {
 	       source-name: "mysql-replica-01"
 	       schema: "some_db"
 	       table: "*"
-	    target:
-	       schema: "new_name_db"
-		   table: ""
 	*/
 	taskSourceConf := openapi.TaskSourceConf{
 		SourceName: source1Name,
@@ -500,12 +497,12 @@ func genNoShardTask() openapi.Task {
 			SourceName: source1Name,
 			Table:      noShardSourceTable,
 		},
-		Target: struct {
-			Schema string  `json:"schema"`
-			Table  *string `json:"table,omitempty"`
+		Target: &struct {
+			Schema string `json:"schema"`
+			Table  string `json:"table"`
 		}{
 			Schema: noShardTargetSchema,
-			Table:  &noShardTargetTable,
+			Table:  noShardTargetTable,
 		},
 	}
 
@@ -625,12 +622,12 @@ func genShardAndFilterTask() openapi.Task {
 			SourceName: source1Name,
 			Table:      shardSource1Table,
 		},
-		Target: struct {
-			Schema string  `json:"schema"`
-			Table  *string `json:"table,omitempty"`
+		Target: &struct {
+			Schema string `json:"schema"`
+			Table  string `json:"table"`
 		}{
 			Schema: shardTargetSchema,
-			Table:  &shardTargetTable,
+			Table:  shardTargetTable,
 		},
 	}
 	tableMigrateRule2 := openapi.TaskTableMigrateRule{
@@ -643,12 +640,12 @@ func genShardAndFilterTask() openapi.Task {
 			SourceName: source2Name,
 			Table:      shardSource2Table,
 		},
-		Target: struct {
-			Schema string  `json:"schema"`
-			Table  *string `json:"table,omitempty"`
+		Target: &struct {
+			Schema string `json:"schema"`
+			Table  string `json:"table"`
 		}{
 			Schema: shardTargetSchema,
-			Table:  &shardTargetTable,
+			Table:  shardTargetTable,
 		},
 	}
 	shardMode := openapi.TaskShardModePessimistic
