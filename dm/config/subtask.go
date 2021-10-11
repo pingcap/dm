@@ -46,6 +46,7 @@ const (
 
 	ShadowTableRules = "shadow-table-rules"
 	TrashTableRules  = "trash-table-rules"
+	TiDBLightningCheckpointPrefix = "tidb_lightning_checkpoint_"
 )
 
 var defaultMaxIdleConns = 2

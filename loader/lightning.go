@@ -15,6 +15,7 @@ package loader
 
 import (
 	"context"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"path/filepath"
 	"sync"
 
@@ -149,6 +150,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		}
 		cfg.Routes = l.cfg.RouteRules
 		cfg.Checkpoint.Driver = lcfg.CheckpointDriverMySQL
+		cfg.Checkpoint.Schema = config.TiDBLightningCheckpointPrefix + dbutil.ColumnName(l.workerName)
 		param := common.MySQLConnectParam{
 			Host:             cfg.TiDB.Host,
 			Port:             cfg.TiDB.Port,

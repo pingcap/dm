@@ -16,7 +16,6 @@ package loader
 import (
 	"crypto/sha1"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -131,7 +130,7 @@ func getMydumpMetadata(cli *clientv3.Client, cfg *config.SubTaskConfig, workerNa
 			return "", "", nil
 		}
 
-		toPrint, err2 := ioutil.ReadFile(metafile)
+		toPrint, err2 := os.ReadFile(metafile)
 		if err2 != nil {
 			toPrint = []byte(err2.Error())
 		}
