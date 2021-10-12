@@ -130,17 +130,17 @@ func OpenAPITaskToSubTaskConfigs(task *openapi.Task, toDBCfg *DBConfig, sourceCf
 	// start to generate sub task configs
 	subTaskCfgList := make([]SubTaskConfig, len(task.SourceConfig.SourceConf))
 	for i, sourceCfg := range task.SourceConfig.SourceConf {
+		// precheck source config
+		_, exist := sourceCfgMap[sourceCfg.SourceName]
+		if !exist {
+			return nil, terror.ErrConfigSourceIDNotFound.Generate(sourceCfg.SourceName)
+		}
 		subTaskCfg := NewSubTaskConfig()
 		// set task name and mode
 		subTaskCfg.Name = task.Name
 		subTaskCfg.Mode = string(task.TaskMode)
 		// set task meta
 		subTaskCfg.MetaFile = *task.MetaSchema
-		// check source config
-		_, exist := sourceCfgMap[sourceCfg.SourceName]
-		if !exist {
-			return nil, terror.ErrConfigSourceIDNotFound.Generate(sourceCfg.SourceName)
-		}
 		// add binlog meta
 		if sourceCfg.BinlogGtid != nil || sourceCfg.BinlogName != nil || sourceCfg.BinlogPos != nil {
 			meta := &Meta{}
