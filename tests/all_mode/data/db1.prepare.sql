@@ -18,3 +18,8 @@ drop database if exists `ignore_db`;
 create database `ignore_db`;
 use `ignore_db`;
 create table `ignore_table`(id int);
+
+-- test downstream schema contains extra datetime/timestamp column
+-- do not use sync-diff to check this table
+create table no_diff(id int NOT NULL PRIMARY KEY);
+insert into no_diff (id) values (1), (2), (3);

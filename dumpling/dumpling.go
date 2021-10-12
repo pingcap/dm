@@ -60,11 +60,13 @@ func NewDumpling(cfg *config.SubTaskConfig) *Dumpling {
 // Init implements Unit.Init.
 func (m *Dumpling) Init(ctx context.Context) error {
 	var err error
-	if m.dumpConfig, err = m.constructArgs(); err != nil {
+	if m.dumpConfig, err = m.constructArgs(ctx); err != nil {
 		return err
 	}
 	m.detectSQLMode(ctx)
-	m.dumpConfig.SessionParams["time_zone"] = "+00:00"
+	if m.cfg.Timezone != "" {
+		m.dumpConfig.SessionParams["time_zone"] = m.cfg.Timezone
+	}
 	m.logger.Info("create dumpling", zap.Stringer("config", m.dumpConfig))
 	return nil
 }
@@ -190,7 +192,7 @@ func (m *Dumpling) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 }
 
 // Update implements Unit.Update.
-func (m *Dumpling) Update(cfg *config.SubTaskConfig) error {
+func (m *Dumpling) Update(context.Context, *config.SubTaskConfig) error {
 	// not support update configuration now
 	return nil
 }
@@ -212,7 +214,7 @@ func (m *Dumpling) IsFreshTask(ctx context.Context) (bool, error) {
 }
 
 // constructArgs constructs arguments for exec.Command.
-func (m *Dumpling) constructArgs() (*export.Config, error) {
+func (m *Dumpling) constructArgs(ctx context.Context) (*export.Config, error) {
 	cfg := m.cfg
 	db := cfg.From
 
@@ -233,10 +235,20 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 	dumpConfig.TableFilter = tableFilter
 	dumpConfig.CompleteInsert = true // always keep column name in `INSERT INTO` statements.
 	dumpConfig.Logger = m.logger.Logger
-	// force using UTC timezone
-	dumpConfig.SessionParams = map[string]interface{}{
-		"time_zone": "+00:00",
+
+	tz := m.cfg.Timezone
+	if len(tz) == 0 {
+		// use target db time_zone as default
+		var err1 error
+		tz, err1 = conn.FetchTZSetting(ctx, &m.cfg.To)
+		if err1 != nil {
+			return nil, err1
+		}
 	}
+	dumpConfig.SessionParams = map[string]interface{}{
+		"time_zone": tz,
+	}
+
 
 	if cfg.Threads > 0 {
 		dumpConfig.Threads = cfg.Threads
@@ -300,7 +312,7 @@ func (m *Dumpling) constructArgs() (*export.Config, error) {
 // detectSQLMode tries to detect SQL mode from upstream. If success, write it to LoaderConfig.
 // Because loader will use this SQL mode, we need to treat disable `EscapeBackslash` when NO_BACKSLASH_ESCAPES.
 func (m *Dumpling) detectSQLMode(ctx context.Context) {
-	baseDB, err := conn.DefaultDBProvider.Apply(m.cfg.From)
+	baseDB, err := conn.DefaultDBProvider.Apply(&m.cfg.From)
 	if err != nil {
 		return
 	}

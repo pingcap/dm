@@ -18,15 +18,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"regexp"
-	"strings"
-
 	"github.com/BurntSushi/toml"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
+	"regexp"
+	"strings"
 
 	"github.com/pingcap/dm/pkg/dumpling"
 	"github.com/pingcap/dm/pkg/log"
@@ -125,11 +124,16 @@ func (db *DBConfig) Decode(data string) error {
 
 // Adjust adjusts the config.
 func (db *DBConfig) Adjust() {
-	// force set session time zone to UTC here.
-	AdjustTargetDBTimeZone(db)
 	if len(db.Password) > 0 {
 		db.Password = utils.DecryptOrPlaintext(db.Password)
 	}
+}
+
+func (db *DBConfig) AdjustWithTimeZone(timeZone string) {
+	if timeZone != "" {
+		AdjustTargetDBTimeZone(db, timeZone)
+	}
+	db.Adjust()
 }
 
 // Clone returns a deep copy of DBConfig. This function only fixes data race when adjusting Session.
@@ -206,7 +210,6 @@ type SubTaskConfig struct {
 	HeartbeatReportInterval int `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	// deprecated
 	EnableHeartbeat bool `toml:"enable-heartbeat" json:"enable-heartbeat"`
-	// deprecated
 	Timezone string `toml:"timezone" json:"timezone"`
 
 	Meta *Meta `toml:"meta" json:"meta"`
@@ -381,11 +384,6 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		c.MetaSchema = defaultMetaSchema
 	}
 
-	if c.Timezone != "" {
-		log.L().Warn("'timezone' is deprecated, please remove this field.")
-		c.Timezone = ""
-	}
-
 	dirSuffix := "." + c.Name
 	if !strings.HasSuffix(c.LoaderConfig.Dir, dirSuffix) { // check to support multiple times calling
 		// if not ends with the task name, we append the task name to the tail
@@ -399,8 +397,8 @@ func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 		c.SyncerConfig.CheckpointFlushInterval = defaultCheckpointFlushInterval
 	}
 
-	c.From.Adjust()
-	c.To.Adjust()
+	c.From.AdjustWithTimeZone(c.Timezone)
+	c.To.AdjustWithTimeZone(c.Timezone)
 
 	if verifyDecryptPassword {
 		_, err1 := c.DecryptPassword()

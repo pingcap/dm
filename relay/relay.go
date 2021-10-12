@@ -142,7 +142,7 @@ func (r *Relay) Init(ctx context.Context) (err error) {
 		return err
 	}
 
-	db, err := conn.DefaultDBProvider.Apply(r.cfg.From)
+	db, err := conn.DefaultDBProvider.Apply(&r.cfg.From)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeUpstream)
 	}
@@ -985,7 +985,7 @@ func (r *Relay) Reload(newCfg *Config) error {
 		r.cfg.From.RawDBCfg = config.DefaultRawDBConfig()
 	}
 	r.cfg.From.RawDBCfg.ReadTimeout = showStatusConnectionTimeout
-	db, err := conn.DefaultDBProvider.Apply(r.cfg.From)
+	db, err := conn.DefaultDBProvider.Apply(&r.cfg.From)
 	if err != nil {
 		return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 	}

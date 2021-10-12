@@ -243,7 +243,6 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.count.Store(0)
 	syncer.c = newCausality()
 	syncer.done = nil
-	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
 	syncer.enableRelay = cfg.UseRelay
 	syncer.cli = etcdClient
@@ -305,10 +304,11 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}()
 
 	tctx := s.tctx.WithContext(ctx)
-
-	err = s.setSyncCfg()
-	if err != nil {
-		return err
+	if err = s.setTimezone(ctx); err != nil {
+		return
+	}
+	if err = s.setSyncCfg(); err != nil {
+		return
 	}
 
 	err = s.createDBs(ctx)
@@ -3065,7 +3065,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 	var err error
 	dbCfg := s.cfg.From
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDMLConnectionTimeout)
-	s.fromDB, err = dbconn.NewUpStreamConn(dbCfg)
+	s.fromDB, err = dbconn.NewUpStreamConn(&dbCfg)
 	if err != nil {
 		return err
 	}
@@ -3108,7 +3108,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 		SetReadTimeout(maxDMLConnectionTimeout).
 		SetMaxIdleConns(s.cfg.WorkerCount)
 
-	s.toDB, s.toDBConns, err = dbconn.CreateConns(s.tctx, s.cfg, dbCfg, s.cfg.WorkerCount)
+	s.toDB, s.toDBConns, err = dbconn.CreateConns(s.tctx, s.cfg, &dbCfg, s.cfg.WorkerCount)
 	if err != nil {
 		dbconn.CloseUpstreamConn(s.tctx, s.fromDB) // release resources acquired before return with error
 		return err
@@ -3118,7 +3118,7 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDDLConnectionTimeout)
 
 	var ddlDBConns []*dbconn.DBConn
-	s.ddlDB, ddlDBConns, err = dbconn.CreateConns(s.tctx, s.cfg, dbCfg, 1)
+	s.ddlDB, ddlDBConns, err = dbconn.CreateConns(s.tctx, s.cfg, &dbCfg, 1)
 	if err != nil {
 		dbconn.CloseUpstreamConn(s.tctx, s.fromDB)
 		dbconn.CloseBaseDB(s.tctx, s.toDB)
@@ -3272,7 +3272,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 // Update implements Unit.Update
 // now, only support to update config for routes, filters, column-mappings, block-allow-list
 // now no config diff implemented, so simply re-init use new config.
-func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
+func (s *Syncer) Update(ctx context.Context, cfg *config.SubTaskConfig) error {
 	if s.cfg.ShardMode == config.ShardPessimistic {
 		_, tables := s.sgk.UnresolvedTables()
 		if len(tables) > 0 {
@@ -3360,7 +3360,9 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	s.cfg.ColumnMappingRules = cfg.ColumnMappingRules
 
 	// update timezone
-	s.setTimezone()
+	if err = s.setTimezone(ctx); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -3392,7 +3394,7 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 
 	var err error
 	s.cfg.From.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDMLConnectionTimeout)
-	s.fromDB, err = dbconn.NewUpStreamConn(s.cfg.From)
+	s.fromDB, err = dbconn.NewUpStreamConn(&s.cfg.From)
 	if err != nil {
 		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))
 		return err
@@ -3409,9 +3411,22 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	return nil
 }
 
-func (s *Syncer) setTimezone() {
-	s.tctx.L().Info("use timezone", log.WrapStringerField("location", time.UTC))
-	s.timezone = time.UTC
+func (s *Syncer) setTimezone(ctx context.Context) error {
+	tz := s.cfg.Timezone
+	var err error
+	if len(tz) == 0 {
+		tz, err = conn.FetchTZSetting(ctx, &s.cfg.To)
+		if err != nil {
+			return err
+		}
+	}
+	loc, err := utils.ParseTimeZone(tz)
+	if err != nil {
+		return err
+	}
+	s.tctx.L().Info("use timezone", zap.String("location", s.cfg.Timezone))
+	s.timezone = loc
+	return nil
 }
 
 func (s *Syncer) setSyncCfg() error {

@@ -172,7 +172,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/GetGTIDPurged")
 	cfg := getDBConfigForTest()
 	conn.InitMockDB(c)
-	db, err := conn.DefaultDBProvider.Apply(cfg)
+	db, err := conn.DefaultDBProvider.Apply(&cfg)
 	c.Assert(err, IsNil)
 	r.db = db
 	c.Assert(r.Init(context.Background()), IsNil)
@@ -264,7 +264,7 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	)
 	cfg := getDBConfigForTest()
 	conn.InitMockDB(c)
-	db, err := conn.DefaultDBProvider.Apply(cfg)
+	db, err := conn.DefaultDBProvider.Apply(&cfg)
 	c.Assert(err, IsNil)
 	r.db = db
 	c.Assert(r.Init(context.Background()), IsNil)
@@ -403,7 +403,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	)
 	cfg := getDBConfigForTest()
 	conn.InitMockDB(c)
-	db, err := conn.DefaultDBProvider.Apply(cfg)
+	db, err := conn.DefaultDBProvider.Apply(&cfg)
 	c.Assert(err, IsNil)
 	r.db = db
 	c.Assert(r.Init(context.Background()), IsNil)

@@ -81,7 +81,7 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 	)
 	for i := range taskCfg.MySQLInstances { // only use necessary part of sources.
 		cfg := sourcesCfg[i]
-		db, err2 := conn.DefaultDBProvider.Apply(cfg)
+		db, err2 := conn.DefaultDBProvider.Apply(&cfg)
 		if err2 != nil {
 			return nil, err2
 		}
@@ -105,7 +105,7 @@ func newTask(ctx context.Context, cli pb.MasterClient, taskFile string, schema s
 		res = append(res, singleResult{})
 	}
 
-	targetDB, err := conn.DefaultDBProvider.Apply(targetCfg)
+	targetDB, err := conn.DefaultDBProvider.Apply(&targetCfg)
 	if err != nil {
 		return nil, err
 	}

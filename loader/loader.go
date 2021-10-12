@@ -536,7 +536,9 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 	if lcfg.To.Session == nil {
 		lcfg.To.Session = make(map[string]string)
 	}
-	lcfg.To.Session["time_zone"] = "+00:00"
+	if len(l.cfg.Timezone) > 0 {
+		lcfg.To.Session["time_zone"] = l.cfg.Timezone
+	}
 
 	hasSQLMode := false
 	for k := range l.cfg.To.Session {
@@ -856,7 +858,7 @@ func (l *Loader) resetDBs(ctx context.Context) error {
 // now, only support to update config for routes, filters, column-mappings, block-allow-list
 // now no config diff implemented, so simply re-init use new config
 // no binlog filter for loader need to update.
-func (l *Loader) Update(cfg *config.SubTaskConfig) error {
+func (l *Loader) Update(ctx context.Context, cfg *config.SubTaskConfig) error {
 	var (
 		err              error
 		oldBaList        *filter.Filter

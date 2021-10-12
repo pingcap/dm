@@ -14,9 +14,13 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/pingcap/dm/pkg/conn"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"os"
 	"sort"
 	"strings"
@@ -293,7 +297,6 @@ type TaskConfig struct {
 	HeartbeatUpdateInterval int `yaml:"heartbeat-update-interval" toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
 	// deprecated
 	HeartbeatReportInterval int `yaml:"heartbeat-report-interval" toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
-	// deprecated
 	Timezone string `yaml:"timezone" toml:"timezone" json:"timezone"`
 
 	// handle schema/table name mode, and only for schema/table name
@@ -686,9 +689,11 @@ func (c *TaskConfig) adjust() error {
 		sort.Strings(unusedConfigs)
 		return terror.ErrConfigGlobalConfigsUnused.Generate(unusedConfigs)
 	}
+	// we postpone default time_zone init in each unit so we won't change the config value in task/sub_task config
 	if c.Timezone != "" {
-		log.L().Warn("`timezone` is deprecated and useless anymore, please remove it.")
-		c.Timezone = ""
+		if _, err := utils.ParseTimeZone(c.Timezone); err != nil {
+			return err
+		}
 	}
 	if c.RemoveMeta {
 		log.L().Warn("`remove-meta` in task config is deprecated, please use `start-task ... --remove-meta` instead")
@@ -728,6 +733,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		}
 		cfg.HeartbeatUpdateInterval = c.HeartbeatUpdateInterval
 		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval
+		cfg.Timezone = c.Timezone
 		cfg.Meta = inst.Meta
 
 		fromClone := dbCfg.Clone()
@@ -811,6 +817,7 @@ func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
 	c.EnableHeartbeat = stCfg0.EnableHeartbeat
 	c.HeartbeatUpdateInterval = stCfg0.HeartbeatUpdateInterval
 	c.HeartbeatReportInterval = stCfg0.HeartbeatReportInterval
+	c.Timezone = stCfg0.Timezone
 	c.CaseSensitive = stCfg0.CaseSensitive
 	c.TargetDB = &stCfg0.To // just ref
 	c.OnlineDDL = stCfg0.OnlineDDL
@@ -926,29 +933,24 @@ func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version *semver.Version) {
 			lowerMap[cfg.key] = cfg.val
 		}
 	}
-	// force set time zone to UTC
-	if tz, ok := lowerMap["time_zone"]; ok {
-		log.L().Warn("session variable 'time_zone' is overwritten with UTC timezone.",
-			zap.String("time_zone", tz))
-	}
-	lowerMap["time_zone"] = defaultTimeZone
 	dbConfig.Session = lowerMap
 }
 
 // AdjustTargetDBTimeZone force adjust session `time_zone` to UTC.
-func AdjustTargetDBTimeZone(config *DBConfig) {
-	for k := range config.Session {
-		if strings.ToLower(k) == "time_zone" {
-			log.L().Warn("session variable 'time_zone' is overwritten by default UTC timezone.",
-				zap.String("time_zone", config.Session[k]))
-			config.Session[k] = defaultTimeZone
+func AdjustTargetDBTimeZone(config *DBConfig, timeZone string) {
+	for k, v := range config.Session {
+		if strings.ToLower(k) == "time_zone" && strings.EqualFold(v, timeZone) {
+			log.L().Warn("session variable 'time_zone' is overwritten by task config timezone.",
+				zap.String("time_zone", config.Session[k]),
+				zap.String("time_zone_cfg", timeZone))
+			config.Session[k] = timeZone
 			return
 		}
 	}
 	if config.Session == nil {
 		config.Session = make(map[string]string, 1)
 	}
-	config.Session["time_zone"] = defaultTimeZone
+	config.Session["time_zone"] = timeZone
 }
 
 var defaultParser = parser.New()

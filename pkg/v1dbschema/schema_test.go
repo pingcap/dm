@@ -79,7 +79,7 @@ func (t *testSchema) setUpDBConn(c *C) {
 
 	var err error
 	t.mockDB = conn.InitMockDB(c)
-	t.db, err = conn.DefaultDBProvider.Apply(cfg)
+	t.db, err = conn.DefaultDBProvider.Apply(&cfg)
 	c.Assert(err, IsNil)
 }
 
