@@ -521,7 +521,7 @@ func (w *SourceWorker) StartSubTask(cfg *config.SubTaskConfig, expectStage pb.St
 }
 
 // UpdateSubTask update config for a sub task.
-func (w *SourceWorker) UpdateSubTask(cfg *config.SubTaskConfig) error {
+func (w *SourceWorker) UpdateSubTask(ctx context.Context, cfg *config.SubTaskConfig) error {
 	w.Lock()
 	defer w.Unlock()
 
@@ -535,7 +535,7 @@ func (w *SourceWorker) UpdateSubTask(cfg *config.SubTaskConfig) error {
 	}
 
 	w.l.Info("update sub task", zap.String("task", cfg.Name))
-	return st.Update(cfg)
+	return st.Update(ctx, cfg)
 }
 
 // OperateSubTask stop/resume/pause  sub task.

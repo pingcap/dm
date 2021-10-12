@@ -911,7 +911,7 @@ func (t *testConfig) TestAdjustTargetDBConfig(c *C) {
 	}{
 		{
 			DBConfig{},
-			DBConfig{Session: map[string]string{"time_zone": "+00:00"}},
+			DBConfig{Session: map[string]string{}},
 			semver.New("0.0.0"),
 		},
 		{

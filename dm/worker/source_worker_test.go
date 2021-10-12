@@ -103,7 +103,7 @@ func (t *testServer) testWorker(c *C) {
 	c.Assert(task, NotNil)
 	c.Assert(task.Result().String(), Matches, ".*worker already closed.*")
 
-	err = w.UpdateSubTask(&config.SubTaskConfig{
+	err = w.UpdateSubTask(context.Background(), &config.SubTaskConfig{
 		Name: "testStartTask",
 	})
 	c.Assert(err, ErrorMatches, ".*worker already closed.*")

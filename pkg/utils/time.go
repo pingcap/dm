@@ -14,15 +14,17 @@
 package utils
 
 import (
-	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/tidb/types"
 	"strings"
 	"time"
+
+	"github.com/pingcap/tidb/types"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // ParseTimeZone parse the time zone location by name or offset
 //
-// NOTE: we don't support the `SYSTEM` time_zone
+// NOTE: we don't support the `SYSTEM` time_zone.
 func ParseTimeZone(s string) (*time.Location, error) {
 	if strings.EqualFold(s, "SYSTEM") {
 		return nil, terror.ErrConfigInvalidTimezone.New("'SYSTEM' time_zone is not supported")

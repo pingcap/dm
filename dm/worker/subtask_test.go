@@ -228,7 +228,7 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 
 	// update in running
-	c.Assert(st.Update(context.Background(),nil), NotNil)
+	c.Assert(st.Update(context.Background(), nil), NotNil)
 	c.Assert(st.CurrUnit(), Equals, mockLoader)
 	c.Assert(st.Result(), IsNil)
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)

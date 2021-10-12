@@ -152,7 +152,7 @@ type BaseDB struct {
 }
 
 // NewBaseDB returns *BaseDB object.
-func NewBaseDB(db *sql.DB, doFuncInClose... func()) *BaseDB {
+func NewBaseDB(db *sql.DB, doFuncInClose ...func()) *BaseDB {
 	conns := make(map[*BaseConn]struct{})
 	return &BaseDB{DB: db, conns: conns, Retry: &retry.FiniteRetryStrategy{}, doFuncInClose: doFuncInClose}
 }

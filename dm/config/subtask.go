@@ -18,14 +18,15 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/BurntSushi/toml"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
-	"regexp"
-	"strings"
 
 	"github.com/pingcap/dm/pkg/dumpling"
 	"github.com/pingcap/dm/pkg/log"
@@ -209,8 +210,8 @@ type SubTaskConfig struct {
 	// deprecated
 	HeartbeatReportInterval int `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	// deprecated
-	EnableHeartbeat bool `toml:"enable-heartbeat" json:"enable-heartbeat"`
-	Timezone string `toml:"timezone" json:"timezone"`
+	EnableHeartbeat bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
+	Timezone        string `toml:"timezone" json:"timezone"`
 
 	Meta *Meta `toml:"meta" json:"meta"`
 

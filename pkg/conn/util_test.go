@@ -16,22 +16,25 @@ package conn
 import (
 	"context"
 
-	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	. "github.com/pingcap/check"
 
 	"github.com/pingcap/dm/dm/config"
 )
 
-// fetchTZSetting fetch target db global time_zone setting.
-func FetchTZSetting(ctx context.Context, cfg *config.DBConfig) (string, error) {
-	db, err := DefaultDBProvider.Apply(cfg)
-	if err != nil {
-		return "", err
-	}
-	defer db.Close()
-	dur, err := dbutil.GetTimeZoneOffset(ctx, db.DB)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	return dbutil.FormatTimeZoneOffset(dur), nil
+var _ = Suite(testUtilSuite{})
+
+type testUtilSuite struct{
+	provider DBProvider
 }
+
+func (s testUtilSuite) TestFetchTZSetting(c *C) {
+	m := InitMockDB(c)
+
+	m.ExpectQuery("SELECT cast(TIMEDIFF(NOW(6), UTC_TIMESTAMP(6)) as time);").
+		WillReturnRows(m.NewRows([]string{""}).AddRow("01:00:00"))
+	tz, err := FetchTZSetting(context.Background(), &config.DBConfig{})
+	c.Assert(err, IsNil)
+	c.Assert(tz, Equals, "+01:00")
+}
+
+

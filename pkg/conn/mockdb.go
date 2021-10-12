@@ -15,7 +15,7 @@ type mockDBProvider struct {
 }
 
 // Apply will build BaseDB with DBConfig.
-func (d *mockDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
+func (d *mockDBProvider) Apply(config *config.DBConfig) (*BaseDB, error) {
 	if d.verDB != nil {
 		if err := d.verDB.Ping(); err == nil {
 			// nolint:nilerr

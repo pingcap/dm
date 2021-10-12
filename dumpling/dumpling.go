@@ -249,7 +249,6 @@ func (m *Dumpling) constructArgs(ctx context.Context) (*export.Config, error) {
 		"time_zone": tz,
 	}
 
-
 	if cfg.Threads > 0 {
 		dumpConfig.Threads = cfg.Threads
 	}
