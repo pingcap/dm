@@ -14,13 +14,9 @@
 package config
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/pingcap/dm/pkg/conn"
-	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"os"
 	"sort"
 	"strings"
