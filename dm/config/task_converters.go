@@ -164,7 +164,7 @@ func OpenAPITaskToSubTaskConfigs(task *openapi.Task, toDBCfg *DBConfig, sourceCf
 		} else {
 			subTaskCfg.IsSharding = false
 		}
-		// set online ddl pulgin config
+		// set online ddl plugin config
 		subTaskCfg.OnlineDDL = task.EnhanceOnlineSchemaChange
 		// set case sensitive from source
 		subTaskCfg.CaseSensitive = sourceCfgMap[sourceCfg.SourceName].CaseSensitive
@@ -200,11 +200,13 @@ func OpenAPITaskToSubTaskConfigs(task *openapi.Task, toDBCfg *DBConfig, sourceCf
 			}
 		}
 		// set route,blockAllowList,filter config
-		doDBs := []string{}
-		doTables := []*filter.Table{}
+		doCnt := len(tableMigrateRuleMap[sourceCfg.SourceName])
+		doDBs := make([]string, doCnt)
+		doTables := make([]*filter.Table, doCnt)
+
 		routeRules := []*router.TableRule{}
 		filterRules := []*bf.BinlogEventRule{}
-		for _, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
+		for i, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
 			// route
 			if rule.Target != nil {
 				routeRules = append(routeRules, &router.TableRule{
@@ -225,8 +227,8 @@ func OpenAPITaskToSubTaskConfigs(task *openapi.Task, toDBCfg *DBConfig, sourceCf
 				}
 			}
 			// BlockAllowList
-			doDBs = append(doDBs, rule.Source.Schema)
-			doTables = append(doTables, &filter.Table{Schema: rule.Source.Schema, Name: rule.Source.Table})
+			doDBs[i] = rule.Source.Schema
+			doTables[i] = &filter.Table{Schema: rule.Source.Schema, Name: rule.Source.Table}
 		}
 		subTaskCfg.RouteRules = routeRules
 		subTaskCfg.FilterRules = filterRules
