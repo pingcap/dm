@@ -104,34 +104,6 @@ func TaskConfigToSubTaskConfigs(c *TaskConfig, sources map[string]DBConfig) ([]*
 // OpenAPITaskToSubTaskConfigs generates sub task configs by openapi.Task.
 func OpenAPITaskToSubTaskConfigs(task *openapi.Task, toDBCfg *DBConfig, sourceCfgMap map[string]*SourceConfig) (
 	[]SubTaskConfig, error) {
-	// source name -> meta config
-	sourceDBMetaMap := make(map[string]*Meta)
-	for _, cfg := range task.SourceConfig.SourceConf {
-		// precheck source config
-		_, exist := sourceCfgMap[cfg.SourceName]
-		if !exist {
-			return nil, terror.ErrConfigSourceIDNotFound.Generate(cfg.SourceName)
-		}
-		// check if need to set source meta
-		var needAddMeta bool
-		meta := &Meta{}
-		if cfg.BinlogGtid != nil {
-			meta.BinLogGTID = *cfg.BinlogGtid
-			needAddMeta = true
-		}
-		if cfg.BinlogName != nil {
-			meta.BinLogName = *cfg.BinlogName
-			needAddMeta = true
-		}
-		if cfg.BinlogPos != nil {
-			pos := uint32(*cfg.BinlogPos)
-			meta.BinLogPos = pos
-			needAddMeta = true
-		}
-		if needAddMeta {
-			sourceDBMetaMap[cfg.SourceName] = meta
-		}
-	}
 	// source name -> migrate rule list
 	tableMigrateRuleMap := make(map[string][]openapi.TaskTableMigrateRule)
 	for _, rule := range task.TableMigrateRule {
@@ -164,7 +136,24 @@ func OpenAPITaskToSubTaskConfigs(task *openapi.Task, toDBCfg *DBConfig, sourceCf
 		subTaskCfg.Mode = string(task.TaskMode)
 		// set task meta
 		subTaskCfg.MetaFile = *task.MetaSchema
-		if meta, ok := sourceDBMetaMap[sourceCfg.SourceName]; ok {
+		// check source config
+		_, exist := sourceCfgMap[sourceCfg.SourceName]
+		if !exist {
+			return nil, terror.ErrConfigSourceIDNotFound.Generate(sourceCfg.SourceName)
+		}
+		// add binlog meta
+		if sourceCfg.BinlogGtid != nil || sourceCfg.BinlogName != nil || sourceCfg.BinlogPos != nil {
+			meta := &Meta{}
+			if sourceCfg.BinlogGtid != nil {
+				meta.BinLogGTID = *sourceCfg.BinlogGtid
+			}
+			if sourceCfg.BinlogName != nil {
+				meta.BinLogName = *sourceCfg.BinlogName
+			}
+			if sourceCfg.BinlogPos != nil {
+				pos := uint32(*sourceCfg.BinlogPos)
+				meta.BinLogPos = pos
+			}
 			subTaskCfg.Meta = meta
 		}
 		// set shard config
