@@ -135,12 +135,19 @@ func (w *Worker) ToBound(bound ha.SourceBound) error {
 
 // ToRelay transforms to Relay.
 // All available transitions can be found at the beginning of this file.
-func (w *Worker) ToRelay(sourceID string) {
+func (w *Worker) ToRelay(sourceID string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.stage == WorkerBound {
+		if w.bound.Source != sourceID {
+			return terror.ErrSchedulerCantTransferToRelayWorker.Generate(w.baseInfo.Name, sourceID, w.bound.Source)
+		}
+	}
+
 	w.stage = WorkerRelay
 	w.reportMetrics()
 	w.relaySource = sourceID
+	return nil
 }
 
 // BaseInfo returns the base info of the worker.

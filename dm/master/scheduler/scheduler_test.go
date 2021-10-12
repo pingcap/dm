@@ -1521,6 +1521,10 @@ func (t *testScheduler) TestTransferWorkerAndSource(c *C) {
 	c.Assert(s.bounds[sourceID2], DeepEquals, worker1)
 	c.Assert(s.bounds[sourceID3], DeepEquals, worker4)
 	c.Assert(s.bounds[sourceID4], DeepEquals, worker3)
+
+	c.Assert(worker1.ToRelay(sourceID2), IsNil)
+	err := s.transferWorkerAndSource(workerName1, sourceID2, workerName2, sourceID1)
+	c.Assert(terror.ErrSchedulerCantTransferToRelayWorker.Equal(err), IsTrue)
 }
 
 func (t *testScheduler) TestWatchLoadTask(c *C) {

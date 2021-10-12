@@ -505,6 +505,8 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		} else {
 			// we have already updated etcd, so if we failed here, 
 		}
+		// TODO: if we failed here, etcd has been modified!! we should try this memory check then modify persistent data
+		// and revert if failed
 	}
 
 	updateUnbound := func(source string) {
@@ -549,19 +551,23 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 			}
 
 			// if the worker has started-relay for a source, it can't be bound to another source.
+			relaySource := workers[i].relaySource
+			another := i ^ 1 // make use of XOR to flip 0 and 1
+			toBindSource := inputSources[another]
+			if relaySource != "" && toBindSource != "" && relaySource != toBindSource {
+				return terror.ErrSchedulerCantTransferToRelayWorker.Generate(inputWorkers[i], toBindSource, relaySource)
+			}
 		}
 	}
-	// TODO: check if the worker has started relay so can't bound to a source
 
-
-	// get current bounded workers.
+	// get current bound workers.
 	for i := range inputWorkers {
 		if inputWorkers[i] != "" && inputSources[i] != "" {
 			boundWorkers = append(boundWorkers, inputWorkers[i])
 		}
 	}
 
-	// del current bounded relations.
+	// del current bound relations.
 	if _, err := ha.DeleteSourceBound(s.etcdCli, boundWorkers...); err != nil {
 		return err
 	}
@@ -573,7 +579,8 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 		}
 	}
 
-	// put new bounded relations.
+	// put new bound relations.
+	// TODO: move this and above DeleteSourceBound in one txn.
 	for i := range inputWorkers {
 		another := i ^ 1 // make use of XOR to flip 0 and 1
 		if inputWorkers[i] != "" && inputSources[another] != "" {
@@ -616,7 +623,8 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 	return nil
 }
 
-// TransferSource unbinds the source and binds it to a free worker. If fails halfway, the old worker should try recover.
+// TransferSource unbinds the `source` and binds it to a free `worker`.
+// If fails halfway, the old worker should try recover.
 func (s *Scheduler) TransferSource(source, worker string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -639,16 +647,16 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 	}
 
 	// 2. check new worker is free and not started relay for another source
-	if stage := w.Stage(); stage != WorkerFree {
-		return terror.ErrSchedulerWorkerInvalidTrans.Generate(worker, stage, WorkerBound)
-	}
-	for source2, workers := range s.relayWorkers {
-		if source2 == source {
-			continue
+	switch w.Stage() {
+	case WorkerOffline:
+		return terror.ErrSchedulerWorkerInvalidTrans.Generate(worker, w.Stage(), WorkerBound)
+	case WorkerFree:
+	case WorkerRelay:
+		if w.relaySource != source {
+			return terror.ErrSchedulerCantTransferToRelayWorker.Generate(worker, source, w.relaySource)
 		}
-		if _, ok2 := workers[worker]; ok2 {
-			return terror.ErrSchedulerRelayWorkersBusy.Generate(worker, source2)
-		}
+	case WorkerBound:
+		// should not happen, because we check s.bounds above.
 	}
 
 	// 3. if no old worker, bound it directly
@@ -690,6 +698,7 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 	if err != nil {
 		return err
 	}
+	??ToRelay
 	oldWorker.ToFree()
 	// we have checked w.stage is free, so there should not be an error
 	_ = s.updateStatusForBound(w, ha.NewSourceBound(source, worker))
