@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/tidb/expression"
 	"go.uber.org/zap"
 
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -99,22 +100,28 @@ RowLoop:
 }
 
 func (s *Syncer) genUpdateSQLs(
+	tctx *tcontext.Context,
 	param *genDMLParam,
 	oldValueFilters []expression.Expression,
 	newValueFilters []expression.Expression,
 ) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		tableID             = param.tableID
-		data                = param.data
-		originalData        = param.originalData
-		columns             = param.columns
-		ti                  = param.sourceTableInfo
-		defaultIndexColumns = findFitIndex(ti)
-		replaceSQL          string // `REPLACE INTO` SQL
-		sqls                = make([]string, 0, len(data)/2)
-		keys                = make([][]string, 0, len(data)/2)
-		values              = make([][]interface{}, 0, len(data)/2)
+		tableID      = param.tableID
+		data         = param.data
+		originalData = param.originalData
+		columns      = param.columns
+		ti           = param.sourceTableInfo
+		replaceSQL   string // `REPLACE INTO` SQL
+		sqls         = make([]string, 0, len(data)/2)
+		keys         = make([][]string, 0, len(data)/2)
+		values       = make([][]interface{}, 0, len(data)/2)
 	)
+
+	// if downstream pk/uk(not null) exits, then use downstream pk/uk(not null)
+	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tctx, tableID, ti, s.ddlDBConn.BaseConn)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	if param.safeMode {
 		replaceSQL = genInsertReplace("REPLACE INTO", tableID, columns)
@@ -166,7 +173,7 @@ RowLoop:
 		}
 
 		if defaultIndexColumns == nil {
-			defaultIndexColumns = getAvailableIndexColumn(ti, oriOldValues)
+			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreanUKIndexInfo(tableID, ti, oriOldValues)
 		}
 
 		ks := genMultipleKeys(ti, oriOldValues, tableID)
@@ -217,16 +224,21 @@ RowLoop:
 	return sqls, keys, values, nil
 }
 
-func (s *Syncer) genDeleteSQLs(param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
+func (s *Syncer) genDeleteSQLs(tctx *tcontext.Context, param *genDMLParam, filterExprs []expression.Expression) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		tableID             = param.tableID
-		dataSeq             = param.originalData
-		ti                  = param.sourceTableInfo
-		defaultIndexColumns = findFitIndex(ti)
-		sqls                = make([]string, 0, len(dataSeq))
-		keys                = make([][]string, 0, len(dataSeq))
-		values              = make([][]interface{}, 0, len(dataSeq))
+		tableID = param.tableID
+		dataSeq = param.originalData
+		ti      = param.sourceTableInfo
+		sqls    = make([]string, 0, len(dataSeq))
+		keys    = make([][]string, 0, len(dataSeq))
+		values  = make([][]interface{}, 0, len(dataSeq))
 	)
+
+	// if downstream pk/uk(not null) exits, then use downstream pk/uk(not null)
+	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tctx, tableID, ti, s.ddlDBConn.BaseConn)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 RowLoop:
 	for _, data := range dataSeq {
@@ -248,7 +260,7 @@ RowLoop:
 		}
 
 		if defaultIndexColumns == nil {
-			defaultIndexColumns = getAvailableIndexColumn(ti, value)
+			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreanUKIndexInfo(tableID, ti, value)
 		}
 		ks := genMultipleKeys(ti, value, tableID)
 

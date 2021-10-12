@@ -17,12 +17,18 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
+	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	dterror "github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	tidbConfig "github.com/pingcap/tidb/config"
@@ -30,23 +36,19 @@ import (
 	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
-	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/store/mockstore"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/mock"
 	"go.uber.org/zap"
-
-	"github.com/pingcap/dm/pkg/conn"
-	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 const (
 	// TiDBClusteredIndex is the variable name for clustered index.
 	TiDBClusteredIndex = "tidb_enable_clustered_index"
+	//downstream mock table id, consists of serial numbers of letters.
+	mockTableID = 121402101900011104
 )
 
 var (
@@ -68,8 +70,8 @@ type Tracker struct {
 
 // DownstreamTracker tracks downstream schema.
 type DownstreamTracker struct {
-	stmtParser *parser.Parser                  // statement parser
-	tableInfos map[string]*downstreamTableInfo // downstream table infos
+	stmtParser *parser.Parser // statement parser
+	tableInfos sync.Map       // downstream table infos
 }
 
 // downstreamTableInfo contains tableinfo and index cache
@@ -175,10 +177,34 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 		return nil, err
 	}
 
+	// init downstreamTracker
+	downstreamTracker, err := initDownStreamTracker(ctx, tidbConn, sessionCfg["sql_mode"])
+	if err != nil {
+		return nil, err
+	}
+
 	return &Tracker{
-		store: store,
-		dom:   dom,
-		se:    se,
+		store:             store,
+		dom:               dom,
+		se:                se,
+		downstreamTracker: downstreamTracker,
+	}, nil
+}
+
+// initDownStreamTracker init downstream tracker by sql_mode str which comes from "SHOW VARIABLES like %SQL_MODE".
+func initDownStreamTracker(ctx context.Context, tidbConn *conn.BaseConn, sqlmode string) (*DownstreamTracker, error) {
+	var stmtParser *parser.Parser
+	var err error
+	if sqlmode != "" {
+		stmtParser, err = utils.GetParserFromSQLModeStr(sqlmode)
+	} else {
+		stmtParser, err = utils.GetParserForConn(ctx, tidbConn.DBConn)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &DownstreamTracker{
+		stmtParser: stmtParser,
 	}, nil
 }
 
@@ -353,7 +379,7 @@ func (tr *Tracker) GetSystemVar(name string) (string, bool) {
 // GetDownStreamIndexInfo gets downstream PK/UK(not null) Index.
 // note. this function will init downstreamTrack's table info.
 func (tr *Tracker) GetDownStreamIndexInfo(tctx *tcontext.Context, tableID string, originTi *model.TableInfo, downstreamConn *conn.BaseConn) (*model.IndexInfo, error) {
-	dti, ok := tr.downstreamTracker.tableInfos[tableID]
+	dti, ok := tr.downstreamTracker.tableInfos.Load(tableID)
 	if !ok {
 		log.L().Info("DownStream schema tracker init. ", zap.String("tableID", tableID))
 		ti, err := tr.getTiByCreateStmt(tctx, tableID, downstreamConn)
@@ -361,15 +387,16 @@ func (tr *Tracker) GetDownStreamIndexInfo(tctx *tcontext.Context, tableID string
 			return nil, err
 		}
 		dti = getDownStreamTi(ti, originTi)
-		tr.downstreamTracker.tableInfos[tableID] = dti
+		tr.downstreamTracker.tableInfos.Store(tableID, dti)
 	}
-	return dti.indexCache, nil
+	return dti.(*downstreamTableInfo).indexCache, nil
 }
 
 // GetAvailableDownStreanUKIndexInfo gets available downstream UK whose data is not null.
 // note. this function will not init downstreamTrack.
 func (tr *Tracker) GetAvailableDownStreanUKIndexInfo(tableID string, originTi *model.TableInfo, data []interface{}) *model.IndexInfo {
-	dti, ok := tr.downstreamTracker.tableInfos[tableID]
+	dtii, ok := tr.downstreamTracker.tableInfos.Load(tableID)
+	dti := dtii.(*downstreamTableInfo)
 	if !ok || dti.availableUKCache == nil || len(dti.availableUKCache) == 0 {
 		return nil
 	}
@@ -402,18 +429,20 @@ func (tr *Tracker) ReTrackDownStreamIndex(targetTables []*filter.Table) {
 
 	for i := 0; i < len(targetTables); i++ {
 		tableID := utils.GenTableID(targetTables[i])
-		if tr.downstreamTracker.tableInfos[tableID] == nil {
+		_, ok := tr.downstreamTracker.tableInfos.Load(tableID)
+		if !ok {
 			// handle just have schema
 			if targetTables[i].Schema != "" && targetTables[i].Name == "" {
-				for k := range tr.downstreamTracker.tableInfos {
-					if strings.HasPrefix(k, tableID+".") {
-						delete(tr.downstreamTracker.tableInfos, k)
+				tr.downstreamTracker.tableInfos.Range(func(k, v interface{}) bool {
+					if strings.HasPrefix(k.(string), tableID+".") {
+						tr.downstreamTracker.tableInfos.Delete(k)
 					}
-				}
+					return true
+				})
 				log.L().Info("Remove downStream schema tracker.", zap.String("schema", targetTables[i].Schema))
 			}
 		} else {
-			delete(tr.downstreamTracker.tableInfos, tableID)
+			tr.downstreamTracker.tableInfos.Delete(tableID)
 			log.L().Info("Remove downStream schema tracker.", zap.String("tableID", tableID))
 		}
 	}
@@ -458,7 +487,7 @@ func (tr *Tracker) getTiByCreateStmt(tctx *tcontext.Context, tableID string, dow
 
 	}
 
-	ti, err := ddl.MockTableInfo(mock.NewContext(), stmtNode.(*ast.CreateTableStmt), 111)
+	ti, err := ddl.MockTableInfo(mock.NewContext(), stmtNode.(*ast.CreateTableStmt), mockTableID)
 	if err != nil {
 		return nil, dterror.ErrParseSQL.Delegate(err, createStr)
 	}
@@ -484,7 +513,7 @@ func getDownStreamTi(ti *model.TableInfo, originTi *model.TableInfo) *downstream
 			hasPk = true
 		} else if idx.Unique {
 			// second check not null unique key
-			if isSpecifiedIndexColumn(idx, fn) {
+			if !hasPk && isSpecifiedIndexColumn(idx, fn) {
 				indexCache = idx
 			} else {
 				availableUKCache = append(availableUKCache, idx)

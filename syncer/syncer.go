@@ -2251,7 +2251,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode
-		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
+		sqls, keys, args, err = s.genUpdateSQLs(ec.tctx, param, oldExprFilter, newExprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen update sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
@@ -2264,7 +2264,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err2
 		}
 
-		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
+		sqls, keys, args, err = s.genDeleteSQLs(ec.tctx, param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen delete sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
@@ -2845,6 +2845,7 @@ func (s *Syncer) trackDDL(usedSchema string, trackInfo *ddlInfo, ec *eventContex
 		shouldTableExistNum          int  // tableNames[:shouldTableExistNum] should exist
 		shouldRefTableExistNum       int  // tableNames[1:shouldTableExistNum] should exist, since first one is "caller table"
 		tryFetchDownstreamTable      bool // to make sure if not exists will execute correctly
+		shouldReTrackDownstreamIndex bool // retrack downstreamIndex
 	)
 
 	switch node := trackInfo.stmt.(type) {
@@ -2855,6 +2856,7 @@ func (s *Syncer) trackDDL(usedSchema string, trackInfo *ddlInfo, ec *eventContex
 		shouldSchemaExist = true
 	case *ast.DropDatabaseStmt:
 		shouldExecDDLOnSchemaTracker = true
+		shouldReTrackDownstreamIndex = true
 		if s.cfg.ShardMode == "" {
 			if err := s.checkpoint.DeleteSchemaPoint(ec.tctx, srcTable.Schema); err != nil {
 				return err
@@ -2871,6 +2873,7 @@ func (s *Syncer) trackDDL(usedSchema string, trackInfo *ddlInfo, ec *eventContex
 		tryFetchDownstreamTable = true
 	case *ast.DropTableStmt:
 		shouldExecDDLOnSchemaTracker = true
+		shouldReTrackDownstreamIndex = true
 		if err := s.checkpoint.DeleteTablePoint(ec.tctx, srcTable); err != nil {
 			return err
 		}
@@ -2878,8 +2881,10 @@ func (s *Syncer) trackDDL(usedSchema string, trackInfo *ddlInfo, ec *eventContex
 		shouldExecDDLOnSchemaTracker = true
 		shouldSchemaExist = true
 		shouldTableExistNum = 1
+		shouldReTrackDownstreamIndex = true
 	case *ast.AlterTableStmt:
 		shouldSchemaExist = true
+		shouldReTrackDownstreamIndex = true
 		// for DDL that adds FK, since TiDB doesn't fully support it yet, we simply ignore execution of this DDL.
 		switch {
 		case len(node.Specs) == 1 && node.Specs[0].Constraint != nil && node.Specs[0].Constraint.Tp == ast.ConstraintForeignKey:
@@ -2896,6 +2901,10 @@ func (s *Syncer) trackDDL(usedSchema string, trackInfo *ddlInfo, ec *eventContex
 		break
 	default:
 		ec.tctx.L().DPanic("unhandled DDL type cannot be tracked", zap.Stringer("type", reflect.TypeOf(trackInfo.stmt)))
+	}
+
+	if shouldReTrackDownstreamIndex {
+		s.schemaTracker.ReTrackDownStreamIndex(targetTables)
 	}
 
 	if shouldSchemaExist {
