@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/failpoint"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
@@ -49,9 +48,10 @@ type SwitchPath struct {
 	nextBinlogName string
 }
 
-// EventNotifier notifies
+// EventNotifier notifies whether there is new binlog event written to the file
 type EventNotifier interface {
-	Notified() chan bool
+	// Notified returns a channel used to check whether there is new binlog event written to the file
+	Notified() chan interface{}
 }
 
 // CollectAllBinlogFiles collects all valid binlog files in dir, and returns filenames in binlog ascending order.
@@ -208,74 +208,44 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 }
 
 // relayLogUpdatedOrNewCreated checks whether current relay log file is updated or new relay log is created.
-// we check the size of the file first, if the size is the same as the latest file, we assume there is no new write
-// so we need to check relay meta file to see if the new relay log is created.
-// this func will be blocked until current filesize changed or meta file updated or context cancelled.
-// we need to make sure that only one channel (updatePathCh or errCh) has events written to it.
-func relayLogUpdatedOrNewCreated(n EventNotifier, ctx context.Context, watcherInterval time.Duration, dir string,
-	latestFilePath, latestFile string, latestFileSize int64, updatePathCh chan string, errCh chan error) {
-	ticker := time.NewTicker(watcherInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-n.Notified():
-			updatePathCh <- latestFilePath
+func relayLogUpdatedOrNewCreated(n EventNotifier, ctx context.Context, dir, latestFilePath, latestFile string,
+	beginOffset, latestFileSize int64, updatePathCh chan string, errCh chan error) {
+	// binlog file may have rotated if we read nothing last time(either it's the first read or after notified)
+	lastReadCnt := latestFileSize - beginOffset
+	if lastReadCnt == 0 {
+		meta := &Meta{}
+		_, err := toml.DecodeFile(filepath.Join(dir, utils.MetaFilename), meta)
+		if err != nil {
+			errCh <- terror.Annotate(err, "decode relay meta toml file failed")
 			return
-		case <-ctx.Done():
-			errCh <- terror.Annotate(ctx.Err(), "context meet error")
-			return
-		case <-ticker.C:
+		}
+		if meta.BinLogName != latestFile {
+			// we need check file size again, as the file may have been changed during our metafile check
 			cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
 			if err != nil {
 				errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize=%d", latestFilePath, latestFileSize)
 				return
 			}
-			failpoint.Inject("CMPAlwaysReturn0", func() {
-				cmp = 0
-			})
 			switch {
 			case cmp < 0:
 				errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
-				return
 			case cmp > 0:
 				updatePathCh <- latestFilePath
-				return
 			default:
-				// current watched file size have no change means that no new writes have been made
-				// our relay meta file will be updated immediately after receive the rotate event
-				// although we cannot ensure that the binlog filename in the meta is the next file after latestFile
-				// but if we return a different filename with latestFile, the outer logic (parseDirAsPossible)
-				// will find the right one
-				meta := &Meta{}
-				_, err = toml.DecodeFile(filepath.Join(dir, utils.MetaFilename), meta)
-				if err != nil {
-					errCh <- terror.Annotate(err, "decode relay meta toml file failed")
-					return
-				}
-				if meta.BinLogName != latestFile {
-					// we need check file size again, as the file may have been changed during our metafile check
-					cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
-					if err != nil {
-						errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize=%d",
-							latestFilePath, latestFileSize)
-						return
-					}
-					switch {
-					case cmp < 0:
-						errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
-					case cmp > 0:
-						updatePathCh <- latestFilePath
-					default:
-						nextFilePath := filepath.Join(dir, meta.BinLogName)
-						log.L().Info("newer relay log file is already generated",
-							zap.String("now file path", latestFilePath),
-							zap.String("new file path", nextFilePath))
-						updatePathCh <- nextFilePath
-					}
-					return
-				}
+				nextFilePath := filepath.Join(dir, meta.BinLogName)
+				log.L().Info("newer relay log file is already generated",
+					zap.String("now file path", latestFilePath),
+					zap.String("new file path", nextFilePath))
+				updatePathCh <- nextFilePath
 			}
+			return
 		}
+	}
+	select {
+	case <-ctx.Done():
+		errCh <- terror.Annotate(ctx.Err(), "context meet error")
+	case <-n.Notified():
+		updatePathCh <- latestFilePath
 	}
 }
 

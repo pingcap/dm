@@ -191,14 +191,21 @@ func (st *SubTask) initUnits() error {
 
 	needCloseUnits = st.units[:skipIdx]
 	st.units = st.units[skipIdx:]
-	for _, u := range st.units {
-		if s, ok := u.(*syncer.Syncer); ok {
-			st.syncer = s
-		}
-	}
+	st.postInitSyncer()
 
 	st.setCurrUnit(st.units[0])
 	return nil
+}
+
+func (st *SubTask) postInitSyncer() {
+	// TODO, right now initUnits create units first and then remove unnecessary units(before first non fresh unit)
+	// maybe can be refactored into check first, then create, so we don't need to loop all units to get syncer here
+	for _, u := range st.units {
+		if s, ok := u.(*syncer.Syncer); ok {
+			st.syncer = s
+			break
+		}
+	}
 }
 
 // Run runs the sub task.
@@ -733,8 +740,9 @@ func updateTaskMetric(task, sourceID string, stage pb.Stage, workerName string) 
 
 func (st *SubTask) relayNotify() {
 	if st.syncer != nil {
+		// skip if it's there's pending notify
 		select {
-		case st.syncer.RelayNotifyCh <- true:
+		case st.syncer.Notified() <- struct{}{}:
 		default:
 		}
 	}

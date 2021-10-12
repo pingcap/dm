@@ -223,7 +223,8 @@ type Syncer struct {
 	workerJobTSArray          []*atomic.Int64 // worker's sync job TS array, note that idx=0 is skip idx and idx=1 is ddl idx,sql worker job idx=(queue id + 2)
 	lastCheckpointFlushedTime time.Time
 
-	RelayNotifyCh chan bool
+	// relayNotifyCh with size = 1, we only need to be notified whether binlog file of relay changed, not how many times
+	relayNotifyCh chan interface{}
 }
 
 // NewSyncer creates a new Syncer.
@@ -266,7 +267,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.workerJobTSArray[i] = atomic.NewInt64(0)
 	}
 	syncer.lastCheckpointFlushedTime = time.Time{}
-	syncer.RelayNotifyCh = make(chan bool, 1)
+	syncer.relayNotifyCh = make(chan interface{}, 1)
 	return syncer
 }
 
@@ -3565,6 +3566,6 @@ func (s *Syncer) delLoadTask() error {
 	return nil
 }
 
-func (s *Syncer) Notified() chan bool {
-	return s.RelayNotifyCh
+func (s *Syncer) Notified() chan interface{} {
+	return s.relayNotifyCh
 }

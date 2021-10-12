@@ -69,8 +69,8 @@ var NewRelay = NewRealRelay
 
 var _ Process = &Relay{}
 
-// EventListener defines a binlog event listener of relay
-type EventListener interface {
+// Listener defines a binlog event listener of relay log
+type Listener interface {
 	// OnEvent get called when relay processed an event successfully.
 	OnEvent(e *replication.BinlogEvent)
 }
@@ -105,6 +105,10 @@ type Process interface {
 	ResetMeta()
 	// PurgeRelayDir will clear all contents under w.cfg.RelayDir
 	PurgeRelayDir() error
+	// RegisterListener registers a relay listener
+	RegisterListener(el Listener)
+	// UnRegisterListener unregisters a relay listener
+	UnRegisterListener(el Listener)
 }
 
 // Relay relays mysql binlog to local file.
@@ -123,16 +127,16 @@ type Relay struct {
 		sync.RWMutex
 		info *pkgstreamer.RelayLogInfo
 	}
-	el EventListener
+	els map[Listener]struct{}
 }
 
 // NewRealRelay creates an instance of Relay.
-func NewRealRelay(el EventListener, cfg *Config) Process {
+func NewRealRelay(cfg *Config) Process {
 	return &Relay{
 		cfg:    cfg,
 		meta:   NewLocalMeta(cfg.Flavor, cfg.RelayDir),
 		logger: log.With(zap.String("component", "relay log")),
-		el:     el,
+		els:    make(map[Listener]struct{}),
 	}
 }
 
@@ -570,15 +574,16 @@ func (r *Relay) handleEvents(
 		if err != nil {
 			relayLogWriteErrorCounter.Inc()
 			return eventIndex, err
-		}
-		r.el.OnEvent(e)
-		if wResult.Ignore {
+		} else if wResult.Ignore {
 			r.logger.Info("ignore event by writer",
 				zap.Reflect("header", e.Header),
 				zap.String("reason", wResult.IgnoreReason))
 			r.tryUpdateActiveRelayLog(e, lastPos.Name) // even the event ignored we still need to try this update.
 			continue
 		}
+
+		r.notify(e)
+
 		relayLogWriteDurationHistogram.Observe(time.Since(writeTimer).Seconds())
 		r.tryUpdateActiveRelayLog(e, lastPos.Name) // wrote a event, try update the current active relay log.
 
@@ -1096,4 +1101,24 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 	}
 	defer dbConn.Close()
 	return utils.AddGSetWithPurged(ctx, resultGs, dbConn)
+}
+
+func (r *Relay) notify(e *replication.BinlogEvent) {
+	r.RLock()
+	defer r.RUnlock()
+	for el, _ := range r.els {
+		el.OnEvent(e)
+	}
+}
+
+func (r *Relay) RegisterListener(el Listener) {
+	r.Lock()
+	defer r.Unlock()
+	r.els[el] = struct{}{}
+}
+
+func (r *Relay) UnRegisterListener(el Listener) {
+	r.Lock()
+	defer r.Unlock()
+	delete(r.els, el)
 }
