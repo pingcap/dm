@@ -270,7 +270,47 @@ function test_last_bound() {
 	echo "[$(date)] <<<<<< finish test_last_bound >>>>>>"
 }
 
+function test_exclusive_relay() {
+	echo "[$(date)] <<<<<< start test_exclusive_relay >>>>>>"
+
+	echo "start DM worker and master cluster"
+	run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master-standalone.toml
+	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
+
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+	cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
+	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
+	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+
+	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"start-relay -s $SOURCE_ID1 worker1 worker2" \
+		"\"result\": true" 1
+
+	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"list-member --worker" \
+		"\"stage\": \"bound\"" 1 \
+		"\"stage\": \"relay\"" 1
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"operate-source show -s $SOURCE_ID2" \
+		"\"msg\": \"\"" 1
+
+	read -p 123
+
+	cleanup
+	echo "[$(date)] <<<<<< finish test_exclusive_relay >>>>>>"
+}
+
 function run() {
+	test_exclusive_relay
 	test_last_bound
 	test_config_name             # TICASE-915, 916, 954, 955
 	test_join_masters_and_worker # TICASE-928, 930, 931, 961, 932, 957

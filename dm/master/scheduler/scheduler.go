@@ -502,6 +502,8 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 	updateBound := func(source string, worker *Worker, bound ha.SourceBound) {
 		if err := s.updateStatusForBound(worker, bound); err == nil {
 			delete(s.unbounds, source)
+		} else {
+			// we have already updated etcd, so if we failed here, 
 		}
 	}
 
@@ -545,9 +547,12 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 			if got != expect {
 				return terror.ErrSchedulerWrongWorkerInput.Generate(inputWorkers[i], expect, got)
 			}
+
+			// if the worker has started-relay for a source, it can't be bound to another source.
 		}
 	}
 	// TODO: check if the worker has started relay so can't bound to a source
+
 
 	// get current bounded workers.
 	for i := range inputWorkers {

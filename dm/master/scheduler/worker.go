@@ -31,16 +31,23 @@ type WorkerStage string
 // the stage of DM-worker instances.
 // valid transformation:
 //   - Offline -> Free, receive keep-alive.
+//   - Offline -> Relay, find relay-pulling source and should not go to Free to avoid accidentally bound.
 //   - Free -> Offline, lost keep-alive.
-//   - Free -> Bound, schedule source.
-//   - Bound -> Offline, lost keep-live, when receive keep-alive again, it should become Free.
-//   - Bound -> Free, revoke source scheduler.
+//   - Free -> Bound, bind source.
+//   - Free -> Relay, start relay for a source.
+//   - Bound -> Offline, lost keep-alive, when receive keep-alive again, it should become Free.
+//   - Bound -> Free, unbind source.
+//   - Bound -> Relay, commands like transfer-source that gracefully unbind a worker which has started relay.
+//   - Relay -> Offline, lost keep-alive.
+//   - Relay -> Free, stop relay.
+//   - Relay -> Bound, old bound worker becomes offline so bind source to this worker.
 // invalid transformation:
 //   - Offline -> Bound, must become Free first.
 const (
 	WorkerOffline WorkerStage = "offline" // the worker is not online yet.
 	WorkerFree    WorkerStage = "free"    // the worker is online, but no upstream source assigned to it yet.
 	WorkerBound   WorkerStage = "bound"   // the worker is online, and one upstream source already assigned to it.
+	WorkerRelay   WorkerStage = "relay"   // the worker is online, pulling relay log but not responsible for migrating.
 )
 
 var (
@@ -50,6 +57,7 @@ var (
 		WorkerOffline: 0.0,
 		WorkerFree:    1.0,
 		WorkerBound:   2.0,
+		WorkerRelay:   1.5,
 	}
 	unrecognizedState = -1.0
 )
@@ -60,9 +68,12 @@ type Worker struct {
 
 	cli workerrpc.Client // the gRPC client proxy.
 
-	baseInfo ha.WorkerInfo  // the base information of the DM-worker instance.
-	bound    ha.SourceBound // the source bound relationship, null value if not bounded.
-	stage    WorkerStage    // the current stage.
+	baseInfo    ha.WorkerInfo  // the base information of the DM-worker instance.
+	bound       ha.SourceBound // the source bound relationship, null value if not bounded.
+	stage       WorkerStage    // the current stage.
+
+	// the source ID from which the worker is pulling relay log. should keep consistent with Scheduler.relayWorkers
+	relaySource string
 }
 
 // NewWorker creates a new Worker instance with Offline stage.
@@ -99,7 +110,7 @@ func (w *Worker) ToOffline() {
 }
 
 // ToFree transforms to Free.
-// both Offline and Bound can transform to Free.
+// All available transitions can be found at the beginning of this file.
 func (w *Worker) ToFree() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -109,7 +120,7 @@ func (w *Worker) ToFree() {
 }
 
 // ToBound transforms to Bound.
-// Free can transform to Bound, but Offline can't.
+// All available transitions can be found at the beginning of this file.
 func (w *Worker) ToBound(bound ha.SourceBound) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -120,6 +131,16 @@ func (w *Worker) ToBound(bound ha.SourceBound) error {
 	w.reportMetrics()
 	w.bound = bound
 	return nil
+}
+
+// ToRelay transforms to Relay.
+// All available transitions can be found at the beginning of this file.
+func (w *Worker) ToRelay(sourceID string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.stage = WorkerRelay
+	w.reportMetrics()
+	w.relaySource = sourceID
 }
 
 // BaseInfo returns the base info of the worker.
@@ -141,6 +162,14 @@ func (w *Worker) Bound() ha.SourceBound {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	return w.bound
+}
+
+// RelaySourceID returns the source ID from which this worker is pulling relay log,
+// returns empty string if not started relay.
+func (w *Worker) RelaySourceID() string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.relaySource
 }
 
 // SendRequest sends request to the DM-worker instance.
