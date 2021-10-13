@@ -19,6 +19,9 @@ service Worker {
     rpc HandleError(HandleWorkerErrorRequest) returns(CommonWorkerResponse) {}
 
     rpc GetWorkerCfg(GetWorkerCfgRequest) returns(GetWorkerCfgResponse) {}
+
+    // Sends binlog stream from a given location.
+    rpc PullBinlogs(PullBinlogReq) returns (stream PullBinlogResp) {}
 }
 
 enum TaskOp {
@@ -372,4 +375,29 @@ message GetWorkerCfgRequest {
 
 message GetWorkerCfgResponse {
     string cfg = 1;
+}
+
+// The Location describes the starts position of a binlog, could be either gtid or position way.
+message Location {
+    // The suffix of binlog file, like .000001 .000002
+    string name = 1;
+
+    // The binlog offset in a file.
+    uint32 pos = 2;
+
+    // The binlog offset in a file.
+    string gtid = 3;
+}
+
+message PullBinlogReq {
+    // Specifies which source of binlog to pull.
+    string source = 1;
+
+    // The position from which the binlog will be sent.
+    Location startFrom = 2;
+}
+
+message PullBinlogResp {
+    // The binlog entity that send in a stream
+    bytes Payload = 1;
 }

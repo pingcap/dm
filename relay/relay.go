@@ -99,6 +99,8 @@ type Process interface {
 	ResetMeta()
 	// PurgeRelayDir will clear all contents under w.cfg.RelayDir
 	PurgeRelayDir() error
+	// PullBinlogs will start a goroutine to continuously parse binlogs in relay dir and send them in streaming way
+	PullBinlogs(ctx context.Context, req *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error)
 }
 
 // Relay relays mysql binlog to local file.
@@ -377,6 +379,13 @@ func (r *Relay) PurgeRelayDir() error {
 	}
 	r.logger.Info("relay dir is purged to be ready for new relay log", zap.String("relayDir", dir))
 	return nil
+}
+
+// PullBinlogs implements Process interface.
+func (r *Relay) PullBinlogs(ctx context.Context, req *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error) {
+	ch, ech := make(chan *replication.BinlogEvent, 1), make(chan error, 1)
+	ech <- errors.New("relay.PullBinlogs is not implemented yet")
+	return ch, ech
 }
 
 // tryRecoverLatestFile tries to recover latest relay log file with corrupt/incomplete binlog events/transactions.

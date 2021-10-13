@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
+	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 
@@ -128,6 +129,11 @@ func (d *DummyRelay) ResetMeta() {}
 // PurgeRelayDir implements Process interface.
 func (d *DummyRelay) PurgeRelayDir() error {
 	return nil
+}
+
+// PullBinlogs implements Process interface.
+func (d *DummyRelay) PullBinlogs(ctx context.Context, req *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error) {
+	return nil, nil
 }
 
 func (t *testRelay) TestRelay(c *C) {

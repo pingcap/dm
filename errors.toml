@@ -2824,6 +2824,12 @@ description = ""
 workaround = "Please try again later"
 tags = ["internal", "low"]
 
+[error.DM-dm-worker-40080]
+message = "request for PullBinlogs is invalid, reason: %s"
+description = ""
+workaround = "Please check the worker's status using `dmctl list-member`"
+tags = ["internal", "low"]
+
 [error.DM-dm-tracer-42001]
 message = "parse dm-tracer config flag set"
 description = ""

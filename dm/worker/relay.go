@@ -17,6 +17,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/errors"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -51,6 +52,8 @@ type RelayHolder interface {
 	Result() *pb.ProcessResult
 	// Update updates relay config online
 	Update(ctx context.Context, cfg *config.SourceConfig) error
+	// PullBinlogs will start a goroutine to continuously parse binlogs in relay dir and send them in streaming way
+	PullBinlogs(ctx context.Context, req *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error)
 }
 
 // NewRelayHolder is relay holder initializer
@@ -310,6 +313,11 @@ func (h *realRelayHolder) Update(ctx context.Context, sourceCfg *config.SourceCo
 	return nil
 }
 
+// PullBinlogs update relay config online.
+func (h *realRelayHolder) PullBinlogs(ctx context.Context, req *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error) {
+	return h.relay.PullBinlogs(ctx, req)
+}
+
 // EarliestActiveRelayLog implements RelayOperator.EarliestActiveRelayLog.
 func (h *realRelayHolder) EarliestActiveRelayLog() *streamer.RelayLogInfo {
 	return h.relay.ActiveRelayLog()
@@ -421,6 +429,11 @@ func (d *dummyRelayHolder) Result() *pb.ProcessResult {
 // Update implements interface of RelayHolder.
 func (d *dummyRelayHolder) Update(ctx context.Context, cfg *config.SourceConfig) error {
 	return nil
+}
+
+// PullBinlogs update relay config online.
+func (h *dummyRelayHolder) PullBinlogs(ctx context.Context, req *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error) {
+	return nil, nil
 }
 
 func (d *dummyRelayHolder) EarliestActiveRelayLog() *streamer.RelayLogInfo {

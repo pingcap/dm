@@ -574,6 +574,7 @@ const (
 	codeWorkerFailConnectMaster
 	codeWorkerWaitRelayCatchupGTID
 	codeWorkerRelayConfigChanging
+	codeWorkerPullBinlogsInvalidRequest
 )
 
 // DM-tracer error code.
@@ -1200,6 +1201,7 @@ var (
 	ErrWorkerTLSConfigNotValid              = New(codeWorkerTLSConfigNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "TLS config not valid", "Please check the `ssl-ca`, `ssl-cert` and `ssl-key` config in worker configuration file.")
 	ErrWorkerFailConnectMaster              = New(codeWorkerFailConnectMaster, ClassDMWorker, ScopeInternal, LevelHigh, "cannot join with master endpoints: %v, error: %v", "Please check network connection of worker and check worker name is unique.")
 	ErrWorkerRelayConfigChanging            = New(codeWorkerRelayConfigChanging, ClassDMWorker, ScopeInternal, LevelLow, "relay config of worker %s is changed too frequently, last relay source %s:, new relay source %s", "Please try again later")
+	ErrWorkerPullBinlogsInvalidRequest      = New(codeWorkerPullBinlogsInvalidRequest, ClassDMWorker, ScopeInternal, LevelLow, "request for PullBinlogs is invalid, reason: %s", "Please check the worker's status using `dmctl list-member`")
 
 	// DM-tracer error.
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set", "")
