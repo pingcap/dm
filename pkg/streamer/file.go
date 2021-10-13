@@ -15,19 +15,16 @@ package streamer
 
 import (
 	"context"
-	"os"
-	"path"
-	"path/filepath"
-	"sort"
-	"time"
-
 	"github.com/BurntSushi/toml"
-	"go.uber.org/zap"
-
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"go.uber.org/zap"
+	"os"
+	"path"
+	"path/filepath"
+	"sort"
 )
 
 // FileCmp is a compare condition used when collecting binlog files.
@@ -207,96 +204,103 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 	}
 }
 
+type relayLogFileChecker struct {
+	n                               EventNotifier
+	relayDir, currentUUID                         string
+	latestRelayLogDir, latestFilePath, latestFile string
+	beginOffset, endOffset                        int64
+}
+
 // relayLogUpdatedOrNewCreated checks whether current relay log file is updated or new relay log is created.
-func relayLogUpdatedOrNewCreated(n EventNotifier, ctx context.Context, dir, latestFilePath, latestFile string,
-	beginOffset, latestFileSize int64, updatePathCh chan string, errCh chan error) {
+func (r *relayLogFileChecker) relayLogUpdatedOrNewCreated(ctx context.Context, updatePathCh chan string, switchCh chan SwitchPath, errCh chan error) {
 	// binlog file may have rotated if we read nothing last time(either it's the first read or after notified)
-	lastReadCnt := latestFileSize - beginOffset
+	lastReadCnt := r.endOffset - r.beginOffset
 	if lastReadCnt == 0 {
 		meta := &Meta{}
-		_, err := toml.DecodeFile(filepath.Join(dir, utils.MetaFilename), meta)
+		_, err := toml.DecodeFile(filepath.Join(r.latestRelayLogDir, utils.MetaFilename), meta)
 		if err != nil {
 			errCh <- terror.Annotate(err, "decode relay meta toml file failed")
 			return
 		}
-		if meta.BinLogName != latestFile {
+		if meta.BinLogName != r.latestFile {
 			// we need check file size again, as the file may have been changed during our metafile check
-			cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
+			cmp, err := fileSizeUpdated(r.latestFilePath, r.endOffset)
 			if err != nil {
-				errCh <- terror.Annotatef(err, "latestFilePath=%s latestFileSize=%d", latestFilePath, latestFileSize)
+				errCh <- terror.Annotatef(err, "latestFilePath=%s endOffset=%d", r.latestFilePath, r.endOffset)
 				return
 			}
 			switch {
 			case cmp < 0:
-				errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
+				errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(r.latestFilePath)
 			case cmp > 0:
-				updatePathCh <- latestFilePath
+				updatePathCh <- r.latestFilePath
 			default:
-				nextFilePath := filepath.Join(dir, meta.BinLogName)
+				nextFilePath := filepath.Join(r.latestRelayLogDir, meta.BinLogName)
 				log.L().Info("newer relay log file is already generated",
-					zap.String("now file path", latestFilePath),
+					zap.String("now file path", r.latestFilePath),
 					zap.String("new file path", nextFilePath))
 				updatePathCh <- nextFilePath
 			}
 			return
-		}
-	}
-	select {
-	case <-ctx.Done():
-		errCh <- terror.Annotate(ctx.Err(), "context meet error")
-	case <-n.Notified():
-		updatePathCh <- latestFilePath
-	}
-}
-
-// needSwitchSubDir checks whether the reader need to switch to next relay sub directory.
-func needSwitchSubDir(ctx context.Context, relayDir, currentUUID string, switchCh chan SwitchPath, errCh chan error) {
-	var (
-		err            error
-		nextUUID       string
-		nextBinlogName string
-		uuids          []string
-	)
-
-	ticker := time.NewTicker(watcherInterval)
-	defer func() {
-		ticker.Stop()
-		if err != nil {
-			errCh <- err
-		}
-	}()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			// reload uuid
-			uuids, err = utils.ParseUUIDIndex(path.Join(relayDir, utils.UUIDIndexFilename))
+		} else {
+			switchPath, err := r.getSwitchPath()
 			if err != nil {
+				errCh <- err
 				return
 			}
-			nextUUID, _, err = getNextUUID(currentUUID, uuids)
-			if err != nil {
-				return
-			}
-			if len(nextUUID) == 0 {
-				continue
-			}
-
-			// try get the first binlog file in next sub directory
-			nextBinlogName, err = getFirstBinlogName(relayDir, nextUUID)
-			if err != nil {
-				// because creating sub directory and writing relay log file are not atomic
-				// just continue to observe subdir
-				if terror.ErrBinlogFilesNotFound.Equal(err) {
-					err = nil
-					continue
+			if switchPath != nil {
+				// we need check file size again, as the file may have been changed during path check
+				cmp, err := fileSizeUpdated(r.latestFilePath, r.endOffset)
+				if err != nil {
+					errCh <- terror.Annotatef(err, "latestFilePath=%s endOffset=%d", r.latestFilePath, r.endOffset)
+					return
+				}
+				switch {
+				case cmp < 0:
+					errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(r.latestFilePath)
+				case cmp > 0:
+					updatePathCh <- r.latestFilePath
+				default:
+					switchCh <- *switchPath
 				}
 				return
 			}
-
-			switchCh <- SwitchPath{nextUUID, nextBinlogName}
-			return
 		}
 	}
+
+	select {
+	case <-ctx.Done():
+		errCh <- terror.Annotate(ctx.Err(), "context meet error")
+	case <-r.n.Notified():
+		// the notified event may not be the current relay file
+		// in that case we may read 0 bytes and check at upper "if statement"
+		updatePathCh <- r.latestFilePath
+	}
+}
+
+func (r *relayLogFileChecker) getSwitchPath() (*SwitchPath, error) {
+	// reload uuid
+	uuids, err := utils.ParseUUIDIndex(path.Join(r.relayDir, utils.UUIDIndexFilename))
+	if err != nil {
+		return nil, err
+	}
+	nextUUID, _, err := getNextUUID(r.currentUUID, uuids)
+	if err != nil {
+		return nil, err
+	}
+	if len(nextUUID) == 0 {
+		return nil, nil
+	}
+
+	// try to get the first binlog file in next subdirectory
+	nextBinlogName, err := getFirstBinlogName(r.relayDir, nextUUID)
+	if err != nil {
+		// because creating subdirectory and writing relay log file are not atomic
+		if terror.ErrBinlogFilesNotFound.Equal(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &SwitchPath{nextUUID, nextBinlogName}, nil
 }

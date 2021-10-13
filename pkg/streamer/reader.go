@@ -589,27 +589,25 @@ func (r *BinlogReader) parseFile(
 	}()
 
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		needSwitchSubDir(newCtx, r.cfg.RelayDir, currentUUID, switchCh, switchErrCh)
-	}()
-
-	wg.Add(1)
 	go func(latestPos int64) {
 		defer wg.Done()
-		relayLogUpdatedOrNewCreated(r.en, newCtx, relayLogDir, fullPath, relayLogFile, offset, latestPos, updatePathCh, updateErrCh)
+		checker := relayLogFileChecker{
+			n:                 r.en,
+			relayDir:          r.cfg.RelayDir,
+			currentUUID:       currentUUID,
+			latestRelayLogDir: relayLogDir,
+			latestFilePath:    fullPath,
+			latestFile:        relayLogFile,
+			beginOffset:       offset,
+			endOffset:         latestPos,
+		}
+		checker.relayLogUpdatedOrNewCreated(newCtx, updatePathCh, switchCh, updateErrCh)
 	}(latestPos)
 
 	select {
 	case <-ctx.Done():
 		return false, false, 0, "", "", false, nil
 	case switchResp := <-switchCh:
-		// wait to ensure old file not updated
-		pathUpdated := utils.WaitSomething(3, watcherInterval, func() bool { return len(updatePathCh) > 0 })
-		if pathUpdated {
-			// re-parse it
-			return false, true, latestPos, "", "", replaceWithHeartbeat, nil
-		}
 		// update new uuid
 		if err = r.updateUUIDs(); err != nil {
 			return false, false, 0, "", "", false, nil
