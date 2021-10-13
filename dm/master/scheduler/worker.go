@@ -31,7 +31,6 @@ type WorkerStage string
 // the stage of DM-worker instances.
 // valid transformation:
 //   - Offline -> Free, receive keep-alive.
-//   - Offline -> Relay, find relay-pulling source and should not go to Free to avoid accidentally bound.
 //   - Free -> Offline, lost keep-alive.
 //   - Free -> Bound, bind source.
 //   - Free -> Relay, start relay for a source.
@@ -40,9 +39,16 @@ type WorkerStage string
 //   - Bound -> Relay, commands like transfer-source that gracefully unbind a worker which has started relay.
 //   - Relay -> Offline, lost keep-alive.
 //   - Relay -> Free, stop relay.
-//   - Relay -> Bound, old bound worker becomes offline so bind source to this worker.
+//   - Relay -> Bound, old bound worker becomes offline so bind source to this worker, which has started relay.
 // invalid transformation:
 //   - Offline -> Bound, must become Free first.
+//   - Offline -> Relay, must become Free first.
+// in Bound stage relay can be turned on/off, the difference with Bound-Relay transformation is
+//   - Bound stage turning on/off represents a bound DM worker receives start-relay/stop-relay, source bound relation is
+//     not changed.
+//   - Bound-Relay transformation represents source bound relation is changed.
+// caller should ensure the correctness when invoke below transformation methods successively. For example, call ToBound
+//   twice with different arguments.
 const (
 	WorkerOffline WorkerStage = "offline" // the worker is not online yet.
 	WorkerFree    WorkerStage = "free"    // the worker is online, but no upstream source assigned to it yet.
@@ -100,7 +106,7 @@ func (w *Worker) Close() {
 }
 
 // ToOffline transforms to Offline.
-// both Free and Bound can transform to Offline.
+// All available transitions can be found at the beginning of this file.
 func (w *Worker) ToOffline() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -117,6 +123,7 @@ func (w *Worker) ToFree() {
 	w.stage = WorkerFree
 	w.reportMetrics()
 	w.bound = nullBound
+	w.relaySource = ""
 }
 
 // ToBound transforms to Bound.
@@ -127,27 +134,81 @@ func (w *Worker) ToBound(bound ha.SourceBound) error {
 	if w.stage == WorkerOffline {
 		return terror.ErrSchedulerWorkerInvalidTrans.Generate(w.BaseInfo(), WorkerOffline, WorkerBound)
 	}
+	if w.stage == WorkerRelay {
+		if w.relaySource != bound.Source {
+			return terror.ErrSchedulerBoundDiffWithStartedRelay.Generate(w.BaseInfo().Name, bound.Source, w.relaySource)
+		}
+	}
+
 	w.stage = WorkerBound
 	w.reportMetrics()
 	w.bound = bound
 	return nil
 }
 
-// ToRelay transforms to Relay.
-// All available transitions can be found at the beginning of this file.
-func (w *Worker) ToRelay(sourceID string) error {
+// Unbound changes worker's stage from Bound to Free or Relay.
+func (w *Worker) Unbound() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.stage == WorkerBound {
-		if w.bound.Source != sourceID {
-			return terror.ErrSchedulerCantTransferToRelayWorker.Generate(w.baseInfo.Name, sourceID, w.bound.Source)
-		}
+	if w.stage != WorkerBound {
+		// caller should not do this.
+		return terror.ErrSchedulerWorkerInvalidTrans.Generatef("can't unbound a worker that is not in bound stage.")
 	}
 
-	w.stage = WorkerRelay
+	w.bound = nullBound
+	if w.relaySource != "" {
+		w.stage = WorkerRelay
+	} else {
+		w.stage = WorkerFree
+	}
 	w.reportMetrics()
-	w.relaySource = sourceID
 	return nil
+}
+
+// TurnOnRelay adds relay source information to a bound worker and calculates the stage.
+func (w *Worker) TurnOnRelay(sourceID string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	switch w.stage {
+	case WorkerOffline:
+		w.relaySource = sourceID
+	case WorkerFree:
+		w.relaySource = sourceID
+		w.stage = WorkerRelay
+		w.reportMetrics()
+	case WorkerRelay:
+		w.relaySource = sourceID
+	case WorkerBound:
+		if w.bound.Source != sourceID {
+			return terror.ErrSchedulerRelayWorkersWrongBound.Generatef(
+				"can't turn on relay of source %s for worker %s, because the worker is bound to source %s",
+				sourceID, w.BaseInfo().Name, w.bound.Source)
+		}
+		w.relaySource = sourceID
+	}
+
+	return nil
+}
+
+// TurnOffRelay clears relay source information of a bound worker and calculates the stage.
+func (w *Worker) TurnOffRelay() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	switch w.stage {
+	case WorkerOffline:
+		w.relaySource = ""
+	case WorkerFree:
+		// should not happen
+		w.relaySource = ""
+	case WorkerRelay:
+		w.relaySource = ""
+		w.stage = WorkerFree
+		w.reportMetrics()
+	case WorkerBound:
+		w.relaySource = ""
+	}
 }
 
 // BaseInfo returns the base info of the worker.
