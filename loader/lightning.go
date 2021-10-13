@@ -16,6 +16,7 @@ package loader
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -35,6 +36,7 @@ import (
 	"github.com/pingcap/tidb/br/pkg/lightning"
 	"github.com/pingcap/tidb/br/pkg/lightning/common"
 	lcfg "github.com/pingcap/tidb/br/pkg/lightning/config"
+	ctl "github.com/pingcap/tidb/br/cmd/tidb-lightning-ctl"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -131,6 +133,25 @@ func (l *LightningLoader) Init(ctx context.Context) (err error) {
 	return err
 }
 
+func (l *LightningLoader) runLightning(ctx context.Context, cfg *lcfg.Config) error {
+	l.Lock()
+	taskCtx, cancel := context.WithCancel(ctx)
+	l.cancel = cancel
+	l.Unlock()
+	err := l.core.RunOnce(taskCtx, cfg, nil)
+	failpoint.Inject("LoadDataSlowDownByTask", func(val failpoint.Value) {
+		tasks := val.(string)
+		taskNames := strings.Split(tasks, ",")
+		for _, taskName := range taskNames {
+			if l.cfg.Name == taskName {
+				l.logger.Info("inject failpoint LoadDataSlowDownByTask", zap.String("task", taskName))
+				<-taskCtx.Done()
+			}
+		}
+	})
+	return err
+}
+
 func (l *LightningLoader) restore(ctx context.Context) error {
 	tctx := tcontext.NewContext(ctx, l.logger)
 	if err := putLoadTask(l.cli, l.cfg, l.workerName); err != nil {
@@ -160,6 +181,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		cfg.Routes = l.cfg.RouteRules
 		cfg.Checkpoint.Driver = lcfg.CheckpointDriverMySQL
 		cfg.Checkpoint.Schema = config.TiDBLightningCheckpointPrefix + dbutil.TableName(l.cfg.Name, l.checkpointID())
+		cfg.Checkpoint.KeepAfterSuccess = lcfg.CheckpointOrigin
 		param := common.MySQLConnectParam{
 			Host:             cfg.TiDB.Host,
 			Port:             cfg.TiDB.Port,
@@ -181,13 +203,10 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		if err = cfg.Adjust(ctx); err != nil {
 			return err
 		}
-		l.Lock()
-		taskCtx, cancel := context.WithCancel(ctx)
-		l.cancel = cancel
-		l.Unlock()
-		err = l.core.RunOnce(taskCtx, cfg, nil)
+		err = l.runLightning(ctx, cfg)
 		if err == nil {
 			l.finish.Store(true)
+			ctl.CheckpointRemove(ctx, cfg, "all")
 			offsetSQL := l.checkPoint.GenSQL(lightningCheckpointFile, 1)
 			err = l.toDBConns[0].executeSQL(tctx, []string{offsetSQL})
 			_ = l.checkPoint.UpdateOffset(lightningCheckpointFile, 1)
