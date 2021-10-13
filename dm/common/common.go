@@ -48,9 +48,6 @@ var (
 	// UpstreamRelayWorkerKeyAdapter is used to store the upstream which this worker needs to pull relay log
 	// k/v: Encode(worker-name) -> source-id.
 	UpstreamRelayWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/relay-worker/")
-	// TaskConfigKeyAdapter is used to store task config string.
-	// k/v: Encode(task-name) -> task-config-string.
-	TaskConfigKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/task/")
 	// UpstreamSubTaskKeyAdapter is used to store SubTask which are subscribing data from MySQL source.
 	// k/v: Encode(source-id, task-name) -> SubTaskConfig.
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
@@ -96,7 +93,7 @@ var (
 func keyAdapterKeysLen(s KeyAdapter) int {
 	switch s {
 	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter,
-		WorkerKeepAliveKeyAdapter, StageRelayKeyAdapter, TaskConfigKeyAdapter,
+		WorkerKeepAliveKeyAdapter, StageRelayKeyAdapter,
 		UpstreamLastBoundWorkerKeyAdapter, UpstreamRelayWorkerKeyAdapter:
 		return 1
 	case UpstreamSubTaskKeyAdapter, StageSubTaskKeyAdapter,
