@@ -331,6 +331,9 @@ type TaskConfig struct {
 
 	// deprecated, replaced by `start-task --remove-meta`
 	RemoveMeta bool `yaml:"remove-meta"`
+
+	// extra config when target db is TiDB
+	TiDB *TiDBExtraConfig `yaml:"tidb" toml:"tidb" json:"tidb"`
 }
 
 // NewTaskConfig creates a TaskConfig.
