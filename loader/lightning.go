@@ -15,9 +15,10 @@ package loader
 
 import (
 	"context"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"path/filepath"
 	"sync"
+
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"

@@ -502,8 +502,6 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 	updateBound := func(source string, worker *Worker, bound ha.SourceBound) {
 		if err := s.updateStatusForBound(worker, bound); err == nil {
 			delete(s.unbounds, source)
-		} else {
-			// we have already updated etcd, so if we failed here, 
 		}
 		// TODO: if we failed here, etcd has been modified!! we should try this memory check then modify persistent data
 		// and revert if failed
@@ -1099,7 +1097,7 @@ func (s *Scheduler) StartRelay(source string, workers []string) error {
 	for _, workerName := range workers {
 		var (
 			worker *Worker
-			ok bool
+			ok     bool
 		)
 		if worker, ok = s.workers[workerName]; !ok {
 			notExistWorkers = append(notExistWorkers, workerName)
@@ -1181,7 +1179,7 @@ func (s *Scheduler) StopRelay(source string, workers []string) error {
 	for _, workerName := range workers {
 		var (
 			worker *Worker
-			ok bool
+			ok     bool
 		)
 
 		if worker, ok = s.workers[workerName]; !ok {

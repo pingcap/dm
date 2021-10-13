@@ -74,9 +74,9 @@ type Worker struct {
 
 	cli workerrpc.Client // the gRPC client proxy.
 
-	baseInfo    ha.WorkerInfo  // the base information of the DM-worker instance.
-	bound       ha.SourceBound // the source bound relationship, null value if not bounded.
-	stage       WorkerStage    // the current stage.
+	baseInfo ha.WorkerInfo  // the base information of the DM-worker instance.
+	bound    ha.SourceBound // the source bound relationship, null value if not bounded.
+	stage    WorkerStage    // the current stage.
 
 	// the source ID from which the worker is pulling relay log. should keep consistent with Scheduler.relayWorkers
 	relaySource string

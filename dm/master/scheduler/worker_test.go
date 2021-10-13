@@ -32,11 +32,11 @@ var _ = Suite(&testWorker{})
 
 func (t *testWorker) TestWorker(c *C) {
 	var (
-		name  = "dm-worker-1"
-		info  = ha.NewWorkerInfo(name, "127.0.0.1:51803") // must ensure no worker listening one this address.
+		name    = "dm-worker-1"
+		info    = ha.NewWorkerInfo(name, "127.0.0.1:51803") // must ensure no worker listening one this address.
 		source1 = "mysql-replica-1"
 		source2 = "mysql-replica-2"
-		bound = ha.NewSourceBound(source1, name)
+		bound   = ha.NewSourceBound(source1, name)
 	)
 
 	// create a worker with Offline stage and not bound.
