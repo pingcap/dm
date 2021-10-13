@@ -941,7 +941,7 @@ func (s *Server) GetWorkerCfg(ctx context.Context, req *pb.GetWorkerCfgRequest) 
 	return resp, err
 }
 
-// PullBinlogs will start a goroutine to continuously parse binlogs in relay dir and send them in streaming way
+// PullBinlogs will start a goroutine to continuously parse binlogs in relay dir and send them in streaming way.
 func (s *Server) PullBinlogs(req *pb.PullBinlogReq, stream pb.Worker_PullBinlogsServer) error {
 	ctx, cancel := context.WithCancel(stream.Context())
 	defer cancel()

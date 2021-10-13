@@ -432,7 +432,7 @@ func (d *dummyRelayHolder) Update(ctx context.Context, cfg *config.SourceConfig)
 }
 
 // PullBinlogs update relay config online.
-func (h *dummyRelayHolder) PullBinlogs(ctx context.Context, req *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error) {
+func (d *dummyRelayHolder) PullBinlogs(ctx context.Context, req *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error) {
 	return nil, nil
 }
 

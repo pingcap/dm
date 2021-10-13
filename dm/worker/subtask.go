@@ -55,18 +55,19 @@ func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, wor
 		failpoint.Return([]unit.Unit{dumpling.NewDumpling(cfg)})
 	})
 
+	w := GetConditionHub().w
 	us := make([]unit.Unit, 0, 3)
 	switch cfg.Mode {
 	case config.ModeAll:
 		us = append(us, dumpling.NewDumpling(cfg))
 		us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
-		us = append(us, syncer.NewSyncer(cfg, etcdClient))
+		us = append(us, syncer.NewSyncer(cfg, etcdClient, w.pullLocalBinlogs))
 	case config.ModeFull:
 		// NOTE: maybe need another checker in the future?
 		us = append(us, dumpling.NewDumpling(cfg))
 		us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
 	case config.ModeIncrement:
-		us = append(us, syncer.NewSyncer(cfg, etcdClient))
+		us = append(us, syncer.NewSyncer(cfg, etcdClient, w.pullLocalBinlogs))
 	default:
 		log.L().Error("unsupported task mode", zap.String("subtask", cfg.Name), zap.String("task mode", cfg.Mode))
 	}

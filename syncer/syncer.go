@@ -213,7 +213,8 @@ type Syncer struct {
 		isQueryEvent  bool
 	}
 
-	addJobFunc func(*job) error
+	addJobFunc       func(*job) error
+	pullLocalBinlogs func(context.Context, *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error)
 
 	// `lower_case_table_names` setting of upstream db
 	SourceTableNamesFlavor utils.LowerCaseTableNamesFlavor
@@ -225,7 +226,8 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new Syncer.
-func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
+func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client,
+	pullLocalBinlogs func(context.Context, *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error)) *Syncer {
 	logger := log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"))
 	syncer := &Syncer{
 		pessimist: shardddl.NewPessimist(&logger, etcdClient, cfg.Name, cfg.SourceID),
@@ -245,6 +247,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 	syncer.done = nil
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
+	syncer.pullLocalBinlogs = pullLocalBinlogs
 	syncer.enableRelay = cfg.UseRelay
 	syncer.cli = etcdClient
 

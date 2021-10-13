@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-mysql-org/go-mysql/replication"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -1037,4 +1039,13 @@ func (w *SourceWorker) HandleError(ctx context.Context, req *pb.HandleWorkerErro
 	}
 
 	return st.HandleError(ctx, req)
+}
+
+func (w *SourceWorker) pullLocalBinlogs(ctx context.Context, req *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error) {
+	if w.relayHolder == nil {
+		ch, ech := make(chan *replication.BinlogEvent, 1), make(chan error, 1)
+		ech <- terror.ErrWorkerPullBinlogsInvalidRequest.Generate("worker doesn't enable relay")
+		return ch, ech
+	}
+	return w.relayHolder.PullBinlogs(ctx, req)
 }

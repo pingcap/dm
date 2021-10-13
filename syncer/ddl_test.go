@@ -204,7 +204,7 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 		},
 	}
 	var err error
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 
@@ -347,7 +347,7 @@ func (s *testDDLSuite) TestParseDDLSQL(c *C) {
 		},
 	}
 	var err error
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 
@@ -435,7 +435,7 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	for _, ca := range cases {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
-		syncer := NewSyncer(cfg, nil)
+		syncer := NewSyncer(cfg, nil, nil)
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
 		// real table
@@ -529,7 +529,7 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 	for _, ca := range cases {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
-		syncer := NewSyncer(cfg, nil)
+		syncer := NewSyncer(cfg, nil, nil)
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
 
@@ -576,7 +576,7 @@ func (s *testDDLSuite) TestDropSchemaInSharding(c *C) {
 	dbCfg := config.GetDBConfigForTest()
 	cfg := s.newSubTaskCfg(dbCfg)
 	cfg.ShardMode = config.ShardPessimistic
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	// nolint:dogsled
 	_, _, _, _, err := syncer.sgk.AddGroup(targetTable, []string{source1}, nil, true)
 	c.Assert(err, IsNil)
@@ -603,7 +603,7 @@ func (s *testDDLSuite) TestClearOnlineDDL(c *C) {
 	dbCfg := config.GetDBConfigForTest()
 	cfg := s.newSubTaskCfg(dbCfg)
 	cfg.ShardMode = config.ShardPessimistic
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	mock := mockOnlinePlugin{
 		map[string]struct{}{key1: {}, key2: {}},
 	}
