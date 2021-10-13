@@ -40,6 +40,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pingcap/tidb/sessionctx"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -159,6 +160,7 @@ type Syncer struct {
 	columnMapping   *cm.Mapping
 	baList          *filter.Filter
 	exprFilterGroup *ExprFilterGroup
+	sessCtx         sessionctx.Context
 
 	closed atomic.Bool
 
@@ -334,7 +336,13 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return terror.ErrSyncerUnitGenBinlogEventFilter.Delegate(err)
 	}
 
-	s.exprFilterGroup = NewExprFilterGroup(s.cfg.ExprFilter)
+
+	vars := map[string]string{
+		"time_zone": s.timezone.String(),
+	}
+	sessCtx := utils.NewSession(vars)
+	s.sessCtx = sessCtx
+	s.exprFilterGroup = NewExprFilterGroup(sessCtx, s.cfg.ExprFilter)
 
 	if len(s.cfg.ColumnMappingRules) > 0 {
 		s.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
@@ -3420,7 +3428,7 @@ func (s *Syncer) setTimezone(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	s.tctx.L().Info("use timezone", zap.String("location", s.cfg.Timezone))
+	s.tctx.L().Info("use timezone", zap.String("location", loc.String()))
 	s.timezone = loc
 	return nil
 }

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/types"
 
 	"github.com/pingcap/dm/pkg/terror"
@@ -54,7 +55,8 @@ func ParseTimeZone(s string) (*time.Location, error) {
 			if s[0] == '-' {
 				ofst = -ofst
 			}
-			return time.FixedZone("", ofst), nil
+			name := dbutil.FormatTimeZoneOffset(d.Duration)
+			return time.FixedZone(name, ofst), nil
 		}
 	}
 

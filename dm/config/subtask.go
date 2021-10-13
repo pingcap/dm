@@ -130,6 +130,7 @@ func (db *DBConfig) Adjust() {
 	}
 }
 
+// AdjustWithTimeZone adjusts the config with specified time_zone value
 func (db *DBConfig) AdjustWithTimeZone(timeZone string) {
 	if timeZone != "" {
 		AdjustTargetDBTimeZone(db, timeZone)

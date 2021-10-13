@@ -79,7 +79,7 @@ RowLoop:
 		}
 
 		for _, expr := range filterExprs {
-			skip, err := SkipDMLByExpression(originalValue, expr, ti.Columns)
+			skip, err := SkipDMLByExpression(s.sessCtx, originalValue, expr, ti.Columns)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -150,11 +150,11 @@ RowLoop:
 		for j := range oldValueFilters {
 			// AND logic
 			oldExpr, newExpr := oldValueFilters[j], newValueFilters[j]
-			skip1, err := SkipDMLByExpression(oriOldValues, oldExpr, ti.Columns)
+			skip1, err := SkipDMLByExpression(s.sessCtx, oriOldValues, oldExpr, ti.Columns)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			skip2, err := SkipDMLByExpression(oriChangedValues, newExpr, ti.Columns)
+			skip2, err := SkipDMLByExpression(s.sessCtx, oriChangedValues, newExpr, ti.Columns)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -237,7 +237,7 @@ RowLoop:
 		value := extractValueFromData(data, ti.Columns)
 
 		for _, expr := range filterExprs {
-			skip, err := SkipDMLByExpression(value, expr, ti.Columns)
+			skip, err := SkipDMLByExpression(s.sessCtx, value, expr, ti.Columns)
 			if err != nil {
 				return nil, nil, nil, err
 			}

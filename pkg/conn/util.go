@@ -22,7 +22,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 )
 
-// fetchTZSetting fetch target db global time_zone setting.
+// FetchTZSetting fetch target db global time_zone setting.
 func FetchTZSetting(ctx context.Context, cfg *config.DBConfig) (string, error) {
 	db, err := DefaultDBProvider.Apply(cfg)
 	if err != nil {

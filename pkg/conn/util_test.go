@@ -23,9 +23,7 @@ import (
 
 var _ = Suite(testUtilSuite{})
 
-type testUtilSuite struct{
-	provider DBProvider
-}
+type testUtilSuite struct{}
 
 func (s testUtilSuite) TestFetchTZSetting(c *C) {
 	m := InitMockDB(c)
@@ -36,5 +34,3 @@ func (s testUtilSuite) TestFetchTZSetting(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(tz, Equals, "+01:00")
 }
-
-
