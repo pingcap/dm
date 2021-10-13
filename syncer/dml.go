@@ -509,14 +509,6 @@ func findFitIndex(ti *model.TableInfo) *model.IndexInfo {
 	return getSpecifiedIndexColumn(ti, fn)
 }
 
-func getAvailableIndexColumn(ti *model.TableInfo, data []interface{}) *model.IndexInfo {
-	fn := func(i int) bool {
-		return data[i] == nil
-	}
-
-	return getSpecifiedIndexColumn(ti, fn)
-}
-
 func getSpecifiedIndexColumn(ti *model.TableInfo, fn func(i int) bool) *model.IndexInfo {
 	for _, indexCols := range ti.Indices {
 		if !indexCols.Unique {

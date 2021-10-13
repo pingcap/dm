@@ -19,11 +19,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pingcap/dm/pkg/conn"
-	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/log"
-	dterror "github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -42,12 +37,18 @@ import (
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/mock"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
+	dterror "github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 const (
 	// TiDBClusteredIndex is the variable name for clustered index.
 	TiDBClusteredIndex = "tidb_enable_clustered_index"
-	//downstream mock table id, consists of serial numbers of letters.
+	// downstream mock table id, consists of serial numbers of letters.
 	mockTableID = 121402101900011104
 )
 
@@ -74,7 +75,7 @@ type DownstreamTracker struct {
 	tableInfos sync.Map       // downstream table infos
 }
 
-// downstreamTableInfo contains tableinfo and index cache
+// downstreamTableInfo contains tableinfo and index cache.
 type downstreamTableInfo struct {
 	tableInfo        *model.TableInfo   // tableInfo which comes from parse create statement syntaxtree
 	indexCache       *model.IndexInfo   // index cache include pk/uk(not null)
@@ -192,13 +193,13 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 }
 
 // initDownStreamTracker init downstream tracker by sql_mode str which comes from "SHOW VARIABLES like %SQL_MODE".
-func initDownStreamTracker(ctx context.Context, tidbConn *conn.BaseConn, sqlmode string) (*DownstreamTracker, error) {
+func initDownStreamTracker(ctx context.Context, downStreamConn *conn.BaseConn, sqlmode string) (*DownstreamTracker, error) {
 	var stmtParser *parser.Parser
 	var err error
 	if sqlmode != "" {
 		stmtParser, err = utils.GetParserFromSQLModeStr(sqlmode)
 	} else {
-		stmtParser, err = utils.GetParserForConn(ctx, tidbConn.DBConn)
+		stmtParser, err = utils.GetParserForConn(ctx, downStreamConn.DBConn)
 	}
 	if err != nil {
 		return nil, err
@@ -455,15 +456,10 @@ func (tr *Tracker) getTiByCreateStmt(tctx *tcontext.Context, tableID string, dow
 	if err != nil {
 		return nil, dterror.DBErrorAdapt(err, dterror.ErrDBDriverError)
 	}
+	defer rows.Close()
 	var tableName, createStr string
 	if rows.Next() {
 		if err = rows.Scan(&tableName, &createStr); err != nil {
-			return nil, dterror.DBErrorAdapt(rows.Err(), dterror.ErrDBDriverError)
-		}
-		if err = rows.Close(); err != nil {
-			return nil, dterror.DBErrorAdapt(rows.Err(), dterror.ErrDBDriverError)
-		}
-		if err = rows.Err(); err != nil {
 			return nil, dterror.DBErrorAdapt(rows.Err(), dterror.ErrDBDriverError)
 		}
 	}
@@ -473,18 +469,17 @@ func (tr *Tracker) getTiByCreateStmt(tctx *tcontext.Context, tableID string, dow
 	stmtNode, err := tr.downstreamTracker.stmtParser.ParseOneStmt(createStr, "", "")
 	if err != nil {
 		// maybe sql_mode is not matching,Reacquire a parser
-		newParser, err := utils.GetParserForConn(tctx.Ctx, downstreamConn.DBConn)
-		if err != nil {
+		newParser, err1 := utils.GetParserForConn(tctx.Ctx, downstreamConn.DBConn)
+		if err1 != nil {
 			return nil, dterror.ErrParseSQL.Delegate(err, createStr)
 		}
 
-		stmtNode, err = newParser.ParseOneStmt(createStr, "", "")
-		if err != nil {
+		stmtNode, err1 = newParser.ParseOneStmt(createStr, "", "")
+		if err1 != nil {
 			return nil, dterror.ErrParseSQL.Delegate(err, createStr)
 		}
 
 		tr.downstreamTracker.stmtParser = newParser
-
 	}
 
 	ti, err := ddl.MockTableInfo(mock.NewContext(), stmtNode.(*ast.CreateTableStmt), mockTableID)
@@ -494,12 +489,12 @@ func (tr *Tracker) getTiByCreateStmt(tctx *tcontext.Context, tableID string, dow
 	return ti, nil
 }
 
-// getDownStreamTi  constructs downstreamTable index cache by tableinfo
+// getDownStreamTi  constructs downstreamTable index cache by tableinfo.
 func getDownStreamTi(ti *model.TableInfo, originTi *model.TableInfo) *downstreamTableInfo {
 	var (
 		indexCache       *model.IndexInfo
-		availableUKCache []*model.IndexInfo = make([]*model.IndexInfo, 0, len(ti.Indices))
-		hasPk            bool               = false
+		availableUKCache = make([]*model.IndexInfo, 0, len(ti.Indices))
+		hasPk            = false
 	)
 
 	// func for check not null constraint
@@ -543,7 +538,7 @@ func getDownStreamTi(ti *model.TableInfo, originTi *model.TableInfo) *downstream
 	}
 }
 
-// redirectIndexKeys redirect index's columns offset in origin tableinfo
+// redirectIndexKeys redirect index's columns offset in origin tableinfo.
 func redirectIndexKeys(index *model.IndexInfo, originTi *model.TableInfo) *model.IndexInfo {
 	if index == nil || originTi == nil {
 		return nil
@@ -593,7 +588,7 @@ func handlePkExCase(ti *model.TableInfo) *model.IndexInfo {
 	return nil
 }
 
-// isSpecifiedIndexColumn checks all of index's columns are matching 'fn'
+// isSpecifiedIndexColumn checks all of index's columns are matching 'fn'.
 func isSpecifiedIndexColumn(index *model.IndexInfo, fn func(i int) bool) bool {
 	for _, col := range index.Columns {
 		if !fn(col.Offset) {

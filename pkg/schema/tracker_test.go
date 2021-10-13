@@ -30,11 +30,12 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/ddl"
+	timock "github.com/pingcap/tidb/util/mock"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
-	timock "github.com/pingcap/tidb/util/mock"
+
+	"github.com/pingcap/dm/pkg/conn"
 )
 
 func Test(t *testing.T) {
@@ -100,7 +101,7 @@ func (s *trackerSuite) TestTiDBAndSessionCfg(c *C) {
 	// empty or default config in downstream
 	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", ""))
+			AddRow("sql_mode", defaultTestSessionCfg["sql_mode"]))
 	tracker, err := NewTracker(context.Background(), "test-tracker", nil, baseConn)
 	c.Assert(err, IsNil)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
@@ -518,12 +519,11 @@ func (s *trackerSuite) TestNotSupportedVariable(c *C) {
 
 	mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'").WillReturnRows(
 		sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", ""))
+			AddRow("sql_mode", defaultTestSessionCfg["sql_mode"]))
 
 	oldSessionVar := map[string]string{
 		"tidb_enable_change_column_type": "ON",
 	}
-
 	_, err = NewTracker(context.Background(), "test-tracker", oldSessionVar, baseConn)
 	c.Assert(err, IsNil)
 }
@@ -577,7 +577,7 @@ func (s *trackerSuite) TestGetDownStreamIndexInfo(c *C) {
 
 	tableID := "`test`.`test`"
 
-	//downstream has no pk/uk
+	// downstream has no pk/uk
 	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
 		sqlmock.NewRows([]string{"Table", "Create Table"}).
 			AddRow("test", "create table t(a int, b int, c varchar(10))"))
@@ -588,7 +588,7 @@ func (s *trackerSuite) TestGetDownStreamIndexInfo(c *C) {
 	c.Assert(indexinfo, IsNil)
 	tracker.downstreamTracker.tableInfos.Delete(tableID)
 
-	//downstream has pk(not constraints like "create table t(a int primary key,b int not null)"
+	// downstream has pk(not constraints like "create table t(a int primary key,b int not null)"
 	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
 		sqlmock.NewRows([]string{"Table", "Create Table"}).
 			AddRow("test", "create table t(a int, b int, c varchar(10), PRIMARY KEY (c))"))
@@ -599,7 +599,7 @@ func (s *trackerSuite) TestGetDownStreamIndexInfo(c *C) {
 	c.Assert(indexinfo, NotNil)
 	tracker.downstreamTracker.tableInfos.Delete(tableID)
 
-	//downstream has composite pks
+	// downstream has composite pks
 	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
 		sqlmock.NewRows([]string{"Table", "Create Table"}).
 			AddRow("test", "create table t(a int, b int, c varchar(10), PRIMARY KEY (a,b))"))
@@ -610,7 +610,7 @@ func (s *trackerSuite) TestGetDownStreamIndexInfo(c *C) {
 	c.Assert(len(indexinfo.Columns) == 2, IsTrue)
 	tracker.downstreamTracker.tableInfos.Delete(tableID)
 
-	//downstream has uk(not null)
+	// downstream has uk(not null)
 	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
 		sqlmock.NewRows([]string{"Table", "Create Table"}).
 			AddRow("test", "create table t(a int unique not null, b int, c varchar(10))"))
@@ -621,7 +621,7 @@ func (s *trackerSuite) TestGetDownStreamIndexInfo(c *C) {
 	c.Assert(indexinfo.Columns, NotNil)
 	tracker.downstreamTracker.tableInfos.Delete(tableID)
 
-	//downstream has uk(without not null)
+	// downstream has uk(without not null)
 	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
 		sqlmock.NewRows([]string{"Table", "Create Table"}).
 			AddRow("test", "create table t(a int unique, b int, c varchar(10))"))
@@ -633,7 +633,7 @@ func (s *trackerSuite) TestGetDownStreamIndexInfo(c *C) {
 	c.Assert(dti.(*downstreamTableInfo).availableUKCache, NotNil)
 	tracker.downstreamTracker.tableInfos.Delete(tableID)
 
-	//downstream has uks
+	// downstream has uks
 	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
 		sqlmock.NewRows([]string{"Table", "Create Table"}).
 			AddRow("test", "create table t(a int unique, b int unique, c varchar(10) unique not null)"))
@@ -645,7 +645,7 @@ func (s *trackerSuite) TestGetDownStreamIndexInfo(c *C) {
 	c.Assert(len(dti.(*downstreamTableInfo).availableUKCache) == 2, IsTrue)
 	tracker.downstreamTracker.tableInfos.Delete(tableID)
 
-	//downstream has pk and uk, pk has priority
+	// downstream has pk and uk, pk has priority
 	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
 		sqlmock.NewRows([]string{"Table", "Create Table"}).
 			AddRow("test", "create table t(a int unique not null , b int, c varchar(10), PRIMARY KEY (c))"))
@@ -655,7 +655,7 @@ func (s *trackerSuite) TestGetDownStreamIndexInfo(c *C) {
 	tracker.downstreamTracker.tableInfos.Delete(tableID)
 }
 
-// TestChangeDownstreamSqlMode is check sql mode change
+// TestChangeDownstreamSqlMode is check sql mode change.
 func (s *trackerSuite) TestChangeDownstreamSqlMode(c *C) {
 	log.SetLevel(zapcore.ErrorLevel)
 

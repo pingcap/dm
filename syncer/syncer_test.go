@@ -95,8 +95,6 @@ type testSyncerSuite struct {
 	db              *sql.DB
 	cfg             *config.SubTaskConfig
 	eventsGenerator *event.Generator
-	syncer          *replication.BinlogSyncer
-	streamer        *replication.BinlogStreamer
 }
 
 type MockStreamer struct {
