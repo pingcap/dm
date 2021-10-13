@@ -379,7 +379,8 @@ func (t *openAPISuite) TestTaskAPI(c *check.C) {
 	// create task
 	taskURL := "/api/v1/tasks"
 
-	task := fixtures.GenNoShardOpenAPITaskForTest()
+	task, err := fixtures.GenNoShardOpenAPITaskForTest()
+	c.Assert(err, check.IsNil)
 	// use a valid target db
 	task.TargetConfig.Host = dbCfg.Host
 	task.TargetConfig.Port = dbCfg.Port
@@ -390,7 +391,7 @@ func (t *openAPISuite) TestTaskAPI(c *check.C) {
 	result2 := testutil.NewRequest().Post(taskURL).WithJsonBody(createTaskReq).Go(t.testT, s.echo)
 	c.Assert(result2.Code(), check.Equals, http.StatusCreated)
 	var createTaskResp openapi.Task
-	err := result2.UnmarshalBodyToObject(&createTaskResp)
+	err = result2.UnmarshalBodyToObject(&createTaskResp)
 	c.Assert(err, check.IsNil)
 	c.Assert(task.Name, check.Equals, createTaskResp.Name)
 	subTaskM := s.scheduler.GetSubTaskCfgsByTask(task.Name)

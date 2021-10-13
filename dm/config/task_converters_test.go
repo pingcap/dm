@@ -48,7 +48,8 @@ func (t *testConfig) TestOpenAPITaskToSubTaskConfigs(c *check.C) {
 }
 
 func testNoShardTaskToSubTaskConfigs(c *check.C) {
-	task := fixtures.GenNoShardOpenAPITaskForTest()
+	task, err := fixtures.GenNoShardOpenAPITaskForTest()
+	c.Assert(err, check.IsNil)
 	sourceCfg1, err := LoadFromFile(sourceSampleFile)
 	c.Assert(err, check.IsNil)
 	source1Name := task.SourceConfig.SourceConf[0].SourceName
@@ -112,8 +113,8 @@ func testNoShardTaskToSubTaskConfigs(c *check.C) {
 }
 
 func testShardAndFilterTaskToSubTaskConfigs(c *check.C) {
-	task := fixtures.GenShardAndFilterOpenAPITaskForTest()
-
+	task, err := fixtures.GenShardAndFilterOpenAPITaskForTest()
+	c.Assert(err, check.IsNil)
 	sourceCfg1, err := LoadFromFile(sourceSampleFile)
 	c.Assert(err, check.IsNil)
 	source1Name := task.SourceConfig.SourceConf[0].SourceName

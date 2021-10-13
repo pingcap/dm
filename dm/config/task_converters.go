@@ -206,7 +206,7 @@ func OpenAPITaskToSubTaskConfigs(task *openapi.Task, toDBCfg *DBConfig, sourceCf
 
 		routeRules := []*router.TableRule{}
 		filterRules := []*bf.BinlogEventRule{}
-		for i, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
+		for j, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
 			// route
 			if rule.Target != nil {
 				routeRules = append(routeRules, &router.TableRule{
@@ -227,8 +227,8 @@ func OpenAPITaskToSubTaskConfigs(task *openapi.Task, toDBCfg *DBConfig, sourceCf
 				}
 			}
 			// BlockAllowList
-			doDBs[i] = rule.Source.Schema
-			doTables[i] = &filter.Table{Schema: rule.Source.Schema, Name: rule.Source.Table}
+			doDBs[j] = rule.Source.Schema
+			doTables[j] = &filter.Table{Schema: rule.Source.Schema, Name: rule.Source.Table}
 		}
 		subTaskCfg.RouteRules = routeRules
 		subTaskCfg.FilterRules = filterRules
@@ -253,7 +253,7 @@ func GetTargetDBCfgFromOpenAPITask(task *openapi.Task) *DBConfig {
 	if task.TargetConfig.Security != nil {
 		var certAllowedCn []string
 		if task.TargetConfig.Security.CertAllowedCn != nil {
-			certAllowedCn = append(certAllowedCn, *task.TargetConfig.Security.CertAllowedCn...)
+			certAllowedCn = *task.TargetConfig.Security.CertAllowedCn
 		}
 		toDBCfg.Security = &Security{
 			SSLCABytes:    []byte(task.TargetConfig.Security.SslCaContent),
