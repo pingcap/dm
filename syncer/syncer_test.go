@@ -1363,21 +1363,21 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 // 			if _, ok := stmt.(ast.DDLNode); !ok {
 // 				continue // BEGIN event
 // 			}
-// 			qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
+// 			qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 // 			c.Assert(err, IsNil)
-// 			for _, sql := range qec.splitedDDLs {
-// 				sqls, err := syncer.processSplitedDDL(qec, sql)
+// 			for _, sql := range qec.splitDDLs {
+// 				sqls, err := syncer.processOneDDL(qec, sql)
 // 				c.Assert(err, IsNil)
-// 				qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+// 				qec.needRoutedDDLs = append(qec.needRoutedDDLs, sqls...)
 // 			}
-// 			if len(qec.appliedDDLs) == 0 {
+// 			if len(qec.needRoutedDDLs) == 0 {
 // 				c.Assert(res[i], HasLen, 1)
 // 				c.Assert(res[i][0], Equals, true)
 // 				i++
 // 				continue
 // 			}
 
-// 			for j, sql := range qec.appliedDDLs {
+// 			for j, sql := range qec.needRoutedDDLs {
 // 				stmt, err := p.ParseOneStmt(sql, "", "")
 // 				c.Assert(err, IsNil)
 

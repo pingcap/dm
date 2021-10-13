@@ -44,13 +44,13 @@ func parseDDLSQL(qec *queryEventContext) (stmt ast.StmtNode, err error) {
 	return stmts[0], nil
 }
 
-// processSplitedDDL processes SplitedDDLddl as follow step:
-// 1. track ddl whatever skip it except optimist shard ddl; (TODO: will implement in https://github.com/pingcap/dm/pull/1975)
+// processOneDDL processes already split ddl as following step:
+// 1. track ddl no matter whether skip it; (TODO: will implement in https://github.com/pingcap/dm/pull/1975)
 // 2. skip sql by filterQueryEvent;
 // 3. apply online ddl if onlineDDL is not nil:
 //    * specially, if skip, apply empty string;
 // 4. handle online ddl SQL by handleOnlineDDL.
-func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string, error) {
+func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, error) {
 	ddlInfo, err := s.routeDDL(qec.p, qec.ddlSchema, sql)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 		}
 	}
 
-	shouldSkip, err := s.skipQueryEvent(realTables, ddlInfo.stmt, qec.originSQL)
+	shouldSkip, err := s.skipQueryEvent(realTables, ddlInfo.originStmt, qec.originSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -79,33 +79,27 @@ func (s *Syncer) processSplitedDDL(qec *queryEventContext, sql string) ([]string
 		return nil, nil
 	}
 
-	sqls := []string{sql}
-	if s.onlineDDL != nil {
-		// filter and save ghost table ddl
-		sqls, err = s.onlineDDL.Apply(qec.tctx, ddlInfo.sourceTables, sql, ddlInfo.stmt)
-		if err != nil {
-			return nil, err
-		}
-		// represent saved in onlineDDL.Storage
-		if len(sqls) == 0 {
-			return nil, nil
-		}
-		// represent this sql is not online DDL.
-		if sqls[0] == sql {
-			return sqls, nil
-		}
-		// In there, stmt must be a `RenameTableStmt`. See details in OnlinePlugin.Apply.
-		// So tables is [old1, new1], which new1 is the OnlinePlugin.RealTable. See details in FetchDDLTables.
-		// Rename ddl's table to RealTable.
-		sqls, err = s.renameOnlineDDLTable(qec, ddlInfo.sourceTables[1], sqls)
-		if err != nil {
-			return sqls, err
-		}
-		if qec.onlineDDLTable == nil {
-			qec.onlineDDLTable = ddlInfo.sourceTables[0]
-		} else if qec.onlineDDLTable.String() != ddlInfo.sourceTables[0].String() {
-			return nil, terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(qec.originSQL)
-		}
+	if s.onlineDDL == nil {
+		return []string{sql}, nil
+	}
+	// filter and save ghost table ddl
+	sqls, err := s.onlineDDL.Apply(qec.tctx, ddlInfo.sourceTables, sql, ddlInfo.originStmt, qec.p)
+	if err != nil {
+		return nil, err
+	}
+	// represent saved in onlineDDL.Storage
+	if len(sqls) == 0 {
+		return nil, nil
+	}
+	// represent this sql is not online DDL.
+	if sqls[0] == sql {
+		return sqls, nil
+	}
+
+	if qec.onlineDDLTable == nil {
+		qec.onlineDDLTable = ddlInfo.sourceTables[0]
+	} else if qec.onlineDDLTable.String() != ddlInfo.sourceTables[0].String() {
+		return nil, terror.ErrSyncerUnitOnlineDDLOnMultipleTable.Generate(qec.originSQL)
 	}
 	return sqls, nil
 }
@@ -131,34 +125,12 @@ func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (*ddlInfo, error
 
 	routedDDL, err := parserpkg.RenameDDLTable(stmt, targetTables)
 	return &ddlInfo{
-		sql:          routedDDL,
-		stmt:         stmt,
+		originDDL:    sql,
+		routedDDL:    routedDDL,
+		originStmt:   stmt,
 		sourceTables: sourceTables,
 		targetTables: targetTables,
 	}, err
-}
-
-// renameOnlineDDLTable renames the given ddl sqls by given targetTable.
-func (s *Syncer) renameOnlineDDLTable(qec *queryEventContext, targetTable *filter.Table, sqls []string) ([]string, error) {
-	renamedSQLs := make([]string, 0, len(sqls))
-	targetTables := []*filter.Table{targetTable}
-	for _, sql := range sqls {
-		// remove empty sqls which inserted because online DDL is filtered
-		if sql == "" {
-			continue
-		}
-		stmt, err := qec.p.ParseOneStmt(sql, "", "")
-		if err != nil {
-			return nil, terror.ErrSyncerUnitParseStmt.New(err.Error())
-		}
-
-		sql, err = parserpkg.RenameDDLTable(stmt, targetTables)
-		if err != nil {
-			return nil, err
-		}
-		renamedSQLs = append(renamedSQLs, sql)
-	}
-	return renamedSQLs, nil
 }
 
 func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema string) error {
@@ -224,8 +196,9 @@ func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetTable *filter.Tabl
 }
 
 type ddlInfo struct {
-	sql          string
-	stmt         ast.StmtNode
+	originDDL    string
+	routedDDL    string
+	originStmt   ast.StmtNode
 	sourceTables []*filter.Table
 	targetTables []*filter.Table
 }

@@ -110,7 +110,7 @@ func (s *testDDLSuite) TestCommentQuote(c *C) {
 	stmt, err := parseDDLSQL(qec)
 	c.Assert(err, IsNil)
 
-	qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
+	qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(&config.SubTaskConfig{}, nil)
@@ -118,13 +118,13 @@ func (s *testDDLSuite) TestCommentQuote(c *C) {
 	err = syncer.genRouter()
 	c.Assert(err, IsNil)
 
-	for _, sql := range qec.splitedDDLs {
-		sqls, err := syncer.processSplitedDDL(qec, sql)
+	for _, sql := range qec.splitDDLs {
+		sqls, err := syncer.processOneDDL(qec, sql)
 		c.Assert(err, IsNil)
-		qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+		qec.needRoutedDDLs = append(qec.needRoutedDDLs, sqls...)
 	}
-	c.Assert(len(qec.appliedDDLs), Equals, 1)
-	c.Assert(qec.appliedDDLs[0], Equals, expectedSQL)
+	c.Assert(len(qec.needRoutedDDLs), Equals, 1)
+	c.Assert(qec.needRoutedDDLs[0], Equals, expectedSQL)
 }
 
 func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
@@ -236,33 +236,33 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 
 	for i, sql := range sqls {
 		qec := &queryEventContext{
-			eventContext: ec,
-			ddlSchema:    "test",
-			originSQL:    sql,
-			appliedDDLs:  make([]string, 0),
-			p:            parser.New(),
+			eventContext:   ec,
+			ddlSchema:      "test",
+			originSQL:      sql,
+			needRoutedDDLs: make([]string, 0),
+			p:              parser.New(),
 		}
 		stmt, err := parseDDLSQL(qec)
 		c.Assert(err, IsNil)
 
-		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
+		qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		for _, sql2 := range qec.splitedDDLs {
-			sqls, err := syncer.processSplitedDDL(qec, sql2)
+		for _, sql2 := range qec.splitDDLs {
+			sqls, err := syncer.processOneDDL(qec, sql2)
 			c.Assert(err, IsNil)
 			for _, sql3 := range sqls {
 				if len(sql3) == 0 {
 					continue
 				}
-				qec.appliedDDLs = append(qec.appliedDDLs, sql3)
+				qec.needRoutedDDLs = append(qec.needRoutedDDLs, sql3)
 			}
 		}
-		c.Assert(qec.appliedDDLs, DeepEquals, expectedSQLs[i])
-		c.Assert(targetSQLs[i], HasLen, len(qec.appliedDDLs))
-		for j, sql2 := range qec.appliedDDLs {
+		c.Assert(qec.needRoutedDDLs, DeepEquals, expectedSQLs[i])
+		c.Assert(targetSQLs[i], HasLen, len(qec.needRoutedDDLs))
+		for j, sql2 := range qec.needRoutedDDLs {
 			ddlInfo, err2 := syncer.routeDDL(qec.p, qec.ddlSchema, sql2)
 			c.Assert(err2, IsNil)
-			c.Assert(targetSQLs[i][j], Equals, ddlInfo.sql)
+			c.Assert(targetSQLs[i][j], Equals, ddlInfo.routedDDL)
 		}
 	}
 }
@@ -386,24 +386,24 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 			eventContext: &eventContext{
 				tctx: tctx,
 			},
-			originSQL:   tc.sql,
-			appliedDDLs: make([]string, 0),
-			ddlSchema:   "test",
-			p:           parser,
+			originSQL:      tc.sql,
+			needRoutedDDLs: make([]string, 0),
+			ddlSchema:      "test",
+			p:              parser,
 		}
 		stmt, err := parseDDLSQL(qec)
 		c.Assert(err, IsNil)
 
-		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
+		qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		for _, sql := range qec.splitedDDLs {
-			sqls, err := syncer.processSplitedDDL(qec, sql)
+		for _, sql := range qec.splitDDLs {
+			sqls, err := syncer.processOneDDL(qec, sql)
 			c.Assert(err, IsNil)
-			qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+			qec.needRoutedDDLs = append(qec.needRoutedDDLs, sqls...)
 		}
 
-		c.Assert(len(qec.appliedDDLs), Equals, 1)
-		c.Assert(qec.appliedDDLs[0], Equals, tc.expected)
+		c.Assert(len(qec.needRoutedDDLs), Equals, 1)
+		c.Assert(qec.needRoutedDDLs[0], Equals, tc.expected)
 	}
 }
 
@@ -468,26 +468,26 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		err2 := syncer.genRouter()
 		c.Assert(err2, IsNil)
 		qec = &queryEventContext{
-			eventContext: ec,
-			ddlSchema:    "test",
-			appliedDDLs:  make([]string, 0),
-			p:            p,
+			eventContext:   ec,
+			ddlSchema:      "test",
+			needRoutedDDLs: make([]string, 0),
+			p:              p,
 		}
 		qec.originSQL = ca.sql
 		stmt, err := parseDDLSQL(qec)
 		c.Assert(err, IsNil)
 		_, ok := stmt.(ast.DDLNode)
 		c.Assert(ok, IsTrue)
-		qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
+		qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		for _, sql := range qec.splitedDDLs {
-			sqls, err := syncer.processSplitedDDL(qec, sql)
+		for _, sql := range qec.splitDDLs {
+			sqls, err := syncer.processOneDDL(qec, sql)
 			c.Assert(err, IsNil)
-			qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+			qec.needRoutedDDLs = append(qec.needRoutedDDLs, sqls...)
 		}
 		if len(ca.expectSQL) != 0 {
-			c.Assert(qec.appliedDDLs, HasLen, 1)
-			c.Assert(qec.appliedDDLs[0], Equals, ca.expectSQL)
+			c.Assert(qec.needRoutedDDLs, HasLen, 1)
+			c.Assert(qec.needRoutedDDLs[0], Equals, ca.expectSQL)
 		}
 	}
 	cluster.Stop()
@@ -555,7 +555,7 @@ type mockOnlinePlugin struct {
 	toFinish map[string]struct{}
 }
 
-func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error) {
+func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode, p *parser.Parser) ([]string, error) {
 	return nil, nil
 }
 

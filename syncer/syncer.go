@@ -2302,8 +2302,8 @@ type queryEventContext struct {
 	ddlSchema string         // used schema
 	originSQL string         // before split
 	// split multi-schema change DDL into multiple one schema change DDL due to TiDB's limitation
-	splitedDDLs    []string // after split before online ddl
-	appliedDDLs    []string // after onlineDDL apply if onlineDDL != nil and track, before route
+	splitDDLs      []string // after split before online ddl
+	needRoutedDDLs []string // after onlineDDL apply if onlineDDL != nil and track, before route
 	needHandleDDLs []string // after route
 
 	shardingDDLInfo *ddlInfo
@@ -2346,12 +2346,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	}
 
 	qec := &queryEventContext{
-		eventContext: &ec,
-		ddlSchema:    string(ev.Schema),
-		originSQL:    utils.TrimCtrlChars(originSQL),
-		splitedDDLs:  make([]string, 0),
-		appliedDDLs:  make([]string, 0),
-		sourceTbls:   make(map[string]map[string]struct{}),
+		eventContext:   &ec,
+		ddlSchema:      string(ev.Schema),
+		originSQL:      utils.TrimCtrlChars(originSQL),
+		splitDDLs:      make([]string, 0),
+		needRoutedDDLs: make([]string, 0),
+		sourceTbls:     make(map[string]map[string]struct{}),
 	}
 	qec.p, err = event.GetParserForStatusVars(ev.StatusVars)
 	if err != nil {
@@ -2420,7 +2420,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	qec.tctx.L().Info("ready to split ddl", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))
 	*qec.lastLocation = *qec.currentLocation // update lastLocation, because we have checked `isDDL`
 
-	qec.splitedDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
+	qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 	if err != nil {
 		return err
 	}
@@ -2429,15 +2429,15 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	// We use default parser because inside function where need parser, sqls are came from parserpkg.SplitDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 	// TODO: save stmt, tableName to avoid parse the sql to get them again
 	qec.p = parser.New()
-	for _, sql := range qec.splitedDDLs {
-		sqls, err2 := s.processSplitedDDL(qec, sql)
+	for _, sql := range qec.splitDDLs {
+		sqls, err2 := s.processOneDDL(qec, sql)
 		if err2 != nil {
 			qec.tctx.L().Error("fail to split statement", zap.String("event", "query"), zap.Stringer("queryEventContext", qec), log.ShortError(err2))
 			return err2
 		}
-		qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+		qec.needRoutedDDLs = append(qec.needRoutedDDLs, sqls...)
 	}
-	qec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.Strings("appliedDDLs", qec.appliedDDLs), zap.Stringer("queryEventContext", qec))
+	qec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.Strings("needRoutedDDLs", qec.needRoutedDDLs), zap.Stringer("queryEventContext", qec))
 
 	metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenQuery, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 
@@ -2454,11 +2454,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			* other rename: we don't allow user to execute more than one rename operation in one ddl event, then it would make no difference
 	*/
 
-	qec.needHandleDDLs = make([]string, 0, len(qec.appliedDDLs))
-	qec.trackInfos = make([]*ddlInfo, 0, len(qec.appliedDDLs))
+	qec.needHandleDDLs = make([]string, 0, len(qec.needRoutedDDLs))
+	qec.trackInfos = make([]*ddlInfo, 0, len(qec.needRoutedDDLs))
 
 	// handle one-schema change DDL
-	for _, sql := range qec.appliedDDLs {
+	for _, sql := range qec.needRoutedDDLs {
 		if len(sql) == 0 {
 			continue
 		}
@@ -2469,7 +2469,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		}
 		sourceTable := ddlInfo.sourceTables[0]
 		targetTable := ddlInfo.targetTables[0]
-		if len(ddlInfo.sql) == 0 {
+		if len(ddlInfo.routedDDL) == 0 {
 			metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 			qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", qec.ddlSchema))
 			continue
@@ -2484,7 +2484,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 		// pre-filter of sharding
 		if s.cfg.ShardMode == config.ShardPessimistic {
-			switch ddlInfo.stmt.(type) {
+			switch ddlInfo.originStmt.(type) {
 			case *ast.DropDatabaseStmt:
 				err = s.dropSchemaInSharding(qec.tctx, sourceTable.Schema)
 				if err != nil {
@@ -2503,7 +2503,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 				}
 				continue
 			case *ast.TruncateTableStmt:
-				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", ddlInfo.sql))
+				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", ddlInfo.routedDDL))
 				continue
 			}
 
@@ -2514,22 +2514,21 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 				return terror.ErrSyncerUnitDDLOnMultipleTable.Generate(qec.originSQL)
 			}
 		} else if s.cfg.ShardMode == config.ShardOptimistic {
-			switch ddlInfo.stmt.(type) {
+			switch ddlInfo.originStmt.(type) {
 			case *ast.TruncateTableStmt:
-				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", ddlInfo.sql))
+				qec.tctx.L().Info("filter truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", ddlInfo.routedDDL))
 				continue
 			case *ast.RenameTableStmt:
 				return terror.ErrSyncerUnsupportedStmt.Generate("RENAME TABLE", config.ShardOptimistic)
 			}
 		}
 
-		qec.needHandleDDLs = append(qec.needHandleDDLs, ddlInfo.sql)
-		ddlInfo.sql = sql
+		qec.needHandleDDLs = append(qec.needHandleDDLs, ddlInfo.routedDDL)
 		qec.trackInfos = append(qec.trackInfos, ddlInfo)
 		// TODO: current table checkpoints will be deleted in track ddls, but created and updated in flush checkpoints,
 		//       we should use a better mechanism to combine these operations
 		if s.cfg.ShardMode == "" {
-			recordSourceTbls(qec.sourceTbls, ddlInfo.stmt, sourceTable)
+			recordSourceTbls(qec.sourceTbls, ddlInfo.originStmt, sourceTable)
 		}
 	}
 
@@ -2642,7 +2641,7 @@ func (s *Syncer) handleQueryEventPessimistic(qec *queryEventContext) error {
 	)
 
 	var annotate string
-	switch ddlInfo.stmt.(type) {
+	switch ddlInfo.originStmt.(type) {
 	case *ast.CreateDatabaseStmt:
 		// for CREATE DATABASE, we do nothing. when CREATE TABLE under this DATABASE, sharding groups will be added
 	case *ast.CreateTableStmt:
@@ -2853,7 +2852,7 @@ func (s *Syncer) trackDDL(usedSchema string, trackInfo *ddlInfo, ec *eventContex
 		tryFetchDownstreamTable      bool // to make sure if not exists will execute correctly
 	)
 
-	switch node := trackInfo.stmt.(type) {
+	switch node := trackInfo.originStmt.(type) {
 	case *ast.CreateDatabaseStmt:
 		shouldExecDDLOnSchemaTracker = true
 	case *ast.AlterDatabaseStmt:
@@ -2901,7 +2900,7 @@ func (s *Syncer) trackDDL(usedSchema string, trackInfo *ddlInfo, ec *eventContex
 	case *ast.LockTablesStmt, *ast.UnlockTablesStmt, *ast.CleanupTableLockStmt, *ast.TruncateTableStmt:
 		break
 	default:
-		ec.tctx.L().DPanic("unhandled DDL type cannot be tracked", zap.Stringer("type", reflect.TypeOf(trackInfo.stmt)))
+		ec.tctx.L().DPanic("unhandled DDL type cannot be tracked", zap.Stringer("type", reflect.TypeOf(trackInfo.originStmt)))
 	}
 
 	if shouldSchemaExist {
@@ -2935,13 +2934,13 @@ func (s *Syncer) trackDDL(usedSchema string, trackInfo *ddlInfo, ec *eventContex
 	}
 
 	if shouldExecDDLOnSchemaTracker {
-		if err := s.schemaTracker.Exec(ec.tctx.Ctx, usedSchema, trackInfo.sql); err != nil {
+		if err := s.schemaTracker.Exec(ec.tctx.Ctx, usedSchema, trackInfo.originDDL); err != nil {
 			ec.tctx.L().Error("cannot track DDL",
 				zap.String("schema", usedSchema),
-				zap.String("statement", trackInfo.sql),
+				zap.String("statement", trackInfo.originDDL),
 				log.WrapStringerField("location", ec.currentLocation),
 				log.ShortError(err))
-			return terror.ErrSchemaTrackerCannotExecDDL.Delegate(err, trackInfo.sql)
+			return terror.ErrSchemaTrackerCannotExecDDL.Delegate(err, trackInfo.originDDL)
 		}
 		s.exprFilterGroup.ResetExprs(srcTable)
 	}

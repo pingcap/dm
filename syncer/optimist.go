@@ -90,7 +90,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		return nil
 	}
 
-	switch trackInfos[0].stmt.(type) {
+	switch trackInfos[0].originStmt.(type) {
 	case *ast.CreateDatabaseStmt, *ast.DropDatabaseStmt, *ast.AlterDatabaseStmt:
 		isDBDDL = true
 	}
@@ -105,7 +105,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	}
 
 	if !isDBDDL {
-		if _, ok := trackInfos[0].stmt.(*ast.CreateTableStmt); !ok {
+		if _, ok := trackInfos[0].originStmt.(*ast.CreateTableStmt); !ok {
 			tiBefore, err = s.getTableInfo(qec.tctx, upTable, downTable)
 			if err != nil {
 				return err
@@ -136,7 +136,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		skipOp bool
 		op     optimism.Operation
 	)
-	switch trackInfos[0].stmt.(type) {
+	switch trackInfos[0].originStmt.(type) {
 	case *ast.CreateDatabaseStmt, *ast.AlterDatabaseStmt:
 		// need to execute the DDL to the downstream, but do not do the coordination with DM-master.
 		op.DDLs = qec.needHandleDDLs
