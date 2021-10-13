@@ -1778,7 +1778,6 @@ func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent, toLock bool) error {
 	// 3. change the stage (from Offline) to Free or Relay.
 	w.ToFree()
 	// TODO: rename ToFree to Online and move below logic inside it
-	// lance test: here
 	if source := w.RelaySourceID(); source != "" {
 		_ = w.TurnOnRelay(source)
 	}
@@ -1855,15 +1854,25 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	}
 
 	if source != "" {
-		s.logger.Info("found history source when worker bound",
-			zap.String("worker", w.BaseInfo().Name),
-			zap.String("source", source))
+		relaySource := w.RelaySourceID()
+		if relaySource != "" && relaySource != source {
+			source = ""
+		} else {
+			// worker not enable relay or last bound is relay source
+			s.logger.Info("found history source when worker bound",
+				zap.String("worker", w.BaseInfo().Name),
+				zap.String("source", source))
+		}
 	}
 
 	// pick a source which has subtask in load stage.
 	if source == "" {
 		worker, sourceID := s.getNextLoadTaskTransfer(w.BaseInfo().Name, "")
 		if sourceID != "" {
+			s.logger.Info("found unfinished load task source when worker bound",
+				zap.String("worker", w.BaseInfo().Name),
+				zap.String("source", source))
+			// TODO: tolerate a failed transfer because of start-relay conflicts with loadTask
 			err = s.transferWorkerAndSource(w.BaseInfo().Name, "", worker, sourceID)
 			return err == nil, err
 		}
@@ -1871,17 +1880,11 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 
 	// try to find its relay source (currently only one relay source)
 	if source == "" {
-		for source2, workers := range s.relayWorkers {
-			if _, ok2 := workers[w.BaseInfo().Name]; ok2 {
-				source = source2
-				s.logger.Info("found relay source when worker bound",
-					zap.String("worker", w.BaseInfo().Name),
-					zap.String("source", source))
-				break
-			}
-		}
-		// found a relay source
+		source = w.RelaySourceID()
 		if source != "" {
+			s.logger.Info("found relay source when worker bound",
+				zap.String("worker", w.BaseInfo().Name),
+				zap.String("source", source))
 			// currently worker can only handle same relay source and source bound, so we don't try bound another source
 			if oldWorker, ok := s.bounds[source]; ok {
 				s.logger.Info("worker has started relay for a source, but that source is bound to another worker, so we let this worker free",
@@ -1950,7 +1953,8 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 					// a not found worker
 					continue
 				}
-				if _, ok2 := relayWorkers[workerName]; ok2 && w.Stage() == WorkerFree {
+				// the worker is not Offline
+				if _, ok2 := relayWorkers[workerName]; ok2 && w.Stage() == WorkerRelay {
 					worker = w
 					s.logger.Info("found history relay worker when source bound",
 						zap.String("worker", workerName),
@@ -1965,11 +1969,12 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 		for workerName := range relayWorkers {
 			w, ok := s.workers[workerName]
 			if !ok {
-				// a not found worker, should not happened
+				// a not found worker, should not happen
 				s.logger.Warn("worker instance not found for relay worker", zap.String("worker", workerName))
 				continue
 			}
-			if w.Stage() == WorkerFree {
+			// the worker is not Offline
+			if w.Stage() == WorkerRelay {
 				worker = w
 				s.logger.Info("found relay worker when source bound",
 					zap.String("worker", workerName),
