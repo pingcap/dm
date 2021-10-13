@@ -331,6 +331,9 @@ type TaskConfig struct {
 
 	// deprecated, replaced by `start-task --remove-meta`
 	RemoveMeta bool `yaml:"remove-meta"`
+
+	// extra config when target db is TiDB
+	TiDB *TiDBExtraConfig `yaml:"tidb" toml:"tidb" json:"tidb"`
 }
 
 // NewTaskConfig creates a TaskConfig.
@@ -774,6 +777,11 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		if err := cfg.Adjust(true); err != nil {
 			return nil, terror.Annotatef(err, "source %s", inst.SourceID)
 		}
+
+		if c.TiDB != nil {
+			cfg.TiDB = *c.TiDB
+		}
+
 		cfgs[i] = cfg
 	}
 	return cfgs, nil

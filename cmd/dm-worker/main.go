@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	lightningLog "github.com/pingcap/tidb/br/pkg/lightning/log"
 )
 
 func main() {
@@ -53,6 +54,7 @@ func main() {
 		common.PrintLinesf("init logger error %s", terror.Message(err))
 		os.Exit(2)
 	}
+	lightningLog.SetAppLogger(log.L().Logger)
 
 	utils.LogHTTPProxies(true)
 
