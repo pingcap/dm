@@ -53,7 +53,6 @@ syncers:
     max-retry: 0
     auto-fix-gtid: false
     enable-gtid: false
-    disable-detect: false
     safe-mode: false
     enable-ansi-quotes: false
 clean-dump-file: false
