@@ -3112,6 +3112,18 @@ description = ""
 workaround = ""
 tags = ["internal", "low"]
 
+[error.DM-scheduler-46026]
+message = "require DM master to modify worker [%s] with source [%s], but currently the worker is bound to source [%s]"
+description = ""
+workaround = ""
+tags = ["internal", "medium"]
+
+[error.DM-scheduler-46027]
+message = "require DM worker to be bound to source [%s], but it has been started relay for source [%s]"
+description = ""
+workaround = ""
+tags = ["internal", "medium"]
+
 [error.DM-dmctl-48001]
 message = "can not create grpc connection"
 description = ""
