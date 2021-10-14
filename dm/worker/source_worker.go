@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/replication"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
