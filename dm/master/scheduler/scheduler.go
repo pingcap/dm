@@ -1107,7 +1107,8 @@ func (s *Scheduler) StartRelay(source string, workers []string) error {
 			alreadyStarted = append(alreadyStarted, workerName)
 		}
 
-		if worker.Bound().Source != source {
+		// for Bound and Offline worker
+		if worker.Bound().Source != "" && worker.Bound().Source != source {
 			boundWorkers = append(boundWorkers, workerName)
 			boundSources = append(boundSources, worker.Bound().Source)
 		}
@@ -1129,7 +1130,7 @@ func (s *Scheduler) StartRelay(source string, workers []string) error {
 	var busyWorkers, busySources []string
 	for _, workerName := range workers {
 		worker := s.workers[workerName]
-		if relaySource := worker.RelaySourceID(); relaySource != source {
+		if relaySource := worker.RelaySourceID(); relaySource != "" && relaySource != source {
 			busyWorkers = append(busyWorkers, workerName)
 			busySources = append(busySources, relaySource)
 		}
@@ -1776,10 +1777,11 @@ func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent, toLock bool) error {
 	}
 
 	// 3. change the stage (from Offline) to Free or Relay.
+	lastRelaySource := w.RelaySourceID()
 	w.ToFree()
 	// TODO: rename ToFree to Online and move below logic inside it
-	if source := w.RelaySourceID(); source != "" {
-		_ = w.TurnOnRelay(source)
+	if lastRelaySource != "" {
+		_ = w.TurnOnRelay(lastRelaySource)
 	}
 
 	// 4. try to bound an unbounded source.

@@ -301,9 +301,7 @@ function test_exclusive_relay() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"operate-source show -s $SOURCE_ID2" \
-		"\"msg\": \"\"" 1
-
-	read -p 123
+		"\"msg\": \"source is added but there is no free worker to bound\"" 1
 
 	cleanup
 	echo "[$(date)] <<<<<< finish test_exclusive_relay >>>>>>"

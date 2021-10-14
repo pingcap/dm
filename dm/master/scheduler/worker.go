@@ -115,7 +115,7 @@ func (w *Worker) ToOffline() {
 	w.bound = nullBound
 }
 
-// ToFree transforms to Free.
+// ToFree transforms to Free and clears the bound and relay information.
 // All available transitions can be found at the beginning of this file.
 func (w *Worker) ToFree() {
 	w.mu.Lock()
