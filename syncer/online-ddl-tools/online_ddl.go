@@ -422,6 +422,7 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 	targetTable := r.RealName(table)
 	tp := r.TableType(table)
 
+	tctx.L().Debug("online ddl", zap.Any("table name", table), zap.Any("table type", tp))
 	switch tp {
 	case RealTable:
 		if _, ok := stmt.(*ast.RenameTableStmt); ok {
