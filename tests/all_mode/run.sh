@@ -368,7 +368,7 @@ function run() {
 	# use sync_diff_inspector to check full dump loader
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	run_sql_tidb "SELECT count(*) from all_mode.no_diff where dt == ts;"
+	run_sql_tidb "SELECT count(*) from all_mode.no_diff where dt = ts;"
 	check_contains "count(*): 3"
 
 	# check default session config
