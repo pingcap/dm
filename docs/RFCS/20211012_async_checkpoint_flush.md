@@ -86,7 +86,7 @@ However, the missing part is that we are leaving the causality structure filled 
 ![DM asynchronously checkpoints flush with causality optimization](../media/asynchronously-checkpoint-flush-with-causality-opt.png)
 The component colored with orange are new components added for async checkpoint flush.
 
-At the time of executing a batch of sql jobs in syncDML, we can collect those causality keys from these executed sql jobs, and so we can collect causality keys to delete in a separate data structure(TBD).
+At the time of executing a batch of sql jobs in syncDML, we can collect those causality keys from these executed sql jobs, and so we can collect causality keys to delete in a separate data structure(TBD). There is a seperate routine running in background to purge causality keys to delete and update current causality on certain time interval.
 
 Whenever we detect causality conflicts during processing upstream binlog event, we can update the current out-of-date causality with those causality-to-delete keys, and then recheck if it still violates causality rules. If still so, we will need to pause and flush all jobs in the channel.
 
@@ -109,20 +109,19 @@ For compatibility testing, we would like to evaluate async checkpoint flush comp
 - Evaluate if async checkpoint compatible with safe mode DM
 
 ## Metrics & Logs
-Since extra components are introduced with asynchronous checkpoint flush, we need to add related metrics & logs to help us observe the DM cluster. 
+Since extra components are introduced with asynchronous checkpoint flush, we need to add related metrics & logs to help us observe the DM cluster. The following design will subject to change in the development phase.
+
+To get a better view of these new metrics and their impact on performance, we can add the [new Grafana dashboard](https://github.com/pingcap/dm/blob/master/dm/dm-ansible/scripts/DM-Monitor-Professional.json).
 
 ### Checkpoint
 #### Mertics
-To understand start time of checkpoint flush msg, we record the checkpoint position when it’s pushed into the job chan
-
-To understand each job channel processing status, we record the checkpoint position when it’s received by syncDML
-
-To understand end time of checkpoint flush msg, we record the checkpoint pos when [checkpoint msg processing routine] find out a recent checkpoint is ready to flush at the time it process the received checkpoint msg from a channel
-
-To understand flush time of checkpoint, we record the checkpoint when it flushed in [checkpoint flush routine]
+With following two metrics, we can conclude the time span of checkpoint snapshot msg:
+- To understand start time of checkpoint snapshot msg, we record the checkpoint position when it’s pushed into the job chan
+- To understand end time of checkpoint snapshot msg, we record the checkpoint pos when [checkpoint msg processing routine] find out a recent checkpoint is ready to flush at the time it process the received checkpoint msg from a channel
+- To understand flush time of checkpoint, we record the checkpoint when it flushed in [checkpoint flush routine]
 #### Logs
-Log checkpoint when it’s pushed into job channel
-Log checkpoint ordered map when [checkpoint msg processing routine] update it
+Log checkpoint when it’s pushed into job channel(need to evaluate its perf impact due to large amount of log generated)
+Log checkpoint when it’s ready to flush after received all job chan msg(need to evaluate its perf impact due to large amount of log generated)
 Log flushed and purged checkpoints
 ### Causality
 #### Mertics
