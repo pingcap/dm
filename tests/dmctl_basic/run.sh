@@ -407,7 +407,7 @@ function run() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"detect inconsistent DDL sequence" 2
+		"detect inconsistent DDL sequence" 1
 }
 
 cleanup_data dmctl

@@ -116,8 +116,7 @@ func (s *testDDLSuite) TestCommentQuote(c *C) {
 
 	syncer := NewSyncer(&config.SubTaskConfig{}, nil)
 	syncer.tctx = tctx
-	err = syncer.genRouter()
-	c.Assert(err, IsNil)
+	c.Assert(syncer.genRouter(), IsNil)
 
 	for _, sql := range qec.splitDDLs {
 		sqls, err := syncer.processOneDDL(qec, sql)
@@ -379,8 +378,7 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveGeneratedColumnSQL")))
 	syncer := NewSyncer(&config.SubTaskConfig{}, nil)
 	syncer.tctx = tctx
-	err := syncer.genRouter()
-	c.Assert(err, IsNil)
+	c.Assert(syncer.genRouter(), IsNil)
 	parser := parser.New()
 	for _, tc := range testCases {
 		qec := &queryEventContext{
@@ -466,8 +464,7 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		syncer.tctx = tctx
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
-		err2 := syncer.genRouter()
-		c.Assert(err2, IsNil)
+		c.Assert(syncer.genRouter(), IsNil)
 		qec = &queryEventContext{
 			eventContext:   ec,
 			ddlSchema:      "test",
@@ -545,7 +542,7 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
 		syncer := NewSyncer(cfg, nil)
-		syncer.genRouter()
+		c.Assert(syncer.genRouter(), IsNil)
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
 
