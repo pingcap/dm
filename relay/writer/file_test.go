@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -299,7 +298,7 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	filename2 := filepath.Join(cfg.RelayDir, nextFilename)
 	_, err = os.Stat(filename1)
 	c.Assert(os.IsNotExist(err), check.IsTrue)
-	data, err := ioutil.ReadFile(filename2)
+	data, err := os.ReadFile(filename2)
 	c.Assert(err, check.IsNil)
 	fileHeaderLen := len(replication.BinLogFileHeader)
 	c.Assert(len(data), check.Equals, fileHeaderLen+len(formatDescEv.RawData))
@@ -328,7 +327,7 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	filename2 = filepath.Join(cfg.RelayDir, nextFilename)
 	_, err = os.Stat(filename2)
 	c.Assert(os.IsNotExist(err), check.IsTrue)
-	data, err = ioutil.ReadFile(filename1)
+	data, err = os.ReadFile(filename1)
 	c.Assert(err, check.IsNil)
 	c.Assert(len(data), check.Equals, fileHeaderLen+len(formatDescEv.RawData))
 	c.Assert(data[fileHeaderLen:], check.DeepEquals, formatDescEv.RawData)
@@ -363,7 +362,7 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	filename2 = filepath.Join(cfg.RelayDir, nextFilename)
 	_, err = os.Stat(filename2)
 	c.Assert(os.IsNotExist(err), check.IsTrue)
-	data, err = ioutil.ReadFile(filename1)
+	data, err = os.ReadFile(filename1)
 	c.Assert(err, check.IsNil)
 	c.Assert(len(data), check.Equals, fileHeaderLen+len(formatDescEv.RawData)+len(rotateEv.RawData))
 	c.Assert(data[fileHeaderLen:fileHeaderLen+len(formatDescEv.RawData)], check.DeepEquals, formatDescEv.RawData)
@@ -437,7 +436,7 @@ func (t *testFileWriterSuite) TestWriteMultiEvents(c *check.C) {
 
 	// read the data back from the file
 	filename := filepath.Join(cfg.RelayDir, cfg.Filename)
-	obtainData, err := ioutil.ReadFile(filename)
+	obtainData, err := os.ReadFile(filename)
 	c.Assert(err, check.IsNil)
 	c.Assert(obtainData, check.DeepEquals, allData.Bytes())
 }
@@ -592,7 +591,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 
 	// write the events to a file
 	filename := filepath.Join(cfg.RelayDir, cfg.Filename)
-	err = ioutil.WriteFile(filename, baseData, 0o644)
+	err = os.WriteFile(filename, baseData, 0o644)
 	c.Assert(err, check.IsNil)
 
 	// try recover, but in fact do nothing
@@ -695,7 +694,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	var allData bytes.Buffer
 	allData.Write(baseData)
 	allData.Write(extraData)
-	fileData, err := ioutil.ReadFile(filename)
+	fileData, err := os.ReadFile(filename)
 	c.Assert(err, check.IsNil)
 	c.Assert(fileData, check.DeepEquals, allData.Bytes())
 }

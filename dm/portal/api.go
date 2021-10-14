@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -304,7 +303,7 @@ func (p *Handler) AnalyzeConfig(w http.ResponseWriter, req *http.Request) {
 
 	// read all of the contents of our uploaded file into a
 	// byte array
-	fileBytes, err := ioutil.ReadAll(file)
+	fileBytes, err := io.ReadAll(file)
 	if err != nil {
 		p.genJSONResp(w, http.StatusBadRequest, AnalyzeResult{
 			CommonResult: CommonResult{
@@ -381,7 +380,7 @@ func (p *Handler) Download(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cfgData, err := ioutil.ReadFile(filepath)
+	cfgData, err := os.ReadFile(filepath)
 	if err != nil {
 		log.L().Error("read file failed", zap.String("filepath", filepath), zap.Error(err))
 		p.genJSONResp(w, http.StatusBadRequest, nil)
@@ -440,7 +439,7 @@ func getDBConnFromReq(req *http.Request, timeout int) (*sql.DB, string, error) {
 }
 
 func readJSON(r io.Reader, data interface{}) error {
-	b, err := ioutil.ReadAll(r)
+	b, err := io.ReadAll(r)
 	if err != nil {
 		return errors.Trace(err)
 	}
