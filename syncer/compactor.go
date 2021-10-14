@@ -14,30 +14,32 @@
 package syncer
 
 import (
-	"sync"
-	"time"
-
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/syncer/metrics"
 )
 
+// compactItem represents whether a job is compacted.
+type compactItem struct {
+	j         *job
+	compacted bool
+}
+
+func newCompactItem(j *job) *compactItem {
+	return &compactItem{j: j}
+}
+
 // compactor compact multiple statements into one statement.
 type compactor struct {
-	compactedCh    chan map[opType][]*job
-	nonCompactedCh chan *job
-	drainCh        chan struct{}
-	in             chan *job
-	drain          atomic.Bool
-	counter        int
-	bufferSize     int
-	logger         log.Logger
-	safeMode       bool
+	inCh       chan *job
+	outCh      chan *job
+	bufferSize int
+	logger     log.Logger
+	safeMode   bool
 
-	// table -> pk -> job
-	compactedBuffer map[string]map[string]*job
+	keyMap map[string]map[string]int // table -> pk -> pos
+	buffer []*compactItem
 
 	// for metrics
 	task   string
@@ -45,166 +47,134 @@ type compactor struct {
 }
 
 // compactorWrap creates and runs a Compactor instance.
-func compactorWrap(in chan *job, syncer *Syncer) (chan map[opType][]*job, chan *job, chan struct{}) {
+func compactorWrap(inCh chan *job, syncer *Syncer) chan *job {
+	bufferSize := syncer.cfg.QueueSize * syncer.cfg.WorkerCount
 	compactor := &compactor{
-		bufferSize:      syncer.cfg.QueueSize * syncer.cfg.WorkerCount,
-		logger:          syncer.tctx.Logger.WithFields(zap.String("component", "compactor")),
-		compactedBuffer: make(map[string]map[string]*job),
-		task:            syncer.cfg.Name,
-		source:          syncer.cfg.SourceID,
-		in:              in,
-		compactedCh:     make(chan map[opType][]*job),
-		nonCompactedCh:  make(chan *job, syncer.cfg.QueueSize),
-		drainCh:         make(chan struct{}),
+		inCh:       inCh,
+		outCh:      make(chan *job, 1),
+		bufferSize: bufferSize,
+		logger:     syncer.tctx.Logger.WithFields(zap.String("component", "compactor")),
+		keyMap:     make(map[string]map[string]int),
+		buffer:     make([]*compactItem, 0, bufferSize),
+		task:       syncer.cfg.Name,
+		source:     syncer.cfg.SourceID,
 	}
-	compactor.run()
-	return compactor.compactedCh, compactor.nonCompactedCh, compactor.drainCh
-}
-
-// run runs compactor.
-func (c *compactor) run() {
-	var wg sync.WaitGroup
-
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		c.runCompactor()
+		compactor.runCompactor()
+		compactor.close()
 	}()
-
-	// no need to wait because it close by sender
-	go func() {
-		for range c.drainCh {
-			c.drain.Store(true)
-		}
-	}()
-
-	go func() {
-		defer c.close()
-		wg.Wait()
-	}()
+	return compactor.outCh
 }
 
 // runCompactor receive dml jobs and compact.
 func (c *compactor) runCompactor() {
-	for {
-		select {
-		case j, ok := <-c.in:
-			if !ok {
-				return
-			}
-			metrics.QueueSizeGauge.WithLabelValues(c.task, "compactor_input", c.source).Set(float64(len(c.in)))
+	for j := range c.inCh {
+		metrics.QueueSizeGauge.WithLabelValues(c.task, "compactor_input", c.source).Set(float64(len(c.inCh)))
 
-			if j.tp == flush {
-				c.flushBuffer()
-				c.sendFlushJob(j)
-				continue
-			}
+		if j.tp == flush {
+			c.flushBuffer()
+			c.outCh <- j
+			continue
+		}
 
-			// set safeMode when receive first job
-			if c.counter == 0 {
-				c.safeMode = j.dml.safeMode
-			}
-			if j.dml.identifyColumns() == nil {
-				c.nonCompactedCh <- j
-				continue
-			}
+		// set safeMode when receive first job
+		if len(c.buffer) == 0 {
+			c.safeMode = j.dml.safeMode
+		}
+		if j.dml.identifyColumns() == nil {
+			c.buffer = append(c.buffer, newCompactItem(j))
+			continue
+		}
 
-			// if update job update its indentify keys, split it as delete + insert
-			if j.tp == update && j.dml.updateIdentify() {
-				delJob := j.clone()
-				delJob.tp = del
-				delJob.dml = j.dml.newDelDML()
-				c.compactJob(delJob)
+		// if update job update its indentify keys, split it as delete + insert
+		if j.tp == update && j.dml.updateIdentify() {
+			delJob := j.clone()
+			delJob.tp = del
+			delJob.dml = j.dml.newDelDML()
+			c.compactJob(delJob)
 
-				insertJob := j.clone()
-				insertJob.tp = insert
-				insertJob.dml = j.dml.newInsertDML()
-				c.compactJob(insertJob)
-			} else {
-				c.compactJob(j)
-			}
-			if c.drain.Load() {
-				c.flushBuffer()
-			}
-		case <-time.After(waitTime):
-			if c.drain.Load() && c.counter > 0 {
-				c.flushBuffer()
-			}
+			insertJob := j.clone()
+			insertJob.tp = insert
+			insertJob.dml = j.dml.newInsertDML()
+			c.compactJob(insertJob)
+		} else {
+			c.compactJob(j)
+		}
+
+		if len(c.inCh) == 0 || len(c.buffer) >= c.bufferSize {
+			c.flushBuffer()
 		}
 	}
 }
 
 // close close out channels.
 func (c *compactor) close() {
-	close(c.compactedCh)
-	close(c.nonCompactedCh)
+	close(c.outCh)
 }
 
 // flushBuffer flush buffer and reset.
 func (c *compactor) flushBuffer() {
-	if c.counter == 0 {
-		return
-	}
-
-	res := make(map[opType][]*job, 3)
-	for _, tableJobs := range c.compactedBuffer {
-		for _, j := range tableJobs {
-			// if there is one job with safeMode(first one), we set safeMode for all other jobs
-			if c.safeMode {
-				j.dml.safeMode = c.safeMode
-			}
-			res[j.tp] = append(res[j.tp], j)
+	for _, item := range c.buffer {
+		if !item.compacted {
+			c.outCh <- item.j
 		}
 	}
-	c.drain.Store(false)
-	c.compactedCh <- res
-	c.counter = 0
-	c.compactedBuffer = make(map[string]map[string]*job)
-}
-
-// sendFlushJob send flush job to all outer channel.
-func (c *compactor) sendFlushJob(j *job) {
-	c.drain.Store(false)
-	c.compactedCh <- map[opType][]*job{flush: {j}}
-	c.nonCompactedCh <- j
+	c.keyMap = make(map[string]map[string]int)
+	c.buffer = make([]*compactItem, 0, c.bufferSize)
 }
 
 // compactJob compact jobs.
-// insert + insert => X			‾|
-// update + insert => X			 |=> anything + insert => insert
-// delete + insert => INSERT	_|
-// insert + delete => delete	‾|
-// update + insert => delete	 |=> anything + delete => delete
-// delete + insert => X			_|
-// insert + update => insert	‾|
-// update + update => update	 |=> insert + update => insert, update + update => update
-// delete + update => X			_|
+// INSERT + INSERT => X			‾|
+// UPDATE + INSERT => X			 |=> anything + INSERT => INSERT
+// DELETE + INSERT => INSERT	_|
+// INSERT + DELETE => DELETE	‾|
+// UPDATE + INSERT => DELETE	 |=> anything + DELETE => DELETE
+// DELETE + INSERT => X			_|
+// INSERT + UPDATE => INSERT	‾|
+// UPDATE + UPDATE => UPDATE	 |=> INSERT + UPDATE => INSERT, UPDATE + UPDATE => UPDATE
+// DELETE + UPDATE => X			_|
 // .
 func (c *compactor) compactJob(j *job) {
 	tableName := j.dml.tableID
-	tableJobs, ok := c.compactedBuffer[tableName]
+	tableMap, ok := c.keyMap[tableName]
 	if !ok {
-		c.compactedBuffer[tableName] = make(map[string]*job, c.bufferSize)
-		tableJobs = c.compactedBuffer[tableName]
+		c.keyMap[tableName] = make(map[string]int, c.bufferSize)
+		tableMap = c.keyMap[tableName]
 	}
 
 	key := j.dml.identifyKey()
-	prevJob, ok := tableJobs[key]
+	prevPos, ok := tableMap[key]
+	// if no such key in the buffer, add it
 	if !ok {
-		tableJobs[key] = j
-		c.counter++
+		tableMap[key] = len(c.buffer)
+		c.buffer = append(c.buffer, newCompactItem(j))
 		return
 	}
+
+	// should not happen, avoid panic
+	if prevPos >= len(c.buffer) {
+		c.logger.Error("cannot find previous job by key", zap.String("key", key), zap.Int("pos", prevPos))
+	}
+	prevItem := c.buffer[prevPos]
+	prevJob := prevItem.j
 
 	if j.tp == update {
 		if prevJob.tp == insert {
 			j.tp = insert
 			j.dml.oldValues = nil
 			j.dml.originOldValues = nil
+			j.dml.op = insert
 		} else if prevJob.tp == update {
 			j.dml.oldValues = prevJob.dml.oldValues
 			j.dml.originOldValues = prevJob.dml.originOldValues
 		}
 	}
-	tableJobs[key] = j
+
+	// mark previous job as compacted, add new job
+	prevItem.compacted = true
+	tableMap[key] = len(c.buffer)
+	prevQueries, prevArgs := prevItem.j.dml.genSQL()
+	curQueries, curArgs := j.dml.genSQL()
+	c.logger.Debug("compact dml", zap.Reflect("prev sqls", prevQueries), zap.Reflect("prev args", prevArgs), zap.Reflect("cur quries", curQueries), zap.Reflect("cur args", curArgs))
+	c.buffer = append(c.buffer, newCompactItem(j))
 }

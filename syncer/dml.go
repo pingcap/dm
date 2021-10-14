@@ -441,7 +441,7 @@ func newDML(op opType, safeMode bool, tableID string, sourceTable *filter.Table,
 func (dml *DML) newDelDML() *DML {
 	clone := &DML{}
 	*clone = *dml
-	clone.values = dml.values
+	clone.values = dml.oldValues
 	clone.originValues = dml.originOldValues
 	clone.oldValues = nil
 	clone.originOldValues = nil

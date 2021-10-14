@@ -1271,18 +1271,12 @@ func (s *Syncer) syncDML() {
 		s.tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
 	})
 
-	var (
-		compactedCh    chan map[opType][]*job
-		nonCompactedCh chan *job
-		drainCh        chan struct{}
-	)
+	dmlJobCh := s.dmlJobCh
 	if s.cfg.Compact {
-		compactedCh, nonCompactedCh, drainCh = compactorWrap(s.dmlJobCh, s)
-	} else {
-		nonCompactedCh = s.dmlJobCh
+		dmlJobCh = compactorWrap(dmlJobCh, s)
 	}
-	causalityCh := causalityWrap(nonCompactedCh, s)
-	flushCount, flushCh := dmlWorkerWrap(compactedCh, drainCh, causalityCh, s)
+	causalityCh := causalityWrap(dmlJobCh, s)
+	flushCount, flushCh := dmlWorkerWrap(causalityCh, s)
 
 	// wait all worker flushed
 	// use counter is enough since we only add new flush job after previous flush job done
@@ -2066,6 +2060,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		originalData:    rows,
 		columns:         prunedColumns,
 		sourceTableInfo: tableInfo,
+		sourceTable:     sourceTable,
 	}
 
 	switch ec.header.EventType {

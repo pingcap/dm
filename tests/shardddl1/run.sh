@@ -574,16 +574,20 @@ function DM_COLUMN_INDEX() {
 }
 
 function DM_COMPACT_CASE() {
-	run_sql_source1 "insert into ${shardddl1}.${tb1}(a,b) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8)"
-	run_sql_source1 "insert into ${shardddl1}.${tb1}(a,b) values(11,11),(12,12),(13,13),(14,14),(15,15),(16,16),(17,17),(18,18)"
-	run_sql_source1 "insert into ${shardddl1}.${tb1}(a,b) values(21,21),(22,22),(23,23),(24,24),(25,25),(26,26),(27,27),(28,28)"
-	run_sql_source1 "update ${shardddl1}.${tb1} set c=1;"
-	run_sql_source1 "update ${shardddl1}.${tb1} set c=c+1;"
-	run_sql_source1 "update ${shardddl1}.${tb1} set b=b+1000;"
-	run_sql_source1 "update ${shardddl1}.${tb1} set a=a+100;"
-	run_sql_source1 "delete from ${shardddl1}.${tb1};"
-
-	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	END=1000
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"pause-task test"
+	for i in $(seq 1 $END); do
+		run_sql_source1 "insert into ${shardddl1}.${tb1}(a,b) values($i,$i)"
+		run_sql_source1 "update ${shardddl1}.${tb1} set c=1 where a=$i"
+		run_sql_source1 "update ${shardddl1}.${tb1} set c=c+1 where a=$i"
+		run_sql_source1 "update ${shardddl1}.${tb1} set b=b+1 where a=$i"
+		run_sql_source1 "update ${shardddl1}.${tb1} set a=a+100 where a=$i"
+		run_sql_source1 "delete from ${shardddl1}.${tb1} where a=$((i+100))"
+	done
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"resume-task test"
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 60
 }
 
 function DM_COMPACT() {
