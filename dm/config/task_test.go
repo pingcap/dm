@@ -700,7 +700,6 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				MaxRetry:                10,
 				AutoFixGTID:             true,
 				EnableGTID:              true,
-				DisableCausality:        false,
 				SafeMode:                true,
 			},
 			CleanDumpFile:    true,
