@@ -1188,12 +1188,13 @@ func (s *Scheduler) StopRelay(source string, workers []string) error {
 			continue
 		}
 
-		if worker.Stage() != WorkerRelay {
+		startedRelay := worker.RelaySourceID()
+		if startedRelay == "" {
 			alreadyStopped = append(alreadyStopped, workerName)
 			continue
 		}
 
-		if startedRelay := worker.RelaySourceID(); startedRelay != source {
+		if startedRelay != source {
 			unmatchedWorkers = append(unmatchedWorkers, workerName)
 			unmatchedSources = append(unmatchedSources, startedRelay)
 		}
