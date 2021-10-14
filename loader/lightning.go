@@ -15,7 +15,6 @@ package loader
 
 import (
 	"context"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"path/filepath"
 	"sync"
 
@@ -31,6 +30,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/br/pkg/lightning"
 	"github.com/pingcap/tidb/br/pkg/lightning/common"
 	lcfg "github.com/pingcap/tidb/br/pkg/lightning/config"

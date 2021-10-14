@@ -76,7 +76,7 @@ function run() {
 	check_port_offline $WORKER2_PORT 10
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-	
+
 	echo "use sync_diff_inspector to check full data"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 

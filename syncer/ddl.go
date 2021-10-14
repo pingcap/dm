@@ -75,7 +75,6 @@ func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, er
 			Schema: table.Schema,
 			Name:   realTableName,
 		})
-
 	}
 
 	qec.tctx.L().Debug("will skip query event", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("ddlInfo", ddlInfo))
