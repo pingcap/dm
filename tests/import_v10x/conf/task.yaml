@@ -112,3 +112,4 @@ syncers:
 clean-dump-file: false
 ansi-quotes: false
 remove-meta: false
+tidb: null
