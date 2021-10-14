@@ -254,7 +254,7 @@ func GetTargetDBCfgFromOpenAPITask(task *openapi.Task) *DBConfig {
 		Password: task.TargetConfig.Password,
 	}
 	if task.TargetConfig.Security != nil {
-		var certAllowedCn []string
+		var certAllowedCN []string
 		if task.TargetConfig.Security.CertAllowedCn != nil {
 			certAllowedCn = *task.TargetConfig.Security.CertAllowedCn
 		}
