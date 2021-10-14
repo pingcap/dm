@@ -59,14 +59,17 @@ func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, er
 	// will implement in https://github.com/pingcap/dm/pull/1975
 
 	// get real tables before apply block-allow list
-	realTables := ddlInfo.sourceTables
-	if s.onlineDDL != nil {
-		for i, table := range ddlInfo.sourceTables {
-			realTables[i] = &filter.Table{
-				Schema: table.Schema,
-				Name:   s.onlineDDL.RealName(table.Name),
-			}
+	realTables := make([]*filter.Table, 0, len(ddlInfo.sourceTables))
+
+	for _, table := range ddlInfo.sourceTables {
+		realTableName := table.Name
+		if s.onlineDDL != nil {
+			realTableName = s.onlineDDL.RealName(table.Name)
 		}
+		realTables = append(realTables, &filter.Table{
+			Schema: table.Schema,
+			Name:   realTableName,
+		})
 	}
 
 	shouldSkip, err := s.skipQueryEvent(realTables, ddlInfo.originStmt, qec.originSQL)
