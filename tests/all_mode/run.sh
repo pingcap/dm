@@ -368,12 +368,21 @@ function run() {
 	# use sync_diff_inspector to check full dump loader
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	run_sql_tidb "SELECT count(*) from all_mode.no_diff where dt = ts;"
+	run_sql_tidb "set time_zone = '+04:00';SELECT count(*) from all_mode.no_diff where dt = ts;"
 	check_contains "count(*): 3"
 
 	# check default session config
 	check_log_contain_with_retry '\\"tidb_txn_mode\\":\\"optimistic\\"' $WORK_DIR/worker1/log/dm-worker.log
 	check_log_contain_with_retry '\\"tidb_txn_mode\\":\\"optimistic\\"' $WORK_DIR/worker2/log/dm-worker.log
+
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"pause-task $ILLEGAL_CHAR_NAME" \
+		"\"result\": true" 3
+	echo 'create table all_mode.no_diff(id int NOT NULL PRIMARY KEY, dt datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, ts timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP);' >${WORK_DIR}/schema.sql
+  run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    "operate-schema set -s mysql-replica-01 $ILLEGAL_CHAR_NAME -d all_mode -t no_diff ${WORK_DIR}/schema.sql" \
+    "\"result\": true" 2
+  run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "resume-task $ILLEGAL_CHAR_NAME" "\"result\": true" 3
 
 	# restart dm-worker1
 	pkill -hup -f dm-worker1.toml 2>/dev/null || true
@@ -425,7 +434,7 @@ function run() {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	# check compatibility after incremental sync
-	run_sql_tidb "SELECT count(*) from all_mode.no_diff where dt = ts;"
+	run_sql_tidb "set time_zone = '+04:00';SELECT count(*) from all_mode.no_diff where dt = ts;"
 	check_contains "count(*): 4"
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
