@@ -69,7 +69,7 @@ var NewRelay = NewRealRelay
 
 var _ Process = &Relay{}
 
-// Listener defines a binlog event listener of relay log
+// Listener defines a binlog event listener of relay log.
 type Listener interface {
 	// OnEvent get called when relay processed an event successfully.
 	OnEvent(e *replication.BinlogEvent)
@@ -1106,7 +1106,7 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 func (r *Relay) notify(e *replication.BinlogEvent) {
 	r.RLock()
 	defer r.RUnlock()
-	for el, _ := range r.els {
+	for el := range r.els {
 		el.OnEvent(e)
 	}
 }

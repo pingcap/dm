@@ -15,17 +15,19 @@ package streamer
 
 import (
 	"context"
-	"github.com/BurntSushi/toml"
-	"github.com/pingcap/dm/pkg/binlog"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
-	"go.uber.org/zap"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/BurntSushi/toml"
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // FileCmp is a compare condition used when collecting binlog files.
@@ -46,7 +48,7 @@ type SwitchPath struct {
 	nextBinlogName string
 }
 
-// EventNotifier notifies whether there is new binlog event written to the file
+// EventNotifier notifies whether there is new binlog event written to the file.
 type EventNotifier interface {
 	// Notified returns a channel used to check whether there is new binlog event written to the file
 	Notified() chan interface{}
@@ -206,7 +208,7 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 }
 
 type relayLogFileChecker struct {
-	n                               EventNotifier
+	n                                             EventNotifier
 	relayDir, currentUUID                         string
 	latestRelayLogDir, latestFilePath, latestFile string
 	beginOffset, endOffset                        int64
@@ -225,9 +227,9 @@ func (r *relayLogFileChecker) relayLogUpdatedOrNewCreated(ctx context.Context, u
 		}
 		if meta.BinLogName != r.latestFile {
 			// we need check file size again, as the file may have been changed during our metafile check
-			cmp, err := fileSizeUpdated(r.latestFilePath, r.endOffset)
-			if err != nil {
-				errCh <- terror.Annotatef(err, "latestFilePath=%s endOffset=%d", r.latestFilePath, r.endOffset)
+			cmp, err2 := fileSizeUpdated(r.latestFilePath, r.endOffset)
+			if err2 != nil {
+				errCh <- terror.Annotatef(err2, "latestFilePath=%s endOffset=%d", r.latestFilePath, r.endOffset)
 				return
 			}
 			switch {
@@ -243,29 +245,30 @@ func (r *relayLogFileChecker) relayLogUpdatedOrNewCreated(ctx context.Context, u
 				updatePathCh <- nextFilePath
 			}
 			return
-		} else {
-			switchPath, err := r.getSwitchPath()
+		}
+
+		// maybe UUID index file changed
+		switchPath, err := r.getSwitchPath()
+		if err != nil {
+			errCh <- err
+			return
+		}
+		if switchPath != nil {
+			// we need check file size again, as the file may have been changed during path check
+			cmp, err := fileSizeUpdated(r.latestFilePath, r.endOffset)
 			if err != nil {
-				errCh <- err
+				errCh <- terror.Annotatef(err, "latestFilePath=%s endOffset=%d", r.latestFilePath, r.endOffset)
 				return
 			}
-			if switchPath != nil {
-				// we need check file size again, as the file may have been changed during path check
-				cmp, err := fileSizeUpdated(r.latestFilePath, r.endOffset)
-				if err != nil {
-					errCh <- terror.Annotatef(err, "latestFilePath=%s endOffset=%d", r.latestFilePath, r.endOffset)
-					return
-				}
-				switch {
-				case cmp < 0:
-					errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(r.latestFilePath)
-				case cmp > 0:
-					updatePathCh <- r.latestFilePath
-				default:
-					switchCh <- *switchPath
-				}
-				return
+			switch {
+			case cmp < 0:
+				errCh <- terror.ErrRelayLogFileSizeSmaller.Generate(r.latestFilePath)
+			case cmp > 0:
+				updatePathCh <- r.latestFilePath
+			default:
+				switchCh <- *switchPath
 			}
+			return
 		}
 	}
 

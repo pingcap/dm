@@ -24,9 +24,10 @@ import (
 
 	"github.com/BurntSushi/toml"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
+
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/errors"
 )
 
 var _ = Suite(&testFileSuite{})
