@@ -90,7 +90,7 @@ filters:
     table-pattern: t_2
     events: []
     sql-pattern:
-    - alter table .* add column `aaa` int
+    - alter table .* add column aaa int
     action: Ignore
 column-mappings:
   cm-01:

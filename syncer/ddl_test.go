@@ -16,6 +16,7 @@ package syncer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -544,16 +545,19 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
 		syncer := NewSyncer(cfg, nil)
+		syncer.genRouter()
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
 
 		// ghost table
 		sql := fmt.Sprintf("ALTER TABLE `test`.`%s` ADD COLUMN `n` INT", ca.ghostname)
-		stmt, err := p.ParseOneStmt(sql, "", "")
+		qec := &queryEventContext{
+			eventContext: &ec,
+			ddlSchema:    "test",
+			p:            p,
+		}
+		sqls, err := syncer.processOneDDL(qec, sql)
 		c.Assert(err, IsNil)
-		sqls, tables, err := syncer.splitAndFilterDDL(ec, p, stmt, "test")
-		c.Assert(err, IsNil)
-		c.Assert(tables, HasLen, 0)
 		table := ca.ghostname
 		matchRules := config.ShadowTableRules
 		if ca.matchGho {
@@ -565,12 +569,14 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 			c.Assert(sqls[0], Equals, sql)
 		}
 		sql = fmt.Sprintf("RENAME TABLE `test`.`t1` TO `test`.`%s`, `test`.`%s` TO `test`.`t1`", ca.trashName, ca.ghostname)
-		stmt, err = p.ParseOneStmt(sql, "", "")
-		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
+		qec = &queryEventContext{
+			eventContext: &ec,
+			ddlSchema:    "test",
+			p:            p,
+		}
+		sqls, err = syncer.processOneDDL(qec, sql)
 		c.Assert(terror.ErrConfigOnlineDDLMistakeRegex.Equal(err), IsTrue)
 		c.Assert(sqls, HasLen, 0)
-		c.Assert(tables, HasLen, 0)
 		c.Assert(err, ErrorMatches, ".*"+sql+".*"+table+".*"+matchRules+".*")
 	}
 	cluster.Stop()
