@@ -465,6 +465,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		)
 
 		if req.RemoveMeta {
+			// TODO: Remove lightning checkpoint and meta.
 			// use same latch for remove-meta and start-task
 			release, err3 = s.scheduler.AcquireSubtaskLatch(cfg.Name)
 			if err3 != nil {
@@ -1376,7 +1377,7 @@ func (s *Server) generateSubTask(ctx context.Context, task string, errCnt, warnC
 
 	sourceCfgs := s.getSourceConfigs(cfg.MySQLInstances)
 
-	stCfgs, err := cfg.SubTaskConfigs(sourceCfgs)
+	stCfgs, err := config.TaskConfigToSubTaskConfigs(cfg, sourceCfgs)
 	if err != nil {
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}

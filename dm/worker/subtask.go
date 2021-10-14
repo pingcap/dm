@@ -60,12 +60,20 @@ func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, wor
 	switch cfg.Mode {
 	case config.ModeAll:
 		us = append(us, dumpling.NewDumpling(cfg))
-		us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
+		if cfg.TiDB.Backend == "" {
+			us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
+		} else {
+			us = append(us, loader.NewLightning(cfg, etcdClient, workerName))
+		}
 		us = append(us, syncer.NewSyncer(cfg, etcdClient, w.pullLocalBinlogs))
 	case config.ModeFull:
 		// NOTE: maybe need another checker in the future?
 		us = append(us, dumpling.NewDumpling(cfg))
-		us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
+		if cfg.TiDB.Backend == "" {
+			us = append(us, loader.NewLoader(cfg, etcdClient, workerName))
+		} else {
+			us = append(us, loader.NewLightning(cfg, etcdClient, workerName))
+		}
 	case config.ModeIncrement:
 		us = append(us, syncer.NewSyncer(cfg, etcdClient, w.pullLocalBinlogs))
 	default:
