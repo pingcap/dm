@@ -25,6 +25,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
 // FileCmp is a compare condition used when collecting binlog files.
@@ -268,12 +269,19 @@ func (r *relayLogFileChecker) relayLogUpdatedOrNewCreated(ctx context.Context, u
 		}
 	}
 
+	timer := time.NewTimer(watcherInterval)
+	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		errCh <- terror.Annotate(ctx.Err(), "context meet error")
 	case <-r.n.Notified():
 		// the notified event may not be the current relay file
-		// in that case we may read 0 bytes and check at upper "if statement"
+		// in that case we may read 0 bytes and check again
+		updatePathCh <- r.latestFilePath
+	case <-timer.C:
+		// for a task start after source shutdown or there's no new write, it'll not be notified,
+		// and if it's reading from dir 000001 and there's need to switch dir to 000002,
+		// we stop waiting after watcherInterval to give it a chance to check again
 		updatePathCh <- r.latestFilePath
 	}
 }
