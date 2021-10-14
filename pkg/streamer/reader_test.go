@@ -85,7 +85,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	currentUUID := "invalid-current-uuid"
 	relayDir := filepath.Join(baseDir, currentUUID)
 	cfg := &BinlogReaderConfig{RelayDir: baseDir, Flavor: gmysql.MySQLFlavor}
-	r := NewBinlogReader(log.L(), cfg)
+	r := NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
 		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, ErrorMatches, ".*invalid-current-uuid.*")
@@ -101,7 +101,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	relayDir = filepath.Join(baseDir, currentUUID)
 	fullPath := filepath.Join(relayDir, filename)
 	cfg = &BinlogReaderConfig{RelayDir: baseDir, Flavor: gmysql.MySQLFlavor}
-	r = NewBinlogReader(log.L(), cfg)
+	r = NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg)
 
 	// relay log file not exists, failed
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
@@ -233,7 +233,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	c.Assert(nextBinlogName, Equals, "")
 	c.Assert(replaceWithHeartbeat, Equals, false)
 
-	// should only got a RotateEvent and a FormatDescriptionEven
+	// should only get a RotateEvent
 	i = 0
 	for {
 		ev, err2 := s.GetEvent(ctx)
@@ -242,114 +242,16 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 		case replication.ROTATE_EVENT:
 			c.Assert(ev.RawData, DeepEquals, rotateEv.RawData)
 			i++
-		case replication.FORMAT_DESCRIPTION_EVENT:
-			i++
 		default:
 			c.Fatalf("got unexpected event %+v", ev.Header)
 		}
-		if i >= 2 {
+		if i >= 1 {
 			break
 		}
 	}
 	t.verifyNoEventsInStreamer(c, s)
 
 	cancel()
-}
-
-func (t *testReaderSuite) TestParseFileRelayLogUpdatedOrNewCreated(c *C) {
-	var (
-		filename                      = "test-mysql-bin.000001"
-		nextFilename                  = "test-mysql-bin.000002"
-		notUsedGTIDSetStr             = t.lastGTID.String()
-		baseDir                       = c.MkDir()
-		offset                        int64
-		firstParse                    = true
-		possibleLast                  = true
-		baseEvents, lastPos, lastGTID = t.genBinlogEvents(c, t.lastPos, t.lastGTID)
-		currentUUID                   = "b60868af-5a6f-11e9-9ea3-0242ac160006.000001"
-		relayDir                      = filepath.Join(baseDir, currentUUID)
-		fullPath                      = filepath.Join(relayDir, filename)
-		nextPath                      = filepath.Join(relayDir, nextFilename)
-		s                             = newLocalStreamer()
-		cfg                           = &BinlogReaderConfig{RelayDir: baseDir, Flavor: gmysql.MySQLFlavor}
-		r                             = NewBinlogReader(log.L(), cfg)
-	)
-
-	// create the current relay log file and write some events
-	err := os.MkdirAll(relayDir, 0o700)
-	c.Assert(err, IsNil)
-	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0o600)
-	c.Assert(err, IsNil)
-	defer f.Close()
-	_, err = f.Write(replication.BinLogFileHeader)
-	c.Assert(err, IsNil)
-	for _, ev := range baseEvents {
-		_, err = f.Write(ev.RawData)
-		c.Assert(err, IsNil)
-	}
-	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
-
-	// no valid update for relay sub dir, timeout, no error
-	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
-	defer cancel1()
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err := r.parseFile(
-		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
-	c.Assert(err, IsNil)
-	c.Assert(needSwitch, IsFalse)
-	c.Assert(needReParse, IsFalse)
-	c.Assert(latestPos, Equals, int64(0))
-	c.Assert(nextUUID, Equals, "")
-	c.Assert(nextBinlogName, Equals, "")
-	c.Assert(replaceWithHeartbeat, Equals, false)
-	t.purgeStreamer(c, s)
-
-	// current relay log file updated, need to re-parse it
-	var wg sync.WaitGroup
-	wg.Add(1)
-	extraEvents, _, _ := t.genBinlogEvents(c, lastPos, lastGTID)
-	go func() {
-		defer wg.Done()
-		time.Sleep(500 * time.Millisecond) // wait parseFile started
-		_, err2 := f.Write(extraEvents[0].RawData)
-		c.Assert(err2, IsNil)
-	}()
-	ctx2, cancel2 := context.WithTimeout(context.Background(), parseFileTimeout)
-	defer cancel2()
-	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
-		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
-	c.Assert(err, IsNil)
-	c.Assert(needSwitch, IsFalse)
-	c.Assert(needReParse, IsTrue)
-	c.Assert(latestPos, Equals, int64(baseEvents[len(baseEvents)-1].Header.LogPos))
-	c.Assert(nextUUID, Equals, "")
-	c.Assert(nextBinlogName, Equals, "")
-	c.Assert(replaceWithHeartbeat, Equals, false)
-	wg.Wait()
-	t.purgeStreamer(c, s)
-
-	// new relay log file created, need to re-collect files
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		time.Sleep(500 * time.Millisecond) // wait parseFile started
-		err2 := os.WriteFile(nextPath, replication.BinLogFileHeader, 0o600)
-		c.Assert(err2, IsNil)
-	}()
-	ctx3, cancel3 := context.WithTimeout(context.Background(), parseFileTimeout)
-	defer cancel3()
-	t.createMetaFile(c, relayDir, nextFilename, uint32(offset), notUsedGTIDSetStr)
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
-		ctx3, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
-	c.Assert(err, IsNil)
-	c.Assert(needSwitch, IsFalse)
-	c.Assert(needReParse, IsFalse)
-	c.Assert(latestPos, Equals, int64(extraEvents[0].Header.LogPos))
-	c.Assert(nextUUID, Equals, "")
-	c.Assert(nextBinlogName, Equals, "")
-	c.Assert(replaceWithHeartbeat, Equals, false)
-	wg.Wait()
-	t.purgeStreamer(c, s)
 }
 
 func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
@@ -361,7 +263,6 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 		offset            int64
 		firstParse        = true
 		possibleLast      = true
-		baseEvents, _, _  = t.genBinlogEvents(c, t.lastPos, t.lastGTID)
 		currentUUID       = "b60868af-5a6f-11e9-9ea3-0242ac160006.000001"
 		switchedUUID      = "b60868af-5a6f-11e9-9ea3-0242ac160007.000002"
 		relayDir          = filepath.Join(baseDir, currentUUID)
@@ -370,7 +271,7 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 		nextFullPath      = filepath.Join(nextRelayDir, nextFilename)
 		s                 = newLocalStreamer()
 		cfg               = &BinlogReaderConfig{RelayDir: baseDir, Flavor: gmysql.MySQLFlavor}
-		r                 = NewBinlogReader(log.L(), cfg)
+		r                 = NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg)
 	)
 
 	// create the current relay log file and write some events
@@ -380,11 +281,8 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 	c.Assert(err, IsNil)
 	defer f.Close()
 	_, err = f.Write(replication.BinLogFileHeader)
+	offset = 4
 	c.Assert(err, IsNil)
-	for _, ev := range baseEvents {
-		_, err = f.Write(ev.RawData)
-		c.Assert(err, IsNil)
-	}
 	t.createMetaFile(c, relayDir, filename, uint32(offset), notUsedGTIDSetStr)
 
 	// invalid UUID in UUID list, error
@@ -444,7 +342,7 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 		fullPath          = filepath.Join(relayDir, filename)
 		s                 = newLocalStreamer()
 		cfg               = &BinlogReaderConfig{RelayDir: baseDir, Flavor: gmysql.MySQLFlavor}
-		r                 = NewBinlogReader(log.L(), cfg)
+		r                 = NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg)
 	)
 
 	// create the current relay log file and write some events
@@ -462,7 +360,7 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
-	c.Assert(needReParse, IsFalse)
+	c.Assert(needReParse, IsTrue)
 	c.Assert(latestPos, Equals, int64(0))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
@@ -480,6 +378,7 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	// meet `err EOF` error (when parsing binlog event) ignored
 	ctx2, cancel2 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel2()
+	r.en = newDummyEventNotifier(1)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
 		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
@@ -493,9 +392,10 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 
 func (t *testReaderSuite) TestUpdateUUIDs(c *C) {
 	var (
+		en      = newDummyEventNotifier(1)
 		baseDir = c.MkDir()
 		cfg     = &BinlogReaderConfig{RelayDir: baseDir, Flavor: gmysql.MySQLFlavor}
-		r       = NewBinlogReader(log.L(), cfg)
+		r       = NewBinlogReader(en, log.L(), cfg)
 	)
 	c.Assert(r.uuids, HasLen, 0)
 
@@ -520,6 +420,7 @@ func (t *testReaderSuite) TestUpdateUUIDs(c *C) {
 
 func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 	var (
+		en                            = newDummyEventNotifier(1)
 		filenamePrefix                = "test-mysql-bin.00000"
 		notUsedGTIDSetStr             = t.lastGTID.String()
 		baseDir                       = c.MkDir()
@@ -531,7 +432,7 @@ func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 			"b60868af-5a6f-11e9-9ea3-0242ac160008.000003",
 		}
 		cfg      = &BinlogReaderConfig{RelayDir: baseDir, Flavor: gmysql.MySQLFlavor}
-		r        = NewBinlogReader(log.L(), cfg)
+		r        = NewBinlogReader(en, log.L(), cfg)
 		startPos = gmysql.Position{Name: "test-mysql-bin|000001.000001"} // from the first relay log file in the first sub directory
 	)
 
@@ -575,18 +476,8 @@ func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 	// get events from the streamer
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	obtainBaseEvents := make([]*replication.BinlogEvent, 0, (1+2+3)*len(baseEvents))
-	for {
-		ev, err2 := s.GetEvent(ctx)
-		c.Assert(err2, IsNil)
-		if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 {
-			continue // ignore fake event
-		}
-		obtainBaseEvents = append(obtainBaseEvents, ev)
-		if len(obtainBaseEvents) == cap(obtainBaseEvents) {
-			break
-		}
-	}
+
+	obtainBaseEvents := readNEvents(ctx, c, s, (1+2+3)*len(baseEvents))
 	t.verifyNoEventsInStreamer(c, s)
 	// verify obtain base events
 	for i := 0; i < len(obtainBaseEvents); i += len(baseEvents) {
@@ -651,12 +542,29 @@ func (t *testReaderSuite) TestStartSyncByPos(c *C) {
 	r.Close()
 }
 
+func readNEvents(ctx context.Context, c *C, s Streamer, l int) []*replication.BinlogEvent {
+	var result []*replication.BinlogEvent
+	for {
+		ev, err2 := s.GetEvent(ctx)
+		c.Assert(err2, IsNil)
+		if ev.Header.Timestamp == 0 && ev.Header.LogPos == 0 {
+			continue // ignore fake event
+		}
+		result = append(result, ev)
+		// start from the first format description event
+		if len(result) == l {
+			break
+		}
+	}
+	return result
+}
+
 func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 	var (
 		baseDir         = c.MkDir()
 		events          []*replication.BinlogEvent
 		cfg             = &BinlogReaderConfig{RelayDir: baseDir, Flavor: gmysql.MySQLFlavor}
-		r               = NewBinlogReader(log.L(), cfg)
+		r               = NewBinlogReader(newDummyEventNotifier(0), log.L(), cfg)
 		lastPos         uint32
 		lastGTID        gtid.Set
 		previousGset, _ = gtid.ParserGTID(gmysql.MySQLFlavor, "")
@@ -824,19 +732,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	var obtainBaseEvents []*replication.BinlogEvent
-	for {
-		ev, err2 := s.GetEvent(ctx)
-		c.Assert(err2, IsNil)
-		if ev.Header.Timestamp == 0 && ev.Header.LogPos == 0 {
-			continue // ignore fake event
-		}
-		obtainBaseEvents = append(obtainBaseEvents, ev)
-		// start from the first format description event
-		if len(obtainBaseEvents) == len(allEvents) {
-			break
-		}
-	}
+	obtainBaseEvents := readNEvents(ctx, c, s, len(allEvents))
 
 	preGset, err := gmysql.ParseGTIDSet(gmysql.MySQLFlavor, "")
 	c.Assert(err, IsNil)
@@ -859,7 +755,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 	}
 
 	r.Close()
-	r = NewBinlogReader(log.L(), cfg)
+	r = NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg)
 
 	excludeStrs := []string{}
 	// exclude first uuid
@@ -877,20 +773,7 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 	// StartSyncByGtid exclude first uuid
 	s, err = r.StartSyncByGTID(excludeGset)
 	c.Assert(err, IsNil)
-	obtainBaseEvents = []*replication.BinlogEvent{}
-
-	for {
-		ev, err2 := s.GetEvent(ctx)
-		c.Assert(err2, IsNil)
-		if ev.Header.Timestamp == 0 && ev.Header.LogPos == 0 {
-			continue // ignore fake event
-		}
-		obtainBaseEvents = append(obtainBaseEvents, ev)
-		// start from the first format description event
-		if len(obtainBaseEvents) == len(allEvents) {
-			break
-		}
-	}
+	obtainBaseEvents = readNEvents(ctx, c, s, len(allEvents))
 
 	gset := excludeGset.Clone()
 	// every gtid event not from first uuid should become heartbeat event
@@ -916,12 +799,12 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 	c.Assert(os.Remove(path.Join(baseDir, excludeUUID, "mysql.000001")), IsNil)
 
 	r.Close()
-	r = NewBinlogReader(log.L(), cfg)
+	r = NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg)
 	_, err = r.StartSyncByGTID(preGset)
 	c.Assert(err, IsNil)
 
 	r.Close()
-	r = NewBinlogReader(log.L(), cfg)
+	r = NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg)
 	_, err = r.StartSyncByGTID(excludeGset)
 	// error because file has been purge
 	c.Assert(terror.ErrNoRelayPosMatchGTID.Equal(err), IsTrue)
@@ -930,12 +813,12 @@ func (t *testReaderSuite) TestStartSyncByGTID(c *C) {
 	c.Assert(os.RemoveAll(path.Join(baseDir, excludeUUID)), IsNil)
 
 	r.Close()
-	r = NewBinlogReader(log.L(), cfg)
+	r = NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg)
 	_, err = r.StartSyncByGTID(preGset)
 	c.Assert(err, IsNil)
 
 	r.Close()
-	r = NewBinlogReader(log.L(), cfg)
+	r = NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg)
 	_, err = r.StartSyncByGTID(excludeGset)
 	// error because subdir has been purge
 	c.Assert(err, ErrorMatches, ".*no such file or directory.*")
@@ -952,7 +835,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 		startPos = gmysql.Position{Name: "test-mysql-bin|000001.000001"} // from the first relay log file in the first sub directory
 	)
 
-	r := NewBinlogReader(log.L(), cfg)
+	r := NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg)
 	err := r.checkRelayPos(startPos)
 	c.Assert(err, ErrorMatches, ".*empty UUIDs not valid.*")
 
@@ -971,7 +854,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	c.Assert(s, IsNil)
 
 	// write UUIDs into index file
-	r = NewBinlogReader(log.L(), cfg) // create a new reader
+	r = NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg) // create a new reader
 	uuidBytes := t.uuidListToBytes(c, UUIDs)
 	err = os.WriteFile(r.indexPath, uuidBytes, 0o600)
 	c.Assert(err, IsNil)
@@ -1014,9 +897,10 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 
 func (t *testReaderSuite) TestAdvanceCurrentGTIDSet(c *C) {
 	var (
+		en             = newDummyEventNotifier(1)
 		baseDir        = c.MkDir()
 		cfg            = &BinlogReaderConfig{RelayDir: baseDir, Flavor: gmysql.MySQLFlavor}
-		r              = NewBinlogReader(log.L(), cfg)
+		r              = NewBinlogReader(en, log.L(), cfg)
 		mysqlGset, _   = gmysql.ParseMysqlGTIDSet("b60868af-5a6f-11e9-9ea3-0242ac160006:1-6")
 		mariadbGset, _ = gmysql.ParseMariadbGTIDSet("0-1-5")
 	)
@@ -1048,9 +932,10 @@ func (t *testReaderSuite) TestAdvanceCurrentGTIDSet(c *C) {
 
 func (t *testReaderSuite) TestReParseUsingGTID(c *C) {
 	var (
+		en        = newDummyEventNotifier(1)
 		baseDir   = c.MkDir()
 		cfg       = &BinlogReaderConfig{RelayDir: baseDir, Flavor: gmysql.MySQLFlavor}
-		r         = NewBinlogReader(log.L(), cfg)
+		r         = NewBinlogReader(en, log.L(), cfg)
 		uuid      = "ba8f633f-1f15-11eb-b1c7-0242ac110002.000001"
 		gtidStr   = "ba8f633f-1f15-11eb-b1c7-0242ac110002:1"
 		file      = "mysql.000001"
@@ -1133,6 +1018,10 @@ func (t *testReaderSuite) TestReParseUsingGTID(c *C) {
 		time.Sleep(time.Second)
 		_, err = f.Write(events[i].RawData)
 		c.Assert(err, IsNil)
+		select {
+		case en.Notified() <- struct{}{}:
+		default:
+		}
 	}
 	wg.Wait()
 }
