@@ -323,6 +323,7 @@ func (se *session) GetBuiltinFunctionUsage() map[string]uint32 {
 	return se.builtinFunctionUsage
 }
 
+// NewSession return a session context with specified session variables
 func NewSession(vars map[string]string) sessionctx.Context {
 	variables := variable.NewSessionVars()
 	for k, v := range vars {
