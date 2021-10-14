@@ -324,6 +324,8 @@ function run() {
 	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 
 	# manually create target table with two extra field
+	run_sql_tidb "drop database if exists all_mode;"
+	run_sql_tidb "create database all_mode;"
 	run_sql_tidb "drop table if exists all_mode.no_diff;"
 	run_sql_tidb "create table all_mode.no_diff(id int NOT NULL PRIMARY KEY, dt datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, ts timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP);"
 
@@ -423,7 +425,7 @@ function run() {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	# check compatibility after incremental sync
-	run_sql_tidb "SELECT count(*) from all_mode.no_diff where dt == ts;"
+	run_sql_tidb "SELECT count(*) from all_mode.no_diff where dt = ts;"
 	check_contains "count(*): 4"
 
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
