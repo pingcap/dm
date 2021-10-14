@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/pingcap/parser"
@@ -58,13 +59,13 @@ func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, er
 	// TODO: add track ddl
 	// will implement in https://github.com/pingcap/dm/pull/1975
 
-	// get real tables before apply block-allow list
-	realTables := make([]*filter.Table, 0, len(ddlInfo.sourceTables))
 	if s.onlineDDL != nil {
 		if err = s.onlineDDL.CheckRegex(ddlInfo.originStmt, qec.ddlSchema, s.SourceTableNamesFlavor); err != nil {
 			return nil, err
 		}
 	}
+	// get real tables before apply block-allow list
+	realTables := make([]*filter.Table, 0, len(ddlInfo.sourceTables))
 	for _, table := range ddlInfo.sourceTables {
 		realTableName := table.Name
 		if s.onlineDDL != nil {
@@ -74,15 +75,17 @@ func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, er
 			Schema: table.Schema,
 			Name:   realTableName,
 		})
+
 	}
 
+	qec.tctx.L().Debug("will skip query event", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("ddlInfo", ddlInfo))
 	shouldSkip, err := s.skipQueryEvent(realTables, ddlInfo.originStmt, qec.originSQL)
 	if err != nil {
 		return nil, err
 	}
 	if shouldSkip {
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
-		qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("schema", qec))
+		qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("query event context", qec))
 		return nil, nil
 	}
 
@@ -208,4 +211,14 @@ type ddlInfo struct {
 	originStmt   ast.StmtNode
 	sourceTables []*filter.Table
 	targetTables []*filter.Table
+}
+
+func (d *ddlInfo) String() string {
+	var sourceTables, targetTables string
+	for i := range d.sourceTables {
+		sourceTables += d.sourceTables[i].String() + ", "
+		targetTables += d.targetTables[i].String() + ", "
+	}
+	return fmt.Sprintf("{originDDL: %s, routedDDL: %s, sourceTables: %s, targetTables: %s}",
+		d.originDDL, d.routedDDL, sourceTables, targetTables)
 }

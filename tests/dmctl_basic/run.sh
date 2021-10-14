@@ -396,9 +396,15 @@ function run() {
 	new_relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
 	[ "$new_relay_log_count" -eq 1 ]
 
+    # not be skipped by source configure's sql-pattern because binlog-filter's table name
 	run_sql_source1 "alter table dmctl.t_1 add column aaa int"
+    # skipped by binlog-filter's table name
+	# ps: maybe original reason is to test the task config's filter is prior than source's
+	# ps: but due to binlog-filter's logic, the unmatched table name will be skipped directly.
 	run_sql_source1 "alter table dmctl.t_2 add column aaa int"
+    # skipped by sql-pattern
 	run_sql_source2 "alter table dmctl.t_1 add column aaa int"
+	# skipped by sql-pattern
 	run_sql_source2 "alter table dmctl.t_2 add column aaa int"
 
 	# all t_1 synced, all t_2 unsynced
@@ -407,7 +413,7 @@ function run() {
 
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status test" \
-		"detect inconsistent DDL sequence" 1
+		"detect inconsistent DDL sequence" 2
 }
 
 cleanup_data dmctl
