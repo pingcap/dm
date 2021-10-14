@@ -256,13 +256,13 @@ func GetTargetDBCfgFromOpenAPITask(task *openapi.Task) *DBConfig {
 	if task.TargetConfig.Security != nil {
 		var certAllowedCN []string
 		if task.TargetConfig.Security.CertAllowedCn != nil {
-			certAllowedCn = *task.TargetConfig.Security.CertAllowedCn
+			certAllowedCN = *task.TargetConfig.Security.CertAllowedCn
 		}
 		toDBCfg.Security = &Security{
 			SSLCABytes:    []byte(task.TargetConfig.Security.SslCaContent),
 			SSLKEYBytes:   []byte(task.TargetConfig.Security.SslKeyContent),
 			SSLCertBytes:  []byte(task.TargetConfig.Security.SslCertContent),
-			CertAllowedCN: certAllowedCn,
+			CertAllowedCN: certAllowedCN,
 		}
 	}
 	return toDBCfg
