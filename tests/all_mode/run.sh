@@ -9,6 +9,7 @@ API_VERSION="v1alpha1"
 ILLEGAL_CHAR_NAME='t-Ë!s`t'
 
 function test_session_config() {
+	echo "[$(date)] <<<<<< start test_session_config >>>>>>"
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 2 rows affected'
 	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -58,9 +59,12 @@ function test_session_config() {
 
 	cleanup_data all_mode
 	cleanup_process
+	echo "[$(date)] <<<<<< finish test_session_config >>>>>>"
+
 }
 
 function test_query_timeout() {
+	echo "[$(date)] <<<<<< start test_query_timeout >>>>>>"
 	export GO_FAILPOINTS="github.com/pingcap/dm/syncer/BlockSyncStatus=return(\"5s\")"
 
 	cp $cur/conf/dm-master.toml $WORK_DIR/dm-master.toml
@@ -140,9 +144,11 @@ function test_query_timeout() {
 	cleanup_process
 
 	export GO_FAILPOINTS=''
+	echo "[$(date)] <<<<<< finish test_query_timeout >>>>>>"
 }
 
 function test_stop_task_before_checkpoint() {
+	echo "[$(date)] <<<<<< start test_stop_task_before_checkpoint >>>>>>"
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 2 rows affected'
 	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -204,9 +210,11 @@ function test_stop_task_before_checkpoint() {
 	cleanup_process
 
 	export GO_FAILPOINTS=''
+	echo "[$(date)] <<<<<< finish test_stop_task_before_checkpoint >>>>>>"
 }
 
 function test_fail_job_between_event() {
+	echo "[$(date)] <<<<<< start test_fail_job_between_event >>>>>>"
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 2 rows affected'
 	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -262,9 +270,11 @@ function test_fail_job_between_event() {
 	cleanup_process
 
 	export GO_FAILPOINTS=''
+	echo "[$(date)] <<<<<< finish test_fail_job_between_event >>>>>>"
 }
 
 function test_expression_filter() {
+	echo "[$(date)] <<<<<< start test_expression_filter >>>>>>"
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 2 rows affected'
 	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
@@ -305,6 +315,7 @@ function test_expression_filter() {
 
 	cleanup_data all_mode
 	cleanup_process
+	echo "[$(date)] <<<<<< finish test_expression_filter >>>>>>"
 }
 
 function run() {
