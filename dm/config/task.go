@@ -935,11 +935,13 @@ func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version *semver.Version) {
 // AdjustTargetDBTimeZone force adjust session `time_zone` to UTC.
 func AdjustTargetDBTimeZone(config *DBConfig, timeZone string) {
 	for k, v := range config.Session {
-		if strings.ToLower(k) == "time_zone" && strings.EqualFold(v, timeZone) {
-			log.L().Warn("session variable 'time_zone' is overwritten by task config timezone.",
-				zap.String("time_zone", config.Session[k]),
-				zap.String("time_zone_cfg", timeZone))
-			config.Session[k] = timeZone
+		if strings.ToLower(k) == "time_zone" {
+			if !strings.EqualFold(v, timeZone) {
+				log.L().Warn("session variable 'time_zone' is overwritten by task config timezone.",
+					zap.String("time_zone", config.Session[k]),
+					zap.String("time_zone_overwritten", timeZone))
+				config.Session[k] = timeZone
+			}
 			return
 		}
 	}
