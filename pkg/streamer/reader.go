@@ -453,7 +453,12 @@ func (r *BinlogReader) parseFile(
 
 		switch ev := e.Event.(type) {
 		case *replication.FormatDescriptionEvent:
-			// ignore FORMAT_DESCRIPTION event, because go-mysql will send this fake event
+			// go-mysql will send a duplicate FormatDescriptionEvent event when offset > 4, ignore it
+			if offset > 4 {
+				return nil
+			}
+			// else just update lastPos
+			latestPos = int64(e.Header.LogPos)
 		case *replication.RotateEvent:
 			// add master UUID suffix to pos.Name
 			parsed, _ := binlog.ParseFilename(string(ev.NextLogName))
