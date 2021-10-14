@@ -17,6 +17,7 @@ import (
 
 	"github.com/pingcap/check"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/openapi/fixtures"
@@ -39,7 +40,7 @@ func (t *testConfig) TestTaskGetTargetDBCfg(c *check.C) {
 	c.Assert(dbCfg.Port, check.Equals, task.TargetConfig.Port)
 	c.Assert(dbCfg.User, check.Equals, task.TargetConfig.User)
 	c.Assert(dbCfg.Security, check.NotNil)
-	c.Assert(dbCfg.Security.CertAllowedCN[0], check.Equals, certAllowedCn[0])
+	c.Assert([]string{dbCfg.Security.CertAllowedCN[0]}, check.DeepEquals, certAllowedCn)
 }
 
 func (t *testConfig) TestOpenAPITaskToSubTaskConfigs(c *check.C) {
@@ -104,12 +105,11 @@ func testNoShardTaskToSubTaskConfigs(c *check.C) {
 	c.Assert(subTaskConfig.FilterRules, check.HasLen, 0)
 	// check balist
 	c.Assert(subTaskConfig.BAList, check.NotNil)
-	ba := subTaskConfig.BAList
-	c.Assert(ba.DoDBs, check.HasLen, 1)
-	c.Assert(ba.DoDBs[0], check.Equals, sourceSchema)
-	c.Assert(ba.DoTables, check.HasLen, 1)
-	c.Assert(ba.DoTables[0].Name, check.Equals, sourceTable)
-	c.Assert(ba.DoTables[0].Schema, check.Equals, sourceSchema)
+	bAListFromOpenAPITask := &filter.Rules{
+		DoDBs:    []string{sourceSchema},
+		DoTables: []*filter.Table{{Schema: sourceSchema, Name: sourceTable}},
+	}
+	c.Assert(subTaskConfig.BAList, check.DeepEquals, bAListFromOpenAPITask)
 }
 
 func testShardAndFilterTaskToSubTaskConfigs(c *check.C) {
@@ -177,25 +177,27 @@ func testShardAndFilterTaskToSubTaskConfigs(c *check.C) {
 	// check filter
 	filterARule, ok := task.BinlogFilterRule.Get("filterA")
 	c.Assert(ok, check.IsTrue)
-	filterAIgnoreSqls := *filterARule.IgnoreSql
-	filterAIgnoreEvents := *filterARule.IgnoreEvent
-	c.Assert(ok, check.IsTrue)
+	filterIgnoreEvents := *filterARule.IgnoreEvent
+	c.Assert(filterIgnoreEvents, check.HasLen, 1)
+	filterEvents := []bf.EventType{bf.EventType(filterIgnoreEvents[0])}
+	filterRulesFromOpenAPITask := &bf.BinlogEventRule{
+		Action:        bf.Ignore,
+		Events:        filterEvents,
+		SQLPattern:    *filterARule.IgnoreSql,
+		SchemaPattern: source1Schema,
+		TablePattern:  source1Table,
+	}
+	c.Assert(filterRulesFromOpenAPITask.Valid(), check.IsNil)
 	c.Assert(subTask1Config.FilterRules, check.HasLen, 1)
-	c.Assert(subTask1Config.FilterRules[0].SchemaPattern, check.Equals, source1Schema)
-	c.Assert(subTask1Config.FilterRules[0].TablePattern, check.Equals, source1Table)
-	c.Assert(subTask1Config.FilterRules[0].Action, check.Equals, bf.Ignore)
-	c.Assert(subTask1Config.FilterRules[0].SQLPattern, check.HasLen, 1)
-	c.Assert(subTask1Config.FilterRules[0].SQLPattern[0], check.Equals, filterAIgnoreSqls[0])
-	c.Assert(subTask1Config.FilterRules[0].Events, check.HasLen, 1)
-	c.Assert(string(subTask1Config.FilterRules[0].Events[0]), check.Equals, filterAIgnoreEvents[0])
+	c.Assert(subTask1Config.FilterRules[0], check.DeepEquals, filterRulesFromOpenAPITask)
+
 	// check balist
 	c.Assert(subTask1Config.BAList, check.NotNil)
-	ba := subTask1Config.BAList
-	c.Assert(ba.DoDBs, check.HasLen, 1)
-	c.Assert(ba.DoDBs[0], check.Equals, source1Schema)
-	c.Assert(ba.DoTables, check.HasLen, 1)
-	c.Assert(ba.DoTables[0].Name, check.Equals, source1Table)
-	c.Assert(ba.DoTables[0].Schema, check.Equals, source1Schema)
+	bAListFromOpenAPITask := &filter.Rules{
+		DoDBs:    []string{source1Schema},
+		DoTables: []*filter.Table{{Schema: source1Schema, Name: source1Table}},
+	}
+	c.Assert(subTask1Config.BAList, check.DeepEquals, bAListFromOpenAPITask)
 
 	// check sub task 2
 	subTask2Config := subTaskConfigList[1]
@@ -238,11 +240,10 @@ func testShardAndFilterTaskToSubTaskConfigs(c *check.C) {
 	c.Assert(ok, check.IsFalse)
 	c.Assert(subTask2Config.FilterRules, check.HasLen, 0)
 	// check balist
-	c.Assert(subTask1Config.BAList, check.NotNil)
-	ba = subTask2Config.BAList
-	c.Assert(ba.DoDBs, check.HasLen, 1)
-	c.Assert(ba.DoDBs[0], check.Equals, source2Schema)
-	c.Assert(ba.DoTables, check.HasLen, 1)
-	c.Assert(ba.DoTables[0].Name, check.Equals, source2Table)
-	c.Assert(ba.DoTables[0].Schema, check.Equals, source2Schema)
+	c.Assert(subTask2Config.BAList, check.NotNil)
+	bAListFromOpenAPITask = &filter.Rules{
+		DoDBs:    []string{source2Schema},
+		DoTables: []*filter.Table{{Schema: source2Schema, Name: source2Table}},
+	}
+	c.Assert(subTask2Config.BAList, check.DeepEquals, bAListFromOpenAPITask)
 }
