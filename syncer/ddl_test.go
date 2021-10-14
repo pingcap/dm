@@ -19,23 +19,23 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-sql-driver/mysql"
-	"github.com/pingcap/tidb/br/pkg/mock"
-
-	"github.com/pingcap/dm/dm/config"
-	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/log"
-	parserpkg "github.com/pingcap/dm/pkg/parser"
-	"github.com/pingcap/dm/pkg/utils"
-	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
-
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb/br/pkg/mock"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/dm/config"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
+	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
+	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
 
 var _ = Suite(&testDDLSuite{})
@@ -493,6 +493,89 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	cluster.Stop()
 }
 
+func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
+	cases := []struct {
+		onlineType string
+		trashName  string
+		ghostname  string
+		matchGho   bool
+	}{
+		{
+			config.GHOST,
+			"_t1_del",
+			"_t1_gho_invalid",
+			false,
+		},
+		{
+			config.GHOST,
+			"_t1_del_invalid",
+			"_t1_gho",
+			true,
+		},
+		{
+			config.PT,
+			"_t1_old",
+			"_t1_new_invalid",
+			false,
+		},
+		{
+			config.PT,
+			"_t1_old_invalid",
+			"_t1_new",
+			true,
+		},
+	}
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestMistakeOnlineDDLRegex")))
+	p := parser.New()
+
+	ec := eventContext{tctx: tctx}
+	cluster, err := mock.NewCluster()
+	c.Assert(err, IsNil)
+	c.Assert(cluster.Start(), IsNil)
+	mysqlConfig, err := mysql.ParseDSN(cluster.DSN)
+	c.Assert(err, IsNil)
+	mockClusterPort, err := strconv.Atoi(strings.Split(mysqlConfig.Addr, ":")[1])
+	c.Assert(err, IsNil)
+	dbCfg := config.GetDBConfigForTest()
+	dbCfg.Port = mockClusterPort
+	dbCfg.Password = ""
+	cfg := s.newSubTaskCfg(dbCfg)
+	for _, ca := range cases {
+		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
+		c.Assert(err, IsNil)
+		syncer := NewSyncer(cfg, nil)
+		syncer.onlineDDL = plugin
+		c.Assert(plugin.Clear(tctx), IsNil)
+
+		// ghost table
+		sql := fmt.Sprintf("ALTER TABLE `test`.`%s` ADD COLUMN `n` INT", ca.ghostname)
+		stmt, err := p.ParseOneStmt(sql, "", "")
+		c.Assert(err, IsNil)
+		sqls, tables, err := syncer.splitAndFilterDDL(ec, p, stmt, "test")
+		c.Assert(err, IsNil)
+		c.Assert(tables, HasLen, 0)
+		table := ca.ghostname
+		matchRules := config.ShadowTableRules
+		if ca.matchGho {
+			c.Assert(sqls, HasLen, 0)
+			table = ca.trashName
+			matchRules = config.TrashTableRules
+		} else {
+			c.Assert(sqls, HasLen, 1)
+			c.Assert(sqls[0], Equals, sql)
+		}
+		sql = fmt.Sprintf("RENAME TABLE `test`.`t1` TO `test`.`%s`, `test`.`%s` TO `test`.`t1`", ca.trashName, ca.ghostname)
+		stmt, err = p.ParseOneStmt(sql, "", "")
+		c.Assert(err, IsNil)
+		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
+		c.Assert(terror.ErrConfigOnlineDDLMistakeRegex.Equal(err), IsTrue)
+		c.Assert(sqls, HasLen, 0)
+		c.Assert(tables, HasLen, 0)
+		c.Assert(err, ErrorMatches, ".*"+sql+".*"+table+".*"+matchRules+".*")
+	}
+	cluster.Stop()
+}
+
 func (s *testDDLSuite) TestDropSchemaInSharding(c *C) {
 	var (
 		targetTable = &filter.Table{
@@ -598,5 +681,9 @@ func (m mockOnlinePlugin) Close() {
 }
 
 func (m mockOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
+	return nil
+}
+
+func (m mockOnlinePlugin) CheckRegex(stmt ast.StmtNode, schema string, flavor utils.LowerCaseTableNamesFlavor) error {
 	return nil
 }

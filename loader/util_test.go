@@ -15,7 +15,7 @@ package loader
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 	"testing"
@@ -88,7 +88,7 @@ func (t *testUtilSuite) TestGenerateSchemaCreateFile(c *C) {
 		file, err := os.Open(path.Join(dir, fmt.Sprintf("%s-schema-create.sql", testCase.schema)))
 		c.Assert(err, IsNil)
 
-		data, err := ioutil.ReadAll(file)
+		data, err := io.ReadAll(file)
 		c.Assert(err, IsNil)
 		c.Assert(string(data), Equals, testCase.createSQL)
 	}

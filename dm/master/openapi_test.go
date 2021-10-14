@@ -483,9 +483,6 @@ func genNoShardTask() openapi.Task {
 	       source-name: "mysql-replica-01"
 	       schema: "some_db"
 	       table: "*"
-	    target:
-	       schema: "new_name_db"
-		   table: ""
 	*/
 	taskSourceConf := openapi.TaskSourceConf{
 		SourceName: source1Name,
@@ -494,15 +491,15 @@ func genNoShardTask() openapi.Task {
 		Source: struct {
 			Schema     string "json:\"schema\""
 			SourceName string "json:\"source_name\""
-			Table      string "json:\"table\""
+			Table      string `json:"table"`
 		}{
 			Schema:     noShardSourceSchema,
 			SourceName: source1Name,
 			Table:      noShardSourceTable,
 		},
-		Target: struct {
-			Schema string "json:\"schema\""
-			Table  string "json:\"table\""
+		Target: &struct {
+			Schema string `json:"schema"`
+			Table  string `json:"table"`
 		}{
 			Schema: noShardTargetSchema,
 			Table:  noShardTargetTable,
@@ -619,15 +616,15 @@ func genShardAndFilterTask() openapi.Task {
 		Source: struct {
 			Schema     string "json:\"schema\""
 			SourceName string "json:\"source_name\""
-			Table      string "json:\"table\""
+			Table      string `json:"table"`
 		}{
 			Schema:     shardSource1Schema,
 			SourceName: source1Name,
 			Table:      shardSource1Table,
 		},
-		Target: struct {
-			Schema string "json:\"schema\""
-			Table  string "json:\"table\""
+		Target: &struct {
+			Schema string `json:"schema"`
+			Table  string `json:"table"`
 		}{
 			Schema: shardTargetSchema,
 			Table:  shardTargetTable,
@@ -637,15 +634,15 @@ func genShardAndFilterTask() openapi.Task {
 		Source: struct {
 			Schema     string "json:\"schema\""
 			SourceName string "json:\"source_name\""
-			Table      string "json:\"table\""
+			Table      string `json:"table"`
 		}{
 			Schema:     shardSource2Schema,
 			SourceName: source2Name,
 			Table:      shardSource2Table,
 		},
-		Target: struct {
-			Schema string "json:\"schema\""
-			Table  string "json:\"table\""
+		Target: &struct {
+			Schema string `json:"schema"`
+			Table  string `json:"table"`
 		}{
 			Schema: shardTargetSchema,
 			Table:  shardTargetTable,

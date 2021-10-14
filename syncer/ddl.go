@@ -61,6 +61,9 @@ func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, er
 	// get real tables before apply block-allow list
 	realTables := ddlInfo.sourceTables
 	if s.onlineDDL != nil {
+    if err = s.onlineDDL.CheckRegex(ddlInfo.originStmt, qec.schema, s.SourceTableNamesFlavor); err != nil {
+			return nil, err
+		}
 		for i, table := range ddlInfo.sourceTables {
 			realTables[i] = &filter.Table{
 				Schema: table.Schema,

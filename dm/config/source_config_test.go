@@ -17,7 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"reflect"
 	"strings"
@@ -124,7 +124,7 @@ func (t *testConfig) TestConfig(c *C) {
 source-id: haha
 aaa: xxx
 `)
-	err = ioutil.WriteFile(configFile, configContent, 0o644)
+	err = os.WriteFile(configFile, configContent, 0o644)
 	c.Assert(err, IsNil)
 	_, err = LoadFromFile(configFile)
 	c.Assert(err, NotNil)

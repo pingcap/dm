@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/hex"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,9 +33,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/dumpling"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
-	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -573,12 +570,19 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	defer cancel()
 
 	l.newFileJobQueue()
-	if err := l.getMydumpMetadata(); err != nil {
+	binlog, gtid, err := getMydumpMetadata(l.cli, l.cfg, l.workerName)
+	if err != nil {
 		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name, l.cfg.SourceID).Inc()
 		pr <- pb.ProcessResult{
 			Errors: []*pb.ProcessError{unit.NewProcessError(err)},
 		}
 		return
+	}
+	if binlog != "" {
+		l.metaBinlog.Store(binlog)
+	}
+	if gtid != "" {
+		l.metaBinlogGTID.Store(gtid)
 	}
 
 	l.runFatalChan = make(chan *pb.ProcessError, 2*l.cfg.PoolSize)
@@ -594,7 +598,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 	}()
 
-	err := l.Restore(newCtx)
+	err = l.Restore(newCtx)
 	close(l.runFatalChan) // Restore returned, all potential fatal sent to l.runFatalChan
 	cancel()              // cancel the goroutines created in `Restore`.
 
@@ -693,7 +697,7 @@ func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
 
 // Restore begins the restore process.
 func (l *Loader) Restore(ctx context.Context) error {
-	if err := l.putLoadTask(); err != nil {
+	if err := putLoadTask(l.cli, l.cfg, l.workerName); err != nil {
 		return err
 	}
 
@@ -743,12 +747,12 @@ func (l *Loader) Restore(ctx context.Context) error {
 		l.logger.Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
 		if l.checkPoint.AllFinished() {
 			if l.cfg.Mode == config.ModeFull {
-				if err = l.delLoadTask(); err != nil {
+				if err = delLoadTask(l.cli, l.cfg, l.workerName); err != nil {
 					return err
 				}
 			}
 			if l.cfg.CleanDumpFile {
-				l.cleanDumpFiles()
+				cleanDumpFiles(l.cfg)
 			}
 		}
 	} else if errors.Cause(err) != context.Canceled {
@@ -1506,85 +1510,4 @@ func (l *Loader) checkpointID() string {
 		return l.cfg.Dir
 	}
 	return shortSha1(dir)
-}
-
-func (l *Loader) getMydumpMetadata() error {
-	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
-	loc, _, err := dumpling.ParseMetaData(metafile, l.cfg.Flavor)
-	if err != nil {
-		if os.IsNotExist(err) {
-			worker, _, err2 := ha.GetLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID)
-			if err2 != nil {
-				l.logger.Warn("get load task", log.ShortError(err2))
-			}
-			if worker != "" && worker != l.workerName {
-				return terror.ErrLoadTaskWorkerNotMatch.Generate(worker, l.workerName)
-			}
-		}
-		if terror.ErrMetadataNoBinlogLoc.Equal(err) {
-			l.logger.Warn("dumped metadata doesn't have binlog location, it's OK if DM doesn't enter incremental mode")
-			return nil
-		}
-
-		toPrint, err2 := ioutil.ReadFile(metafile)
-		if err2 != nil {
-			toPrint = []byte(err2.Error())
-		}
-		l.logger.Error("fail to parse dump metadata", log.ShortError(err))
-		return terror.ErrParseMydumperMeta.Generate(err, toPrint)
-	}
-
-	l.metaBinlog.Store(loc.Position.String())
-	l.metaBinlogGTID.Store(loc.GTIDSetStr())
-	return nil
-}
-
-// cleanDumpFiles is called when finish restoring data, to clean useless files.
-func (l *Loader) cleanDumpFiles() {
-	l.logger.Info("clean dump files")
-	if l.cfg.Mode == config.ModeFull {
-		// in full-mode all files won't be need in the future
-		if err := os.RemoveAll(l.cfg.Dir); err != nil {
-			l.logger.Warn("error when remove loaded dump folder", zap.String("data folder", l.cfg.Dir), zap.Error(err))
-		}
-	} else {
-		// leave metadata file and table structure files, only delete data files
-		files, err := utils.CollectDirFiles(l.cfg.Dir)
-		if err != nil {
-			l.logger.Warn("fail to collect files", zap.String("data folder", l.cfg.Dir), zap.Error(err))
-		}
-		var lastErr error
-		for f := range files {
-			if strings.HasSuffix(f, ".sql") {
-				// TODO: table structure files are not used now, but we plan to used them in future so not delete them
-				if strings.HasSuffix(f, "-schema-create.sql") || strings.HasSuffix(f, "-schema.sql") {
-					continue
-				}
-				lastErr = os.Remove(filepath.Join(l.cfg.Dir, f))
-			}
-		}
-		if lastErr != nil {
-			l.logger.Warn("show last error when remove loaded dump sql files", zap.String("data folder", l.cfg.Dir), zap.Error(lastErr))
-		}
-	}
-}
-
-// putLoadTask is called when start restoring data, to put load worker in etcd.
-func (l *Loader) putLoadTask() error {
-	_, err := ha.PutLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID, l.workerName)
-	if err != nil {
-		return err
-	}
-	l.logger.Info("put load worker in etcd", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
-	return nil
-}
-
-// delLoadTask is called when finish restoring data, to delete load worker in etcd.
-func (l *Loader) delLoadTask() error {
-	_, _, err := ha.DelLoadTask(l.cli, l.cfg.Name, l.cfg.SourceID)
-	if err != nil {
-		return err
-	}
-	l.logger.Info("delete load worker in etcd for full mode", zap.String("task", l.cfg.Name), zap.String("source", l.cfg.SourceID), zap.String("worker", l.workerName))
-	return nil
 }

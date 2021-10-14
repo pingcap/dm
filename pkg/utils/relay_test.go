@@ -14,7 +14,6 @@
 package utils
 
 import (
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -32,7 +31,7 @@ func TestSuite(t *testing.T) {
 type testUtilsSuite struct{}
 
 func (t *testUtilsSuite) TestParseUUIDIndex(c *C) {
-	f, err := ioutil.TempFile("", "server-uuid.index")
+	f, err := os.CreateTemp("", "server-uuid.index")
 	c.Assert(err, IsNil)
 	defer os.Remove(f.Name())
 
@@ -42,7 +41,7 @@ func (t *testUtilsSuite) TestParseUUIDIndex(c *C) {
 		"c65525fa-c7a3-11e8-a878-0242ac130005.000003",
 	}
 
-	err = ioutil.WriteFile(f.Name(), []byte(strings.Join(uuids, "\n")), 0o644)
+	err = os.WriteFile(f.Name(), []byte(strings.Join(uuids, "\n")), 0o644)
 	c.Assert(err, IsNil)
 
 	obtainedUUIDs, err := ParseUUIDIndex(f.Name())

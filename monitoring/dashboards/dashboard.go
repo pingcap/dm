@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,7 +27,7 @@ var dashboards = map[string]string{
 
 func readDashboard(dir string, name string) (string, error) {
 	file := filepath.Join(dir, name)
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return "", errors.Errorf("File %s do not exists", file)
 	}

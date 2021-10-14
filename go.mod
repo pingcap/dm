@@ -21,12 +21,12 @@ require (
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/labstack/echo/v4 v4.4.0
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/dumpling v0.0.0-20210914144241-99aca9186bc8
+	github.com/pingcap/dumpling v0.0.0-20211008101523-e13bfc29a093
 	github.com/pingcap/errors v0.11.5-0.20210513014640-40f9a1999b3b
 	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
 	github.com/pingcap/log v0.0.0-20210906054005-afc726e70354
-	github.com/pingcap/parser v0.0.0-20210907051057-948434fa20e4
-	github.com/pingcap/tidb v1.1.0-beta.0.20210914112841-6ebfe8aa4257
+	github.com/pingcap/parser v0.0.0-20211004012448-687005894c4e
+	github.com/pingcap/tidb v1.1.0-beta.0.20211011021924-2f9d591ef722
 	github.com/pingcap/tidb-tools v5.2.0-alpha.0.20210727084616-915b22e4d42c+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.5.1
@@ -42,9 +42,9 @@ require (
 	github.com/tidwall/sjson v1.1.2
 	github.com/tikv/pd v1.1.0-beta.0.20210818082359-acba1da0018d
 	github.com/unrolled/render v1.0.1
-	go.etcd.io/etcd v0.5.0-alpha.5.0.20200824191128-ae9734ed278b
+	go.etcd.io/etcd v0.5.0-alpha.5.0.20210512015243-d19fbe541bf9
 	go.uber.org/atomic v1.9.0
-	go.uber.org/zap v1.19.0
+	go.uber.org/zap v1.19.1
 	golang.org/x/net v0.0.0-20210503060351-7fd8e65b6420
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210806184541-e5e7981a1069

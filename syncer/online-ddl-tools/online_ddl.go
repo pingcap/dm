@@ -25,11 +25,13 @@ import (
 	"github.com/pingcap/dm/pkg/cputil"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
@@ -50,7 +52,7 @@ type OnlinePlugin interface {
 	Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode, p *parser.Parser) ([]string, error)
 	// Finish would delete online ddl from memory and storage
 	Finish(tctx *tcontext.Context, table *filter.Table) error
-	// TableType returns ghhost/real table
+	// TableType returns ghost/real table
 	TableType(table string) TableType
 	// RealName returns real table name that removed ghost suffix and handled by table router
 	RealName(table string) string
@@ -63,6 +65,8 @@ type OnlinePlugin interface {
 	Close()
 	// CheckAndUpdate try to check and fix the schema/table case-sensitive issue
 	CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error
+	// CheckRegex checks the regex of shadow/trash table rules and reports an error if a ddl event matches only either of the rules
+	CheckRegex(stmt ast.StmtNode, schema string, flavor utils.LowerCaseTableNamesFlavor) error
 }
 
 // TableType is type of table.
@@ -73,6 +77,12 @@ const (
 	RealTable  TableType = "real table"
 	GhostTable TableType = "ghost table"
 	TrashTable TableType = "trash table" // means we should ignore these tables
+)
+
+const (
+	shadowTable int = iota
+	trashTable
+	allTable
 )
 
 // GhostDDLInfo stores ghost information and ddls.
@@ -391,14 +401,14 @@ func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (Onl
 	for _, sg := range cfg.ShadowTableRules {
 		shadowReg, err := regexp.Compile(sg)
 		if err != nil {
-			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate("shadow-table-rules", sg, "fail to compile: "+err.Error())
+			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate(config.ShadowTableRules, sg, "fail to compile: "+err.Error())
 		}
 		shadowRegs = append(shadowRegs, shadowReg)
 	}
 	for _, tg := range cfg.TrashTableRules {
 		trashReg, err := regexp.Compile(tg)
 		if err != nil {
-			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate("trash-table-rules", tg, "fail to compile: "+err.Error())
+			return nil, terror.ErrConfigOnlineDDLInvalidRegex.Generate(config.TrashTableRules, tg, "fail to compile: "+err.Error())
 		}
 		trashRegs = append(trashRegs, trashReg)
 	}
@@ -556,6 +566,86 @@ func (r *RealOnlinePlugin) ResetConn(tctx *tcontext.Context) error {
 // CheckAndUpdate try to check and fix the schema/table case-sensitive issue.
 func (r *RealOnlinePlugin) CheckAndUpdate(tctx *tcontext.Context, schemas map[string]string, tables map[string]map[string]string) error {
 	return r.storage.CheckAndUpdate(tctx, schemas, tables, r.RealName)
+}
+
+// CheckRegex checks the regex of shadow/trash table rules and reports an error if a ddl event matches only either of the rules.
+func (r *RealOnlinePlugin) CheckRegex(stmt ast.StmtNode, schema string, flavor utils.LowerCaseTableNamesFlavor) error {
+	var (
+		v  *ast.RenameTableStmt
+		ok bool
+	)
+	if v, ok = stmt.(*ast.RenameTableStmt); !ok {
+		return nil
+	}
+	t2ts := v.TableToTables
+	if len(t2ts) != 2 {
+		return nil
+	}
+	onlineDDLMatched := allTable
+	tableRecords := make([]*filter.Table, 2)
+	schemaName := model.NewCIStr(schema) // fill schema name
+
+	// Online DDL sql example: RENAME TABLE `test`.`t1` TO `test`.`_t1_old`, `test`.`_t1_new` TO `test`.`t1`
+	// We should parse two rename DDL from this DDL:
+	//         tables[0]         tables[1]
+	// DDL 0  real table  ───►  trash table
+	// DDL 1 shadow table ───►   real table
+	// If we only have one of them, that means users may configure a wrong trash/shadow table regex
+	for i, t2t := range t2ts {
+		if t2t.OldTable.Schema.O == "" {
+			t2t.OldTable.Schema = schemaName
+		}
+		if t2t.NewTable.Schema.O == "" {
+			t2t.NewTable.Schema = schemaName
+		}
+
+		v.TableToTables = []*ast.TableToTable{t2t}
+
+		if i == 0 {
+			tableRecords[trashTable] = fetchTable(t2t.NewTable, flavor)
+			if r.TableType(t2t.OldTable.Name.String()) == RealTable &&
+				r.TableType(t2t.NewTable.Name.String()) == TrashTable {
+				onlineDDLMatched = trashTable
+			}
+		} else {
+			tableRecords[shadowTable] = fetchTable(t2t.OldTable, flavor)
+			if r.TableType(t2t.OldTable.Name.String()) == GhostTable &&
+				r.TableType(t2t.NewTable.Name.String()) == RealTable {
+				// if no trash table is not matched before, we should record that shadow table is matched here
+				// if shadow table is matched before, we just return all tables are matched and a nil error
+				if onlineDDLMatched != trashTable {
+					onlineDDLMatched = shadowTable
+				} else {
+					onlineDDLMatched = allTable
+				}
+			}
+		}
+	}
+	if onlineDDLMatched != allTable {
+		return terror.ErrConfigOnlineDDLMistakeRegex.Generate(stmt.Text(), tableRecords[onlineDDLMatched^1], unmatchedOnlineDDLRules(onlineDDLMatched))
+	}
+	return nil
+}
+
+func unmatchedOnlineDDLRules(match int) string {
+	switch match {
+	case shadowTable:
+		return config.TrashTableRules
+	case trashTable:
+		return config.ShadowTableRules
+	default:
+		return ""
+	}
+}
+
+func fetchTable(t *ast.TableName, flavor utils.LowerCaseTableNamesFlavor) *filter.Table {
+	var tb *filter.Table
+	if flavor == utils.LCTableNamesSensitive {
+		tb = &filter.Table{Schema: t.Schema.O, Name: t.Name.O}
+	} else {
+		tb = &filter.Table{Schema: t.Schema.L, Name: t.Name.L}
+	}
+	return tb
 }
 
 // renameOnlineDDLTable renames the given ddl sqls by given targetTable.
