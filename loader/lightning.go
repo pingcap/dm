@@ -273,7 +273,7 @@ func (l *LightningLoader) Resume(ctx context.Context, pr chan pb.ProcessResult) 
 // now, only support to update config for routes, filters, column-mappings, block-allow-list
 // now no config diff implemented, so simply re-init use new config
 // no binlog filter for loader need to update.
-func (l *LightningLoader) Update(cfg *config.SubTaskConfig) error {
+func (l *LightningLoader) Update(ctx context.Context, cfg *config.SubTaskConfig) error {
 	// update l.cfg
 	l.cfg.BAList = cfg.BAList
 	l.cfg.RouteRules = cfg.RouteRules
