@@ -96,7 +96,6 @@ syncers:
     max-retry: 0
     auto-fix-gtid: false
     enable-gtid: false
-    disable-detect: false
     safe-mode: false
     enable-ansi-quotes: false
   sync-02:
@@ -108,9 +107,9 @@ syncers:
     max-retry: 0
     auto-fix-gtid: false
     enable-gtid: true
-    disable-detect: false
     safe-mode: false
     enable-ansi-quotes: false
 clean-dump-file: false
 ansi-quotes: false
 remove-meta: false
+tidb: null

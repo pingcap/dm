@@ -243,10 +243,9 @@ type SyncerConfig struct {
 	MaxRetry int `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
 
 	// refine following configs to top level configs?
-	AutoFixGTID      bool `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
-	EnableGTID       bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
-	DisableCausality bool `yaml:"disable-detect" toml:"disable-detect" json:"disable-detect"`
-	SafeMode         bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
+	AutoFixGTID bool `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
+	EnableGTID  bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
+	SafeMode    bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
 	// deprecated, use `ansi-quotes` in top level config instead
 	EnableANSIQuotes bool `yaml:"enable-ansi-quotes" toml:"enable-ansi-quotes" json:"enable-ansi-quotes"`
 }
@@ -330,6 +329,9 @@ type TaskConfig struct {
 
 	// deprecated, replaced by `start-task --remove-meta`
 	RemoveMeta bool `yaml:"remove-meta"`
+
+	// extra config when target db is TiDB
+	TiDB *TiDBExtraConfig `yaml:"tidb" toml:"tidb" json:"tidb"`
 }
 
 // NewTaskConfig creates a TaskConfig.
@@ -776,6 +778,11 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		if err := cfg.Adjust(true); err != nil {
 			return nil, terror.Annotatef(err, "source %s", inst.SourceID)
 		}
+
+		if c.TiDB != nil {
+			cfg.TiDB = *c.TiDB
+		}
+
 		cfgs[i] = cfg
 	}
 	return cfgs, nil

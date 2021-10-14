@@ -465,6 +465,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		)
 
 		if req.RemoveMeta {
+			// TODO: Remove lightning checkpoint and meta.
 			// use same latch for remove-meta and start-task
 			release, err3 = s.scheduler.AcquireSubtaskLatch(cfg.Name)
 			if err3 != nil {
