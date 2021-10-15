@@ -740,7 +740,7 @@ func updateTaskMetric(task, sourceID string, stage pb.Stage, workerName string) 
 
 func (st *SubTask) relayNotify() {
 	if st.syncer != nil {
-		// skip if it's there's pending notify
+		// skip if there's pending notify
 		select {
 		case st.syncer.Notified() <- struct{}{}:
 		default:
