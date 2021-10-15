@@ -2051,7 +2051,7 @@ func (s *Server) GetCfg(ctx context.Context, req *pb.GetCfgRequest) (*pb.GetCfgR
 			return subCfgList[i].SourceID < subCfgList[j].SourceID
 		})
 
-		taskCfg := config.FromSubTaskConfigs(subCfgList...)
+		taskCfg := config.SubTaskConfigsToTaskConfig(subCfgList...)
 		taskCfg.TargetDB.Password = "******"
 		if taskCfg.TargetDB.Security != nil {
 			taskCfg.TargetDB.Security.ClearSSLBytesData()
