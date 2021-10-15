@@ -654,7 +654,7 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 			return terror.ErrSchedulerBoundDiffWithStartedRelay.Generate(worker, source, relaySource)
 		}
 	case WorkerBound:
-		// should not happen, because we check s.bounds above.
+		s.logger.DPanic("worker should not be bound because we have checked it")
 		return terror.ErrSchedulerWorkerInvalidTrans.Generate(worker, w.Stage(), WorkerBound)
 	}
 
@@ -697,10 +697,12 @@ func (s *Scheduler) TransferSource(source, worker string) error {
 	if err != nil {
 		return err
 	}
-	// the oldWorker is get from s.bound, so there should not be an error
-	_ = oldWorker.Unbound()
-	// we have checked w.stage is free, so there should not be an error
-	_ = s.updateStatusForBound(w, ha.NewSourceBound(source, worker))
+	if err2 := oldWorker.Unbound(); err2 != nil {
+		s.logger.DPanic("the oldWorker is get from s.bound, so there should not be an error", zap.Error(err2))
+	}
+	if err2 := s.updateStatusForBound(w, ha.NewSourceBound(source, worker)); err2 != nil {
+		s.logger.DPanic("we have checked w.stage is free, so there should not be an error", zap.Error(err2))
+	}
 
 	// 6. try bound the old worker
 	_, err = s.tryBoundForWorker(oldWorker)
@@ -1153,8 +1155,10 @@ func (s *Scheduler) StartRelay(source string, workers []string) error {
 	}
 	for _, workerName := range workers {
 		s.relayWorkers[source][workerName] = struct{}{}
-		// we have checked the prerequisite and updated etcd, so should be no error
-		_ = s.workers[workerName].StartRelay(source)
+		if err := s.workers[workerName].StartRelay(source); err != nil {
+			s.logger.DPanic("we have checked the prerequisite and updated etcd, so should be no error",
+				zap.Error(err))
+		}
 	}
 	return nil
 }
@@ -1555,8 +1559,8 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 
 	scm := s.sourceCfgs
 	boundsToTrigger := make([]ha.SourceBound, 0)
-	// 4. recover DM-worker info and status.
 
+	// 4. recover DM-worker info and status.
 	// prepare a worker -> relay source map
 	relayInfo := map[string]string{}
 	for source, workers := range s.relayWorkers {
@@ -1575,7 +1579,9 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 		if _, ok := kam[name]; ok {
 			w.ToFree()
 			if source, ok2 := relayInfo[name]; ok2 {
-				_ = w.StartRelay(source)
+				if err3 := w.StartRelay(source); err3 != nil {
+					s.logger.DPanic("", zap.Error(err3))
+				}
 			}
 
 			// set the stage as Bound and record the bound relationship if exists.
@@ -1782,7 +1788,9 @@ func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent, toLock bool) error {
 	w.ToFree()
 	// TODO: rename ToFree to Online and move below logic inside it
 	if lastRelaySource != "" {
-		_ = w.StartRelay(lastRelaySource)
+		if err := w.StartRelay(lastRelaySource); err != nil {
+			s.logger.DPanic("", zap.Error(err))
+		}
 	}
 
 	// 4. try to bound an unbounded source.
@@ -1973,7 +1981,7 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 			w, ok := s.workers[workerName]
 			if !ok {
 				// a not found worker, should not happen
-				s.logger.Warn("worker instance not found for relay worker", zap.String("worker", workerName))
+				s.logger.DPanic("worker instance not found for relay worker", zap.String("worker", workerName))
 				continue
 			}
 			// the worker is not Offline

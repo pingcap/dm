@@ -22,7 +22,9 @@ import (
 	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/pkg/ha"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"go.uber.org/zap"
 )
 
 // WorkerStage represents the stage of a DM-worker instance.
@@ -196,7 +198,8 @@ func (w *Worker) StopRelay() {
 	switch w.stage {
 	case WorkerOffline, WorkerBound:
 	case WorkerFree:
-		// StopRelay for a Free worker should not happen
+		log.L().DPanic("StopRelay for a Free worker should not happen",
+			zap.String("worker name", w.baseInfo.Name))
 	case WorkerRelay:
 		w.stage = WorkerFree
 		w.reportMetrics()
