@@ -28,7 +28,7 @@ type testUtilSuite struct{}
 func (s testUtilSuite) TestFetchTZSetting(c *C) {
 	m := InitMockDB(c)
 
-	m.ExpectQuery("SELECT cast(TIMEDIFF(NOW(6), UTC_TIMESTAMP(6)) as time);").
+	m.ExpectQuery("SELECT cast\\(TIMEDIFF\\(NOW\\(6\\), UTC_TIMESTAMP\\(6\\)\\) as time\\);").
 		WillReturnRows(m.NewRows([]string{""}).AddRow("01:00:00"))
 	tz, err := FetchTZSetting(context.Background(), &config.DBConfig{})
 	c.Assert(err, IsNil)

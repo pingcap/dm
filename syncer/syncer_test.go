@@ -977,7 +977,12 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	cancel()
 	// when syncer exit Run(), will flush job
 	syncer.Pause()
-	c.Assert(syncer.Update(ctx, s.cfg), IsNil)
+
+	mockForUpdate :=  conn.InitMockDB(c)
+	// used for syncer.Update
+	mockForUpdate.ExpectQuery("SELECT cast\\(TIMEDIFF\\(NOW\\(6\\), UTC_TIMESTAMP\\(6\\)\\) as time\\);").
+		WillReturnRows(sqlmock.NewRows([]string{""}).AddRow("08:00:00"))
+	c.Assert(syncer.Update(context.Background(), s.cfg), IsNil)
 
 	events2 := mockBinlogEvents{
 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), "c"}}}},
