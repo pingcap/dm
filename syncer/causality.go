@@ -49,16 +49,16 @@ func causalityWrap(inCh chan *job, syncer *Syncer) chan *job {
 	}
 
 	go func() {
-		causality.runCausality()
+		causality.run()
 		causality.close()
 	}()
 
 	return causality.outCh
 }
 
-// runCausality receives dml jobs and send causality jobs by adding causality key.
+// run receives dml jobs and send causality jobs by adding causality key.
 // When meet conflict, sends a conflict job.
-func (c *causality) runCausality() {
+func (c *causality) run() {
 	for j := range c.inCh {
 		metrics.QueueSizeGauge.WithLabelValues(c.task, "causality_input", c.source).Set(float64(len(c.inCh)))
 

@@ -808,7 +808,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	c.Assert(WordCount(cfg.String()), DeepEquals, WordCount(cfg2.String())) // since rules are unordered, so use WordCount to compare
 
 	c.Assert(cfg.adjust(), IsNil)
-	stCfgs, err := cfg.SubTaskConfigs(map[string]DBConfig{source1: source1DBCfg, source2: source2DBCfg})
+	stCfgs, err := TaskConfigToSubTaskConfigs(cfg, map[string]DBConfig{source1: source1DBCfg, source2: source2DBCfg})
 	c.Assert(err, IsNil)
 	// revert ./dumpped_data.from-sub-tasks
 	stCfgs[0].LoaderConfig.Dir = stCfg1.LoaderConfig.Dir
@@ -1025,7 +1025,7 @@ func (t *testConfig) TestTaskConfigForDowngrade(c *C) {
 	// make sure all new field were added
 	cfgReflect := reflect.Indirect(reflect.ValueOf(cfg))
 	cfgForDowngradeReflect := reflect.Indirect(reflect.ValueOf(cfgForDowngrade))
-	c.Assert(cfgReflect.NumField(), Equals, cfgForDowngradeReflect.NumField()+1) // without flag
+	c.Assert(cfgReflect.NumField(), Equals, cfgForDowngradeReflect.NumField()+2) // without flag and tidb
 
 	// make sure all field were copied
 	cfgForClone := &TaskConfigForDowngrade{}

@@ -55,12 +55,12 @@ type DMLWorker struct {
 	addCountFunc func(bool, string, opType, int64, *filter.Table)
 
 	// channel
-	causalityCh chan *job
-	flushCh     chan *job
+	inCh    chan *job
+	flushCh chan *job
 }
 
 // dmlWorkerWrap creates and runs a dmlWorker instance and return all workers count and flush job channel.
-func dmlWorkerWrap(causalityCh chan *job, syncer *Syncer) (int, chan *job) {
+func dmlWorkerWrap(inCh chan *job, syncer *Syncer) (int, chan *job) {
 	dmlWorker := &DMLWorker{
 		batch:          syncer.cfg.Batch,
 		workerCount:    syncer.cfg.WorkerCount,
@@ -76,32 +76,15 @@ func dmlWorkerWrap(causalityCh chan *job, syncer *Syncer) (int, chan *job) {
 		addCountFunc:   syncer.addCount,
 		tctx:           syncer.tctx,
 		toDBConns:      syncer.toDBConns,
-		causalityCh:    causalityCh,
+		inCh:           inCh,
 		flushCh:        make(chan *job),
 	}
-	dmlWorker.run()
-	// flushCount is as many as workerCount
+
+	go func() {
+		dmlWorker.run()
+		dmlWorker.close()
+	}()
 	return dmlWorker.workerCount, dmlWorker.flushCh
-}
-
-// run runs dml workers
-//            |‾ causality worker  ‾|
-// causality -|- causality worker   |=> connection pool
-//            |_ causality worker  _|
-// .
-func (w *DMLWorker) run() {
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		w.runCausalityDMLWorker()
-	}()
-
-	go func() {
-		defer w.close()
-		wg.Wait()
-	}()
 }
 
 // close closes outer channel.
@@ -109,18 +92,18 @@ func (w *DMLWorker) close() {
 	close(w.flushCh)
 }
 
-// runCausalityDMLWorker distribute jobs by queueBucket.
-func (w *DMLWorker) runCausalityDMLWorker() {
-	causalityJobChs := make([]chan *job, w.workerCount)
+// run distribute jobs by queueBucket.
+func (w *DMLWorker) run() {
+	jobChs := make([]chan *job, w.workerCount)
 
 	for i := 0; i < w.workerCount; i++ {
-		causalityJobChs[i] = make(chan *job, w.chanSize)
-		go w.executeCausalityJobs(i, causalityJobChs[i])
+		jobChs[i] = make(chan *job, w.chanSize)
+		go w.executeJobs(i, jobChs[i])
 	}
 
 	defer func() {
 		for i := 0; i < w.workerCount; i++ {
-			close(causalityJobChs[i])
+			close(jobChs[i])
 		}
 	}()
 
@@ -129,17 +112,17 @@ func (w *DMLWorker) runCausalityDMLWorker() {
 		queueBucketMapping[i] = queueBucketName(i)
 	}
 
-	for j := range w.causalityCh {
-		metrics.QueueSizeGauge.WithLabelValues(w.task, "causality_output", w.source).Set(float64(len(w.causalityCh)))
+	for j := range w.inCh {
+		metrics.QueueSizeGauge.WithLabelValues(w.task, "dml_worker_input", w.source).Set(float64(len(w.inCh)))
 		if j.tp == flush || j.tp == conflict {
 			if j.tp == conflict {
 				w.addCountFunc(false, adminQueueName, j.tp, 1, j.targetTable)
 				w.causalityWg.Add(w.workerCount)
 			}
 			// flush for every DML queue
-			for i, causalityJobCh := range causalityJobChs {
+			for i, jobCh := range jobChs {
 				startTime := time.Now()
-				causalityJobCh <- j
+				jobCh <- j
 				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[i], w.source).Observe(time.Since(startTime).Seconds())
 			}
 			if j.tp == conflict {
@@ -151,7 +134,7 @@ func (w *DMLWorker) runCausalityDMLWorker() {
 			w.addCountFunc(false, queueBucketMapping[queueBucket], j.tp, 1, j.targetTable)
 			startTime := time.Now()
 			w.logger.Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.key))
-			causalityJobChs[queueBucket] <- j
+			jobChs[queueBucket] <- j
 			metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[queueBucket], w.source).Observe(time.Since(startTime).Seconds())
 		}
 	}
@@ -159,7 +142,7 @@ func (w *DMLWorker) runCausalityDMLWorker() {
 
 // executeCausalityJobs execute jobs in same queueBucket
 // All the jobs received should be executed consecutively.
-func (w *DMLWorker) executeCausalityJobs(queueID int, jobCh chan *job) {
+func (w *DMLWorker) executeJobs(queueID int, jobCh chan *job) {
 	jobs := make([]*job, 0, w.batch)
 	workerJobIdx := dmlWorkerJobIdx(queueID)
 	var wg sync.WaitGroup

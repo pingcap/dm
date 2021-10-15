@@ -22,9 +22,6 @@ import (
 	"github.com/deepmap/oapi-codegen/pkg/middleware"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
-	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	"github.com/pingcap/tidb-tools/pkg/filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/checker"
@@ -225,22 +222,30 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 	if err := ctx.Bind(&req); err != nil {
 		return err
 	}
-	task := req.Task
+	task := &req.Task
 	if err := task.Adjust(); err != nil {
 		return err
 	}
 	// prepare target db config
 	newCtx := ctx.Request().Context()
-	toDBCfg := task.GetTargetDBCfg()
+	toDBCfg := config.GetTargetDBCfgFromOpenAPITask(task)
 	if adjustDBErr := adjustTargetDB(newCtx, toDBCfg); adjustDBErr != nil {
 		return terror.WithClass(adjustDBErr, terror.ClassDMMaster)
 	}
-	// generate sub task config list
-	subTaskConfigList, err := s.modelToSubTaskConfigList(toDBCfg, &task)
+	// prepare source db config source name -> source config
+	sourceCfgMap := make(map[string]*config.SourceConfig)
+	for _, cfg := range task.SourceConfig.SourceConf {
+		if sourceCfg := s.scheduler.GetSourceCfgByID(cfg.SourceName); sourceCfg != nil {
+			sourceCfgMap[cfg.SourceName] = sourceCfg
+		} else {
+			return terror.ErrOpenAPITaskSourceNotFound.Generatef("source name %s", cfg.SourceName)
+		}
+	}
+	// generate sub task configs
+	subTaskConfigList, err := config.OpenAPITaskToSubTaskConfigs(task, toDBCfg, sourceCfgMap)
 	if err != nil {
 		return err
 	}
-	var needStartSubTaskList []config.SubTaskConfig
 	// check subtask config
 	subTaskConfigPList := make([]*config.SubTaskConfig, len(subTaskConfigList))
 	for i := range subTaskConfigList {
@@ -251,6 +256,7 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		return terror.WithClass(err, terror.ClassDMMaster)
 	}
 	// specify only start task on partial sources
+	var needStartSubTaskList []config.SubTaskConfig
 	if req.SourceNameList != nil {
 		// source name -> sub task config
 		subTaskCfgM := make(map[string]*config.SubTaskConfig, len(subTaskConfigList))
@@ -261,7 +267,7 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		for _, sourceName := range *req.SourceNameList {
 			subTaskCfg, ok := subTaskCfgM[sourceName]
 			if !ok {
-				return terror.ErrOpenAPICommonError.Generatef("source %s not found.", sourceName)
+				return terror.ErrOpenAPITaskSourceNotFound.Generatef("source name %s", sourceName)
 			}
 			needStartSubTaskList = append(needStartSubTaskList, *subTaskCfg)
 		}
@@ -399,169 +405,4 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 		}
 	}
 	return cfg
-}
-
-func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openapi.Task) ([]config.SubTaskConfig, error) {
-	// prepare source db config source name -> source config
-	sourceCfgMap := make(map[string]*config.SourceConfig)
-	for _, cfg := range task.SourceConfig.SourceConf {
-		if sourceCfg := s.scheduler.GetSourceCfgByID(cfg.SourceName); sourceCfg != nil {
-			sourceCfgMap[cfg.SourceName] = sourceCfg
-		} else {
-			return nil, terror.ErrOpenAPITaskSourceNotFound.Generatef("source name=%s", cfg.SourceName)
-		}
-	}
-	// source name -> meta config
-	sourceDBMetaMap := make(map[string]*config.Meta)
-	for _, cfg := range task.SourceConfig.SourceConf {
-		// check if need to set source meta
-		var needAddMeta bool
-		meta := &config.Meta{}
-		if cfg.BinlogGtid != nil {
-			meta.BinLogGTID = *cfg.BinlogGtid
-			needAddMeta = true
-		}
-		if cfg.BinlogName != nil {
-			meta.BinLogName = *cfg.BinlogName
-			needAddMeta = true
-		}
-		if cfg.BinlogPos != nil {
-			pos := uint32(*cfg.BinlogPos)
-			meta.BinLogPos = pos
-			needAddMeta = true
-		}
-		if needAddMeta {
-			sourceDBMetaMap[cfg.SourceName] = meta
-		}
-	}
-	// source name -> migrate rule list
-	tableMigrateRuleMap := make(map[string][]openapi.TaskTableMigrateRule)
-	for _, rule := range task.TableMigrateRule {
-		tableMigrateRuleMap[rule.Source.SourceName] = append(tableMigrateRuleMap[rule.Source.SourceName], rule)
-	}
-	// rule name -> rule template
-	eventFilterTemplateMap := make(map[string]bf.BinlogEventRule)
-	if task.BinlogFilterRule != nil {
-		for ruleName, rule := range task.BinlogFilterRule.AdditionalProperties {
-			ruleT := bf.BinlogEventRule{Action: bf.Ignore}
-			if rule.IgnoreEvent != nil {
-				events := make([]bf.EventType, len(*rule.IgnoreEvent))
-				for i, eventStr := range *rule.IgnoreEvent {
-					events[i] = bf.EventType(eventStr)
-				}
-				ruleT.Events = events
-			}
-			if rule.IgnoreSql != nil {
-				ruleT.SQLPattern = *rule.IgnoreSql
-			}
-			eventFilterTemplateMap[ruleName] = ruleT
-		}
-	}
-	// start to generate sub task configs
-	subTaskCfgList := make([]config.SubTaskConfig, len(task.SourceConfig.SourceConf))
-	for i, sourceCfg := range task.SourceConfig.SourceConf {
-		subTaskCfg := config.NewSubTaskConfig()
-		// set task name and mode
-		subTaskCfg.Name = task.Name
-		subTaskCfg.Mode = string(task.TaskMode)
-		// set task meta
-		subTaskCfg.MetaFile = *task.MetaSchema
-		if meta, ok := sourceDBMetaMap[sourceCfg.SourceName]; ok {
-			subTaskCfg.Meta = meta
-		}
-		// set shard config
-		if task.ShardMode != nil {
-			subTaskCfg.IsSharding = true
-			mode := *task.ShardMode
-			subTaskCfg.ShardMode = string(mode)
-		} else {
-			subTaskCfg.IsSharding = false
-		}
-		// set online ddl pulgin config
-		subTaskCfg.OnlineDDL = task.EnhanceOnlineSchemaChange
-		// set case sensitive from source
-		subTaskCfg.CaseSensitive = sourceCfgMap[sourceCfg.SourceName].CaseSensitive
-		// set source db config
-		subTaskCfg.SourceID = sourceCfg.SourceName
-		subTaskCfg.From = sourceCfgMap[sourceCfg.SourceName].From
-		// set target db config
-		subTaskCfg.To = *toDBCfg.Clone()
-		// TODO set meet error policy
-		// TODO ExprFilter
-		// set full unit config
-		subTaskCfg.MydumperConfig = config.DefaultMydumperConfig()
-		subTaskCfg.LoaderConfig = config.DefaultLoaderConfig()
-		if fullCfg := task.SourceConfig.FullMigrateConf; fullCfg != nil {
-			if fullCfg.ExportThreads != nil {
-				subTaskCfg.MydumperConfig.Threads = *fullCfg.ExportThreads
-			}
-			if fullCfg.ImportThreads != nil {
-				subTaskCfg.LoaderConfig.PoolSize = *fullCfg.ImportThreads
-			}
-			if fullCfg.DataDir != nil {
-				subTaskCfg.LoaderConfig.Dir = *fullCfg.DataDir
-			}
-		}
-		// set incremental config
-		subTaskCfg.SyncerConfig = config.DefaultSyncerConfig()
-		if incrCfg := task.SourceConfig.IncrMigrateConf; incrCfg != nil {
-			if incrCfg.ReplThreads != nil {
-				subTaskCfg.SyncerConfig.WorkerCount = *incrCfg.ReplThreads
-			}
-			if incrCfg.ReplBatch != nil {
-				subTaskCfg.SyncerConfig.Batch = *incrCfg.ReplBatch
-			}
-		}
-		// set route,blockAllowList,filter config
-		doDBs := []string{}
-		doTables := []*filter.Table{}
-		routeRules := []*router.TableRule{}
-		filterRules := []*bf.BinlogEventRule{}
-		for _, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
-			// route
-			routeRules = append(routeRules, &router.TableRule{
-				SchemaPattern: rule.Source.Schema, TablePattern: rule.Source.Table,
-				TargetSchema: rule.Target.Schema, TargetTable: rule.Target.Table,
-			})
-			// filter
-			if rule.BinlogFilterRule != nil {
-				for _, name := range *rule.BinlogFilterRule {
-					filterRule, ok := eventFilterTemplateMap[name] // NOTE: this return a copied value
-					if !ok {
-						return nil, terror.ErrOpenAPICommonError.Generatef("filter rule name %s not found.", name)
-					}
-					filterRule.SchemaPattern = rule.Source.Schema
-					filterRule.TablePattern = rule.Source.Table
-					filterRules = append(filterRules, &filterRule)
-				}
-			}
-			// BlockAllowList
-			doDBs = append(doDBs, rule.Source.Schema)
-			doTables = append(doTables, &filter.Table{Schema: rule.Source.Schema, Name: rule.Source.Table})
-		}
-		subTaskCfg.RouteRules = routeRules
-		subTaskCfg.FilterRules = filterRules
-		subTaskCfg.BAList = &filter.Rules{DoDBs: removeDuplication(doDBs), DoTables: doTables}
-		// adjust sub task config
-		if err := subTaskCfg.Adjust(true); err != nil {
-			return nil, terror.Annotatef(err, "source name=%s", sourceCfg.SourceName)
-		}
-		subTaskCfgList[i] = *subTaskCfg
-	}
-	return subTaskCfgList, nil
-}
-
-func removeDuplication(in []string) []string {
-	m := make(map[string]struct{}, len(in))
-	j := 0
-	for _, v := range in {
-		_, ok := m[v]
-		if ok {
-			continue
-		}
-		m[v] = struct{}{}
-		in[j] = v
-		j++
-	}
-	return in[:j]
 }
