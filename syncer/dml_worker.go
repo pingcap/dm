@@ -83,7 +83,7 @@ func dmlWorkerWrap(inCh chan *job, syncer *Syncer) (int, chan *job) {
 	}
 
 	go func() {
-		dmlWorker.runDMLWorker()
+		dmlWorker.run()
 		dmlWorker.close()
 	}()
 	return dmlWorker.workerCount, dmlWorker.flushCh
@@ -94,8 +94,8 @@ func (w *DMLWorker) close() {
 	close(w.flushCh)
 }
 
-// runDMLWorker distribute jobs by queueBucket.
-func (w *DMLWorker) runDMLWorker() {
+// run distribute jobs by queueBucket.
+func (w *DMLWorker) run() {
 	jobChs := make([]chan *job, w.workerCount)
 
 	for i := 0; i < w.workerCount; i++ {

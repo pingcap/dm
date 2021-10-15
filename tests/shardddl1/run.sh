@@ -583,7 +583,7 @@ function DM_COMPACT_CASE() {
 		run_sql_source1 "update ${shardddl1}.${tb1} set c=c+1 where a=$i"
 		run_sql_source1 "update ${shardddl1}.${tb1} set b=b+1 where a=$i"
 		run_sql_source1 "update ${shardddl1}.${tb1} set a=a+100 where a=$i"
-		run_sql_source1 "delete from ${shardddl1}.${tb1} where a=$((i+100))"
+		run_sql_source1 "delete from ${shardddl1}.${tb1} where a=$((i + 100))"
 	done
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"resume-task test"
