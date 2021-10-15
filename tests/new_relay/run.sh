@@ -10,6 +10,41 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 API_VERSION="v1alpha1"
 
+function test_cant_dail_upstream() {
+	cleanup_data $TEST_NAME
+	cleanup_process
+
+	run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+
+	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"start-relay -s $SOURCE_ID1 worker1" \
+		"\"result\": true" 1
+
+	kill_dm_worker
+
+	export GO_FAILPOINTS="github.com/pingcap/dm/pkg/conn/failDBPing=return()"
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+
+	# make sure DM-worker doesn't exit
+	sleep 2
+	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s $SOURCE_ID1" \
+		"injected error" 1
+
+	export GO_FAILPOINTS=""
+	cleanup_process
+	cleanup_data $TEST_NAME
+}
+
 function test_kill_dump_connection() {
 	cleanup_data $TEST_NAME
 	cleanup_process
@@ -50,6 +85,8 @@ function test_kill_dump_connection() {
 }
 
 function run() {
+	test_cant_dail_upstream
+
 	export GO_FAILPOINTS="github.com/pingcap/dm/relay/ReportRelayLogSpaceInBackground=return(1)"
 
 	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1

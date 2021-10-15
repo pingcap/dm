@@ -128,22 +128,8 @@ func NewRealRelay(cfg *Config) Process {
 }
 
 // Init implements the dm.Unit interface.
-// TODO: these errors will make DM-worker exit when it boots up and assigned relay.
+// NOTE these errors will make DM-worker exit when it boots up and assigned relay.
 func (r *Relay) Init(ctx context.Context) (err error) {
-	err = r.setSyncConfig()
-	if err != nil {
-		return err
-	}
-
-	if err2 := os.MkdirAll(r.cfg.RelayDir, 0o755); err2 != nil {
-		return terror.ErrRelayMkdir.Delegate(err2)
-	}
-
-	err = r.meta.Load()
-	if err != nil {
-		return err
-	}
-
 	return reportRelayLogSpaceInBackground(ctx, r.cfg.RelayDir)
 }
 
@@ -173,11 +159,25 @@ func (r *Relay) Process(ctx context.Context) pb.ProcessResult {
 }
 
 func (r *Relay) process(ctx context.Context) error {
+	err := r.setSyncConfig()
+	if err != nil {
+		return err
+	}
+
 	db, err := conn.DefaultDBProvider.Apply(r.cfg.From)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeUpstream)
 	}
 	r.db = db
+
+	if err2 := os.MkdirAll(r.cfg.RelayDir, 0o755); err2 != nil {
+		return terror.ErrRelayMkdir.Delegate(err2)
+	}
+
+	err = r.meta.Load()
+	if err != nil {
+		return err
+	}
 
 	parser2, err := utils.GetParser(ctx, r.db.DB) // refine to use user config later
 	if err != nil {
