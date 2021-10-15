@@ -14,9 +14,8 @@ When the user replicates sharding task and the upstream has high-write workload,
 Some users' write logic is: one INSERT statement followed by multiple UPDATE statements in a short time. We consider merging these DMLs into one INSERT statement, which can reduce the number of SQL synchronized to downstream.
 
 ```
-# Assuming that UPDATE statement does not update the primary/unique key.
-# If UPDATE statement update the primary/unique key, split it into one DELETE AND one INSERT statement.
-# For multiple unique keys, treat all primary keys and unique keys as one big primary key.
+# Assuming that UPDATE statement does not update the primary key. If no primary key, choose a UNIQUE NOT NULL Key.
+# If UPDATE statement update the primary key, split it into one DELETE AND one INSERT statement.
 # X means this situation will not happen.
 INSERT + INSERT => X
 INSERT + UPDATE => INSERT
@@ -29,7 +28,7 @@ DELETE + UPDATE => X
 DELETE + DELETE => X
 ```
 
-Now we can then compact all DMLs with the same primary and unique key to a single DML (INSERT/UPDATE/DELETE), which can be executed in parallel since they all have different primary and unique keys.
+Now we can then compact all DMLs with the same primary key to a single DML (INSERT/UPDATE/DELETE), and output them in the original order.
 
 > **Notice**
 >
@@ -70,25 +69,30 @@ By combining multiple update statements into a single `INSERT ON DUPLICATE UPDAT
 
 ### DML Flow
 
-Now, all the DMLs compacted by compactor can be executed in parallel since they all have different primary and unique keys. But since some tables do not have primary/unique keys to be compacted, we still need conflict detection.
+Now, all the DMLs compacted by compactor will be sent to causality, and then we can execute DMLs by hash in parallel.
 
 So the processing flow of DML will look like the following diagram.
 
 ![DML Flow](../media/flow.png)
 
-- Compactor compacts DMLs, output a ***batch*** of INSERT/DELETE/UPDATE jobs and flush job(receive from input channel)
-- Causality detects conflict for DMLs, output INSERT/DELETE/UPDATE jobs, conflict job(conflict detected) and flush job(receive from input channel) in ***streaming***
-- DMLWorker receives a group of compact jobs from Compactor, splits jobs to CompactorWorkers by batch size, executes them in parallel and then wait for next group of compact jobs.
-- DMLWorker receives DML jobs from Causality in streaming, distribute them to the CausalityWorkers by hash key, each CausalityWorker executes batch jobs and wait for next batch of causality jobs.
-- Executor called by CompactorWorker and CausalityWorker, it receives batch of jobs, get connection from connection pool and then generate, merge and execute DMLs to downstream.
+- Compactor compacts DMLs, output a ***batch*** of DML jobs in original order and flush job(receive from input channel)
+- Causality detects conflict for DMLs, output DML jobs, conflict job(conflict detected) and flush job(receive from input channel) in ***streaming***
+- DMLWorker receives DML jobs from Causality in streaming, distribute them to the Workers by hash key, each Worker executes batch jobs and wait for next batch of jobs.
 
 > **Notice**
 > 
-> The difference between CompactorWorker and CausalityWorker is that:
->  1. The number of CompactorWorker is determined by the number of compacted jobs and batch-size while the number of CausalityWorker is specific at the beginning.
->  2. CompactorWorker is in batch mode, which will start receiving the next batch of compacted jobs only after all of them have finished executing previous jobs. CausalityWorker is in streaming mode, which wait for the others only when receive conflict job, otherwise execute jobs individually.
->  3. CompactorWorker has no ID because each of them is stateless. CausalityWorker has ID since each of them should execute jobs with same hash key.
+> According to the principle of latency first, all components must give priority to output DML jobs when the downstream load is low, which means compactor should flush buffer when ouput channel is empty even if the buffer is not full and DML workers should execute jobs when previous jobs are executed even if the batch is not full. 
 > 
+
+## Configuration
+
+Two configuration items will be added to the task configuration file, and their default values ​​will both be false.
+```toml
+syncers:
+  global:
+    compact: true
+    multiple-rows: true
+```
 
 ### Benchmark
 
