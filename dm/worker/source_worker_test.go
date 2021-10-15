@@ -195,6 +195,7 @@ func (t *testServer2) TestTaskAutoResume(c *C) {
 	c.Assert(subtaskCfg.DecodeFile("./subtask.toml", true), IsNil)
 	c.Assert(err, IsNil)
 	subtaskCfg.Mode = "full"
+	subtaskCfg.Timezone = "UTC"
 	c.Assert(s.getWorker(true).StartSubTask(&subtaskCfg, pb.Stage_Running, true), IsNil)
 
 	// check task in paused state

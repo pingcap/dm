@@ -137,6 +137,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	s.cfg = &config.SubTaskConfig{
 		From:             config.GetDBConfigForTest(),
 		To:               config.GetDBConfigForTest(),
+		Timezone: 		  "UTC",
 		ServerID:         101,
 		MetaSchema:       "test",
 		Name:             "syncer_ut",
@@ -977,11 +978,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	cancel()
 	// when syncer exit Run(), will flush job
 	syncer.Pause()
-
-	mockForUpdate :=  conn.InitMockDB(c)
-	// used for syncer.Update
-	mockForUpdate.ExpectQuery("SELECT cast\\(TIMEDIFF\\(NOW\\(6\\), UTC_TIMESTAMP\\(6\\)\\) as time\\);").
-		WillReturnRows(sqlmock.NewRows([]string{""}).AddRow("08:00:00"))
 	c.Assert(syncer.Update(context.Background(), s.cfg), IsNil)
 
 	events2 := mockBinlogEvents{
