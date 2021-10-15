@@ -459,7 +459,7 @@ func SubTaskConfigsToOpenAPITask(subTaskConfigMap map[string]map[string]SubTaskC
 		// set basic global config
 		task := openapi.Task{
 			Name:                      taskName,
-			TaskMode:                  strToModelTaskMode(oneSubtaskConfig.Mode),
+			TaskMode:                  openapi.StrToTaskMode(oneSubtaskConfig.Mode),
 			EnhanceOnlineSchemaChange: oneSubtaskConfig.OnlineDDL,
 			MetaSchema:                &oneSubtaskConfig.MetaSchema,
 			OnDuplicate:               openapi.TaskOnDuplicateError,
@@ -472,7 +472,7 @@ func SubTaskConfigsToOpenAPITask(subTaskConfigMap map[string]map[string]SubTaskC
 			},
 		}
 		if oneSubtaskConfig.ShardMode != "" {
-			taskShardMode := strToModelTaskShardMode(oneSubtaskConfig.ShardMode)
+			taskShardMode := openapi.StrTaskShardMode(oneSubtaskConfig.ShardMode)
 			task.ShardMode = &taskShardMode
 		}
 		if len(filterMap) > 0 {
@@ -502,24 +502,4 @@ func removeDuplication(in []string) []string {
 func genFilterRuleName(sourceName string, idx int) string {
 	// NOTE that we don't have user input filter rule name in sub task config,so we make one by ourself
 	return fmt.Sprintf("%s-filter-rule-%d", sourceName, idx)
-}
-
-func strToModelTaskMode(s string) openapi.TaskTaskMode {
-	switch s {
-	case string(openapi.TaskTaskModeAll):
-		return openapi.TaskTaskModeAll
-	case string(openapi.TaskTaskModeFull):
-		return openapi.TaskTaskModeFull
-	default:
-		return openapi.TaskTaskModeIncremental
-	}
-}
-
-func strToModelTaskShardMode(s string) openapi.TaskShardMode {
-	switch s {
-	case string(openapi.TaskShardModeOptimistic):
-		return openapi.TaskShardModeOptimistic
-	default:
-		return openapi.TaskShardModePessimistic
-	}
 }
