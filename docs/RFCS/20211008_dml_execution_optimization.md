@@ -15,8 +15,8 @@ Some users' write logic is: one INSERT statement followed by multiple UPDATE sta
 
 ```
 # Assuming that UPDATE statement does not update the primary key. If no primary key, choose a UNIQUE NOT NULL Key.
-# If UPDATE statement update the primary key, split it into one DELETE AND one INSERT statement.
-# X means this situation will not happen.
+# If UPDATE statement update the primary key, split it into one DELETE and one INSERT statement.
+# We list two successive DMLs and the result that can be compacted. X means this situation will not happen.
 INSERT + INSERT => X
 INSERT + UPDATE => INSERT
 INSERT + DELETE => NULL(DELETE)
@@ -36,6 +36,7 @@ Now we can then compact all DMLs with the same primary key to a single DML (INSE
 > If a table only has a unique key which can be NULL, we cannot compact it.
 > e.g.
 > ```
+> // column `a` is UNIQUE KEY DEFAULT NULL
 > INSERT INTO tb(a,b) VALUES(NULL,1);
 > FLUSH COMPACTOR
 > // cannot compact these two to INSERT because it update two rows
