@@ -3566,6 +3566,7 @@ func (s *Syncer) delLoadTask() error {
 	return nil
 }
 
+// Notified implements streamer.EventNotifier
 func (s *Syncer) Notified() chan interface{} {
 	return s.relayNotifyCh
 }

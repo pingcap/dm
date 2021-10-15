@@ -1111,12 +1111,14 @@ func (r *Relay) notify(e *replication.BinlogEvent) {
 	}
 }
 
+// RegisterListener implements Process.RegisterListener
 func (r *Relay) RegisterListener(el Listener) {
 	r.Lock()
 	defer r.Unlock()
 	r.els[el] = struct{}{}
 }
 
+// UnRegisterListener implements Process.UnRegisterListener
 func (r *Relay) UnRegisterListener(el Listener) {
 	r.Lock()
 	defer r.Unlock()
