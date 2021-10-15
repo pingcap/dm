@@ -88,7 +88,7 @@ So the processing flow of DML will look like the following diagram.
 ## Configuration
 
 Two configuration items will be added to the task configuration file, and their default values ​​will both be false.
-```toml
+```
 syncers:
   global:
     compact: true
