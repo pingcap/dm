@@ -1376,7 +1376,7 @@ func (s *Server) generateSubTask(ctx context.Context, task string, errCnt, warnC
 
 	sourceCfgs := s.getSourceConfigs(cfg.MySQLInstances)
 
-	stCfgs, err := cfg.SubTaskConfigs(sourceCfgs)
+	stCfgs, err := config.TaskConfigToSubTaskConfigs(cfg, sourceCfgs)
 	if err != nil {
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
