@@ -1040,6 +1040,40 @@ func (w *SourceWorker) HandleError(ctx context.Context, req *pb.HandleWorkerErro
 	return st.HandleError(ctx, req)
 }
 
+func (w *SourceWorker) PullBinlogs(req *pb.PullBinlogReq, stream pb.Worker_PullBinlogsServer) error {
+	switch {
+	case w.cfg.SourceID != req.Source:
+		return terror.ErrWorkerPullBinlogsInvalidRequest.Generate(fmt.Sprintf("worker is bound to source %s, but requested for %s's relay log", w.cfg.SourceID, req.Source))
+	case w.relayHolder == nil:
+		return terror.ErrWorkerPullBinlogsInvalidRequest.Generate("worker doesn't enable relay")
+	}
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
+	ch, ech := w.relayHolder.PullBinlogs(ctx, req)
+	for {
+		select {
+		case <-w.ctx.Done():
+			return nil
+		case ev, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			resp := new(pb.PullBinlogResp)
+
+			resp.Payload = ev.RawData
+			err := stream.Send(resp)
+			if err != nil {
+				log.L().Warn("fail to send binlog", zap.Error(err))
+				return err
+			}
+			log.L().Debug("PullBinlogs send binlog payload success", zap.Int("len", len(ev.RawData)))
+		case err := <-ech:
+			log.L().Warn("receive parse error from relay", zap.Error(err))
+			return err
+		}
+	}
+}
+
 func (w *SourceWorker) pullLocalBinlogs(ctx context.Context, req *pb.PullBinlogReq) (chan *replication.BinlogEvent, chan error) {
 	if w.relayHolder == nil {
 		ch, ech := make(chan *replication.BinlogEvent, 1), make(chan error, 1)

@@ -21,6 +21,7 @@ service Worker {
     rpc GetWorkerCfg(GetWorkerCfgRequest) returns(GetWorkerCfgResponse) {}
 
     // Sends binlog stream to a given location or gtid set.
+    // It's used for another worker to pull binlogs from a worker who has relay logs to reduce upstream source burden.
     rpc PullBinlogs(PullBinlogReq) returns (stream PullBinlogResp) {}
 }
 
@@ -383,7 +384,7 @@ message Location {
     string name = 1;
 
     // The binlog offset in a file. Assign this if we want to start from a binlog position
-    uint32 pos = 2;
+    uint64 pos = 2;
 
     // The gtid set to start with. Assign this if we want to start from a gtid set
     // If both pos and gtid are specified, relay will start with gtid

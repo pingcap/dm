@@ -943,39 +943,10 @@ func (s *Server) GetWorkerCfg(ctx context.Context, req *pb.GetWorkerCfgRequest) 
 
 // PullBinlogs will start a goroutine to continuously parse binlogs in relay dir and send them in streaming way.
 func (s *Server) PullBinlogs(req *pb.PullBinlogReq, stream pb.Worker_PullBinlogsServer) error {
-	ctx, cancel := context.WithCancel(stream.Context())
-	defer cancel()
 	w := s.getWorker(true)
-	switch {
-	case w == nil:
+	if w == nil {
 		return terror.ErrWorkerPullBinlogsInvalidRequest.Generate("worker isn't bound to any source now")
-	case w.cfg.SourceID != req.Source:
-		return terror.ErrWorkerPullBinlogsInvalidRequest.Generate(fmt.Sprintf("worker is bound to source %s, but requested for %s's relay log", w.cfg.SourceID, req.Source))
-	case w.relayHolder == nil:
-		return terror.ErrWorkerPullBinlogsInvalidRequest.Generate("worker doesn't enable relay")
 	}
 
-	ch, ech := s.worker.relayHolder.PullBinlogs(ctx, req)
-	for {
-		select {
-		case <-w.ctx.Done():
-			return nil
-		case ev, ok := <-ch:
-			if !ok {
-				return nil
-			}
-			resp := new(pb.PullBinlogResp)
-
-			resp.Payload = ev.RawData
-			err := stream.Send(resp)
-			if err != nil {
-				log.L().Warn("fail to send binlog", zap.Error(err))
-				return err
-			}
-			log.L().Debug("PullBinlogs send binlog payload success", zap.Int("len", len(ev.RawData)))
-		case err := <-ech:
-			log.L().Warn("receive parse error from relay", zap.Error(err))
-			return err
-		}
-	}
+	return w.PullBinlogs(req, stream)
 }
