@@ -488,6 +488,9 @@ func (s *Scheduler) GetSourceCfgByID(source string) *config.SourceConfig {
 // lworker, lsource, "", rsource		This means transfer a worker from a bounded source to another unbounded source
 // lworker, lsource, rworker, rsource	This means transfer two bounded relations.
 func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// in first four arrays, index 0 is for left worker, index 1 is for right worker
 	var (
 		inputWorkers [2]string
