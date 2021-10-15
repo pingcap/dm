@@ -1040,6 +1040,7 @@ func (w *SourceWorker) HandleError(ctx context.Context, req *pb.HandleWorkerErro
 	return st.HandleError(ctx, req)
 }
 
+// PullBinlogs will start a goroutine to continuously parse binlogs in relay dir and send them in streaming way.
 func (w *SourceWorker) PullBinlogs(req *pb.PullBinlogReq, stream pb.Worker_PullBinlogsServer) error {
 	switch {
 	case w.cfg.SourceID != req.Source:
