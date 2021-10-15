@@ -371,13 +371,13 @@ type TaskTableMigrateRule struct {
 	} `json:"source"`
 
 	// downstream-related configuration
-	Target struct {
+	Target *struct {
 		// schema name, does not support wildcards
 		Schema string `json:"schema"`
 
 		// table name, does not support wildcards
 		Table string `json:"table"`
-	} `json:"target"`
+	} `json:"target,omitempty"`
 }
 
 // downstream database configuration

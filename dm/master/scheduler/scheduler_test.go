@@ -1499,7 +1499,7 @@ func (t *testScheduler) TestTransferWorkerAndSource(c *C) {
 	c.Assert(worker2.Stage(), Equals, WorkerFree)
 	c.Assert(worker3.Stage(), Equals, WorkerBound)
 
-	// test transfer bounded worker to ubounded source
+	// test transfer bounded worker to unbounded source
 	s.unbounds[sourceID3] = struct{}{}
 	s.unbounds[sourceID4] = struct{}{}
 	c.Assert(s.transferWorkerAndSource("", sourceID3, workerName3, sourceID2), IsNil)

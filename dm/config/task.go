@@ -243,10 +243,9 @@ type SyncerConfig struct {
 	MaxRetry int `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
 
 	// refine following configs to top level configs?
-	AutoFixGTID      bool `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
-	EnableGTID       bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
-	DisableCausality bool `yaml:"disable-detect" toml:"disable-detect" json:"disable-detect"`
-	SafeMode         bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
+	AutoFixGTID bool `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
+	EnableGTID  bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
+	SafeMode    bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
 	// deprecated, use `ansi-quotes` in top level config instead
 	EnableANSIQuotes bool `yaml:"enable-ansi-quotes" toml:"enable-ansi-quotes" json:"enable-ansi-quotes"`
 }
@@ -331,6 +330,9 @@ type TaskConfig struct {
 
 	// deprecated, replaced by `start-task --remove-meta`
 	RemoveMeta bool `yaml:"remove-meta"`
+
+	// extra config when target db is TiDB
+	TiDB *TiDBExtraConfig `yaml:"tidb" toml:"tidb" json:"tidb"`
 }
 
 // NewTaskConfig creates a TaskConfig.
@@ -700,83 +702,6 @@ func (c *TaskConfig) adjust() error {
 		log.L().Warn("heartbeat is deprecated, needn't set it anymore.")
 	}
 	return nil
-}
-
-// SubTaskConfigs generates sub task configs.
-func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConfig, error) {
-	cfgs := make([]*SubTaskConfig, len(c.MySQLInstances))
-	for i, inst := range c.MySQLInstances {
-		dbCfg, exist := sources[inst.SourceID]
-		if !exist {
-			return nil, terror.ErrConfigSourceIDNotFound.Generate(inst.SourceID)
-		}
-
-		cfg := NewSubTaskConfig()
-		cfg.IsSharding = c.IsSharding
-		cfg.ShardMode = c.ShardMode
-		cfg.OnlineDDL = c.OnlineDDL
-		cfg.TrashTableRules = c.TrashTableRules
-		cfg.ShadowTableRules = c.ShadowTableRules
-		cfg.IgnoreCheckingItems = c.IgnoreCheckingItems
-		cfg.Name = c.Name
-		cfg.Mode = c.TaskMode
-		cfg.CaseSensitive = c.CaseSensitive
-		cfg.MetaSchema = c.MetaSchema
-		cfg.EnableHeartbeat = false
-		if c.EnableHeartbeat {
-			log.L().Warn("DM 2.0 does not support heartbeat feature, will overwrite it to false")
-		}
-		cfg.HeartbeatUpdateInterval = c.HeartbeatUpdateInterval
-		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval
-		cfg.Meta = inst.Meta
-
-		fromClone := dbCfg.Clone()
-		if fromClone == nil {
-			return nil, terror.ErrConfigMySQLInstNotFound
-		}
-		cfg.From = *fromClone
-		toClone := c.TargetDB.Clone()
-		if toClone == nil {
-			return nil, terror.ErrConfigNeedTargetDB
-		}
-		cfg.To = *toClone
-
-		cfg.SourceID = inst.SourceID
-
-		cfg.RouteRules = make([]*router.TableRule, len(inst.RouteRules))
-		for j, name := range inst.RouteRules {
-			cfg.RouteRules[j] = c.Routes[name]
-		}
-
-		cfg.FilterRules = make([]*bf.BinlogEventRule, len(inst.FilterRules))
-		for j, name := range inst.FilterRules {
-			cfg.FilterRules[j] = c.Filters[name]
-		}
-
-		cfg.ColumnMappingRules = make([]*column.Rule, len(inst.ColumnMappingRules))
-		for j, name := range inst.ColumnMappingRules {
-			cfg.ColumnMappingRules[j] = c.ColumnMappings[name]
-		}
-
-		cfg.ExprFilter = make([]*ExpressionFilter, len(inst.ExpressionFilters))
-		for j, name := range inst.ExpressionFilters {
-			cfg.ExprFilter[j] = c.ExprFilter[name]
-		}
-
-		cfg.BAList = c.BAList[inst.BAListName]
-
-		cfg.MydumperConfig = *inst.Mydumper
-		cfg.LoaderConfig = *inst.Loader
-		cfg.SyncerConfig = *inst.Syncer
-
-		cfg.CleanDumpFile = c.CleanDumpFile
-
-		if err := cfg.Adjust(true); err != nil {
-			return nil, terror.Annotatef(err, "source %s", inst.SourceID)
-		}
-		cfgs[i] = cfg
-	}
-	return cfgs, nil
 }
 
 // getGenerateName generates name by rule or gets name from nameMap

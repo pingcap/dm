@@ -160,7 +160,7 @@ function test_shard_task() {
 		"\"stage\": \"Running\"" 2
 
 	init_shard_data
-	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	check_sync_diff $WORK_DIR $cur/conf/diff_config_shard.toml
 
 	# test binlog event filter, this delete will ignored in source-1
 	run_sql_source1 "DELETE FROM openapi.t;"
@@ -217,7 +217,7 @@ function test_noshard_task() {
 		"\"stage\": \"Running\"" 2
 
 	init_noshard_data
-	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+	check_sync_diff $WORK_DIR $cur/conf/diff_config_no_shard.toml
 
 	# stop task success
 	openapi_task_check "stop_task_success" "$task_name"

@@ -2957,13 +2957,6 @@ func (s *Syncer) commitJob(tp opType, sourceTable, targetTable *filter.Table, sq
 }
 
 func (s *Syncer) resolveCasuality(keys []string) (string, error) {
-	if s.cfg.DisableCausality {
-		if len(keys) > 0 {
-			return keys[0], nil
-		}
-		return "", nil
-	}
-
 	if s.c.detectConflict(keys) {
 		s.tctx.L().Debug("meet causality key, will generate a flush job and wait all sqls executed", zap.Strings("keys", keys))
 		if err := s.flushJobs(); err != nil {
