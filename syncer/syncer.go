@@ -336,7 +336,6 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return terror.ErrSyncerUnitGenBinlogEventFilter.Delegate(err)
 	}
 
-
 	vars := map[string]string{
 		"time_zone": s.timezone.String(),
 	}

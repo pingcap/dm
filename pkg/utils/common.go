@@ -323,7 +323,7 @@ func (se *session) GetBuiltinFunctionUsage() map[string]uint32 {
 	return se.builtinFunctionUsage
 }
 
-// NewSession return a session context with specified session variables
+// NewSession return a session context with specified session variables.
 func NewSession(vars map[string]string) sessionctx.Context {
 	variables := variable.NewSessionVars()
 	for k, v := range vars {
@@ -335,8 +335,8 @@ func NewSession(vars map[string]string) sessionctx.Context {
 	}
 
 	return &session{
-		vars: variables,
-		values: make(map[fmt.Stringer]interface{}, 1),
+		vars: 				  variables,
+		values: 			  make(map[fmt.Stringer]interface{}, 1),
 		builtinFunctionUsage: make(map[string]uint32),
 	}
 }

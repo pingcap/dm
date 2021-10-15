@@ -379,10 +379,10 @@ function run() {
 		"pause-task $ILLEGAL_CHAR_NAME" \
 		"\"result\": true" 3
 	echo 'create table all_mode.no_diff(id int NOT NULL PRIMARY KEY);' >${WORK_DIR}/schema.sql
-  run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-    "operate-schema set -s mysql-replica-01 $ILLEGAL_CHAR_NAME -d all_mode -t no_diff ${WORK_DIR}/schema.sql" \
-    "\"result\": true" 2
-  run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "resume-task $ILLEGAL_CHAR_NAME" "\"result\": true" 3
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"operate-schema set -s mysql-replica-01 $ILLEGAL_CHAR_NAME -d all_mode -t no_diff ${WORK_DIR}/schema.sql" \
+		"\"result\": true" 2
+	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" "resume-task $ILLEGAL_CHAR_NAME" "\"result\": true" 3
 
 	# restart dm-worker1
 	pkill -hup -f dm-worker1.toml 2>/dev/null || true
