@@ -165,49 +165,41 @@ func (w *Worker) Unbound() error {
 	return nil
 }
 
-// TurnOnRelay adds relay source information to a bound worker and calculates the stage.
-func (w *Worker) TurnOnRelay(sourceID string) error {
+// StartRelay adds relay source information to a bound worker and calculates the stage.
+func (w *Worker) StartRelay(sourceID string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	switch w.stage {
-	case WorkerOffline:
-		w.relaySource = sourceID
+	case WorkerOffline, WorkerRelay:
 	case WorkerFree:
-		w.relaySource = sourceID
 		w.stage = WorkerRelay
 		w.reportMetrics()
-	case WorkerRelay:
-		w.relaySource = sourceID
 	case WorkerBound:
 		if w.bound.Source != sourceID {
 			return terror.ErrSchedulerRelayWorkersWrongBound.Generatef(
 				"can't turn on relay of source %s for worker %s, because the worker is bound to source %s",
 				sourceID, w.BaseInfo().Name, w.bound.Source)
 		}
-		w.relaySource = sourceID
 	}
+	w.relaySource = sourceID
 
 	return nil
 }
 
-// TurnOffRelay clears relay source information of a bound worker and calculates the stage.
-func (w *Worker) TurnOffRelay() {
+// StopRelay clears relay source information of a bound worker and calculates the stage.
+func (w *Worker) StopRelay() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	w.relaySource = ""
 	switch w.stage {
-	case WorkerOffline:
-		w.relaySource = ""
+	case WorkerOffline, WorkerBound:
 	case WorkerFree:
-		// should not happen
-		w.relaySource = ""
+		// StopRelay for a Free worker should not happen
 	case WorkerRelay:
-		w.relaySource = ""
 		w.stage = WorkerFree
 		w.reportMetrics()
-	case WorkerBound:
-		w.relaySource = ""
 	}
 }
 

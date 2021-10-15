@@ -85,34 +85,34 @@ func (t *testWorker) TestWorker(c *C) {
 
 	// Offline to Free to Relay
 	w.ToFree()
-	c.Assert(w.TurnOnRelay(source1), IsNil)
+	c.Assert(w.StartRelay(source1), IsNil)
 	c.Assert(w.Stage(), Equals, WorkerRelay)
 	c.Assert(w.RelaySourceID(), Equals, source1)
 
 	// Relay to Free
-	w.TurnOffRelay()
+	w.StopRelay()
 	c.Assert(w.Stage(), Equals, WorkerFree)
 	c.Assert(w.RelaySourceID(), HasLen, 0)
 
 	// Relay to Bound (bound with relay)
-	c.Assert(w.TurnOnRelay(source1), IsNil)
+	c.Assert(w.StartRelay(source1), IsNil)
 	c.Assert(w.ToBound(bound), IsNil)
 	c.Assert(w.Stage(), Equals, WorkerBound)
 	c.Assert(w.Bound(), DeepEquals, bound)
 	c.Assert(w.relaySource, Equals, source1)
 
 	// Bound turn off relay
-	w.TurnOffRelay()
+	w.StopRelay()
 	c.Assert(w.Stage(), Equals, WorkerBound)
 	c.Assert(w.relaySource, HasLen, 0)
 
 	// Bound try to turn on relay, but with wrong source ID
-	err = w.TurnOnRelay(source2)
+	err = w.StartRelay(source2)
 	c.Assert(terror.ErrSchedulerRelayWorkersWrongBound.Equal(err), IsTrue)
 	c.Assert(w.relaySource, HasLen, 0)
 
 	// Bound turn on relay
-	c.Assert(w.TurnOnRelay(source1), IsNil)
+	c.Assert(w.StartRelay(source1), IsNil)
 	c.Assert(w.Stage(), Equals, WorkerBound)
 	c.Assert(w.relaySource, Equals, source1)
 
@@ -128,7 +128,7 @@ func (t *testWorker) TestWorker(c *C) {
 	c.Assert(w.RelaySourceID(), Equals, source1)
 
 	// Offline turn off relay (when DM worker is offline, stop-relay)
-	w.TurnOffRelay()
+	w.StopRelay()
 	c.Assert(w.stage, Equals, WorkerOffline)
 	c.Assert(w.RelaySourceID(), HasLen, 0)
 

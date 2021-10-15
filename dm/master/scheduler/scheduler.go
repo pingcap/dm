@@ -1154,7 +1154,7 @@ func (s *Scheduler) StartRelay(source string, workers []string) error {
 	for _, workerName := range workers {
 		s.relayWorkers[source][workerName] = struct{}{}
 		// we have checked the prerequisite and updated etcd, so should be no error
-		_ = s.workers[workerName].TurnOnRelay(source)
+		_ = s.workers[workerName].StartRelay(source)
 	}
 	return nil
 }
@@ -1217,7 +1217,7 @@ func (s *Scheduler) StopRelay(source string, workers []string) error {
 	}
 	for _, workerName := range workers {
 		delete(s.relayWorkers[source], workerName)
-		s.workers[workerName].TurnOffRelay()
+		s.workers[workerName].StopRelay()
 	}
 	if len(s.relayWorkers[source]) == 0 {
 		if _, err := ha.DeleteRelayStage(s.etcdCli, source); err != nil {
@@ -1575,7 +1575,7 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 		if _, ok := kam[name]; ok {
 			w.ToFree()
 			if source, ok2 := relayInfo[name]; ok2 {
-				_ = w.TurnOnRelay(source)
+				_ = w.StartRelay(source)
 			}
 
 			// set the stage as Bound and record the bound relationship if exists.
@@ -1782,7 +1782,7 @@ func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent, toLock bool) error {
 	w.ToFree()
 	// TODO: rename ToFree to Online and move below logic inside it
 	if lastRelaySource != "" {
-		_ = w.TurnOnRelay(lastRelaySource)
+		_ = w.StartRelay(lastRelaySource)
 	}
 
 	// 4. try to bound an unbounded source.

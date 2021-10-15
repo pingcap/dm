@@ -1522,7 +1522,7 @@ func (t *testScheduler) TestTransferWorkerAndSource(c *C) {
 	c.Assert(s.bounds[sourceID3], DeepEquals, worker4)
 	c.Assert(s.bounds[sourceID4], DeepEquals, worker3)
 
-	c.Assert(worker1.TurnOnRelay(sourceID2), IsNil)
+	c.Assert(worker1.StartRelay(sourceID2), IsNil)
 	err := s.transferWorkerAndSource(workerName1, sourceID2, workerName2, sourceID1)
 	c.Assert(terror.ErrSchedulerBoundDiffWithStartedRelay.Equal(err), IsTrue)
 }
