@@ -130,19 +130,16 @@ func (h *realRelayHolder) Close() {
 }
 
 func (h *realRelayHolder) run() {
+	// TODO: concurrent problem?
 	h.ctx, h.cancel = context.WithCancel(context.Background())
-	pr := make(chan pb.ProcessResult, 1)
 	h.setResult(nil) // clear previous result
 	h.setStage(pb.Stage_Running)
 
-	h.relay.Process(h.ctx, pr)
+	r := h.relay.Process(h.ctx)
 
-	for len(pr) > 0 {
-		r := <-pr
-		h.setResult(&r)
-		for _, err := range r.Errors {
-			h.l.Error("process error", zap.Stringer("type", err))
-		}
+	h.setResult(&r)
+	for _, err := range r.Errors {
+		h.l.Error("process error", zap.Stringer("type", err))
 	}
 
 	h.setStageIfNot(pb.Stage_Stopped, pb.Stage_Paused)
