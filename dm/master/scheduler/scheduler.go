@@ -480,19 +480,22 @@ func (s *Scheduler) GetSourceCfgByID(source string) *config.SourceConfig {
 	return &clone
 }
 
-// transferWorkerAndSource swaps two sources between two workers (maybe empty).
+// transferWorkerAndSource swaps two sources between two workers (maybe empty). The input means before invocation of
+// this function, left worker and left source are bound, right worker and right source are bound. After this function,
+// left worker should be bound to right source and vice versa.
 // lworker, "", "", rsource				This means an unbounded source bounded to a free worker
 // lworker, lsource, rworker, "" 		This means transfer a source from a worker to another free worker
 // lworker, lsource, "", rsource		This means transfer a worker from a bounded source to another unbounded source
 // lworker, lsource, rworker, rsource	This means transfer two bounded relations.
 func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource string) error {
+	// in first four arrays, index 0 is for left worker, index 1 is for right worker
 	var (
-		lw           *Worker
-		rw           *Worker
+		inputWorkers [2]string
+		inputSources [2]string
+		workers      [2]*Worker
+		bounds       [2]ha.SourceBound
 		boundWorkers []string
-		bounds       []ha.SourceBound
-		bound1       ha.SourceBound
-		bound2       ha.SourceBound
+		boundsToPut  []ha.SourceBound
 		ok           bool
 	)
 
@@ -520,29 +523,37 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 
 	s.logger.Info("transfer source and worker", zap.String("left worker", lworker), zap.String("left source", lsource), zap.String("right worker", rworker), zap.String("right source", rsource))
 
-	if lworker != "" {
-		lw, ok = s.workers[lworker]
-		// should not happen, avoid panic
-		if !ok {
-			s.logger.Error("could not found worker in scheduler", zap.String("worker", lworker))
-			return nil
-		}
-	}
-	if rworker != "" {
-		rw, ok = s.workers[rworker]
-		// should not happen, avoid panic
-		if !ok {
-			s.logger.Error("could not found worker in scheduler", zap.String("worker", rworker))
-			return nil
+	inputWorkers[0], inputWorkers[1] = lworker, rworker
+	inputSources[0], inputSources[1] = lsource, rsource
+
+	for i, workerName := range inputWorkers {
+		if workerName != "" {
+			workers[i], ok = s.workers[workerName]
+			// should not happen, avoid panic
+			if !ok {
+				s.logger.Error("could not found worker in scheduler", zap.String("worker", workerName))
+				return terror.ErrSchedulerWorkerNotExist.Generate(workerName)
+			}
 		}
 	}
 
-	// get current bounded workers.
-	if lworker != "" && lsource != "" {
-		boundWorkers = append(boundWorkers, lworker)
+	// check if the swap is valid, to avoid we messing up metadata in etcd.
+	for i := range inputWorkers {
+		if inputWorkers[i] != "" {
+			got := workers[i].bound.Source
+			expect := inputSources[i]
+			if got != expect {
+				return terror.ErrSchedulerWrongWorkerInput.Generate(inputWorkers[i], expect, got)
+			}
+		}
 	}
-	if rworker != "" && rsource != "" {
-		boundWorkers = append(boundWorkers, rworker)
+	// TODO: check if the worker has started relay so can't bound to a source
+
+	// get current bounded workers.
+	for i := range inputWorkers {
+		if inputWorkers[i] != "" && inputSources[i] != "" {
+			boundWorkers = append(boundWorkers, inputWorkers[i])
+		}
 	}
 
 	// del current bounded relations.
@@ -551,54 +562,49 @@ func (s *Scheduler) transferWorkerAndSource(lworker, lsource, rworker, rsource s
 	}
 
 	// update unbound sources
-	if lsource != "" {
-		updateUnbound(lsource)
-	}
-	if rsource != "" {
-		updateUnbound(rsource)
+	for _, sourceID := range inputSources {
+		if sourceID != "" {
+			updateUnbound(sourceID)
+		}
 	}
 
 	// put new bounded relations.
-	if lworker != "" && rsource != "" {
-		bound1 = ha.NewSourceBound(rsource, lworker)
-		bounds = append(bounds, bound1)
+	for i := range inputWorkers {
+		another := i ^ 1 // make use of XOR to flip 0 and 1
+		if inputWorkers[i] != "" && inputSources[another] != "" {
+			b := ha.NewSourceBound(inputSources[another], inputWorkers[i])
+			bounds[i] = b
+			boundsToPut = append(boundsToPut, b)
+		}
 	}
-	if rworker != "" && lsource != "" {
-		bound2 = ha.NewSourceBound(lsource, rworker)
-		bounds = append(bounds, bound2)
-	}
-	if _, err := ha.PutSourceBound(s.etcdCli, bounds...); err != nil {
+	if _, err := ha.PutSourceBound(s.etcdCli, boundsToPut...); err != nil {
 		return err
 	}
 
 	// update bound sources and workers
-	if lworker != "" && rsource != "" {
-		updateBound(rsource, lw, bound1)
-	}
-	if rworker != "" && lsource != "" {
-		updateBound(lsource, rw, bound2)
+	for i := range inputWorkers {
+		another := i ^ 1 // make use of XOR to flip 0 and 1
+		if inputWorkers[i] != "" && inputSources[another] != "" {
+			updateBound(inputSources[another], workers[i], bounds[i])
+		}
 	}
 
 	// if one of the workers/sources become free/unbounded
 	// try bound it.
-	if lworker != "" && rsource == "" {
-		if _, err := s.tryBoundForWorker(lw); err != nil {
-			return err
+	for i := range inputWorkers {
+		another := i ^ 1 // make use of XOR to flip 0 and 1
+		if inputWorkers[i] != "" && inputSources[another] == "" {
+			if _, err := s.tryBoundForWorker(workers[i]); err != nil {
+				return err
+			}
 		}
 	}
-	if rworker != "" && lsource == "" {
-		if _, err := s.tryBoundForWorker(rw); err != nil {
-			return err
-		}
-	}
-	if lworker == "" && rsource != "" {
-		if err := boundForSource(rsource); err != nil {
-			return err
-		}
-	}
-	if rworker == "" && lsource != "" {
-		if err := boundForSource(lsource); err != nil {
-			return err
+	for i := range inputSources {
+		another := i ^ 1 // make use of XOR to flip 0 and 1
+		if inputSources[i] != "" && inputWorkers[another] == "" {
+			if err := boundForSource(inputSources[i]); err != nil {
+				return err
+			}
 		}
 	}
 

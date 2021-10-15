@@ -351,7 +351,7 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 	cp.connMutex.Unlock()
 	if err != nil {
 		if isErrDupEntry(err) {
-			cp.logger.Error("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
+			cp.logger.Warn("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
 			return nil
 		}
 		return terror.WithScope(terror.Annotate(err, "initialize checkpoint"), terror.ScopeDownstream)
