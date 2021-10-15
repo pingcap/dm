@@ -378,7 +378,7 @@ function run() {
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"pause-task $ILLEGAL_CHAR_NAME" \
 		"\"result\": true" 3
-	echo 'create table all_mode.no_diff(id int NOT NULL PRIMARY KEY, dt datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, ts timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP);' >${WORK_DIR}/schema.sql
+	echo 'create table all_mode.no_diff(id int NOT NULL PRIMARY KEY);' >${WORK_DIR}/schema.sql
   run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
     "operate-schema set -s mysql-replica-01 $ILLEGAL_CHAR_NAME -d all_mode -t no_diff ${WORK_DIR}/schema.sql" \
     "\"result\": true" 2
