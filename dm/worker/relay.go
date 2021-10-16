@@ -241,12 +241,6 @@ func (h *realRelayHolder) Stage() pb.Stage {
 	return h.stage
 }
 
-func (h *realRelayHolder) setStage(stage pb.Stage) {
-	h.Lock()
-	defer h.Unlock()
-	h.stage = stage
-}
-
 // setStageIfNot sets stage to newStage if its current value is not oldStage, similar to CAS.
 func (h *realRelayHolder) setStageIfNot(oldStage, newStage pb.Stage) bool {
 	h.Lock()
