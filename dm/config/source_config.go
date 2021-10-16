@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	_ "embed"
 	"encoding/json"
 	"math"
 	"math/rand"
@@ -33,9 +34,10 @@ const (
 
 var getAllServerIDFunc = utils.GetAllServerID
 
-// SampleConfigFile is sample config file of source
-// later we can read it from dm/master/source.yaml
-// and assign it to SampleConfigFile while we build dm-ctl.
+// SampleConfigFile is sample config file of source.
+// The embed source.yaml is a copy of dm/master/source.yaml, because embed
+// can only match regular files in the current directory and subdirectories.
+//go:embed source.yaml
 var SampleConfigFile string
 
 // PurgeConfig is the configuration for Purger.
