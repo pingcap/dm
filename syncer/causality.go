@@ -66,20 +66,14 @@ func (c *causality) run() {
 		if j.tp == flush {
 			c.reset()
 		} else {
-			keys := j.keys
-			var key string
-			if len(keys) > 0 {
-				key = keys[0]
-			}
-
 			// detectConflict before add
-			if c.detectConflict(keys) {
-				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", keys))
+			if c.detectConflict(j.keys) {
+				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", j.keys))
 				c.outCh <- newConflictJob()
 				c.reset()
 			}
-			j.key = c.add(keys)
-			c.logger.Debug("key for keys", zap.String("key", key), zap.Strings("keys", keys))
+			j.key = c.add(j.keys)
+			c.logger.Debug("key for keys", zap.String("key", j.key), zap.Strings("keys", j.keys))
 		}
 		metrics.ConflictDetectDurationHistogram.WithLabelValues(c.task, c.source).Observe(time.Since(startTime).Seconds())
 
