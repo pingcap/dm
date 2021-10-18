@@ -375,8 +375,7 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
 			}
 		}
 		// add syncer status
-		syncerS := subTaskStatus.GetSync()
-		if subTaskStatus.Unit == pb.UnitType_Sync && syncerS != nil {
+		if syncerS := subTaskStatus.GetSync(); syncerS != nil {
 			openapiSubTaskStatus.SyncStatus = &openapi.SyncStatus{
 				BinlogType:          syncerS.GetBinlogType(),
 				BlockingDdls:        syncerS.GetBlockingDDLs(),
