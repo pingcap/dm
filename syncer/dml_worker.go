@@ -37,7 +37,7 @@ type DMLWorker struct {
 	chanSize    int
 	toDBConns   []*dbconn.DBConn
 	tctx        *tcontext.Context
-	causalityWg sync.WaitGroup
+	wg          sync.WaitGroup
 	logger      log.Logger
 
 	// for metrics
@@ -58,7 +58,7 @@ type DMLWorker struct {
 }
 
 // dmlWorkerWrap creates and runs a dmlWorker instance and return all workers count and flush job channel.
-func dmlWorkerWrap(inCh chan *job, syncer *Syncer) (int, chan *job) {
+func dmlWorkerWrap(inCh chan *job, syncer *Syncer) chan *job {
 	dmlWorker := &DMLWorker{
 		batch:        syncer.cfg.Batch,
 		workerCount:  syncer.cfg.WorkerCount,
@@ -81,7 +81,7 @@ func dmlWorkerWrap(inCh chan *job, syncer *Syncer) (int, chan *job) {
 		dmlWorker.run()
 		dmlWorker.close()
 	}()
-	return dmlWorker.workerCount, dmlWorker.flushCh
+	return dmlWorker.flushCh
 }
 
 // close closes outer channel.
@@ -114,17 +114,19 @@ func (w *DMLWorker) run() {
 		if j.tp == flush || j.tp == conflict {
 			if j.tp == conflict {
 				w.addCountFunc(false, adminQueueName, j.tp, 1, j.targetTable)
-				w.causalityWg.Add(w.workerCount)
 			}
+			w.wg.Add(w.workerCount)
 			// flush for every DML queue
 			for i, jobCh := range jobChs {
 				startTime := time.Now()
 				jobCh <- j
 				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[i], w.source).Observe(time.Since(startTime).Seconds())
 			}
+			w.wg.Wait()
 			if j.tp == conflict {
-				w.causalityWg.Wait()
 				w.addCountFunc(true, adminQueueName, j.tp, 1, j.targetTable)
+			} else {
+				w.flushCh <- j
 			}
 		} else {
 			queueBucket := int(utils.GenHashKey(j.key)) % w.workerCount
@@ -165,15 +167,11 @@ func (w *DMLWorker) executeJobs(queueID int, jobCh chan *job) {
 
 		batchJobs := jobs
 		w.executeBatchJobs(queueID, batchJobs)
-		if j.tp == conflict {
-			w.causalityWg.Done()
+		if j.tp == conflict || j.tp == flush {
+			w.wg.Done()
 		}
 
-		if j.tp == flush {
-			w.flushCh <- j
-		}
 		jobs = jobs[0:0]
-
 		if len(jobCh) == 0 {
 			failpoint.Inject("noJobInQueueLog", func() {
 				w.logger.Debug("no job in queue, update lag to zero", zap.Int(
