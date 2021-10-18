@@ -289,7 +289,9 @@ func (r *relayLogFileChecker) relayLogUpdatedOrNewCreated(ctx context.Context, u
 	case <-timer.C:
 		// for a task start after source shutdown or there's no new write, it'll not be notified,
 		// and if it's reading from dir 000001 and there's need to switch dir to 000002,
-		// we stop waiting after watcherInterval to give it a chance to check again
+		// after the task read files in dir 000001, the read size > 0, so it goes to the select directly,
+		// since there is no notify, it blocks, that'll leave dir 000002 un-synced.
+		// so we stop waiting after watcherInterval to give it a chance to check again
 		updatePathCh <- r.latestFilePath
 	}
 }
