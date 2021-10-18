@@ -225,6 +225,11 @@ func (r *relayLogFileChecker) relayLogUpdatedOrNewCreated(ctx context.Context, u
 			errCh <- terror.Annotate(err, "decode relay meta toml file failed")
 			return
 		}
+		// current watched file size have no change means that no new writes have been made
+		// our relay meta file will be updated immediately after receive the rotate event,
+		// although we cannot ensure that the binlog filename in the meta is the next file after latestFile
+		// but if we return a different filename with latestFile, the outer logic (parseDirAsPossible)
+		// will find the right one
 		if meta.BinLogName != r.latestFile {
 			// we need check file size again, as the file may have been changed during our metafile check
 			cmp, err2 := fileSizeUpdated(r.latestFilePath, r.endOffset)

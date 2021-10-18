@@ -583,7 +583,6 @@ func (r *BinlogReader) parseFile(
 	}
 
 	switchCh := make(chan SwitchPath, 1)
-	switchErrCh := make(chan error, 1)
 	updatePathCh := make(chan string, 1)
 	updateErrCh := make(chan error, 1)
 	newCtx, cancel := context.WithCancel(ctx)
@@ -606,6 +605,7 @@ func (r *BinlogReader) parseFile(
 			beginOffset:       offset,
 			endOffset:         latestPos,
 		}
+		// TODO no need to be a goroutine now, maybe refactored when refactoring parseFile itself.
 		checker.relayLogUpdatedOrNewCreated(newCtx, updatePathCh, switchCh, updateErrCh)
 	}(latestPos)
 
@@ -625,8 +625,6 @@ func (r *BinlogReader) parseFile(
 		}
 		// need parse next relay log file or re-collect files
 		return false, false, latestPos, "", "", false, nil
-	case err := <-switchErrCh:
-		return false, false, 0, "", "", false, err
 	case err := <-updateErrCh:
 		return false, false, 0, "", "", false, err
 	}
