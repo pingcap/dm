@@ -128,7 +128,7 @@ func NewRealRelay(cfg *Config) Process {
 }
 
 // Init implements the dm.Unit interface.
-// NOTE these errors will make DM-worker exit when it boots up and assigned relay.
+// NOTE when Init encounters an error, it will make DM-worker exit when it boots up and assigned relay.
 func (r *Relay) Init(ctx context.Context) (err error) {
 	return reportRelayLogSpaceInBackground(ctx, r.cfg.RelayDir)
 }
