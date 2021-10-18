@@ -20,12 +20,14 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/util/mock"
 
@@ -38,6 +40,7 @@ import (
 	"github.com/pingcap/dm/pkg/cputil"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/schema"
 	streamer2 "github.com/pingcap/dm/pkg/streamer"
@@ -48,6 +51,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
@@ -231,7 +235,6 @@ func (s *testSyncerSuite) mockGetServerUnixTS(mock sqlmock.Sqlmock) {
 	mock.ExpectQuery("SELECT UNIX_TIMESTAMP()").WillReturnRows(rows)
 }
 
-/*
 func (s *testSyncerSuite) TestSelectDB(c *C) {
 	s.cfg.BAList = &filter.Rules{
 		DoDBs: []string{"~^b.*", "s1", "stest"},
@@ -612,7 +615,6 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 		}
 	}
 }
-*/
 
 func (s *testSyncerSuite) TestColumnMapping(c *C) {
 	rules := []*cm.Rule{
@@ -1342,65 +1344,65 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	}
 }
 
-// func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.BinlogEvent, p *parser.Parser, res [][]bool) {
-// 	i := 0
-// 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "checkEventWithTableResult")))
-// 	ec := &eventContext{
-// 		tctx: tctx,
-// 	}
-// 	for _, e := range allEvents {
-// 		switch ev := e.Event.(type) {
-// 		case *replication.QueryEvent:
-// 			qec := &queryEventContext{
-// 				eventContext: ec,
-// 				originSQL:    string(ev.Query),
-// 				ddlSchema:    string(ev.Schema),
-// 				p:            p,
-// 			}
-// 			stmt, err := parseOneStmt(qec)
-// 			c.Assert(err, IsNil)
+func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.BinlogEvent, p *parser.Parser, res [][]bool) {
+	i := 0
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "checkEventWithTableResult")))
+	ec := &eventContext{
+		tctx: tctx,
+	}
+	for _, e := range allEvents {
+		switch ev := e.Event.(type) {
+		case *replication.QueryEvent:
+			qec := &queryEventContext{
+				eventContext: ec,
+				originSQL:    string(ev.Query),
+				ddlSchema:    string(ev.Schema),
+				p:            p,
+			}
+			stmt, err := parseOneStmt(qec)
+			c.Assert(err, IsNil)
 
-// 			if _, ok := stmt.(ast.DDLNode); !ok {
-// 				continue // BEGIN event
-// 			}
-// 			qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
-// 			c.Assert(err, IsNil)
-// 			for _, sql := range qec.splitDDLs {
-// 				sqls, err := syncer.processOneDDL(qec, sql)
-// 				c.Assert(err, IsNil)
-// 				qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
-// 			}
-// 			if len(qec.needRouteDDLs) == 0 {
-// 				c.Assert(res[i], HasLen, 1)
-// 				c.Assert(res[i][0], Equals, true)
-// 				i++
-// 				continue
-// 			}
+			if _, ok := stmt.(ast.DDLNode); !ok {
+				continue // BEGIN event
+			}
+			qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
+			c.Assert(err, IsNil)
+			for _, sql := range qec.splitDDLs {
+				sqls, err := syncer.processOneDDL(qec, sql)
+				c.Assert(err, IsNil)
+				qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
+			}
+			if len(qec.needRouteDDLs) == 0 {
+				c.Assert(res[i], HasLen, 1)
+				c.Assert(res[i][0], Equals, true)
+				i++
+				continue
+			}
 
-// 			for j, sql := range qec.needRouteDDLs {
-// 				stmt, err := p.ParseOneStmt(sql, "", "")
-// 				c.Assert(err, IsNil)
+			for j, sql := range qec.needRouteDDLs {
+				stmt, err := p.ParseOneStmt(sql, "", "")
+				c.Assert(err, IsNil)
 
-// 				tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
-// 				c.Assert(err, IsNil)
-// 				needSkip, err := syncer.skipQueryEvent(tables, stmt, sql)
-// 				c.Assert(err, IsNil)
-// 				c.Assert(needSkip, Equals, res[i][j])
-// 			}
-// 		case *replication.RowsEvent:
-// 			table := &filter.Table{
-// 				Schema: string(ev.Table.Schema),
-// 				Name:   string(ev.Table.Table),
-// 			}
-// 			needSkip, err := syncer.skipRowsEvent(table, e.Header.EventType)
-// 			c.Assert(err, IsNil)
-// 			c.Assert(needSkip, Equals, res[i][0])
-// 		default:
-// 			continue
-// 		}
-// 		i++
-// 	}
-// }
+				tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
+				c.Assert(err, IsNil)
+				needSkip, err := syncer.skipQueryEvent(tables, stmt, sql)
+				c.Assert(err, IsNil)
+				c.Assert(needSkip, Equals, res[i][j])
+			}
+		case *replication.RowsEvent:
+			table := &filter.Table{
+				Schema: string(ev.Table.Schema),
+				Name:   string(ev.Table.Table),
+			}
+			needSkip, err := syncer.skipRowsEvent(table, e.Header.EventType)
+			c.Assert(err, IsNil)
+			c.Assert(needSkip, Equals, res[i][0])
+		default:
+			continue
+		}
+		i++
+	}
+}
 
 func executeSQLAndWait(expectJobNum int) {
 	for i := 0; i < 10; i++ {
