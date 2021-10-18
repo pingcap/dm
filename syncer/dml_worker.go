@@ -20,7 +20,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	brutils "github.com/pingcap/tidb/br/pkg/utils"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -33,15 +32,14 @@ import (
 
 // DMLWorker is used to sync dml.
 type DMLWorker struct {
-	batch          int
-	workerCount    int
-	chanSize       int
-	multipleRows   bool
-	toDBConns      []*dbconn.DBConn
-	tctx           *tcontext.Context
-	causalityWg    sync.WaitGroup
-	connectionPool *brutils.WorkerPool
-	logger         log.Logger
+	batch        int
+	workerCount  int
+	chanSize     int
+	multipleRows bool
+	toDBConns    []*dbconn.DBConn
+	tctx         *tcontext.Context
+	wg           sync.WaitGroup
+	logger       log.Logger
 
 	// for metrics
 	task   string
@@ -61,32 +59,31 @@ type DMLWorker struct {
 }
 
 // dmlWorkerWrap creates and runs a dmlWorker instance and return all workers count and flush job channel.
-func dmlWorkerWrap(inCh chan *job, syncer *Syncer) (int, chan *job) {
+func dmlWorkerWrap(inCh chan *job, syncer *Syncer) chan *job {
 	dmlWorker := &DMLWorker{
-		batch:          syncer.cfg.Batch,
-		workerCount:    syncer.cfg.WorkerCount,
-		chanSize:       syncer.cfg.QueueSize,
-		multipleRows:   syncer.cfg.MultipleRows,
-		task:           syncer.cfg.Name,
-		source:         syncer.cfg.SourceID,
-		worker:         syncer.cfg.WorkerName,
-		connectionPool: brutils.NewWorkerPool(uint(syncer.cfg.WorkerCount), "dml_connection_pool"),
-		logger:         syncer.tctx.Logger.WithFields(zap.String("component", "dml_worker")),
-		successFunc:    syncer.successFunc,
-		fatalFunc:      syncer.fatalFunc,
-		lagFunc:        syncer.updateReplicationJobTS,
-		addCountFunc:   syncer.addCount,
-		tctx:           syncer.tctx,
-		toDBConns:      syncer.toDBConns,
-		inCh:           inCh,
-		flushCh:        make(chan *job),
+		batch:        syncer.cfg.Batch,
+		workerCount:  syncer.cfg.WorkerCount,
+		chanSize:     syncer.cfg.QueueSize,
+		multipleRows: syncer.cfg.MultipleRows,
+		task:         syncer.cfg.Name,
+		source:       syncer.cfg.SourceID,
+		worker:       syncer.cfg.WorkerName,
+		logger:       syncer.tctx.Logger.WithFields(zap.String("component", "dml_worker")),
+		successFunc:  syncer.successFunc,
+		fatalFunc:    syncer.fatalFunc,
+		lagFunc:      syncer.updateReplicationJobTS,
+		addCountFunc: syncer.addCount,
+		tctx:         syncer.tctx,
+		toDBConns:    syncer.toDBConns,
+		inCh:         inCh,
+		flushCh:      make(chan *job),
 	}
 
 	go func() {
 		dmlWorker.run()
 		dmlWorker.close()
 	}()
-	return dmlWorker.workerCount, dmlWorker.flushCh
+	return dmlWorker.flushCh
 }
 
 // close closes outer channel.
@@ -119,17 +116,19 @@ func (w *DMLWorker) run() {
 		if j.tp == flush || j.tp == conflict {
 			if j.tp == conflict {
 				w.addCountFunc(false, adminQueueName, j.tp, 1, j.targetTable)
-				w.causalityWg.Add(w.workerCount)
 			}
+			w.wg.Add(w.workerCount)
 			// flush for every DML queue
 			for i, jobCh := range jobChs {
 				startTime := time.Now()
 				jobCh <- j
 				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[i], w.source).Observe(time.Since(startTime).Seconds())
 			}
+			w.wg.Wait()
 			if j.tp == conflict {
-				w.causalityWg.Wait()
 				w.addCountFunc(true, adminQueueName, j.tp, 1, j.targetTable)
+			} else {
+				w.flushCh <- j
 			}
 		} else {
 			queueBucket := int(utils.GenHashKey(j.dml.key)) % w.workerCount
@@ -153,12 +152,7 @@ func (w *DMLWorker) run() {
 // delete from tb where a=2,b=2	 |=> delete from tb where (a,b) in (1,1),(2,2),(3,3)
 // delete from tb where a=3,b=3	_|
 // group by [opType => table name => columns].
-func genMultipleRowsSQL(op opType, dmls []*DML) ([]string, [][]interface{}) {
-	// for compacted jobs, all dmlParmas already has same opType
-	// so group by table
-	if op != null {
-		return gendmlsWithSameTable(op, dmls)
-	}
+func genMultipleRowsSQL(dmls []*DML) ([]string, [][]interface{}) {
 	// for causality jobs, group dmls with opType
 	return gendmlsWithSameTp(dmls)
 }
@@ -180,131 +174,100 @@ func genSingleRowSQL(dmls []*DML) ([]string, [][]interface{}) {
 func (w *DMLWorker) executeJobs(queueID int, jobCh chan *job) {
 	jobs := make([]*job, 0, w.batch)
 	workerJobIdx := dmlWorkerJobIdx(queueID)
-	var wg sync.WaitGroup
 	queueBucket := queueBucketName(queueID)
-	for {
-		select {
-		case j, ok := <-jobCh:
-			if !ok {
-				if len(jobs) > 0 {
-					w.logger.Warn("have unexecuted jobs when close job chan!", zap.Any("rest job", jobs))
-				}
-				return
-			}
-			metrics.QueueSizeGauge.WithLabelValues(w.task, queueBucket, w.source).Set(float64(len(jobCh)))
+	for j := range jobCh {
+		metrics.QueueSizeGauge.WithLabelValues(w.task, queueBucket, w.source).Set(float64(len(jobCh)))
 
-			if j.tp != flush && j.tp != conflict {
-				if len(jobs) == 0 {
-					// set job TS when received first job of this batch.
-					w.lagFunc(j, workerJobIdx)
-				}
-				jobs = append(jobs, j)
-				if len(jobs) < w.batch {
-					continue
-				}
+		if j.tp != flush && j.tp != conflict {
+			if len(jobs) == 0 {
+				// set job TS when received first job of this batch.
+				w.lagFunc(j, workerJobIdx)
 			}
+			jobs = append(jobs, j)
+			if len(jobs) < w.batch && len(jobCh) > 0 {
+				continue
+			}
+		}
 
-			// wait for previous jobs executed
-			wg.Wait()
-			batchJobs := jobs
-			wg.Add(1)
+		failpoint.Inject("syncDMLBatchNotFull", func() {
+			if len(jobCh) == 0 && len(jobs) < w.batch {
+				w.logger.Info("execute not full job queue")
+			}
+		})
 
-			if j.tp == conflict {
-				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, null, batchJobs, func() {
-					wg.Done()
-					w.causalityWg.Done()
-				}))
-			} else {
-				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, null, batchJobs, func() { wg.Done() }))
-			}
+		batchJobs := jobs
+		w.executeBatchJobs(queueID, batchJobs)
+		if j.tp == conflict || j.tp == flush {
+			w.wg.Done()
+		}
 
-			if j.tp == flush {
-				wg.Wait()
-				w.flushCh <- j
-			}
-			jobs = make([]*job, 0, w.batch)
-		case <-time.After(waitTime):
-			if len(jobs) > 0 {
-				failpoint.Inject("syncDMLTicker", func() {
-					w.logger.Info("job queue not full, executeSQLs by ticker")
-				})
-				// wait for previous jobs executed
-				wg.Wait()
-				batchJobs := jobs
-				wg.Add(1)
-				w.connectionPool.ApplyWithID(w.executeBatchJobs(queueID, null, batchJobs, func() { wg.Done() }))
-				jobs = make([]*job, 0, w.batch)
-			} else {
-				failpoint.Inject("noJobInQueueLog", func() {
-					w.logger.Debug("no job in queue, update lag to zero", zap.Int(
-						"workerJobIdx", workerJobIdx), zap.Int64("current ts", time.Now().Unix()))
-				})
-				w.lagFunc(nil, workerJobIdx)
-			}
+		jobs = jobs[0:0]
+		if len(jobCh) == 0 {
+			failpoint.Inject("noJobInQueueLog", func() {
+				w.logger.Debug("no job in queue, update lag to zero", zap.Int(
+					"workerJobIdx", workerJobIdx), zap.Int64("current ts", time.Now().Unix()))
+			})
+			w.lagFunc(nil, workerJobIdx)
 		}
 	}
 }
 
 // executeBatchJobs execute jobs with batch size.
-func (w *DMLWorker) executeBatchJobs(queueID int, op opType, jobs []*job, clearFunc func()) func(uint64) {
-	executeJobs := func(id uint64) {
-		var (
-			affect int
-			db     = w.toDBConns[int(id)-1]
-			err    error
-		)
+func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job) {
+	var (
+		affect int
+		db     = w.toDBConns[queueID]
+		err    error
+	)
 
-		defer func() {
-			if err == nil {
-				w.successFunc(queueID, jobs)
-			} else {
-				w.fatalFunc(jobs[affect], err)
-			}
-			clearFunc()
-		}()
-
-		if len(jobs) == 0 {
-			return
-		}
-		failpoint.Inject("BlockExecuteSQLs", func(v failpoint.Value) {
-			t := v.(int) // sleep time
-			w.logger.Info("BlockExecuteSQLs", zap.Any("job", jobs[0]), zap.Int("sleep time", t))
-			time.Sleep(time.Second * time.Duration(t))
-		})
-
-		failpoint.Inject("failSecondJob", func() {
-			if failExecuteSQL && failOnce.CAS(false, true) {
-				w.logger.Info("trigger failSecondJob")
-				err = terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJob"), "mock")
-				failpoint.Return()
-			}
-		})
-
-		dmls := make([]*DML, 0, len(jobs))
-		for _, j := range jobs {
-			dmls = append(dmls, j.dml)
-		}
-		var queries []string
-		var args [][]interface{}
-		if w.multipleRows {
-			queries, args = genMultipleRowsSQL(op, dmls)
+	defer func() {
+		if err == nil {
+			w.successFunc(queueID, jobs)
 		} else {
-			queries, args = genSingleRowSQL(dmls)
+			w.fatalFunc(jobs[affect], err)
 		}
-		failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
-			t := v.(int)
-			time.Sleep(time.Duration(t) * time.Second)
-		})
-		// use background context to execute sqls as much as possible
-		ctx, cancel := w.tctx.WithTimeout(maxDMLExecutionDuration)
-		defer cancel()
-		affect, err = db.ExecuteSQL(ctx, queries, args...)
-		failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
-			if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
-				w.logger.Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
-				affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
-			}
-		})
+	}()
+
+	if len(jobs) == 0 {
+		return
 	}
-	return executeJobs
+	failpoint.Inject("BlockExecuteSQLs", func(v failpoint.Value) {
+		t := v.(int) // sleep time
+		w.logger.Info("BlockExecuteSQLs", zap.Any("job", jobs[0]), zap.Int("sleep time", t))
+		time.Sleep(time.Second * time.Duration(t))
+	})
+
+	failpoint.Inject("failSecondJob", func() {
+		if failExecuteSQL && failOnce.CAS(false, true) {
+			w.logger.Info("trigger failSecondJob")
+			err = terror.ErrDBExecuteFailed.Delegate(errors.New("failSecondJob"), "mock")
+			failpoint.Return()
+		}
+	})
+
+	dmls := make([]*DML, 0, len(jobs))
+	for _, j := range jobs {
+		dmls = append(dmls, j.dml)
+	}
+	var queries []string
+	var args [][]interface{}
+	if w.multipleRows {
+		queries, args = genMultipleRowsSQL(dmls)
+	} else {
+		queries, args = genSingleRowSQL(dmls)
+	}
+	failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
+		t := v.(int)
+		time.Sleep(time.Duration(t) * time.Second)
+	})
+	// use background context to execute sqls as much as possible
+	ctx, cancel := w.tctx.WithTimeout(maxDMLExecutionDuration)
+	defer cancel()
+	affect, err = db.ExecuteSQL(ctx, queries, args...)
+	failpoint.Inject("SafeModeExit", func(val failpoint.Value) {
+		if intVal, ok := val.(int); ok && intVal == 4 && len(jobs) > 0 {
+			w.logger.Warn("fail to exec DML", zap.String("failpoint", "SafeModeExit"))
+			affect, err = 0, terror.ErrDBExecuteFailed.Delegate(errors.New("SafeModeExit"), "mock")
+		}
+	})
 }

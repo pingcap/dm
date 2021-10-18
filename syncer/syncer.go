@@ -75,7 +75,6 @@ var (
 	maxRetryCount = 100
 
 	retryTimeout = 3 * time.Second
-	waitTime     = 10 * time.Millisecond
 
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL.
 	MaxDDLConnectionTimeoutMinute = 5
@@ -1265,28 +1264,15 @@ func (s *Syncer) fatalFunc(job *job, err error) {
 func (s *Syncer) syncDML() {
 	defer s.wg.Done()
 
-	failpoint.Inject("changeTickerInterval", func(val failpoint.Value) {
-		t := val.(int)
-		waitTime = time.Duration(t) * time.Second
-		s.tctx.L().Info("changeTickerInterval", zap.Int("current ticker interval second", t))
-	})
-
 	dmlJobCh := s.dmlJobCh
 	if s.cfg.Compact {
 		dmlJobCh = compactorWrap(dmlJobCh, s)
 	}
 	causalityCh := causalityWrap(dmlJobCh, s)
-	flushCount, flushCh := dmlWorkerWrap(causalityCh, s)
+	flushCh := dmlWorkerWrap(causalityCh, s)
 
-	// wait all worker flushed
-	// use counter is enough since we only add new flush job after previous flush job done
-	counter := 0
 	for range flushCh {
-		counter++
-		if counter == flushCount {
-			counter = 0
-			s.jobWg.Done()
-		}
+		s.jobWg.Done()
 	}
 }
 
