@@ -237,9 +237,7 @@ type SyncerConfig struct {
 	Batch       int    `yaml:"batch" toml:"batch" json:"batch"`
 	QueueSize   int    `yaml:"queue-size" toml:"queue-size" json:"queue-size"`
 	// checkpoint flush interval in seconds.
-	CheckpointFlushInterval int  `yaml:"checkpoint-flush-interval" toml:"checkpoint-flush-interval" json:"checkpoint-flush-interval"`
-	Compact                 bool `yaml:"compact" toml:"compact" json:"compact"`
-	MultipleRows            bool `yaml:"multiple-rows" toml:"multiple-rows" json:"multiple-rows"`
+	CheckpointFlushInterval int `yaml:"checkpoint-flush-interval" toml:"checkpoint-flush-interval" json:"checkpoint-flush-interval"`
 
 	// deprecated
 	MaxRetry int `yaml:"max-retry" toml:"max-retry" json:"max-retry"`

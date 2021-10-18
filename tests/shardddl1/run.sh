@@ -573,29 +573,6 @@ function DM_COLUMN_INDEX() {
 		"clean_table" "optimistic"
 }
 
-function DM_COMPACT_CASE() {
-	END=1000
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"pause-task test"
-	for i in $(seq 1 $END); do
-		run_sql_source1 "insert into ${shardddl1}.${tb1}(a,b) values($i,$i)"
-		run_sql_source1 "update ${shardddl1}.${tb1} set c=1 where a=$i"
-		run_sql_source1 "update ${shardddl1}.${tb1} set c=c+1 where a=$i"
-		run_sql_source1 "update ${shardddl1}.${tb1} set b=b+1 where a=$i"
-		run_sql_source1 "update ${shardddl1}.${tb1} set a=a+100 where a=$i"
-		run_sql_source1 "delete from ${shardddl1}.${tb1} where a=$((i + 100))"
-	done
-	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"resume-task test"
-	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 60
-}
-
-function DM_COMPACT() {
-	run_case COMPACT "single-source-no-sharding" \
-		"run_sql_source1 \"create table ${shardddl1}.${tb1} (a int primary key, b int unique, c int);\"" \
-		"clean_table" ""
-}
-
 function DM_CAUSALITY_CASE() {
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(1,2)"
 	run_sql_source1 "insert into ${shardddl1}.${tb1} values(2,3)"
@@ -617,7 +594,6 @@ function run() {
 	init_cluster
 	init_database
 
-	DM_COMPACT
 	DM_CAUSALITY
 	DM_UpdateBARule
 	DM_RENAME_TABLE

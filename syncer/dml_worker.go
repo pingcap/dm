@@ -32,14 +32,13 @@ import (
 
 // DMLWorker is used to sync dml.
 type DMLWorker struct {
-	batch        int
-	workerCount  int
-	chanSize     int
-	multipleRows bool
-	toDBConns    []*dbconn.DBConn
-	tctx         *tcontext.Context
-	wg           sync.WaitGroup
-	logger       log.Logger
+	batch       int
+	workerCount int
+	chanSize    int
+	toDBConns   []*dbconn.DBConn
+	tctx        *tcontext.Context
+	wg          sync.WaitGroup
+	logger      log.Logger
 
 	// for metrics
 	task   string
@@ -64,7 +63,6 @@ func dmlWorkerWrap(inCh chan *job, syncer *Syncer) chan *job {
 		batch:        syncer.cfg.Batch,
 		workerCount:  syncer.cfg.WorkerCount,
 		chanSize:     syncer.cfg.QueueSize,
-		multipleRows: syncer.cfg.MultipleRows,
 		task:         syncer.cfg.Name,
 		source:       syncer.cfg.SourceID,
 		worker:       syncer.cfg.WorkerName,
@@ -139,34 +137,6 @@ func (w *DMLWorker) run() {
 			metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[queueBucket], w.source).Observe(time.Since(startTime).Seconds())
 		}
 	}
-}
-
-// genMultipleRowsSQL generate multiple row values SQL by different opType.
-// insert into tb values(1,1)	‾|
-// insert into tb values(2,2)	 |=> insert into tb values (1,1),(2,2),(3,3)
-// insert into tb values(3,3)	_|
-// update tb set b=1 where a=1	‾|
-// update tb set b=2 where a=2	 |=> replace into tb values(1,1),(2,2),(3,3)
-// update tb set b=3 where a=3	_|
-// delete from tb where a=1,b=1	‾|
-// delete from tb where a=2,b=2	 |=> delete from tb where (a,b) in (1,1),(2,2),(3,3)
-// delete from tb where a=3,b=3	_|
-// group by [opType => table name => columns].
-func genMultipleRowsSQL(dmls []*DML) ([]string, [][]interface{}) {
-	// for causality jobs, group dmls with opType
-	return gendmlsWithSameTp(dmls)
-}
-
-// genSingleRowSQL generate single row value SQL.
-func genSingleRowSQL(dmls []*DML) ([]string, [][]interface{}) {
-	queries := make([]string, 0, len(dmls))
-	args := make([][]interface{}, 0, len(dmls))
-	for _, dml := range dmls {
-		query, arg := dml.genSQL()
-		queries = append(queries, query...)
-		args = append(args, arg...)
-	}
-	return queries, args
 }
 
 // executeJobs execute jobs in same queueBucket
@@ -245,16 +215,12 @@ func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job) {
 		}
 	})
 
-	dmls := make([]*DML, 0, len(jobs))
-	for _, j := range jobs {
-		dmls = append(dmls, j.dml)
-	}
 	var queries []string
 	var args [][]interface{}
-	if w.multipleRows {
-		queries, args = genMultipleRowsSQL(dmls)
-	} else {
-		queries, args = genSingleRowSQL(dmls)
+	for _, j := range jobs {
+		query, arg := j.dml.genSQL()
+		queries = append(queries, query...)
+		args = append(args, arg...)
 	}
 	failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
 		t := v.(int)

@@ -437,89 +437,16 @@ func newDML(op opType, safeMode bool, tableID string, sourceTable *filter.Table,
 	}
 }
 
-// newDelDML generate delete DML from origin update dml.
-func (dml *DML) newDelDML() *DML {
-	clone := &DML{}
-	*clone = *dml
-	clone.values = dml.oldValues
-	clone.originValues = dml.originOldValues
-	clone.oldValues = nil
-	clone.originOldValues = nil
-	clone.op = del
-	return clone
-}
-
-// newInsertDML generate insert DML from origin update dml.
-func (dml *DML) newInsertDML() *DML {
-	clone := &DML{}
-	*clone = *dml
-	clone.oldValues = nil
-	clone.originOldValues = nil
-	clone.op = insert
-	return clone
-}
-
-// columnNames return column names of DML.
-func (dml *DML) columnNames() []string {
-	columnNames := make([]string, 0, len(dml.columns))
-	for _, column := range dml.columns {
-		columnNames = append(columnNames, column.Name.O)
-	}
-	return columnNames
-}
-
-// identifyColumns gets columns of unique not null index.
-func (dml *DML) identifyColumns() []string {
-	if defaultIndexColumns := findFitIndex(dml.ti); defaultIndexColumns != nil {
-		columns := make([]string, 0, len(defaultIndexColumns.Columns))
-		for _, column := range defaultIndexColumns.Columns {
-			columns = append(columns, column.Name.O)
-		}
-		return columns
-	}
-	return nil
-}
-
-// identifyValues gets values of unique not null index.
-func (dml *DML) identifyValues() []interface{} {
-	if defaultIndexColumns := findFitIndex(dml.ti); defaultIndexColumns != nil {
-		values := make([]interface{}, 0, len(defaultIndexColumns.Columns))
-		for _, column := range defaultIndexColumns.Columns {
-			values = append(values, dml.values[column.Offset])
-		}
-		return values
-	}
-	return nil
-}
-
-// oldIdentifyValues gets old values of unique not null index.
-// only for update SQL.
-func (dml *DML) oldIdentifyValues() []interface{} {
-	if defaultIndexColumns := findFitIndex(dml.ti); defaultIndexColumns != nil {
-		values := make([]interface{}, 0, len(defaultIndexColumns.Columns))
-		for _, column := range defaultIndexColumns.Columns {
-			values = append(values, dml.oldValues[column.Offset])
-		}
-		return values
-	}
-	return nil
-}
-
-// identifyKey use identifyValues to gen key.
-// This is used for compacted.
-// PK or (UK + NOT NULL).
-func (dml *DML) identifyKey() string {
-	return genKey(dml.identifyValues())
-}
-
 // identifyKeys gens keys by unique not null value.
 // This is used for causality.
 // PK or (UK + NOT NULL) or (UK + NULL + NOT NULL VALUE).
 func (dml *DML) identifyKeys() []string {
 	var keys []string
+	// for UPDATE statement
 	if dml.originOldValues != nil {
 		keys = append(keys, genMultipleKeys(dml.ti, dml.originOldValues, dml.tableID)...)
 	}
+
 	if dml.originValues != nil {
 		keys = append(keys, genMultipleKeys(dml.ti, dml.originValues, dml.tableID)...)
 	}
@@ -527,6 +454,7 @@ func (dml *DML) identifyKeys() []string {
 }
 
 // whereColumnsAndValues gets columns and values of unique column with not null value.
+// This is used to generete where condition.
 func (dml *DML) whereColumnsAndValues() ([]string, []interface{}) {
 	columns, values := dml.ti.Columns, dml.originValues
 
@@ -550,19 +478,7 @@ func (dml *DML) whereColumnsAndValues() ([]string, []interface{}) {
 	return columnNames, values
 }
 
-// genKey gens key by values e.g. "a.1.b".
-func genKey(values []interface{}) string {
-	builder := new(strings.Builder)
-	for i, v := range values {
-		if i != 0 {
-			builder.WriteString(".")
-		}
-		fmt.Fprintf(builder, "%v", v)
-	}
-
-	return builder.String()
-}
-
+// genKeyList format keys.
 func genKeyList(table string, columns []*model.ColumnInfo, dataSeq []interface{}) string {
 	var buf strings.Builder
 	for i, data := range dataSeq {
@@ -584,6 +500,8 @@ func genKeyList(table string, columns []*model.ColumnInfo, dataSeq []interface{}
 	return buf.String()
 }
 
+// genMultipleKeys gens keys with UNIQUE NOT NULL value.
+// if not UNIQUE NOT NULL value, use table name instead.
 func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []string {
 	multipleKeys := make([]string, 0, len(ti.Indices)+1)
 	if ti.PKIsHandle {
@@ -619,24 +537,7 @@ func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []s
 	return multipleKeys
 }
 
-// updateIdentify check whether a update sql update its identify values.
-func (dml *DML) updateIdentify() bool {
-	if len(dml.oldValues) == 0 {
-		return false
-	}
-
-	values := dml.identifyValues()
-	oldValues := dml.oldIdentifyValues()
-
-	for i := 0; i < len(values); i++ {
-		if values[i] != oldValues[i] {
-			return true
-		}
-	}
-
-	return false
-}
-
+// genWhere generates where condition.
 func (dml *DML) genWhere(buf *strings.Builder) []interface{} {
 	whereColumns, whereValues := dml.whereColumnsAndValues()
 
@@ -655,13 +556,25 @@ func (dml *DML) genWhere(buf *strings.Builder) []interface{} {
 	return whereValues
 }
 
-// genDeleteSQL generates a `UPDATE` SQL with `WHERE`.
+func (dml *DML) genSQL() (sql []string, arg [][]interface{}) {
+	switch dml.op {
+	case insert:
+		return dml.genInsertSQL()
+	case del:
+		return dml.genDeleteSQL()
+	case update:
+		return dml.genUpdateSQL()
+	}
+	return
+}
+
+// genUpdateSQL generates a `UPDATE` SQL with `WHERE`.
 func (dml *DML) genUpdateSQL() ([]string, [][]interface{}) {
 	if dml.safeMode {
 		sqls, args := dml.genDeleteSQL()
-		replaceSQLs, replaceArgs := dml.genInsertReplaceSQL()
-		sqls = append(sqls, replaceSQLs...)
-		args = append(args, replaceArgs...)
+		insertSQLs, insertArgs := dml.genInsertSQL()
+		sqls = append(sqls, insertSQLs...)
+		args = append(args, insertArgs...)
 		return sqls, args
 	}
 	var buf strings.Builder
@@ -687,18 +600,6 @@ func (dml *DML) genUpdateSQL() ([]string, [][]interface{}) {
 	return []string{buf.String()}, [][]interface{}{args}
 }
 
-func (dml *DML) genSQL() (sql []string, arg [][]interface{}) {
-	switch dml.op {
-	case insert:
-		return dml.genInsertReplaceSQL()
-	case del:
-		return dml.genDeleteSQL()
-	case update:
-		return dml.genUpdateSQL()
-	}
-	return
-}
-
 // genDeleteSQL generates a `DELETE FROM` SQL with `WHERE`.
 func (dml *DML) genDeleteSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
@@ -712,7 +613,9 @@ func (dml *DML) genDeleteSQL() ([]string, [][]interface{}) {
 	return []string{buf.String()}, [][]interface{}{whereArgs}
 }
 
-func (dml *DML) genInsertReplaceSQL() ([]string, [][]interface{}) {
+// genInsertDuplicateSQL generates a `INSERT` SQL with WHERE
+// if in safemode, generates a `INSERT ON DUPLICATE UPDATE` statement.
+func (dml *DML) genInsertSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
 	buf.Grow(256)
 	buf.WriteString("INSERT INTO")
@@ -746,282 +649,4 @@ func (dml *DML) genInsertReplaceSQL() ([]string, [][]interface{}) {
 		}
 	}
 	return []string{buf.String()}, [][]interface{}{dml.values}
-}
-
-// valuesHolder gens values holder like (?,?,?).
-func valuesHolder(n int) string {
-	builder := new(strings.Builder)
-	builder.WriteByte('(')
-	for i := 0; i < n; i++ {
-		if i > 0 {
-			builder.WriteString(",")
-		}
-		builder.WriteString("?")
-	}
-	builder.WriteByte(')')
-	return builder.String()
-}
-
-// genMultipleRowsInsertRelace gens insert/replace multiple rows statement.
-func genMultipleRowsInsertReplace(replace bool, dmls []*DML) ([]string, [][]interface{}) {
-	if len(dmls) == 0 {
-		return nil, nil
-	}
-
-	var buf strings.Builder
-	buf.Grow(256)
-	buf.WriteString("INSERT INTO")
-	buf.WriteString(" " + dmls[0].tableID + " (")
-	for i, column := range dmls[0].columns {
-		if i != len(dmls[0].columns)-1 {
-			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`,")
-		} else {
-			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`)")
-		}
-	}
-	buf.WriteString(" VALUES ")
-
-	holder := valuesHolder(len(dmls[0].columns))
-	for i := range dmls {
-		if i > 0 {
-			buf.WriteString(",")
-		}
-		buf.WriteString(holder)
-	}
-
-	if replace {
-		buf.WriteString(" ON DUPLICATE KEY UPDATE ")
-		for i, column := range dmls[0].columns {
-			col := strings.ReplaceAll(column.Name.O, "`", "``")
-			buf.WriteString("`" + col + "`=VALUES(`" + col + "`)")
-			if i != len(dmls[0].columns)-1 {
-				buf.WriteByte(',')
-			}
-		}
-	}
-
-	args := make([]interface{}, 0, len(dmls)*len(dmls[0].columns))
-	for _, dml := range dmls {
-		args = append(args, dml.values...)
-	}
-	return []string{buf.String()}, [][]interface{}{args}
-}
-
-// genMultipleRowsInsert gens insert statement like 'INSERT INTO tb(a,b) VALUES(1,1),(2,2);'.
-func genMultipleRowsInsert(dmls []*DML) ([]string, [][]interface{}) {
-	if len(dmls) == 0 {
-		return nil, nil
-	}
-	return genMultipleRowsInsertReplace(dmls[0].safeMode, dmls)
-}
-
-// genMultipleRowsReplace gens insert statement like 'REPLACE INTO tb(a,b) VALUES(1,1),(2,2);'.
-func genMultipleRowsReplace(dmls []*DML) ([]string, [][]interface{}) {
-	return genMultipleRowsInsertReplace(true, dmls)
-}
-
-// genMultipleRowsDelete gens delete statement like 'DELTE FROM tb WHERE (a,b) IN (1,1),(2,2);'.
-func genMultipleRowsDelete(dmls []*DML) ([]string, [][]interface{}) {
-	if len(dmls) == 0 {
-		return nil, nil
-	}
-
-	var buf strings.Builder
-	buf.Grow(1024)
-	buf.WriteString("DELETE FROM ")
-	buf.WriteString(dmls[0].tableID)
-	buf.WriteString(" WHERE (")
-
-	whereColumns, _ := dmls[0].whereColumnsAndValues()
-	for i, column := range whereColumns {
-		if i != len(whereColumns)-1 {
-			buf.WriteString("`" + strings.ReplaceAll(column, "`", "``") + "`,")
-		} else {
-			buf.WriteString("`" + strings.ReplaceAll(column, "`", "``") + "`)")
-		}
-	}
-	buf.WriteString(" IN (")
-
-	holder := valuesHolder(len(whereColumns))
-	args := make([]interface{}, 0, len(dmls)*len(dmls[0].columns))
-	for i, dml := range dmls {
-		if i > 0 {
-			buf.WriteString(",")
-		}
-		buf.WriteString(holder)
-		_, whereValues := dml.whereColumnsAndValues()
-		args = append(args, whereValues...)
-	}
-	buf.WriteString(")")
-	return []string{buf.String()}, [][]interface{}{args}
-}
-
-// genMultipleRows gens multiple rows SQL with different opType.
-func genMultipleRows(op opType, dmls []*DML) (queries []string, args [][]interface{}) {
-	switch op {
-	case insert:
-		return genMultipleRowsInsert(dmls)
-	case replace:
-		return genMultipleRowsReplace(dmls)
-	case del:
-		return genMultipleRowsDelete(dmls)
-	}
-	return
-}
-
-// sameColumns check whether two DML have same columns.
-func sameColumns(lhs *DML, rhs *DML) bool {
-	if lhs.sourceTable.Schema == rhs.sourceTable.Schema && lhs.sourceTable.Name == rhs.sourceTable.Name {
-		return true
-	}
-
-	var lhsCols, rhsCols []string
-	if lhs.op == del {
-		lhsCols, _ = lhs.whereColumnsAndValues()
-		rhsCols, _ = rhs.whereColumnsAndValues()
-	} else {
-		lhsCols = lhs.columnNames()
-		rhsCols = rhs.columnNames()
-	}
-	if len(lhsCols) != len(rhsCols) {
-		return false
-	}
-	for i := 0; i < len(lhsCols); i++ {
-		if lhsCols[i] != rhsCols[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// gendmlsWithSameCols group and gen dmls by same columns.
-// in optimistic shard mode, different upstream tables may have different columns.
-// e.g.
-// insert into tb(a,b,c) values(1,1,1)
-// insert into tb(a,b,d) values(2,2,2)
-// we can only combine DMLs with same column names.
-// all dmls should have same opType and same tableName.
-func gendmlsWithSameCols(op opType, dmls []*DML) ([]string, [][]interface{}) {
-	queries := make([]string, 0, len(dmls))
-	args := make([][]interface{}, 0, len(dmls))
-	var lastdmls *DML
-	var query []string
-	var arg [][]interface{}
-	groupdmls := make([]*DML, 0, len(dmls))
-
-	// group dmls by same columns
-	for i, dml := range dmls {
-		if i == 0 {
-			lastdmls = dml
-			groupdmls = append(groupdmls, dml)
-			continue
-		}
-
-		if sameColumns(lastdmls, dml) {
-			groupdmls = append(groupdmls, dml)
-		} else {
-			query, arg = genMultipleRows(op, groupdmls)
-			queries = append(queries, query...)
-			args = append(args, arg...)
-
-			groupdmls = groupdmls[0:0]
-			lastdmls = dml
-			groupdmls = append(groupdmls, dml)
-		}
-	}
-	if len(groupdmls) > 0 {
-		switch op {
-		case insert:
-			query, arg = genMultipleRowsInsert(groupdmls)
-		case replace:
-			query, arg = genMultipleRowsReplace(groupdmls)
-		case del:
-			query, arg = genMultipleRowsDelete(groupdmls)
-		}
-		queries = append(queries, query...)
-		args = append(args, arg...)
-	}
-	return queries, args
-}
-
-// genSQLsWithSameTable group and gen dmls with same table.
-// all the dmls should have same opType.
-func gendmlsWithSameTable(op opType, dmls []*DML) ([]string, [][]interface{}) {
-	queries := make([]string, 0, len(dmls))
-	args := make([][]interface{}, 0, len(dmls))
-	var lastTable string
-	groupdmls := make([]*DML, 0, len(dmls))
-
-	// for update statement, generate SQLs one by one
-	if op == update {
-		for _, dml := range dmls {
-			query, arg := dml.genUpdateSQL()
-			queries = append(queries, query...)
-			args = append(args, arg...)
-		}
-		return queries, args
-	}
-
-	// group dmls with same table
-	for i, dml := range dmls {
-		if i == 0 {
-			lastTable = dml.tableID
-		}
-		if lastTable == dml.tableID {
-			groupdmls = append(groupdmls, dml)
-		} else {
-			query, arg := gendmlsWithSameCols(op, groupdmls)
-			queries = append(queries, query...)
-			args = append(args, arg...)
-
-			groupdmls = groupdmls[0:0]
-			lastTable = dml.tableID
-			groupdmls = append(groupdmls, dml)
-		}
-	}
-	if len(groupdmls) > 0 {
-		query, arg := gendmlsWithSameCols(op, groupdmls)
-		queries = append(queries, query...)
-		args = append(args, arg...)
-	}
-	return queries, args
-}
-
-// gendmls group and gen dmls by opType.
-// only used for causality jobs.
-func gendmlsWithSameTp(dmls []*DML) ([]string, [][]interface{}) {
-	queries := make([]string, 0, len(dmls))
-	args := make([][]interface{}, 0, len(dmls))
-	var lastTp opType
-	groupdmls := make([]*DML, 0, len(dmls))
-
-	// group dmls with same opType
-	for i, dml := range dmls {
-		// if update statement didn't update primary values, regard it as replace
-		// if insert statement in safeMode, regard it as replace
-		if dml.op == update && !dml.updateIdentify() || dml.op == insert && dml.safeMode {
-			dml.op = replace
-		}
-		if i == 0 {
-			lastTp = dml.op
-		}
-		// now there are 4 situation: [insert, replace, update, delete]
-		if lastTp == dml.op {
-			groupdmls = append(groupdmls, dml)
-		} else {
-			query, arg := gendmlsWithSameTable(lastTp, groupdmls)
-			queries = append(queries, query...)
-			args = append(args, arg...)
-
-			groupdmls = groupdmls[0:0]
-			lastTp = dml.op
-			groupdmls = append(groupdmls, dml)
-		}
-	}
-	if len(groupdmls) > 0 {
-		query, arg := gendmlsWithSameTable(lastTp, groupdmls)
-		queries = append(queries, query...)
-		args = append(args, arg...)
-	}
-	return queries, args
 }

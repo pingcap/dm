@@ -55,5 +55,3 @@ syncers:
   global:
     worker-count: 16
     batch: 100
-    compact: true
-    multiple-rows: true

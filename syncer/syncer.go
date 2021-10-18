@@ -255,7 +255,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 	}
 	syncer.recordedActiveRelayLog = false
-	syncer.workerJobTSArray = make([]*atomic.Int64, cfg.WorkerCount+workerJobTSArrayInitSize+1)
+	syncer.workerJobTSArray = make([]*atomic.Int64, cfg.WorkerCount+workerJobTSArrayInitSize)
 	for i := range syncer.workerJobTSArray {
 		syncer.workerJobTSArray[i] = atomic.NewInt64(0)
 	}
@@ -1264,11 +1264,8 @@ func (s *Syncer) fatalFunc(job *job, err error) {
 func (s *Syncer) syncDML() {
 	defer s.wg.Done()
 
-	dmlJobCh := s.dmlJobCh
-	if s.cfg.Compact {
-		dmlJobCh = compactorWrap(dmlJobCh, s)
-	}
-	causalityCh := causalityWrap(dmlJobCh, s)
+	// TODO: add compactor
+	causalityCh := causalityWrap(s.dmlJobCh, s)
 	flushCh := dmlWorkerWrap(causalityCh, s)
 
 	for range flushCh {
