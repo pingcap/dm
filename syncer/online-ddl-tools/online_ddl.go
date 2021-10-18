@@ -484,7 +484,8 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 				if ghostInfo != nil {
 					return renameOnlineDDLTable(p, tables[1], ghostInfo.DDLs)
 				}
-				return nil, nil
+				// return nil, nil
+				return nil, terror.ErrSyncerUnitGhostOnlineDDLOnGhostTbl.Generate(schema, table)
 			} else if tp1 == GhostTable {
 				return nil, terror.ErrSyncerUnitGhostRenameGhostTblToOther.Generate(statement)
 			}
