@@ -1266,17 +1266,10 @@ func (s *Syncer) syncDML() {
 
 	// TODO: add compactor
 	causalityCh := causalityWrap(s.dmlJobCh, s)
-	flushCount, flushCh := dmlWorkerWrap(causalityCh, s)
+	flushCh := dmlWorkerWrap(causalityCh, s)
 
-	// wait all worker flushed
-	// use counter is enough since we only add new flush job after previous flush job done
-	counter := 0
 	for range flushCh {
-		counter++
-		if counter == flushCount {
-			counter = 0
-			s.jobWg.Done()
-		}
+		s.jobWg.Done()
 	}
 }
 
