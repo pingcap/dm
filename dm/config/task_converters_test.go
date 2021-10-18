@@ -280,9 +280,6 @@ func testNoShardSubTaskConfigsToOpenAPITask(c *check.C) {
 	c.Assert(taskList, check.HasLen, 1)
 	newTask := taskList[0]
 
-	// full migrate data dir will auto add task name, we fix this field manually
-	dataDir := fmt.Sprintf("%s.%s", *task.SourceConfig.FullMigrateConf.DataDir, task.Name)
-	task.SourceConfig.FullMigrateConf.DataDir = &dataDir
 	c.Assert(task, check.DeepEquals, newTask)
 }
 
@@ -318,11 +315,8 @@ func testShardAndFilterSubTaskConfigsToOpenAPITask(c *check.C) {
 	taskList := SubTaskConfigsToOpenAPITask(subTaskConfigMap)
 	c.Assert(taskList, check.HasLen, 1)
 	newTask := taskList[0]
-	// full migrate data dir will auto add task name, we fix this field manually
-	dataDir := fmt.Sprintf("%s.%s", *task.SourceConfig.FullMigrateConf.DataDir, task.Name)
-	task.SourceConfig.FullMigrateConf.DataDir = &dataDir
 
-	// because subtask config not have filter-rule-name,so we need to add it manually
+	// because subtask config not have filter-rule-name, so we need to add it manually
 	oldRuleName := "filterA"
 	newRuleName := genFilterRuleName(source1Name, 0)
 	oldRule, ok := task.BinlogFilterRule.Get(oldRuleName)
@@ -331,6 +325,15 @@ func testShardAndFilterSubTaskConfigsToOpenAPITask(c *check.C) {
 	newRule.Set(newRuleName, oldRule)
 	task.BinlogFilterRule = &newRule
 	task.TableMigrateRule[0].BinlogFilterRule = &[]string{newRuleName}
+
+	// because map key is not sorted, so generated array (source_conf and table_migrate_rule) order may not same with old one.
+	// so we need to fix it manually.
+	if task.SourceConfig.SourceConf[0].SourceName != newTask.SourceConfig.SourceConf[0].SourceName {
+		task.SourceConfig.SourceConf[0], task.SourceConfig.SourceConf[1] = task.SourceConfig.SourceConf[1], task.SourceConfig.SourceConf[0]
+	}
+	if task.TableMigrateRule[0].Source.SourceName != newTask.TableMigrateRule[0].Source.SourceName {
+		task.TableMigrateRule[0], task.TableMigrateRule[1] = task.TableMigrateRule[1], task.TableMigrateRule[0]
+	}
 
 	c.Assert(task, check.DeepEquals, newTask)
 }
