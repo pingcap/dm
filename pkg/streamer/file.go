@@ -208,7 +208,7 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 }
 
 type relayLogFileChecker struct {
-	n                                             EventNotifier
+	notifier                                      EventNotifier
 	relayDir, currentUUID                         string
 	latestRelayLogDir, latestFilePath, latestFile string
 	beginOffset, endOffset                        int64
@@ -277,7 +277,7 @@ func (r *relayLogFileChecker) relayLogUpdatedOrNewCreated(ctx context.Context, u
 	select {
 	case <-ctx.Done():
 		errCh <- terror.Annotate(ctx.Err(), "context meet error")
-	case <-r.n.Notified():
+	case <-r.notifier.Notified():
 		// the notified event may not be the current relay file
 		// in that case we may read 0 bytes and check again
 		updatePathCh <- r.latestFilePath

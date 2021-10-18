@@ -127,16 +127,16 @@ type Relay struct {
 		sync.RWMutex
 		info *pkgstreamer.RelayLogInfo
 	}
-	els map[Listener]struct{}
+	listeners map[Listener]struct{} // make it a set to make it easier to remove listener
 }
 
 // NewRealRelay creates an instance of Relay.
 func NewRealRelay(cfg *Config) Process {
 	return &Relay{
-		cfg:    cfg,
-		meta:   NewLocalMeta(cfg.Flavor, cfg.RelayDir),
-		logger: log.With(zap.String("component", "relay log")),
-		els:    make(map[Listener]struct{}),
+		cfg:       cfg,
+		meta:      NewLocalMeta(cfg.Flavor, cfg.RelayDir),
+		logger:    log.With(zap.String("component", "relay log")),
+		listeners: make(map[Listener]struct{}),
 	}
 }
 
@@ -1106,7 +1106,7 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 func (r *Relay) notify(e *replication.BinlogEvent) {
 	r.RLock()
 	defer r.RUnlock()
-	for el := range r.els {
+	for el := range r.listeners {
 		el.OnEvent(e)
 	}
 }
@@ -1115,12 +1115,12 @@ func (r *Relay) notify(e *replication.BinlogEvent) {
 func (r *Relay) RegisterListener(el Listener) {
 	r.Lock()
 	defer r.Unlock()
-	r.els[el] = struct{}{}
+	r.listeners[el] = struct{}{}
 }
 
 // UnRegisterListener implements Process.UnRegisterListener.
 func (r *Relay) UnRegisterListener(el Listener) {
 	r.Lock()
 	defer r.Unlock()
-	delete(r.els, el)
+	delete(r.listeners, el)
 }

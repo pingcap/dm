@@ -334,7 +334,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	en := newDummyEventNotifier(0)
 	// a. relay log dir not exist
 	checker := &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          "",
 		currentUUID:       "",
 		latestRelayLogDir: "/not-exists-directory",
@@ -368,7 +368,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 
 	// meta not found
 	checker = &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          "",
 		currentUUID:       "",
 		latestRelayLogDir: subDir,
@@ -389,7 +389,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 
 	// relay file not found
 	checker = &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          "",
 		currentUUID:       "",
 		latestRelayLogDir: subDir,
@@ -415,7 +415,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	err = os.WriteFile(relayPaths[0], nil, 0o600)
 	c.Assert(err, IsNil)
 	checker = &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          "",
 		currentUUID:       "",
 		latestRelayLogDir: subDir,
@@ -433,7 +433,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 
 	// return changed file in meta
 	checker = &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          "",
 		currentUUID:       "",
 		latestRelayLogDir: subDir,
@@ -452,7 +452,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	// file increased when checking meta
 	err = os.WriteFile(relayPaths[0], data, 0o600)
 	checker = &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          "",
 		currentUUID:       "",
 		latestRelayLogDir: subDir,
@@ -473,7 +473,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	relayDir := c.MkDir()
 	t.writeUUIDs(c, relayDir, []string{"xxx.000001", "xxx.000002"})
 	checker = &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          relayDir,
 		currentUUID:       "xxx.000002",
 		latestRelayLogDir: subDir,
@@ -493,7 +493,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	_ = os.MkdirAll(filepath.Join(relayDir, "xxx.000002"), 0o700)
 	_ = os.WriteFile(filepath.Join(relayDir, "xxx.000002", "mysql.000001"), nil, 0o600)
 	checker = &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          relayDir,
 		currentUUID:       "xxx.000001",
 		latestRelayLogDir: subDir,
@@ -512,7 +512,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	// binlog dir switched, but last file smaller
 	err = os.WriteFile(relayPaths[1], nil, 0o600)
 	checker = &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          relayDir,
 		currentUUID:       "xxx.000001",
 		latestRelayLogDir: subDir,
@@ -531,7 +531,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	// binlog dir switched, but last file bigger
 	err = os.WriteFile(relayPaths[1], data, 0o600)
 	checker = &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          relayDir,
 		currentUUID:       "xxx.000001",
 		latestRelayLogDir: subDir,
@@ -550,7 +550,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	// binlog dir switched, but last file not changed
 	err = os.WriteFile(relayPaths[1], nil, 0o600)
 	checker = &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          relayDir,
 		currentUUID:       "xxx.000001",
 		latestRelayLogDir: subDir,
@@ -572,7 +572,7 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 	newCtx, cancel = context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	checker = &relayLogFileChecker{
-		n:                 en,
+		notifier:          en,
 		relayDir:          relayDir,
 		currentUUID:       "xxx.000002",
 		latestRelayLogDir: subDir,

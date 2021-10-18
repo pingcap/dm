@@ -378,7 +378,7 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	// meet `err EOF` error (when parsing binlog event) ignored
 	ctx2, cancel2 := context.WithTimeout(context.Background(), parseFileTimeout)
 	defer cancel2()
-	r.en = newDummyEventNotifier(1)
+	r.notifier = newDummyEventNotifier(1)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, replaceWithHeartbeat, err = r.parseFile(
 		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast, false)
 	c.Assert(err, IsNil)
