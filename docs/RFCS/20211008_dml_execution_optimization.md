@@ -15,7 +15,7 @@ Some users' write logic is: one INSERT statement followed by multiple UPDATE sta
 
 ```
 # Assuming that UPDATE statement does not update the primary key. If no primary key, choose a UNIQUE NOT NULL Key.
-# If UPDATE statement update the primary key, split it into one DELETE and one INSERT statement.
+# If UPDATE statement update the primary key or unique key, split it into one DELETE and one INSERT statement.
 # We list two successive DMLs of one row and the result that can be compacted. X means this situation will not happen.
 INSERT + INSERT => X
 INSERT + UPDATE => INSERT
