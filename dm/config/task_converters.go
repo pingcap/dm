@@ -337,11 +337,8 @@ func SubTaskConfigsToTaskConfig(stCfgs ...*SubTaskConfig) *TaskConfig {
 		loadName, loadIdx = getGenerateName(stCfg.LoaderConfig, loadIdx, "load", loadMap)
 		loaderCfg := stCfg.LoaderConfig
 		dirSuffix := "." + c.Name
-		if strings.HasSuffix(loaderCfg.Dir, dirSuffix) {
-			// if ends with the task name, we remove to get user input dir.
-			loaderCfg.Dir = strings.TrimSuffix(loaderCfg.Dir, dirSuffix)
-			println("iinininini", loaderCfg.Dir)
-		}
+		// if ends with the task name, we remove to get user input dir.
+		loaderCfg.Dir = strings.TrimSuffix(loaderCfg.Dir, dirSuffix)
 		c.Loaders[loadName] = &loaderCfg
 
 		syncName, syncIdx = getGenerateName(stCfg.SyncerConfig, syncIdx, "sync", syncMap)
@@ -410,10 +407,8 @@ func SubTaskConfigsToOpenAPITask(subTaskConfigMap map[string]map[string]SubTaskC
 		taskSourceConfig.SourceConf = sourceConfList
 
 		dirSuffix := "." + oneSubtaskConfig.Name
-		if strings.HasSuffix(oneSubtaskConfig.LoaderConfig.Dir, dirSuffix) {
-			// if ends with the task name, we remove to get user input dir.
-			oneSubtaskConfig.LoaderConfig.Dir = strings.TrimSuffix(oneSubtaskConfig.LoaderConfig.Dir, dirSuffix)
-		}
+		// if ends with the task name, we remove to get user input dir.
+		oneSubtaskConfig.LoaderConfig.Dir = strings.TrimSuffix(oneSubtaskConfig.LoaderConfig.Dir, dirSuffix)
 		taskSourceConfig.FullMigrateConf = &openapi.TaskFullMigrateConf{
 			DataDir:       &oneSubtaskConfig.LoaderConfig.Dir,
 			ExportThreads: &oneSubtaskConfig.MydumperConfig.Threads,
