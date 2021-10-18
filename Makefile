@@ -40,16 +40,6 @@ ARCH      := "$(shell uname -s)"
 LINUX     := "Linux"
 MAC       := "Darwin"
 
-ifeq ($(ARCH), $(LINUX))
-	LDFLAGS += -X "github.com/pingcap/dm/dm/worker.SampleConfigFile=$(shell cat dm/worker/dm-worker.toml | base64 -w 0)"
-	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64 -w 0)"
-	LDFLAGS += -X "github.com/pingcap/dm/dm/config.SampleConfigFile=$(shell cat dm/master/source.yaml | base64 -w 0)"
-else
-	LDFLAGS += -X "github.com/pingcap/dm/dm/worker.SampleConfigFile=$(shell cat dm/worker/dm-worker.toml | base64)"
-	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64)"
-	LDFLAGS += -X "github.com/pingcap/dm/dm/config.SampleConfigFile=$(shell cat dm/master/source.yaml | base64)"
-endif
-
 .PHONY: build tools_setup test unit_test dm_integration_test_build integration_test \
 	coverage check dm-worker dm-master chaos-case dmctl debug-tools
 
