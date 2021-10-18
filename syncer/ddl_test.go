@@ -108,7 +108,7 @@ func (s *testDDLSuite) TestCommentQuote(c *C) {
 		originSQL:    sql,
 		p:            parser.New(),
 	}
-	stmt, err := parseDDLSQL(qec)
+	stmt, err := parseOneStmt(qec)
 	c.Assert(err, IsNil)
 
 	qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
@@ -242,7 +242,7 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 			needRouteDDLs: make([]string, 0),
 			p:             parser.New(),
 		}
-		stmt, err := parseDDLSQL(qec)
+		stmt, err := parseOneStmt(qec)
 		c.Assert(err, IsNil)
 
 		qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
@@ -267,7 +267,7 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 	}
 }
 
-func (s *testDDLSuite) TestParseDDLSQL(c *C) {
+func (s *testDDLSuite) TestparseOneStmt(c *C) {
 	cases := []struct {
 		sql      string
 		isDDL    bool
@@ -339,7 +339,7 @@ func (s *testDDLSuite) TestParseDDLSQL(c *C) {
 			hasError: true,
 		},
 	}
-	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestParseDDLSQL")))
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestparseOneStmt")))
 	qec := &queryEventContext{
 		eventContext: &eventContext{
 			tctx: tctx,
@@ -349,7 +349,7 @@ func (s *testDDLSuite) TestParseDDLSQL(c *C) {
 
 	for _, cs := range cases {
 		qec.originSQL = cs.sql
-		stmt, err := parseDDLSQL(qec)
+		stmt, err := parseOneStmt(qec)
 		if cs.hasError {
 			c.Assert(err, NotNil)
 		} else {
@@ -390,7 +390,7 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 			ddlSchema:     "test",
 			p:             parser,
 		}
-		stmt, err := parseDDLSQL(qec)
+		stmt, err := parseOneStmt(qec)
 		c.Assert(err, IsNil)
 
 		qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
@@ -472,7 +472,7 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 			p:             p,
 		}
 		qec.originSQL = ca.sql
-		stmt, err := parseDDLSQL(qec)
+		stmt, err := parseOneStmt(qec)
 		c.Assert(err, IsNil)
 		_, ok := stmt.(ast.DDLNode)
 		c.Assert(ok, IsTrue)

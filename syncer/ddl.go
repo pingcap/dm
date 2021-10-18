@@ -29,7 +29,7 @@ import (
 	"github.com/pingcap/dm/syncer/metrics"
 )
 
-func parseDDLSQL(qec *queryEventContext) (stmt ast.StmtNode, err error) {
+func parseOneStmt(qec *queryEventContext) (stmt ast.StmtNode, err error) {
 	// We use Parse not ParseOneStmt here, because sometimes we got a commented out ddl which can't be parsed
 	// by ParseOneStmt(it's a limitation of tidb parser.)
 	qec.tctx.L().Info("parse ddl", zap.String("event", "query"), zap.Stringer("query event context", qec))

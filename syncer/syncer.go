@@ -2361,7 +2361,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		log.L().Warn("found error when get sql_mode from binlog status_vars", zap.Error(err))
 	}
 
-	stmt, err := parseDDLSQL(qec)
+	stmt, err := parseOneStmt(qec)
 	if err != nil {
 		// return error if parse fail and filter fail
 		needSkip, err2 := s.skipSQLByPattern(qec.originSQL)

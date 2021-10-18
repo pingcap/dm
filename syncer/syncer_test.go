@@ -231,386 +231,388 @@ func (s *testSyncerSuite) mockGetServerUnixTS(mock sqlmock.Sqlmock) {
 	mock.ExpectQuery("SELECT UNIX_TIMESTAMP()").WillReturnRows(rows)
 }
 
-// func (s *testSyncerSuite) TestSelectDB(c *C) {
-// 	s.cfg.BAList = &filter.Rules{
-// 		DoDBs: []string{"~^b.*", "s1", "stest"},
-// 	}
+/*
+func (s *testSyncerSuite) TestSelectDB(c *C) {
+	s.cfg.BAList = &filter.Rules{
+		DoDBs: []string{"~^b.*", "s1", "stest"},
+	}
 
-// 	schemas := [][]byte{[]byte("s1"), []byte("s2"), []byte("btest"), []byte("b1"), []byte("stest"), []byte("st")}
-// 	skips := []bool{false, true, false, false, false, true}
-// 	type Case struct {
-// 		schema []byte
-// 		query  []byte
-// 		skip   bool
-// 	}
-// 	cases := make([]Case, 0, 2*len(schemas))
-// 	for i, schema := range schemas {
-// 		cases = append(cases, Case{
-// 			schema: schema,
-// 			query:  append([]byte("create database "), schema...),
-// 			skip:   skips[i],
-// 		})
-// 		cases = append(cases, Case{
-// 			schema: schema,
-// 			query:  append([]byte("drop database "), schema...),
-// 			skip:   skips[i],
-// 		})
-// 	}
+	schemas := [][]byte{[]byte("s1"), []byte("s2"), []byte("btest"), []byte("b1"), []byte("stest"), []byte("st")}
+	skips := []bool{false, true, false, false, false, true}
+	type Case struct {
+		schema []byte
+		query  []byte
+		skip   bool
+	}
+	cases := make([]Case, 0, 2*len(schemas))
+	for i, schema := range schemas {
+		cases = append(cases, Case{
+			schema: schema,
+			query:  append([]byte("create database "), schema...),
+			skip:   skips[i],
+		})
+		cases = append(cases, Case{
+			schema: schema,
+			query:  append([]byte("drop database "), schema...),
+			skip:   skips[i],
+		})
+	}
 
-// 	p := parser.New()
-// 	var err error
-// 	syncer := NewSyncer(s.cfg, nil)
-// 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
-// 	c.Assert(err, IsNil)
-// 	err = syncer.genRouter()
-// 	c.Assert(err, IsNil)
+	p := parser.New()
+	var err error
+	syncer := NewSyncer(s.cfg, nil)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
+	c.Assert(err, IsNil)
+	err = syncer.genRouter()
+	c.Assert(err, IsNil)
 
-// 	header := &replication.EventHeader{
-// 		Timestamp: uint32(time.Now().Unix()),
-// 		ServerID:  101,
-// 		Flags:     0x01,
-// 	}
+	header := &replication.EventHeader{
+		Timestamp: uint32(time.Now().Unix()),
+		ServerID:  101,
+		Flags:     0x01,
+	}
 
-// 	for _, cs := range cases {
-// 		e, err := event.GenQueryEvent(header, 123, 0, 0, 0, nil, cs.schema, cs.query)
-// 		c.Assert(err, IsNil)
-// 		c.Assert(e, NotNil)
-// 		ev, ok := e.Event.(*replication.QueryEvent)
-// 		c.Assert(ok, IsTrue)
+	for _, cs := range cases {
+		e, err := event.GenQueryEvent(header, 123, 0, 0, 0, nil, cs.schema, cs.query)
+		c.Assert(err, IsNil)
+		c.Assert(e, NotNil)
+		ev, ok := e.Event.(*replication.QueryEvent)
+		c.Assert(ok, IsTrue)
 
-// 		query := string(ev.Query)
-// 		stmt, err := p.ParseOneStmt(query, "", "")
-// 		c.Assert(err, IsNil)
+		query := string(ev.Query)
+		stmt, err := p.ParseOneStmt(query, "", "")
+		c.Assert(err, IsNil)
 
-// 		tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
-// 		c.Assert(err, IsNil)
+		tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
+		c.Assert(err, IsNil)
 
-// 		needSkip, err := syncer.skipQueryEvent(tables, stmt, query)
-// 		c.Assert(err, IsNil)
-// 		c.Assert(needSkip, Equals, cs.skip)
-// 	}
-// }
+		needSkip, err := syncer.skipQueryEvent(tables, stmt, query)
+		c.Assert(err, IsNil)
+		c.Assert(needSkip, Equals, cs.skip)
+	}
+}
 
-// func (s *testSyncerSuite) TestSelectTable(c *C) {
-// 	s.cfg.BAList = &filter.Rules{
-// 		DoDBs: []string{"t2", "stest", "~^ptest*"},
-// 		DoTables: []*filter.Table{
-// 			{Schema: "stest", Name: "log"},
-// 			{Schema: "stest", Name: "~^t.*"},
-// 			{Schema: "~^ptest*", Name: "~^t.*"},
-// 		},
-// 	}
-// 	s.resetEventsGenerator(c)
-// 	events := mockBinlogEvents{
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"s1", "create table s1.log(id int)"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"s1"}},
+func (s *testSyncerSuite) TestSelectTable(c *C) {
+	s.cfg.BAList = &filter.Rules{
+		DoDBs: []string{"t2", "stest", "~^ptest*"},
+		DoTables: []*filter.Table{
+			{Schema: "stest", Name: "log"},
+			{Schema: "stest", Name: "~^t.*"},
+			{Schema: "~^ptest*", Name: "~^t.*"},
+		},
+	}
+	s.resetEventsGenerator(c)
+	events := mockBinlogEvents{
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"s1", "create table s1.log(id int)"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"s1"}},
 
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"mysql", "create table mysql.test(id int)"}},
-// 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"mysql", "test"}},
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log(id int)"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.t(id int)"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log2(id int)"}},
-// 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "stest", "t", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
-// 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest", "log", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
-// 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(10), "stest", "log2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
-// 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log"}},
-// 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "t"}},
-// 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log2"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"stest"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"mysql", "create table mysql.test(id int)"}},
+		mockBinlogEvent{typ: TableDrop, args: []interface{}{"mysql", "test"}},
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log(id int)"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.t(id int)"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log2(id int)"}},
+		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "stest", "t", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
+		mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest", "log", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
+		mockBinlogEvent{typ: Write, args: []interface{}{uint64(10), "stest", "log2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
+		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log"}},
+		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "t"}},
+		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log2"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"stest"}},
 
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"t2"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log(id int)"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log1(id int)"}},
-// 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"t2", "log"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"t2"}},
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"t2"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log(id int)"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log1(id int)"}},
+		mockBinlogEvent{typ: TableDrop, args: []interface{}{"t2", "log"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"t2"}},
 
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"ptest1"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"ptest1", "create table ptest1.t1(id int)"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"ptest1"}},
-// 	}
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"ptest1"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"ptest1", "create table ptest1.t1(id int)"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"ptest1"}},
+	}
 
-// 	allEvents := s.generateEvents(events, c)
+	allEvents := s.generateEvents(events, c)
 
-// 	res := [][]bool{
-// 		{true},
-// 		{true},
-// 		{true},
+	res := [][]bool{
+		{true},
+		{true},
+		{true},
 
-// 		{true},
-// 		{true},
-// 		{false},
-// 		{false},
-// 		{false},
-// 		{true},
-// 		{false},
-// 		{false},
-// 		{true},
-// 		{false},
-// 		{false},
-// 		{true},
-// 		{false},
+		{true},
+		{true},
+		{false},
+		{false},
+		{false},
+		{true},
+		{false},
+		{false},
+		{true},
+		{false},
+		{false},
+		{true},
+		{false},
 
-// 		{false},
-// 		{true},
-// 		{true},
-// 		{true},
-// 		{false},
+		{false},
+		{true},
+		{true},
+		{true},
+		{false},
 
-// 		{false},
-// 		{false},
-// 		{false},
-// 	}
+		{false},
+		{false},
+		{false},
+	}
 
-// 	p := parser.New()
-// 	var err error
-// 	syncer := NewSyncer(s.cfg, nil)
-// 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
-// 	c.Assert(err, IsNil)
-// 	c.Assert(syncer.genRouter(), IsNil)
+	p := parser.New()
+	var err error
+	syncer := NewSyncer(s.cfg, nil)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
+	c.Assert(err, IsNil)
+	c.Assert(syncer.genRouter(), IsNil)
 
-// 	checkEventWithTableResult(c, syncer, allEvents, p, res)
-// }
+	checkEventWithTableResult(c, syncer, allEvents, p, res)
+}
 
-// func (s *testSyncerSuite) TestIgnoreDB(c *C) {
-// 	s.cfg.BAList = &filter.Rules{
-// 		IgnoreDBs: []string{"~^b.*", "s1", "stest"},
-// 	}
+func (s *testSyncerSuite) TestIgnoreDB(c *C) {
+	s.cfg.BAList = &filter.Rules{
+		IgnoreDBs: []string{"~^b.*", "s1", "stest"},
+	}
 
-// 	s.resetEventsGenerator(c)
-// 	events := mockBinlogEvents{
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"s1"}},
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"s2"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"s2"}},
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"btest"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"btest"}},
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"b1"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"b1"}},
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"stest"}},
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"st"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"st"}},
-// 	}
+	s.resetEventsGenerator(c)
+	events := mockBinlogEvents{
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"s1"}},
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"s2"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"s2"}},
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"btest"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"btest"}},
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"b1"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"b1"}},
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"stest"}},
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"st"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"st"}},
+	}
 
-// 	allEvents := s.generateEvents(events, c)
+	allEvents := s.generateEvents(events, c)
 
-// 	res := []bool{true, true, false, false, true, true, true, true, true, true, false, false}
+	res := []bool{true, true, false, false, true, true, true, true, true, true, false, false}
 
-// 	p := parser.New()
-// 	var err error
-// 	syncer := NewSyncer(s.cfg, nil)
-// 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
-// 	c.Assert(err, IsNil)
-// 	c.Assert(syncer.genRouter(), IsNil)
-// 	i := 0
-// 	for _, e := range allEvents {
-// 		ev, ok := e.Event.(*replication.QueryEvent)
-// 		if !ok {
-// 			continue
-// 		}
-// 		sql := string(ev.Query)
-// 		stmt, err := p.ParseOneStmt(sql, "", "")
-// 		c.Assert(err, IsNil)
+	p := parser.New()
+	var err error
+	syncer := NewSyncer(s.cfg, nil)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
+	c.Assert(err, IsNil)
+	c.Assert(syncer.genRouter(), IsNil)
+	i := 0
+	for _, e := range allEvents {
+		ev, ok := e.Event.(*replication.QueryEvent)
+		if !ok {
+			continue
+		}
+		sql := string(ev.Query)
+		stmt, err := p.ParseOneStmt(sql, "", "")
+		c.Assert(err, IsNil)
 
-// 		tables, err := parserpkg.FetchDDLTables(sql, stmt, syncer.SourceTableNamesFlavor)
-// 		c.Assert(err, IsNil)
-// 		needSkip, err := syncer.skipQueryEvent(tables, stmt, sql)
-// 		c.Assert(err, IsNil)
-// 		c.Assert(needSkip, Equals, res[i])
-// 		i++
-// 	}
-// }
+		tables, err := parserpkg.FetchDDLTables(sql, stmt, syncer.SourceTableNamesFlavor)
+		c.Assert(err, IsNil)
+		needSkip, err := syncer.skipQueryEvent(tables, stmt, sql)
+		c.Assert(err, IsNil)
+		c.Assert(needSkip, Equals, res[i])
+		i++
+	}
+}
 
-// func (s *testSyncerSuite) TestIgnoreTable(c *C) {
-// 	s.cfg.BAList = &filter.Rules{
-// 		IgnoreDBs: []string{"t2"},
-// 		IgnoreTables: []*filter.Table{
-// 			{Schema: "stest", Name: "log"},
-// 			{Schema: "stest", Name: "~^t.*"},
-// 		},
-// 	}
+func (s *testSyncerSuite) TestIgnoreTable(c *C) {
+	s.cfg.BAList = &filter.Rules{
+		IgnoreDBs: []string{"t2"},
+		IgnoreTables: []*filter.Table{
+			{Schema: "stest", Name: "log"},
+			{Schema: "stest", Name: "~^t.*"},
+		},
+	}
 
-// 	s.resetEventsGenerator(c)
-// 	events := mockBinlogEvents{
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"s1", "create table s1.log(id int)"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"s1"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"mysql", "create table mysql.test(id int)"}},
-// 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"mysql", "test"}},
+	s.resetEventsGenerator(c)
+	events := mockBinlogEvents{
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"s1", "create table s1.log(id int)"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"s1"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"mysql", "create table mysql.test(id int)"}},
+		mockBinlogEvent{typ: TableDrop, args: []interface{}{"mysql", "test"}},
 
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log(id int)"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.t(id int)"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log2(id int)"}},
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log(id int)"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.t(id int)"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log2(id int)"}},
 
-// 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "stest", "t", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
-// 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest", "log", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
-// 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(10), "stest", "log2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
-// 		// TODO event generator support generate an event with multiple tables DDL
-// 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log"}},
-// 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "t"}},
-// 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log2"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"stest"}},
+		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "stest", "t", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
+		mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest", "log", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
+		mockBinlogEvent{typ: Write, args: []interface{}{uint64(10), "stest", "log2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}},
+		// TODO event generator support generate an event with multiple tables DDL
+		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log"}},
+		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "t"}},
+		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log2"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"stest"}},
 
-// 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"t2"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log(id int)"}},
-// 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log1(id int)"}},
-// 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"t2", "log"}},
-// 		mockBinlogEvent{typ: DBDrop, args: []interface{}{"t2"}},
-// 	}
-// 	allEvents := s.generateEvents(events, c)
+		mockBinlogEvent{typ: DBCreate, args: []interface{}{"t2"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log(id int)"}},
+		mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log1(id int)"}},
+		mockBinlogEvent{typ: TableDrop, args: []interface{}{"t2", "log"}},
+		mockBinlogEvent{typ: DBDrop, args: []interface{}{"t2"}},
+	}
+	allEvents := s.generateEvents(events, c)
 
-// 	res := [][]bool{
-// 		{false},
-// 		{false},
-// 		{false},
-// 		{true},
-// 		{true},
+	res := [][]bool{
+		{false},
+		{false},
+		{false},
+		{true},
+		{true},
 
-// 		{false},
-// 		{true},
-// 		{true},
-// 		{false},
+		{false},
+		{true},
+		{true},
+		{false},
 
-// 		{true},
-// 		{true},
-// 		{false},
+		{true},
+		{true},
+		{false},
 
-// 		{true},
-// 		{true},
-// 		{false},
-// 		{false},
+		{true},
+		{true},
+		{false},
+		{false},
 
-// 		{true},
-// 		{true},
-// 		{true},
-// 		{true},
-// 		{true},
-// 	}
+		{true},
+		{true},
+		{true},
+		{true},
+		{true},
+	}
 
-// 	p := parser.New()
-// 	var err error
-// 	syncer := NewSyncer(s.cfg, nil)
-// 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
-// 	c.Assert(err, IsNil)
-// 	c.Assert(syncer.genRouter(), IsNil)
+	p := parser.New()
+	var err error
+	syncer := NewSyncer(s.cfg, nil)
+	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
+	c.Assert(err, IsNil)
+	c.Assert(syncer.genRouter(), IsNil)
 
-// 	checkEventWithTableResult(c, syncer, allEvents, p, res)
-// }
+	checkEventWithTableResult(c, syncer, allEvents, p, res)
+}
 
-// func (s *testSyncerSuite) TestSkipDML(c *C) {
-// 	s.cfg.FilterRules = []*bf.BinlogEventRule{
-// 		{
-// 			SchemaPattern: "*",
-// 			TablePattern:  "",
-// 			Events:        []bf.EventType{bf.UpdateEvent},
-// 			Action:        bf.Ignore,
-// 		}, {
-// 			SchemaPattern: "foo",
-// 			TablePattern:  "",
-// 			Events:        []bf.EventType{bf.DeleteEvent},
-// 			Action:        bf.Ignore,
-// 		}, {
-// 			SchemaPattern: "foo1",
-// 			TablePattern:  "bar1",
-// 			Events:        []bf.EventType{bf.DeleteEvent},
-// 			Action:        bf.Ignore,
-// 		}, {
-// 			SchemaPattern: "foo1",
-// 			TablePattern:  "bar2",
-// 			Events:        []bf.EventType{bf.EventType(strings.ToUpper(string(bf.DeleteEvent)))},
-// 			Action:        bf.Ignore,
-// 		},
-// 	}
-// 	s.cfg.BAList = nil
+func (s *testSyncerSuite) TestSkipDML(c *C) {
+	s.cfg.FilterRules = []*bf.BinlogEventRule{
+		{
+			SchemaPattern: "*",
+			TablePattern:  "",
+			Events:        []bf.EventType{bf.UpdateEvent},
+			Action:        bf.Ignore,
+		}, {
+			SchemaPattern: "foo",
+			TablePattern:  "",
+			Events:        []bf.EventType{bf.DeleteEvent},
+			Action:        bf.Ignore,
+		}, {
+			SchemaPattern: "foo1",
+			TablePattern:  "bar1",
+			Events:        []bf.EventType{bf.DeleteEvent},
+			Action:        bf.Ignore,
+		}, {
+			SchemaPattern: "foo1",
+			TablePattern:  "bar2",
+			Events:        []bf.EventType{bf.EventType(strings.ToUpper(string(bf.DeleteEvent)))},
+			Action:        bf.Ignore,
+		},
+	}
+	s.cfg.BAList = nil
 
-// 	s.resetEventsGenerator(c)
+	s.resetEventsGenerator(c)
 
-// 	type SQLChecker struct {
-// 		events   []*replication.BinlogEvent
-// 		isDML    bool
-// 		expected bool
-// 	}
+	type SQLChecker struct {
+		events   []*replication.BinlogEvent
+		isDML    bool
+		expected bool
+	}
 
-// 	sqls := make([]SQLChecker, 0, 16)
+	sqls := make([]SQLChecker, 0, 16)
 
-// 	evs := s.generateEvents([]mockBinlogEvent{{DBCreate, []interface{}{"foo"}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
+	evs := s.generateEvents([]mockBinlogEvent{{DBCreate, []interface{}{"foo"}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo", "create table foo.bar(id int)"}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
+	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo", "create table foo.bar(id int)"}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: false})
+	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: false})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
+	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
+	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{DBDrop, []interface{}{"foo1"}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
+	evs = s.generateEvents([]mockBinlogEvent{{DBDrop, []interface{}{"foo1"}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{DBCreate, []interface{}{"foo1"}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
+	evs = s.generateEvents([]mockBinlogEvent{{DBCreate, []interface{}{"foo1"}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo1", "create table foo1.bar1(id int)"}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
+	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo1", "create table foo1.bar1(id int)"}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: false})
+	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: false})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
+	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
+	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo1", "create table foo1.bar2(id int)"}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
+	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo1", "create table foo1.bar2(id int)"}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, expected: false})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: false})
+	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: false})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
+	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
-// 	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
-// 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
+	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, expected: true})
 
-// 	p := parser.New()
-// 	var err error
+	p := parser.New()
+	var err error
 
-// 	syncer := NewSyncer(s.cfg, nil)
-// 	c.Assert(syncer.genRouter(), IsNil)
+	syncer := NewSyncer(s.cfg, nil)
+	c.Assert(syncer.genRouter(), IsNil)
 
-// 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, s.cfg.FilterRules)
-// 	c.Assert(err, IsNil)
+	syncer.binlogFilter, err = bf.NewBinlogEvent(false, s.cfg.FilterRules)
+	c.Assert(err, IsNil)
 
-// 	for _, sql := range sqls {
-// 		events := sql.events
-// 		for _, e := range events {
-// 			switch ev := e.Event.(type) {
-// 			case *replication.QueryEvent:
-// 				_, err = p.ParseOneStmt(string(ev.Query), "", "")
-// 				c.Assert(err, IsNil)
-// 			case *replication.RowsEvent:
-// 				table := &filter.Table{
-// 					Schema: string(ev.Table.Schema),
-// 					Name:   string(ev.Table.Table),
-// 				}
-// 				needSkip, err := syncer.skipRowsEvent(table, e.Header.EventType)
-// 				c.Assert(err, IsNil)
-// 				c.Assert(needSkip, Equals, sql.expected)
-// 			default:
-// 				continue
-// 			}
-// 		}
-// 	}
-// }
+	for _, sql := range sqls {
+		events := sql.events
+		for _, e := range events {
+			switch ev := e.Event.(type) {
+			case *replication.QueryEvent:
+				_, err = p.ParseOneStmt(string(ev.Query), "", "")
+				c.Assert(err, IsNil)
+			case *replication.RowsEvent:
+				table := &filter.Table{
+					Schema: string(ev.Table.Schema),
+					Name:   string(ev.Table.Table),
+				}
+				needSkip, err := syncer.skipRowsEvent(table, e.Header.EventType)
+				c.Assert(err, IsNil)
+				c.Assert(needSkip, Equals, sql.expected)
+			default:
+				continue
+			}
+		}
+	}
+}
+*/
 
 func (s *testSyncerSuite) TestColumnMapping(c *C) {
 	rules := []*cm.Rule{
@@ -1355,7 +1357,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 // 				ddlSchema:    string(ev.Schema),
 // 				p:            p,
 // 			}
-// 			stmt, err := parseDDLSQL(qec)
+// 			stmt, err := parseOneStmt(qec)
 // 			c.Assert(err, IsNil)
 
 // 			if _, ok := stmt.(ast.DDLNode); !ok {
