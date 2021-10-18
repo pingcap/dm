@@ -389,8 +389,7 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
 				TotalEvents:         syncerS.TotalEvents,
 				TotalTps:            syncerS.TotalTps,
 			}
-			unResolvedGroups := syncerS.GetUnresolvedGroups()
-			if len(unResolvedGroups) > 0 {
+			if unResolvedGroups := syncerS.GetUnresolvedGroups(); len(unResolvedGroups) > 0 {
 				openapiSubTaskStatus.SyncStatus.UnresolvedGroups = make([]openapi.ShardingGroup, len(unResolvedGroups))
 				for i, unResolvedGroup := range unResolvedGroups {
 					openapiSubTaskStatus.SyncStatus.UnresolvedGroups[i] = openapi.ShardingGroup{
