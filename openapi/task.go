@@ -30,25 +30,3 @@ func (t *Task) Adjust() error {
 	}
 	return nil
 }
-
-// StrToTaskMode converts input string to TaskMode.
-func StrToTaskMode(s string) TaskTaskMode {
-	switch s {
-	case string(TaskTaskModeAll):
-		return TaskTaskModeAll
-	case string(TaskTaskModeFull):
-		return TaskTaskModeFull
-	default:
-		return TaskTaskModeIncremental
-	}
-}
-
-// StrTaskShardMode converts input string to TaskShardMode.
-func StrTaskShardMode(s string) TaskShardMode {
-	switch s {
-	case string(TaskShardModeOptimistic):
-		return TaskShardModeOptimistic
-	default:
-		return TaskShardModePessimistic
-	}
-}

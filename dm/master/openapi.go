@@ -338,7 +338,6 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
 	}
 	// 2. get status from workers
 	workerRespList := s.getStatusFromWorkers(ctx.Request().Context(), sourceList, taskName, true)
-	s.fillUnsyncedStatus(workerRespList)
 	subTaskStatusList := make([]openapi.SubTaskStatus, len(workerRespList))
 	for i, workerStatus := range workerRespList {
 		if workerStatus == nil || workerStatus.SourceStatus == nil {
@@ -366,8 +365,7 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
 			UnresolvedDdlLockId: &subTaskStatus.UnresolvedDDLLockID,
 		}
 		// add load status
-		loadS := subTaskStatus.GetLoad()
-		if subTaskStatus.Unit == pb.UnitType_Load && loadS != nil {
+		if loadS := subTaskStatus.GetLoad(); loadS != nil {
 			openapiSubTaskStatus.LoadStatus = &openapi.LoadStatus{
 				FinishedBytes:  loadS.FinishedBytes,
 				MetaBinlog:     loadS.MetaBinlog,
