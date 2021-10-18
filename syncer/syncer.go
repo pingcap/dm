@@ -2303,7 +2303,7 @@ type queryEventContext struct {
 	originSQL string         // before split
 	// split multi-schema change DDL into multiple one schema change DDL due to TiDB's limitation
 	splitDDLs      []string // after split before online ddl
-	needRoutedDDLs []string // after onlineDDL apply if onlineDDL != nil and track, before route
+	needRouteDDLs  []string // after onlineDDL apply if onlineDDL != nil and track, before route
 	needHandleDDLs []string // after route
 
 	shardingDDLInfo *ddlInfo
@@ -2349,12 +2349,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	}
 
 	qec := &queryEventContext{
-		eventContext:   &ec,
-		ddlSchema:      string(ev.Schema),
-		originSQL:      utils.TrimCtrlChars(originSQL),
-		splitDDLs:      make([]string, 0),
-		needRoutedDDLs: make([]string, 0),
-		sourceTbls:     make(map[string]map[string]struct{}),
+		eventContext:  &ec,
+		ddlSchema:     string(ev.Schema),
+		originSQL:     utils.TrimCtrlChars(originSQL),
+		splitDDLs:     make([]string, 0),
+		needRouteDDLs: make([]string, 0),
+		sourceTbls:    make(map[string]map[string]struct{}),
 	}
 	qec.p, err = event.GetParserForStatusVars(ev.StatusVars)
 	if err != nil {
@@ -2363,10 +2363,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 	stmt, err := parseDDLSQL(qec)
 	if err != nil {
-		ec.tctx.L().Error("fail to parse statement",
-			zap.String("event", "query"),
-			zap.Stringer("query event context", qec),
-			log.ShortError(err))
 		// return error if parse fail and filter fail
 		needSkip, err2 := s.skipSQLByPattern(qec.originSQL)
 		if err2 != nil {
@@ -2382,7 +2378,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 		return s.recordSkipSQLsLocation(&ec)
 	}
 
-	// QA: Could DMLNode come here?
 	if node, ok := stmt.(ast.DMLNode); ok {
 		// if DML can be ignored, we do not report an error
 		table, err2 := getTableByDML(node)
@@ -2423,11 +2418,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	qec.tctx.L().Info("ready to split ddl", zap.String("event", "query"), zap.Stringer("queryEventContext", qec))
 	*qec.lastLocation = *qec.currentLocation // update lastLocation, because we have checked `isDDL`
 
+	// TiDB can't handle multi schema change DDL, so we split it here.
 	qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 	if err != nil {
 		return err
 	}
-	// TiDB can't handle multi schema change DDL, so we split it here.
 	// for DDL, we don't apply operator until we try to execute it. so can handle sharding cases
 	// We use default parser because inside function where need parser, sqls are came from parserpkg.SplitDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 	// TODO: save stmt, tableName to avoid parse the sql to get them again
@@ -2438,9 +2433,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			qec.tctx.L().Error("fail to split statement", zap.String("event", "query"), zap.Stringer("queryEventContext", qec), log.ShortError(err2))
 			return err2
 		}
-		qec.needRoutedDDLs = append(qec.needRoutedDDLs, sqls...)
+		qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
 	}
-	qec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.Strings("needRoutedDDLs", qec.needRoutedDDLs), zap.Stringer("queryEventContext", qec))
+	qec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.Strings("needRouteDDLs", qec.needRouteDDLs), zap.Stringer("queryEventContext", qec))
 
 	metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenQuery, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 
@@ -2457,11 +2452,11 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			* other rename: we don't allow user to execute more than one rename operation in one ddl event, then it would make no difference
 	*/
 
-	qec.needHandleDDLs = make([]string, 0, len(qec.needRoutedDDLs))
-	qec.trackInfos = make([]*ddlInfo, 0, len(qec.needRoutedDDLs))
+	qec.needHandleDDLs = make([]string, 0, len(qec.needRouteDDLs))
+	qec.trackInfos = make([]*ddlInfo, 0, len(qec.needRouteDDLs))
 
 	// handle one-schema change DDL
-	for _, sql := range qec.needRoutedDDLs {
+	for _, sql := range qec.needRouteDDLs {
 		if len(sql) == 0 {
 			continue
 		}

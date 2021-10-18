@@ -1366,16 +1366,16 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 // 			for _, sql := range qec.splitDDLs {
 // 				sqls, err := syncer.processOneDDL(qec, sql)
 // 				c.Assert(err, IsNil)
-// 				qec.needRoutedDDLs = append(qec.needRoutedDDLs, sqls...)
+// 				qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
 // 			}
-// 			if len(qec.needRoutedDDLs) == 0 {
+// 			if len(qec.needRouteDDLs) == 0 {
 // 				c.Assert(res[i], HasLen, 1)
 // 				c.Assert(res[i][0], Equals, true)
 // 				i++
 // 				continue
 // 			}
 
-// 			for j, sql := range qec.needRoutedDDLs {
+// 			for j, sql := range qec.needRouteDDLs {
 // 				stmt, err := p.ParseOneStmt(sql, "", "")
 // 				c.Assert(err, IsNil)
 

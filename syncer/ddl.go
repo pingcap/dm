@@ -32,11 +32,11 @@ import (
 func parseDDLSQL(qec *queryEventContext) (stmt ast.StmtNode, err error) {
 	// We use Parse not ParseOneStmt here, because sometimes we got a commented out ddl which can't be parsed
 	// by ParseOneStmt(it's a limitation of tidb parser.)
-	qec.tctx.L().Info("parse ddl", zap.String("statement", qec.originSQL))
+	qec.tctx.L().Info("parse ddl", zap.String("event", "query"), zap.Stringer("query event context", qec))
 	stmts, err := parserpkg.Parse(qec.p, qec.originSQL, "", "")
 	if err != nil {
 		// log error rather than fatal, so other defer can be executed
-		qec.tctx.L().Error("parse ddl", zap.String("sql", qec.originSQL))
+		qec.tctx.L().Error("parse ddl", zap.String("event", "query"), zap.Stringer("query event context", qec))
 		return nil, terror.ErrSyncerParseDDL.Delegate(err, qec.originSQL)
 	}
 	if len(stmts) == 0 {
