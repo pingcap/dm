@@ -18,8 +18,6 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
-
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 func (t *testForEtcd) TestOperationJSON(c *C) {
@@ -67,20 +65,22 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	// start the watcher with the same revision as the last PUT for the specified task and source.
 	wch := make(chan Operation, 10)
 	ech := make(chan error, 10)
+	done := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
-	go WatchOperationPut(ctx, etcdTestCli, task1, source1, rev2, wch, ech)
-	// wait response of WatchOperationPut, increase waiting time when resource shortage
-	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
-		return len(wch) != 0
-	})
-	cancel()
-	close(wch)
-	close(ech)
+	go func() {
+		WatchOperationPut(ctx, etcdTestCli, task1, source1, rev2, wch, ech)
+		close(wch)
+		close(ech)
+		close(done)
+	}()
 
 	// watch should only get op11.
-	c.Assert(len(wch), Equals, 1)
 	c.Assert(<-wch, DeepEquals, op11)
+	// sleep 100ms to check if there is unexpected operation.
+	time.Sleep(time.Millisecond * 100)
 	c.Assert(len(ech), Equals, 0)
+	cancel()
+	<-done
 
 	// put for another task.
 	rev3, succ, err := PutOperations(etcdTestCli, false, op21)
@@ -90,21 +90,24 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	// start the watch with an older revision for all tasks and sources.
 	wch = make(chan Operation, 10)
 	ech = make(chan error, 10)
+	done = make(chan struct{})
 	ctx, cancel = context.WithCancel(context.Background())
-	go WatchOperationPut(ctx, etcdTestCli, "", "", rev2, wch, ech)
-	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
-		return len(wch) != 0
-	})
-	cancel()
-	close(wch)
-	close(ech)
+	go func() {
+		WatchOperationPut(ctx, etcdTestCli, "", "", rev2, wch, ech)
+		close(wch)
+		close(ech)
+		close(done)
+	}()
 
 	// watch should get 3 operations.
-	c.Assert(len(wch), Equals, 3)
 	c.Assert(<-wch, DeepEquals, op11)
 	c.Assert(<-wch, DeepEquals, op12)
 	c.Assert(<-wch, DeepEquals, op21)
+	// sleep 100ms to check if there is unexpected operation.
+	time.Sleep(time.Millisecond * 100)
 	c.Assert(len(ech), Equals, 0)
+	cancel()
+	<-done
 
 	// get all operations.
 	opm, rev4, err := GetAllOperations(etcdTestCli)
@@ -134,22 +137,22 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	// start watch with an older revision for the deleted op11.
 	wch = make(chan Operation, 10)
 	ech = make(chan error, 10)
+	done = make(chan struct{})
 	ctx, cancel = context.WithCancel(context.Background())
-	go WatchOperationDelete(ctx, etcdTestCli, op11.Task, op11.Source, rev5, wch, ech)
-	utils.WaitSomething(10, 500*time.Millisecond, func() bool {
-		return len(wch) != 0
-	})
-	cancel()
-	close(wch)
-	close(ech)
+	go func() {
+		WatchOperationDelete(ctx, etcdTestCli, op11.Task, op11.Source, rev5, wch, ech)
+		close(wch)
+		close(ech)
+		close(done)
+	}()
 
 	// watch should got the previous deleted operation.
-	c.Assert(len(wch), Equals, 1)
-	c.Assert(len(ech), Equals, 0)
 	op11d := <-wch
 	c.Assert(op11d.IsDeleted, IsTrue)
 	op11d.IsDeleted = false // reset to false
 	c.Assert(op11d, DeepEquals, op11)
+	cancel()
+	<-done
 
 	// get again, op11 should be deleted.
 	opm, _, err = GetAllOperations(etcdTestCli)
