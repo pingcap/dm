@@ -19,7 +19,7 @@ Some users' write logic is: one INSERT statement followed by multiple UPDATE sta
 # We list two successive DMLs of one row and the result that can be compacted. X means this situation will not happen.
 INSERT + INSERT => X
 INSERT + UPDATE => INSERT
-INSERT + DELETE => NULL(DELETE)
+INSERT + DELETE => DELETE
 UPDATE + INSERT => X
 UPDATE + UPDATE => UPDATE
 UPDATE + DELETE => DELETE
