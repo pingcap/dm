@@ -459,7 +459,7 @@ func SubTaskConfigsToOpenAPITask(subTaskConfigMap map[string]map[string]SubTaskC
 		// set basic global config
 		task := openapi.Task{
 			Name:                      taskName,
-			TaskMode:                  openapi.StrToTaskMode(oneSubtaskConfig.Mode),
+			TaskMode:                  openapi.TaskTaskMode(oneSubtaskConfig.Mode),
 			EnhanceOnlineSchemaChange: oneSubtaskConfig.OnlineDDL,
 			MetaSchema:                &oneSubtaskConfig.MetaSchema,
 			OnDuplicate:               openapi.TaskOnDuplicateError,
@@ -472,7 +472,7 @@ func SubTaskConfigsToOpenAPITask(subTaskConfigMap map[string]map[string]SubTaskC
 			},
 		}
 		if oneSubtaskConfig.ShardMode != "" {
-			taskShardMode := openapi.StrTaskShardMode(oneSubtaskConfig.ShardMode)
+			taskShardMode := openapi.TaskShardMode(oneSubtaskConfig.ShardMode)
 			task.ShardMode = &taskShardMode
 		}
 		if len(filterMap) > 0 {

@@ -280,7 +280,7 @@ func testNoShardSubTaskConfigsToOpenAPITask(c *check.C) {
 	c.Assert(taskList, check.HasLen, 1)
 	newTask := taskList[0]
 
-	// full migrate data dir will auto add task name,we fix this field manually
+	// full migrate data dir will auto add task name, we fix this field manually
 	dataDir := fmt.Sprintf("%s.%s", *task.SourceConfig.FullMigrateConf.DataDir, task.Name)
 	task.SourceConfig.FullMigrateConf.DataDir = &dataDir
 	c.Assert(task, check.DeepEquals, newTask)
@@ -318,7 +318,7 @@ func testShardAndFilterSubTaskConfigsToOpenAPITask(c *check.C) {
 	taskList := SubTaskConfigsToOpenAPITask(subTaskConfigMap)
 	c.Assert(taskList, check.HasLen, 1)
 	newTask := taskList[0]
-	// full migrate data dir will auto add task name,we fix this field manually
+	// full migrate data dir will auto add task name, we fix this field manually
 	dataDir := fmt.Sprintf("%s.%s", *task.SourceConfig.FullMigrateConf.DataDir, task.Name)
 	task.SourceConfig.FullMigrateConf.DataDir = &dataDir
 
