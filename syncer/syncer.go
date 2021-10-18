@@ -223,12 +223,11 @@ type Syncer struct {
 	workerJobTSArray          []*atomic.Int64 // worker's sync job TS array, note that idx=0 is skip idx and idx=1 is ddl idx,sql worker job idx=(queue id + 2)
 	lastCheckpointFlushedTime time.Time
 
-	// relayNotifyCh with size = 1, we only need to be notified whether binlog file of relay changed, not how many times
-	relayNotifyCh chan interface{}
+	notifier streamer.EventNotifier
 }
 
 // NewSyncer creates a new Syncer.
-func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
+func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, notifier streamer.EventNotifier) *Syncer {
 	logger := log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"))
 	syncer := &Syncer{
 		pessimist: shardddl.NewPessimist(&logger, etcdClient, cfg.Name, cfg.SourceID),
@@ -267,7 +266,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.workerJobTSArray[i] = atomic.NewInt64(0)
 	}
 	syncer.lastCheckpointFlushedTime = time.Time{}
-	syncer.relayNotifyCh = make(chan interface{}, 1)
+	syncer.notifier = notifier
 	return syncer
 }
 
@@ -326,7 +325,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return terror.ErrSchemaTrackerInit.Delegate(err)
 	}
 
-	s.streamerController = NewStreamerController(s, s.syncCfg, s.cfg.EnableGTID, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
+	s.streamerController = NewStreamerController(s.notifier, s.syncCfg, s.cfg.EnableGTID, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
 
 	s.baList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BAList)
 	if err != nil {
@@ -3508,7 +3507,7 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 		return false, nil
 	}
 	// set enableGTID to false for new streamerController
-	streamerController := NewStreamerController(s, s.syncCfg, false, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
+	streamerController := NewStreamerController(s.notifier, s.syncCfg, false, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
 
 	endPos := binlog.AdjustPosition(location.Position)
 	startPos := mysql.Position{
@@ -3564,9 +3563,4 @@ func (s *Syncer) delLoadTask() error {
 	}
 	s.tctx.Logger.Info("delete load worker in etcd for all mode", zap.String("task", s.cfg.Name), zap.String("source", s.cfg.SourceID))
 	return nil
-}
-
-// Notified implements streamer.EventNotifier.
-func (s *Syncer) Notified() chan interface{} {
-	return s.relayNotifyCh
 }

@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/dm/pkg/streamer"
+
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/pingcap/failpoint"
 	"github.com/prometheus/client_golang/prometheus"
@@ -44,12 +46,22 @@ const (
 	waitRelayCatchupTimeout = 30 * time.Second
 )
 
+type relayNotifier struct {
+	// ch with size = 1, we only need to be notified whether binlog file of relay changed, not how many times
+	ch chan interface{}
+}
+
+// Notified implements streamer.EventNotifier.
+func (r relayNotifier) Notified() chan interface{} {
+	return r.ch
+}
+
 // createRealUnits is subtask units initializer
 // it can be used for testing.
 var createUnits = createRealUnits
 
 // createRealUnits creates process units base on task mode.
-func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, workerName string) []unit.Unit {
+func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, workerName string, notifier streamer.EventNotifier) []unit.Unit {
 	failpoint.Inject("mockCreateUnitsDumpOnly", func(_ failpoint.Value) {
 		log.L().Info("create mock worker units with dump unit only", zap.String("failpoint", "mockCreateUnitsDumpOnly"))
 		failpoint.Return([]unit.Unit{dumpling.NewDumpling(cfg)})
@@ -64,7 +76,7 @@ func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, wor
 		} else {
 			us = append(us, loader.NewLightning(cfg, etcdClient, workerName))
 		}
-		us = append(us, syncer.NewSyncer(cfg, etcdClient))
+		us = append(us, syncer.NewSyncer(cfg, etcdClient, notifier))
 	case config.ModeFull:
 		// NOTE: maybe need another checker in the future?
 		us = append(us, dumpling.NewDumpling(cfg))
@@ -74,7 +86,7 @@ func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, wor
 			us = append(us, loader.NewLightning(cfg, etcdClient, workerName))
 		}
 	case config.ModeIncrement:
-		us = append(us, syncer.NewSyncer(cfg, etcdClient))
+		us = append(us, syncer.NewSyncer(cfg, etcdClient, notifier))
 	default:
 		log.L().Error("unsupported task mode", zap.String("subtask", cfg.Name), zap.String("task mode", cfg.Mode))
 	}
@@ -100,7 +112,6 @@ type SubTask struct {
 	units    []unit.Unit // units do job one by one
 	currUnit unit.Unit
 	prevUnit unit.Unit
-	syncer   *syncer.Syncer
 	resultWg sync.WaitGroup
 
 	stage  pb.Stage          // stage of current sub task
@@ -109,6 +120,8 @@ type SubTask struct {
 	etcdClient *clientv3.Client
 
 	workerName string
+
+	notifier streamer.EventNotifier
 }
 
 // NewSubTask is subtask initializer
@@ -131,6 +144,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 		cancel:     cancel,
 		etcdClient: etcdClient,
 		workerName: workerName,
+		notifier:   &relayNotifier{ch: make(chan interface{}, 1)},
 	}
 	updateTaskMetric(st.cfg.Name, st.cfg.SourceID, st.stage, st.workerName)
 	return &st
@@ -138,7 +152,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 
 // initUnits initializes the sub task processing units.
 func (st *SubTask) initUnits() error {
-	st.units = createUnits(st.cfg, st.etcdClient, st.workerName)
+	st.units = createUnits(st.cfg, st.etcdClient, st.workerName, st.notifier)
 	if len(st.units) < 1 {
 		return terror.ErrWorkerNoAvailUnits.Generate(st.cfg.Name, st.cfg.Mode)
 	}
@@ -191,21 +205,9 @@ func (st *SubTask) initUnits() error {
 
 	needCloseUnits = st.units[:skipIdx]
 	st.units = st.units[skipIdx:]
-	st.postInitSyncer()
 
 	st.setCurrUnit(st.units[0])
 	return nil
-}
-
-func (st *SubTask) postInitSyncer() {
-	// TODO, right now initUnits create units first and then remove unnecessary units(before first non fresh unit)
-	// maybe can be refactored into check first, then create, so we don't need to loop all units to get syncer here
-	for _, u := range st.units {
-		if s, ok := u.(*syncer.Syncer); ok {
-			st.syncer = s
-			break
-		}
-	}
 }
 
 // Run runs the sub task.
@@ -739,11 +741,9 @@ func updateTaskMetric(task, sourceID string, stage pb.Stage, workerName string) 
 }
 
 func (st *SubTask) relayNotify() {
-	if st.syncer != nil {
-		// skip if there's pending notify
-		select {
-		case st.syncer.Notified() <- struct{}{}:
-		default:
-		}
+	// skip if there's pending notify
+	select {
+	case st.notifier.Notified() <- struct{}{}:
+	default:
 	}
 }

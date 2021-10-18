@@ -20,7 +20,7 @@ func (s *testSyncerSuite) TestIsConnectionRefusedError(c *C) {
 }
 
 func (s *testSyncerSuite) TestCanErrorRetry(c *C) {
-	controller := NewStreamerController(&Syncer{}, replication.BinlogSyncerConfig{}, true, nil,
+	controller := NewStreamerController(nil, replication.BinlogSyncerConfig{}, true, nil,
 		LocalBinlog, "", nil)
 
 	mockErr := errors.New("test")
@@ -37,7 +37,7 @@ func (s *testSyncerSuite) TestCanErrorRetry(c *C) {
 	}()
 
 	// test with remote binlog
-	controller = NewStreamerController(&Syncer{}, replication.BinlogSyncerConfig{}, true, nil,
+	controller = NewStreamerController(nil, replication.BinlogSyncerConfig{}, true, nil,
 		RemoteBinlog, "", nil)
 
 	c.Assert(controller.CanRetry(mockErr), IsTrue)
