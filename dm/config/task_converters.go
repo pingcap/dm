@@ -15,6 +15,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
@@ -334,7 +335,14 @@ func SubTaskConfigsToTaskConfig(stCfgs ...*SubTaskConfig) *TaskConfig {
 		c.Mydumpers[dumpName] = &stCfg.MydumperConfig
 
 		loadName, loadIdx = getGenerateName(stCfg.LoaderConfig, loadIdx, "load", loadMap)
-		c.Loaders[loadName] = &stCfg.LoaderConfig
+		loaderCfg := stCfg.LoaderConfig
+		dirSuffix := "." + c.Name
+		if strings.HasSuffix(loaderCfg.Dir, dirSuffix) {
+			// if ends with the task name, we remove to get user input dir.
+			loaderCfg.Dir = strings.TrimSuffix(loaderCfg.Dir, dirSuffix)
+			println("iinininini", loaderCfg.Dir)
+		}
+		c.Loaders[loadName] = &loaderCfg
 
 		syncName, syncIdx = getGenerateName(stCfg.SyncerConfig, syncIdx, "sync", syncMap)
 		c.Syncers[syncName] = &stCfg.SyncerConfig
@@ -400,6 +408,12 @@ func SubTaskConfigsToOpenAPITask(subTaskConfigMap map[string]map[string]SubTaskC
 			}
 		}
 		taskSourceConfig.SourceConf = sourceConfList
+
+		dirSuffix := "." + oneSubtaskConfig.Name
+		if strings.HasSuffix(oneSubtaskConfig.LoaderConfig.Dir, dirSuffix) {
+			// if ends with the task name, we remove to get user input dir.
+			oneSubtaskConfig.LoaderConfig.Dir = strings.TrimSuffix(oneSubtaskConfig.LoaderConfig.Dir, dirSuffix)
+		}
 		taskSourceConfig.FullMigrateConf = &openapi.TaskFullMigrateConf{
 			DataDir:       &oneSubtaskConfig.LoaderConfig.Dir,
 			ExportThreads: &oneSubtaskConfig.MydumperConfig.Threads,
