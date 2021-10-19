@@ -120,7 +120,7 @@ issues:
       text: "SA1019:"
 
   # Fix found issues (if it's supported by the linter)
-  fix: true
+  fix: false
 
 run:
   # timeout for analysis, e.g. 30s, 5m, default is 1m
