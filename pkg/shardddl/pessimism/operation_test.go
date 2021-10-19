@@ -15,9 +15,12 @@ package pessimism
 
 import (
 	"context"
+	"fmt"
+	"go.etcd.io/etcd/mvcc/mvccpb"
 	"time"
 
 	. "github.com/pingcap/check"
+	"go.etcd.io/etcd/clientv3"
 )
 
 func (t *testForEtcd) TestOperationJSON(c *C) {
@@ -33,6 +36,42 @@ func (t *testForEtcd) TestOperationJSON(c *C) {
 	o2, err := operationFromJSON(j)
 	c.Assert(err, IsNil)
 	c.Assert(o2, DeepEquals, o1)
+}
+
+func watchExactOperations(
+	ctx context.Context, cli *clientv3.Client, watchTp mvccpb.Event_EventType,
+	task, source string, revision int64, opCnt int,
+) ([]Operation, error) {
+	opCh := make(chan Operation, 10)
+	errCh := make(chan error, 10)
+	done := make(chan struct{})
+	subCtx, cancel := context.WithCancel(ctx)
+	go func() {
+		watchOperation(subCtx, cli, watchTp, task, source, revision, opCh, errCh)
+		close(done)
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+	var ops []Operation
+	for i := 0; i < opCnt; i++ {
+		select {
+		case op := <-opCh:
+			ops = append(ops, op)
+		case err := <-errCh:
+			return nil, err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	// Wait 100ms to check if there is unexpected operation.
+	select {
+	case op := <-opCh:
+		return nil, fmt.Errorf("unpexecped operation %s", op.String())
+	case <-time.After(time.Millisecond * 100):
+	}
+	return ops, nil
 }
 
 func (t *testForEtcd) TestOperationEtcd(c *C) {
@@ -63,24 +102,10 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	c.Assert(rev2, Greater, rev1)
 
 	// start the watcher with the same revision as the last PUT for the specified task and source.
-	wch := make(chan Operation, 10)
-	ech := make(chan error, 10)
-	done := make(chan struct{})
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		WatchOperationPut(ctx, etcdTestCli, task1, source1, rev2, wch, ech)
-		close(wch)
-		close(ech)
-		close(done)
-	}()
-
+	ops, err := watchExactOperations(context.Background(), etcdTestCli, mvccpb.PUT, task1, source1, rev2, 1)
+	c.Assert(err, IsNil)
 	// watch should only get op11.
-	c.Assert(<-wch, DeepEquals, op11)
-	// sleep 100ms to check if there is unexpected operation.
-	time.Sleep(time.Millisecond * 100)
-	c.Assert(len(ech), Equals, 0)
-	cancel()
-	<-done
+	c.Assert(ops[0], DeepEquals, op11)
 
 	// put for another task.
 	rev3, succ, err := PutOperations(etcdTestCli, false, op21)
@@ -88,26 +113,11 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	c.Assert(succ, IsTrue)
 
 	// start the watch with an older revision for all tasks and sources.
-	wch = make(chan Operation, 10)
-	ech = make(chan error, 10)
-	done = make(chan struct{})
-	ctx, cancel = context.WithCancel(context.Background())
-	go func() {
-		WatchOperationPut(ctx, etcdTestCli, "", "", rev2, wch, ech)
-		close(wch)
-		close(ech)
-		close(done)
-	}()
-
+	ops, err = watchExactOperations(context.Background(), etcdTestCli, mvccpb.PUT, "", "", rev2, 3)
 	// watch should get 3 operations.
-	c.Assert(<-wch, DeepEquals, op11)
-	c.Assert(<-wch, DeepEquals, op12)
-	c.Assert(<-wch, DeepEquals, op21)
-	// sleep 100ms to check if there is unexpected operation.
-	time.Sleep(time.Millisecond * 100)
-	c.Assert(len(ech), Equals, 0)
-	cancel()
-	<-done
+	c.Assert(ops[0], DeepEquals, op11)
+	c.Assert(ops[1], DeepEquals, op12)
+	c.Assert(ops[2], DeepEquals, op21)
 
 	// get all operations.
 	opm, rev4, err := GetAllOperations(etcdTestCli)
@@ -135,24 +145,12 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	c.Assert(rev6, Greater, rev5)
 
 	// start watch with an older revision for the deleted op11.
-	wch = make(chan Operation, 10)
-	ech = make(chan error, 10)
-	done = make(chan struct{})
-	ctx, cancel = context.WithCancel(context.Background())
-	go func() {
-		WatchOperationDelete(ctx, etcdTestCli, op11.Task, op11.Source, rev5, wch, ech)
-		close(wch)
-		close(ech)
-		close(done)
-	}()
-
+	ops, err = watchExactOperations(context.Background(), etcdTestCli, mvccpb.DELETE, op11.Task, op11.Source, rev5, 1)
 	// watch should got the previous deleted operation.
-	op11d := <-wch
+	op11d := ops[0]
 	c.Assert(op11d.IsDeleted, IsTrue)
 	op11d.IsDeleted = false // reset to false
 	c.Assert(op11d, DeepEquals, op11)
-	cancel()
-	<-done
 
 	// get again, op11 should be deleted.
 	opm, _, err = GetAllOperations(etcdTestCli)
