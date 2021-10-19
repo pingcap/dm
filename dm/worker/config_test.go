@@ -14,6 +14,11 @@
 package worker
 
 import (
+	"flag"
+	"os"
+	"strings"
+
+	"github.com/kami-zh/go-capturer"
 	"github.com/pingcap/check"
 
 	"github.com/pingcap/dm/pkg/terror"
@@ -45,4 +50,17 @@ func (t *testConfigSuite) TestAdjustAddr(c *check.C) {
 	cfg.WorkerAddr = "127.0.0.1:8262"
 	c.Assert(cfg.adjust(), check.IsNil)
 	c.Assert(cfg.AdvertiseAddr, check.Equals, cfg.WorkerAddr)
+}
+
+func (t *testConfigSuite) TestPrintSampleConfig(c *check.C) {
+	buf, err := os.ReadFile(defaultConfigFile)
+	c.Assert(err, check.IsNil)
+
+	// test print sample config
+	out := capturer.CaptureStdout(func() {
+		cfg := NewConfig()
+		err = cfg.Parse([]string{"-print-sample-config"})
+		c.Assert(err, check.ErrorMatches, flag.ErrHelp.Error())
+	})
+	c.Assert(strings.TrimSpace(out), check.Equals, strings.TrimSpace(string(buf)))
 }

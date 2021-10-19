@@ -35,6 +35,7 @@ const (
 	flush
 	skip // used by Syncer.recordSkipSQLsLocation to record global location, but not execute SQL
 	rotate
+	conflict
 )
 
 func (t opType) String() string {
@@ -55,6 +56,8 @@ func (t opType) String() string {
 		return "skip"
 	case rotate:
 		return "rotate"
+	case conflict:
+		return "conflict"
 	}
 
 	return ""
@@ -70,6 +73,7 @@ type job struct {
 	sql             string
 	args            []interface{}
 	key             string
+	keys            []string
 	retry           bool
 	location        binlog.Location // location of last received (ROTATE / QUERY / XID) event, for global/table checkpoint
 	startLocation   binlog.Location // start location of the sql in binlog, for handle_error
@@ -86,21 +90,21 @@ func (j *job) String() string {
 	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.startLocation, j.currentLocation)
 }
 
-func newDMLJob(tp opType, sql string, sourceTable, targetTable *filter.Table, args []interface{},
-	key string, location, startLocation, cmdLocation binlog.Location, eventHeader *replication.EventHeader) *job {
+func newDMLJob(tp opType, sourceTable, targetTable *filter.Table, sql string, args []interface{},
+	keys []string, ec *eventContext) *job {
 	return &job{
 		tp:          tp,
 		sourceTbls:  map[string][]*filter.Table{sourceTable.Schema: {sourceTable}},
 		targetTable: targetTable,
 		sql:         sql,
 		args:        args,
-		key:         key,
+		keys:        keys,
 		retry:       true,
 
-		location:        location,
-		startLocation:   startLocation,
-		currentLocation: cmdLocation,
-		eventHeader:     eventHeader,
+		location:        *ec.lastLocation,
+		startLocation:   *ec.startLocation,
+		currentLocation: *ec.currentLocation,
+		eventHeader:     ec.header,
 		jobAddTime:      time.Now(),
 	}
 }
@@ -168,6 +172,14 @@ func newFlushJob() *job {
 	}
 }
 
+func newConflictJob() *job {
+	return &job{
+		tp:          conflict,
+		targetTable: &filter.Table{},
+		jobAddTime:  time.Now(),
+	}
+}
+
 // put queues into bucket to monitor them.
 func queueBucketName(queueID int) string {
 	return fmt.Sprintf("q_%d", queueID%defaultBucketCount)
@@ -175,8 +187,4 @@ func queueBucketName(queueID int) string {
 
 func dmlWorkerJobIdx(queueID int) int {
 	return queueID + workerJobTSArrayInitSize
-}
-
-func dmlWorkerJobIdxToQueueID(idx int) int {
-	return idx - workerJobTSArrayInitSize
 }

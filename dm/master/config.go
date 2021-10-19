@@ -15,7 +15,7 @@ package master
 
 import (
 	"bytes"
-	"encoding/base64"
+	_ "embed"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -48,14 +48,9 @@ const (
 	quotaBackendBytesLowerBound    = 500 * 1024 * 1024      // 500MB
 )
 
-var (
-	// EnableZap enable the zap logger in embed etcd.
-	EnableZap = false
-	// SampleConfigFile is sample config file of dm-master
-	// later we can read it from dm/master/dm-master.toml
-	// and assign it to SampleConfigFile while we build dm-master.
-	SampleConfigFile string
-)
+// SampleConfigFile is sample config file of dm-master.
+//go:embed dm-master.toml
+var SampleConfigFile string
 
 // NewConfig creates a config for dm-master.
 func NewConfig() *Config {
@@ -175,16 +170,7 @@ func (c *Config) Parse(arguments []string) error {
 	}
 
 	if c.printSampleConfig {
-		if strings.TrimSpace(SampleConfigFile) == "" {
-			fmt.Println("sample config file of dm-master is empty")
-		} else {
-			rawConfig, err2 := base64.StdEncoding.DecodeString(SampleConfigFile)
-			if err2 != nil {
-				fmt.Println("base64 decode config error:", err2)
-			} else {
-				fmt.Println(string(rawConfig))
-			}
-		}
+		fmt.Println(SampleConfigFile)
 		return flag.ErrHelp
 	}
 
