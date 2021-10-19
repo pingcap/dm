@@ -556,6 +556,7 @@ func (dml *DML) genWhere(buf *strings.Builder) []interface{} {
 	return whereValues
 }
 
+// genSQL generates SQL for a DML.
 func (dml *DML) genSQL() (sql []string, arg [][]interface{}) {
 	switch dml.op {
 	case insert:
