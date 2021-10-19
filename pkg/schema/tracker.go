@@ -332,7 +332,7 @@ func (tr *Tracker) CreateSchemaIfNotExists(db string) error {
 	if tr.dom.InfoSchema().SchemaExists(dbName) {
 		return nil
 	}
-	return tr.dom.DDL().CreateSchema(tr.se, dbName, nil)
+	return tr.dom.DDL().CreateSchema(tr.se, dbName, nil, nil, nil)
 }
 
 // cloneTableInfo creates a clone of the TableInfo.

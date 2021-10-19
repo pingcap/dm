@@ -15,11 +15,9 @@ package master
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -66,17 +64,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) error {
 	}
 
 	if printSampleConfig {
-		if strings.TrimSpace(config.SampleConfigFile) == "" {
-			fmt.Println("sample config file of source is empty")
-		} else {
-			var rawConfig []byte
-			rawConfig, err = base64.StdEncoding.DecodeString(config.SampleConfigFile)
-			if err != nil {
-				fmt.Println("base64 decode config error")
-			} else {
-				fmt.Println(string(rawConfig))
-			}
-		}
+		fmt.Println(config.SampleConfigFile)
 		return nil
 	}
 
