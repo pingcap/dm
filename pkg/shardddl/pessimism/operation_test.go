@@ -16,11 +16,11 @@ package pessimism
 import (
 	"context"
 	"fmt"
-	"go.etcd.io/etcd/mvcc/mvccpb"
 	"time"
 
 	. "github.com/pingcap/check"
 	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/mvcc/mvccpb"
 )
 
 func (t *testForEtcd) TestOperationJSON(c *C) {
