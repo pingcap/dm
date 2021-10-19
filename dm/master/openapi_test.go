@@ -215,7 +215,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	defer func() {
 		cancel()
 		s.Close()
-		defer ctrl.Finish()
+		ctrl.Finish()
 	}()
 
 	baseURL := "/api/v1/sources"
@@ -341,10 +341,12 @@ func (t *openAPISuite) TestTaskAPI(c *check.C) {
 	s := setupServer(ctx, c)
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/MockSkipAdjustTargetDB", `return(true)`), check.IsNil)
 	checker.CheckSyncConfigFunc = mockCheckSyncConfig
+	ctrl := gomock.NewController(c)
 	defer func() {
 		checker.CheckSyncConfigFunc = checker.CheckSyncConfig
 		cancel()
 		s.Close()
+		ctrl.Finish()
 	}()
 
 	dbCfg := config.GetDBConfigForTest()
@@ -398,12 +400,44 @@ func (t *openAPISuite) TestTaskAPI(c *check.C) {
 	c.Assert(len(subTaskM) == 1, check.IsTrue)
 	c.Assert(subTaskM[source1Name].Name, check.Equals, task.Name)
 
+	// list tasks
+	result3 := testutil.NewRequest().Get(taskURL).Go(t.testT, s.echo)
+	c.Assert(result3.Code(), check.Equals, http.StatusOK)
+	var resultTaskList openapi.GetTaskListResponse
+	err = result3.UnmarshalBodyToObject(&resultTaskList)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultTaskList.Total, check.Equals, 1)
+	c.Assert(resultTaskList.Data[0].Name, check.Equals, task.Name)
+
+	// get task status
+	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+	mockTaskQueryStatus(mockWorkerClient, task.Name, source1.SourceName, workerName1)
+	s.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
+	taskStatusURL := fmt.Sprintf("%s/%s/status", taskURL, task.Name)
+	result4 := testutil.NewRequest().Get(taskStatusURL).Go(t.testT, s.echo)
+	c.Assert(result4.Code(), check.Equals, http.StatusOK)
+	var resultTaskStatus openapi.GetTaskStatusResponse
+	err = result4.UnmarshalBodyToObject(&resultTaskStatus)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultTaskStatus.Total, check.Equals, 1) // only 1 subtask
+	c.Assert(resultTaskStatus.Data[0].Name, check.Equals, task.Name)
+	c.Assert(resultTaskStatus.Data[0].Stage, check.Equals, pb.Stage_Running.String())
+	c.Assert(resultTaskStatus.Data[0].WorkerName, check.Equals, workerName1)
+
 	// stop task
-	result3 := testutil.NewRequest().Delete(fmt.Sprintf("%s/%s", taskURL, task.Name)).Go(t.testT, s.echo)
-	c.Assert(result3.Code(), check.Equals, http.StatusNoContent)
+	result5 := testutil.NewRequest().Delete(fmt.Sprintf("%s/%s", taskURL, task.Name)).Go(t.testT, s.echo)
+	c.Assert(result5.Code(), check.Equals, http.StatusNoContent)
 	subTaskM = s.scheduler.GetSubTaskCfgsByTask(task.Name)
 	c.Assert(len(subTaskM) == 0, check.IsTrue)
 	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/master/MockSkipAdjustTargetDB"), check.IsNil)
+
+	// list tasks
+	result6 := testutil.NewRequest().Get(taskURL).Go(t.testT, s.echo)
+	c.Assert(result6.Code(), check.Equals, http.StatusOK)
+	var resultTaskList2 openapi.GetTaskListResponse
+	err = result6.UnmarshalBodyToObject(&resultTaskList2)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultTaskList2.Total, check.Equals, 0)
 }
 
 func setupServer(ctx context.Context, c *check.C) *Server {
@@ -446,6 +480,43 @@ func mockRelayQueryStatus(
 	mockWorkerClient.EXPECT().QueryStatus(
 		gomock.Any(),
 		&pb.QueryStatusRequest{Name: ""},
+	).Return(queryResp, nil).MaxTimes(maxRetryNum)
+}
+
+func mockTaskQueryStatus(
+	mockWorkerClient *pbmock.MockWorkerClient, taskName, sourceName, workerName string) {
+	queryResp := &pb.QueryStatusResponse{
+		Result: true,
+		SourceStatus: &pb.SourceStatus{
+			Worker: workerName,
+			Source: sourceName,
+		},
+		SubTaskStatus: []*pb.SubTaskStatus{
+			{
+				Stage: pb.Stage_Running,
+				Name:  taskName,
+				Status: &pb.SubTaskStatus_Sync{
+					Sync: &pb.SyncStatus{
+						TotalEvents:         0,
+						TotalTps:            0,
+						RecentTps:           0,
+						MasterBinlog:        "",
+						MasterBinlogGtid:    "",
+						SyncerBinlog:        "",
+						SyncerBinlogGtid:    "",
+						BlockingDDLs:        nil,
+						UnresolvedGroups:    nil,
+						Synced:              false,
+						BinlogType:          "",
+						SecondsBehindMaster: 0,
+					},
+				},
+			},
+		},
+	}
+	mockWorkerClient.EXPECT().QueryStatus(
+		gomock.Any(),
+		&pb.QueryStatusRequest{Name: taskName},
 	).Return(queryResp, nil).MaxTimes(maxRetryNum)
 }
 

@@ -726,9 +726,6 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 	}
 
 	resps := s.getStatusFromWorkers(ctx, sources, req.Name, queryRelayWorker)
-
-	s.fillUnsyncedStatus(resps)
-
 	workerRespMap := make(map[string][]*pb.QueryStatusResponse, len(sources))
 	for _, workerResp := range resps {
 		workerRespMap[workerResp.SourceStatus.Source] = append(workerRespMap[workerResp.SourceStatus.Source], workerResp)
@@ -1070,6 +1067,7 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 		}
 	}
 	wg.Wait()
+	s.fillUnsyncedStatus(workerResps)
 	return workerResps
 }
 
@@ -2052,7 +2050,7 @@ func (s *Server) GetCfg(ctx context.Context, req *pb.GetCfgRequest) (*pb.GetCfgR
 			return subCfgList[i].SourceID < subCfgList[j].SourceID
 		})
 
-		taskCfg := config.FromSubTaskConfigs(subCfgList...)
+		taskCfg := config.SubTaskConfigsToTaskConfig(subCfgList...)
 		taskCfg.TargetDB.Password = "******"
 		if taskCfg.TargetDB.Security != nil {
 			taskCfg.TargetDB.Security.ClearSSLBytesData()
