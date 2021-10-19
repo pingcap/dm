@@ -381,7 +381,7 @@ func SubTaskConfigsToOpenAPITask(subTaskConfigMap map[string]map[string]SubTaskC
 		var oneSubtaskConfig SubTaskConfig // need this to get target db config
 		taskSourceConfig := openapi.TaskSourceConfig{}
 		sourceConfList := []openapi.TaskSourceConf{}
-		// source name ->filter rule list
+		// source name -> filter rule list
 		filterMap := make(map[string][]*bf.BinlogEventRule)
 		// source name -> route rule list
 		routeMap := make(map[string][]*router.TableRule)
