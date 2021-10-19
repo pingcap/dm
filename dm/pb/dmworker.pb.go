@@ -2493,7 +2493,7 @@ func (m *GetWorkerCfgResponse) GetCfg() string {
 
 // The Location describes the starts position of a binlog, could be either gtid or position way.
 type Location struct {
-	// The suffix of binlog file, like .000001 .000002
+	// The name of mysql binlog file, like mysql-bin.000001
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// The binlog offset in a file. Assign this if we want to start from a binlog position
 	Pos uint64 `protobuf:"varint,2,opt,name=pos,proto3" json:"pos,omitempty"`
