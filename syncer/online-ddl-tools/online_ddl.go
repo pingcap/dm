@@ -655,6 +655,9 @@ func renameOnlineDDLTable(p *parser.Parser, targetTable *filter.Table, sqls []st
 	renamedSQLs := make([]string, 0, len(sqls))
 	targetTables := []*filter.Table{targetTable}
 	for _, sql := range sqls {
+		if len(sql) == 0 {
+			continue
+		}
 		stmt, err := p.ParseOneStmt(sql, "", "")
 		if err != nil {
 			return nil, terror.ErrSyncerUnitParseStmt.New(err.Error())

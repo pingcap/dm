@@ -85,7 +85,7 @@ func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, er
 	if shouldSkip {
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 		qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("query event context", qec))
-		return nil, nil
+		sql = ""
 	}
 
 	if s.onlineDDL == nil {
