@@ -131,8 +131,8 @@ type Syncer struct {
 	streamerController *StreamerController
 	enableRelay        bool
 
-	wg    sync.WaitGroup
-	jobWg sync.WaitGroup
+	wg    sync.WaitGroup // counts goroutines
+	jobWg sync.WaitGroup // counts ddl/flush job in-flight in s.dmlJobCh and s.ddlJobCh
 
 	schemaTracker *schema.Tracker
 
@@ -949,15 +949,15 @@ func (s *Syncer) addJob(job *job) error {
 	}
 
 	// nolint:ifshort
-	flush := s.checkFlush()
+	needFlush := s.checkFlush()
 	failpoint.Inject("flushFirstJob", func() {
 		if waitJobsDone {
 			s.tctx.L().Info("trigger flushFirstJob")
 			waitJobsDone = false
-			flush = true
+			needFlush = true
 		}
 	})
-	if flush {
+	if needFlush {
 		s.jobWg.Add(1)
 		s.dmlJobCh <- newFlushJob()
 		s.jobWg.Wait()
@@ -1005,7 +1005,7 @@ func (s *Syncer) addJob(job *job) error {
 		}
 	}
 
-	if flush || job.tp == ddl {
+	if needFlush || job.tp == ddl {
 		// interrupted after save checkpoint and before flush checkpoint.
 		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
 			err := handleFlushCheckpointStage(4, val.(int), "before flush checkpoint")
@@ -2927,6 +2927,7 @@ func (s *Syncer) recordSkipSQLsLocation(ec *eventContext) error {
 	return s.addJobFunc(job)
 }
 
+// flushJobs add a flush job and wait for all jobs finished.
 func (s *Syncer) flushJobs() error {
 	s.tctx.L().Info("flush all jobs", zap.Stringer("global checkpoint", s.checkpoint))
 	job := newFlushJob()
