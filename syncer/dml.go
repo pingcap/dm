@@ -49,7 +49,7 @@ func extractValueFromData(data []interface{}, columns []*model.ColumnInfo) []int
 	return value
 }
 
-func (s *Syncer) genAndFilterInsertdmls(param *genDMLParam, filterExprs []expression.Expression) ([]*DML, error) {
+func (s *Syncer) genAndFilterInsertDMLs(param *genDMLParam, filterExprs []expression.Expression) ([]*DML, error) {
 	var (
 		dataSeq         = param.data
 		originalDataSeq = param.originalData
@@ -87,7 +87,7 @@ RowLoop:
 	return dmls, nil
 }
 
-func (s *Syncer) genAndFilterUpdatedmls(
+func (s *Syncer) genAndFilterUpdateDMLs(
 	param *genDMLParam,
 	oldValueFilters []expression.Expression,
 	newValueFilters []expression.Expression,
@@ -151,7 +151,7 @@ RowLoop:
 	return dmls, nil
 }
 
-func (s *Syncer) genAndFilterDeletedmls(param *genDMLParam, filterExprs []expression.Expression) ([]*DML, error) {
+func (s *Syncer) genAndFilterDeleteDMLs(param *genDMLParam, filterExprs []expression.Expression) ([]*DML, error) {
 	var (
 		dataSeq = param.originalData
 		ti      = param.sourceTableInfo

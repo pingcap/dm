@@ -2054,7 +2054,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode
-		dmls, err = s.genAndFilterInsertdmls(param, exprFilter)
+		dmls, err = s.genAndFilterInsertDMLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen insert sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
@@ -2068,7 +2068,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode
-		dmls, err = s.genAndFilterUpdatedmls(param, oldExprFilter, newExprFilter)
+		dmls, err = s.genAndFilterUpdateDMLs(param, oldExprFilter, newExprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen update sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
@@ -2081,7 +2081,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err2
 		}
 
-		dmls, err = s.genAndFilterDeletedmls(param, exprFilter)
+		dmls, err = s.genAndFilterDeleteDMLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen delete sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
