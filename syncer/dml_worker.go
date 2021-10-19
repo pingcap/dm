@@ -37,7 +37,7 @@ type DMLWorker struct {
 	chanSize    int
 	toDBConns   []*dbconn.DBConn
 	tctx        *tcontext.Context
-	wg          sync.WaitGroup
+	wg          sync.WaitGroup // counts conflict/flush jobs in all DML job channels.
 	logger      log.Logger
 
 	// for metrics
@@ -57,7 +57,7 @@ type DMLWorker struct {
 	flushCh chan *job
 }
 
-// dmlWorkerWrap creates and runs a dmlWorker instance and return all workers count and flush job channel.
+// dmlWorkerWrap creates and runs a dmlWorker instance and returns flush job channel.
 func dmlWorkerWrap(inCh chan *job, syncer *Syncer) chan *job {
 	dmlWorker := &DMLWorker{
 		batch:        syncer.cfg.Batch,
@@ -165,8 +165,7 @@ func (w *DMLWorker) executeJobs(queueID int, jobCh chan *job) {
 			}
 		})
 
-		batchJobs := jobs
-		w.executeBatchJobs(queueID, batchJobs)
+		w.executeBatchJobs(queueID, jobs)
 		if j.tp == conflict || j.tp == flush {
 			w.wg.Done()
 		}

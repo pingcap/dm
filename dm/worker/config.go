@@ -15,7 +15,7 @@ package worker
 
 import (
 	"bytes"
-	"encoding/base64"
+	_ "embed"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -31,11 +31,11 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// SampleConfigFile is sample config file of dm-worker
-// later we can read it from dm/worker/dm-worker.toml
-// and assign it to SampleConfigFile while we build dm-worker.
+// SampleConfigFile is sample config file of dm-worker.
+//go:embed dm-worker.toml
+var SampleConfigFile string
+
 var (
-	SampleConfigFile         string
 	defaultKeepAliveTTL      = int64(60)      // 1 minute
 	defaultRelayKeepAliveTTL = int64(60 * 30) // 30 minutes
 )
@@ -147,16 +147,7 @@ func (c *Config) Parse(arguments []string) error {
 	}
 
 	if c.printSampleConfig {
-		if strings.TrimSpace(SampleConfigFile) == "" {
-			fmt.Println("sample config file of dm-worker is empty")
-		} else {
-			rawConfig, err2 := base64.StdEncoding.DecodeString(SampleConfigFile)
-			if err2 != nil {
-				fmt.Println("base64 decode config error:", err2)
-			} else {
-				fmt.Println(string(rawConfig))
-			}
-		}
+		fmt.Println(SampleConfigFile)
 		return flag.ErrHelp
 	}
 
