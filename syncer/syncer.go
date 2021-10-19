@@ -139,10 +139,11 @@ type Syncer struct {
 
 	fromDB *dbconn.UpStreamConn
 
-	toDB      *conn.BaseDB
-	toDBConns []*dbconn.DBConn
-	ddlDB     *conn.BaseDB
-	ddlDBConn *dbconn.DBConn
+	toDB                *conn.BaseDB
+	toDBConns           []*dbconn.DBConn
+	ddlDB               *conn.BaseDB
+	ddlDBConn           *dbconn.DBConn
+	downstreamTrackConn *dbconn.DBConn
 
 	jobs                []chan *job
 	jobsClosed          atomic.Bool
@@ -317,7 +318,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
 
-	s.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, s.cfg.To.Session, s.ddlDBConn.BaseConn)
+	s.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, s.cfg.To.Session, s.downstreamTrackConn.BaseConn)
 	if err != nil {
 		return terror.ErrSchemaTrackerInit.Delegate(err)
 	}
@@ -572,6 +573,11 @@ func (s *Syncer) resetDBs(tctx *tcontext.Context) error {
 	}
 
 	err = s.ddlDBConn.ResetConn(tctx)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+
+	err = s.downstreamTrackConn.ResetConn(tctx)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -3127,13 +3133,14 @@ func (s *Syncer) createDBs(ctx context.Context) error {
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDDLConnectionTimeout)
 
 	var ddlDBConns []*dbconn.DBConn
-	s.ddlDB, ddlDBConns, err = dbconn.CreateConns(s.tctx, s.cfg, dbCfg, 1)
+	s.ddlDB, ddlDBConns, err = dbconn.CreateConns(s.tctx, s.cfg, dbCfg, 2)
 	if err != nil {
 		dbconn.CloseUpstreamConn(s.tctx, s.fromDB)
 		dbconn.CloseBaseDB(s.tctx, s.toDB)
 		return err
 	}
 	s.ddlDBConn = ddlDBConns[0]
+	s.downstreamTrackConn = ddlDBConns[1]
 	printServerVersion(s.tctx, s.fromDB.BaseDB, "upstream")
 	printServerVersion(s.tctx, s.toDB, "downstream")
 

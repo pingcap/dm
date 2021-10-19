@@ -118,7 +118,7 @@ func (s *Syncer) genUpdateSQLs(
 	)
 
 	// if downstream pk/uk(not null) exits, then use downstream pk/uk(not null)
-	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tctx, tableID, ti, s.ddlDBConn.BaseConn)
+	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tctx, tableID, ti)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -173,7 +173,7 @@ RowLoop:
 		}
 
 		if defaultIndexColumns == nil {
-			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreanUKIndexInfo(tableID, ti, oriOldValues)
+			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreamUKIndexInfo(tableID, ti, oriOldValues)
 		}
 
 		ks := genMultipleKeys(ti, oriOldValues, tableID)
@@ -235,7 +235,7 @@ func (s *Syncer) genDeleteSQLs(tctx *tcontext.Context, param *genDMLParam, filte
 	)
 
 	// if downstream pk/uk(not null) exits, then use downstream pk/uk(not null)
-	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tctx, tableID, ti, s.ddlDBConn.BaseConn)
+	defaultIndexColumns, err := s.schemaTracker.GetDownStreamIndexInfo(tctx, tableID, ti)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -260,7 +260,7 @@ RowLoop:
 		}
 
 		if defaultIndexColumns == nil {
-			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreanUKIndexInfo(tableID, ti, value)
+			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreamUKIndexInfo(tableID, ti, value)
 		}
 		ks := genMultipleKeys(ti, value, tableID)
 
