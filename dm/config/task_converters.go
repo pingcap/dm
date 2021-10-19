@@ -509,6 +509,6 @@ func removeDuplication(in []string) []string {
 }
 
 func genFilterRuleName(sourceName string, idx int) string {
-	// NOTE that we don't have user input filter rule name in sub task config,so we make one by ourself
+	// NOTE that we don't have user input filter rule name in sub task config, so we make one by ourself
 	return fmt.Sprintf("%s-filter-rule-%d", sourceName, idx)
 }
