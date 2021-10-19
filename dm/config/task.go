@@ -245,7 +245,9 @@ type SyncerConfig struct {
 	// refine following configs to top level configs?
 	AutoFixGTID bool `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
 	EnableGTID  bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
-	SafeMode    bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
+	// deprecated
+	DisableCausality bool `yaml:"disable-detect" toml:"disable-detect" json:"disable-detect"`
+	SafeMode         bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
 	// deprecated, use `ansi-quotes` in top level config instead
 	EnableANSIQuotes bool `yaml:"enable-ansi-quotes" toml:"enable-ansi-quotes" json:"enable-ansi-quotes"`
 }
@@ -621,6 +623,9 @@ func (c *TaskConfig) adjust() error {
 		// for backward compatible, set global config `ansi-quotes: true` if any syncer is true
 		if inst.Syncer.EnableANSIQuotes {
 			log.L().Warn("DM could discover proper ANSI_QUOTES, `enable-ansi-quotes` is no longer take effect")
+		}
+		if inst.Syncer.DisableCausality {
+			log.L().Warn("`disable-causality` is no longer take effect")
 		}
 
 		for _, name := range inst.ExpressionFilters {
