@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"math"
+	"strings"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
@@ -22,6 +23,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/types"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	tiddl "github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/mock"
@@ -220,5 +222,81 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 		assert(err, IsNil)
 		keys := genMultipleKeys(ti, tc.values, "table")
 		assert(keys, DeepEquals, tc.keys)
+	}
+}
+
+func (s *testSyncerSuite) TestGenWhere(c *C) {
+	p := parser.New()
+	se := mock.NewContext()
+	schema := "create table test.tb(id int primary key, col1 int unique not null, col2 int unique, name varchar(24))"
+	ti, err := createTableInfo(p, se, 0, schema)
+	c.Assert(err, IsNil)
+
+	testCases := []struct {
+		dml    *DML
+		sql    string
+		values []interface{}
+	}{
+		{
+			newDML(del, false, "", &filter.Table{}, nil, []interface{}{1, 2, 3, "haha"}, nil, []interface{}{1, 2, 3, "haha"}, ti.Columns, ti),
+			"`id` = ?",
+			[]interface{}{1},
+		},
+		{
+			newDML(update, false, "", &filter.Table{}, []interface{}{1, 2, 3, "haha"}, []interface{}{4, 5, 6, "hihi"}, []interface{}{1, 2, 3, "haha"}, []interface{}{4, 5, 6, "hihi"}, ti.Columns, ti),
+			"`id` = ?",
+			[]interface{}{1},
+		},
+	}
+	for _, tc := range testCases {
+		var buf strings.Builder
+		whereValues := tc.dml.genWhere(&buf)
+		c.Assert(buf.String(), Equals, tc.sql)
+		c.Assert(whereValues, DeepEquals, tc.values)
+	}
+}
+
+func (s *testSyncerSuite) TestGenSQL(c *C) {
+	p := parser.New()
+	se := mock.NewContext()
+	schema := "create table test.tb(id int primary key, col1 int unique not null, col2 int unique, name varchar(24))"
+	ti, err := createTableInfo(p, se, 0, schema)
+	c.Assert(err, IsNil)
+
+	testCases := []struct {
+		dml     *DML
+		queries []string
+		args    [][]interface{}
+	}{
+		{
+			newDML(insert, false, "`targetSchema`.`targetTable`", &filter.Table{}, nil, []interface{}{1, 2, 3, "haha"}, nil, []interface{}{1, 2, 3, "haha"}, ti.Columns, ti),
+			[]string{"INSERT INTO `targetSchema`.`targetTable` (`id`,`col1`,`col2`,`name`) VALUES (?,?,?,?)"},
+			[][]interface{}{{1, 2, 3, "haha"}},
+		},
+		{
+			newDML(insert, true, "`targetSchema`.`targetTable`", &filter.Table{}, nil, []interface{}{1, 2, 3, "haha"}, nil, []interface{}{1, 2, 3, "haha"}, ti.Columns, ti),
+			[]string{"INSERT INTO `targetSchema`.`targetTable` (`id`,`col1`,`col2`,`name`) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`col1`=VALUES(`col1`),`col2`=VALUES(`col2`),`name`=VALUES(`name`)"},
+			[][]interface{}{{1, 2, 3, "haha"}},
+		},
+		{
+			newDML(del, false, "`targetSchema`.`targetTable`", &filter.Table{}, nil, []interface{}{1, 2, 3, "haha"}, nil, []interface{}{1, 2, 3, "haha"}, ti.Columns, ti),
+			[]string{"DELETE FROM `targetSchema`.`targetTable` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{1}},
+		},
+		{
+			newDML(update, false, "`targetSchema`.`targetTable`", &filter.Table{}, []interface{}{1, 2, 3, "haha"}, []interface{}{4, 5, 6, "hihi"}, []interface{}{1, 2, 3, "haha"}, []interface{}{1, 2, 3, "haha"}, ti.Columns, ti),
+			[]string{"UPDATE `targetSchema`.`targetTable` SET `id` = ?, `col1` = ?, `col2` = ?, `name` = ? WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{4, 5, 6, "hihi", 1}},
+		},
+		{
+			newDML(update, true, "`targetSchema`.`targetTable`", &filter.Table{}, []interface{}{1, 2, 3, "haha"}, []interface{}{4, 5, 6, "hihi"}, []interface{}{1, 2, 3, "haha"}, []interface{}{1, 2, 3, "haha"}, ti.Columns, ti),
+			[]string{"DELETE FROM `targetSchema`.`targetTable` WHERE `id` = ? LIMIT 1", "INSERT INTO `targetSchema`.`targetTable` (`id`,`col1`,`col2`,`name`) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`col1`=VALUES(`col1`),`col2`=VALUES(`col2`),`name`=VALUES(`name`)"},
+			[][]interface{}{{1}, {4, 5, 6, "hihi"}},
+		},
+	}
+	for _, tc := range testCases {
+		queries, args := tc.dml.genSQL()
+		c.Assert(queries, DeepEquals, tc.queries)
+		c.Assert(args, DeepEquals, tc.args)
 	}
 }

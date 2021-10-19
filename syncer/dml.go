@@ -618,9 +618,9 @@ func (dml *DML) genDeleteSQL() ([]string, [][]interface{}) {
 func (dml *DML) genInsertSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
 	buf.Grow(256)
-	buf.WriteString("INSERT INTO")
-
-	buf.WriteString(" " + dml.tableID + " (")
+	buf.WriteString("INSERT INTO ")
+	buf.WriteString(dml.tableID)
+	buf.WriteString(" (")
 	for i, column := range dml.columns {
 		if i != len(dml.columns)-1 {
 			buf.WriteString("`" + strings.ReplaceAll(column.Name.O, "`", "``") + "`,")
