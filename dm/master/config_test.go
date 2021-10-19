@@ -14,7 +14,6 @@
 package master
 
 import (
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"net/url"
@@ -43,39 +42,16 @@ func (t *testConfigSuite) SetUpSuite(c *check.C) {
 }
 
 func (t *testConfigSuite) TestPrintSampleConfig(c *check.C) {
-	var (
-		buf    []byte
-		err    error
-		encode string
-		out    string
-	)
+	buf, err := os.ReadFile(defaultConfigFile)
+	c.Assert(err, check.IsNil)
 
-	defer func() {
-		SampleConfigFile = ""
-	}()
-
-	// test valid sample config
-	out = capturer.CaptureStdout(func() {
-		buf, err = os.ReadFile(defaultConfigFile)
-		c.Assert(err, check.IsNil)
-		encode = base64.StdEncoding.EncodeToString(buf)
-		SampleConfigFile = encode
-
+	// test print sample config
+	out := capturer.CaptureStdout(func() {
 		cfg := NewConfig()
 		err = cfg.Parse([]string{"-print-sample-config"})
 		c.Assert(err, check.ErrorMatches, flag.ErrHelp.Error())
 	})
 	c.Assert(strings.TrimSpace(out), check.Equals, strings.TrimSpace(string(buf)))
-
-	// test invalid base64 encoded sample config
-	out = capturer.CaptureStdout(func() {
-		SampleConfigFile = "invalid base64 encode string"
-
-		cfg := NewConfig()
-		err = cfg.Parse([]string{"-print-sample-config"})
-		c.Assert(err, check.ErrorMatches, flag.ErrHelp.Error())
-	})
-	c.Assert(strings.TrimSpace(out), check.Matches, "base64 decode config error:.*")
 }
 
 func (t *testConfigSuite) TestConfig(c *check.C) {
