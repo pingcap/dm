@@ -74,5 +74,5 @@ mysql-instances:
   loader: null
   loader-thread: 0
   syncer-config-name: sync-01
-syncer: null
+  syncer: null
   syncer-thread: 0
