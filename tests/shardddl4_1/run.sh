@@ -510,17 +510,14 @@ function DM_145_CASE {
 	run_sql_source2 "insert into ${shardddl1}.${tb2} values(300),(301),(302),(303),(304),(305);"
 
 	run_sql_source1 "alter table ${shardddl1}.${tb1} engine=innodb;"
+	run_sql_source2 "alter table ${shardddl1}.${tb1} engine=innodb;"
+	run_sql_source2 "alter table ${shardddl1}.${tb2} engine=innodb;"
 
-	if [[ "$shardmode" == "pessimistic" ]]; then
-		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"query-status test" \
-			"blockingDDLs" 2 \
-			"ALTER TABLE \`shardddl\`.\`tb\` ENGINE = innodb" 2
-	else
-		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-			"query-status test" \
-			"\"result\": true" 3
-	fi
+	run_sql_source1 "insert into ${shardddl1}.${tb1} values(400),(401),(402),(403),(404),(405);"
+	run_sql_source2 "insert into ${shardddl1}.${tb1} values(500),(501),(502),(503),(504),(505);"
+	run_sql_source2 "insert into ${shardddl1}.${tb2} values(600),(601),(602),(603),(604),(605);"
+
+	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 # Defragment.
