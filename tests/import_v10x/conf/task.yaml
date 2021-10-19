@@ -85,7 +85,7 @@ mydumpers:
 loaders:
   load-01:
     pool-size: 16
-    dir: ./dumped_data.test
+    dir: ./dumped_data
 syncers:
   sync-01:
     meta-file: ""
@@ -114,3 +114,4 @@ syncers:
 clean-dump-file: false
 ansi-quotes: false
 remove-meta: false
+tidb: null
