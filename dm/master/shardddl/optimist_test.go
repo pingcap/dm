@@ -62,12 +62,12 @@ func createTableInfo(c *C, p *parser.Parser, se sessionctx.Context, tableID int6
 	return info
 }
 
-func watchExactPutOperations(
+func watchExactOneOperation(
 	ctx context.Context,
 	cli *clientv3.Client,
 	task, source, upSchema, upTable string,
-	revision int64, opCnt int,
-) ([]optimism.Operation, error) {
+	revision int64,
+) (optimism.Operation, error) {
 	opCh := make(chan optimism.Operation, 10)
 	errCh := make(chan error, 10)
 	done := make(chan struct{})
@@ -80,24 +80,23 @@ func watchExactPutOperations(
 		cancel()
 		<-done
 	}()
-	var ops []optimism.Operation
-	for i := 0; i < opCnt; i++ {
-		select {
-		case op := <-opCh:
-			ops = append(ops, op)
-		case err := <-errCh:
-			return nil, err
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
+
+	var op optimism.Operation
+	select {
+	case op = <-opCh:
+	case err := <-errCh:
+		return op, err
+	case <-ctx.Done():
+		return op, ctx.Err()
 	}
+
 	// Wait 100ms to check if there is unexpected operation.
 	select {
-	case op := <-opCh:
-		return nil, fmt.Errorf("unpexecped operation %s", op.String())
+	case extraOp := <-opCh:
+		return op, fmt.Errorf("unpexecped operation %s", extraOp)
 	case <-time.After(time.Millisecond * 100):
 	}
-	return ops, nil
+	return op, nil
 }
 
 func (t *testOptimist) TestOptimistSourceTables(c *C) {
@@ -299,9 +298,8 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// wait operation for i11 become available.
-	ops, err := watchExactPutOperations(ctx, cli, i11.Task, i11.Source, i11.UpSchema, i11.UpTable, rev1, 1)
+	op11, err := watchExactOneOperation(ctx, cli, i11.Task, i11.Source, i11.UpSchema, i11.UpTable, rev1)
 	c.Assert(err, IsNil)
-	op11 := ops[0]
 	c.Assert(op11.DDLs, DeepEquals, DDLs1)
 	c.Assert(op11.ConflictStage, Equals, optimism.ConflictNone)
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
@@ -347,9 +345,8 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// wait operation for i12 become available.
-	ops, err = watchExactPutOperations(ctx, cli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, 1)
+	op12, err := watchExactOneOperation(ctx, cli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2)
 	c.Assert(err, IsNil)
-	op12 := ops[0]
 	c.Assert(op12.DDLs, DeepEquals, DDLs1)
 	c.Assert(op12.ConflictStage, Equals, optimism.ConflictNone)
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
@@ -387,9 +384,8 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(remain, Equals, 1)
 
 	// wait operation for i21 become available.
-	ops, err = watchExactPutOperations(ctx, cli, i21.Task, i21.Source, i21.UpSchema, i21.UpTable, rev1, 1)
+	op21, err := watchExactOneOperation(ctx, cli, i21.Task, i21.Source, i21.UpSchema, i21.UpTable, rev1)
 	c.Assert(err, IsNil)
-	op21 := ops[0]
 	c.Assert(op21.DDLs, DeepEquals, i21.DDLs)
 	c.Assert(op12.ConflictStage, Equals, optimism.ConflictNone)
 
@@ -444,9 +440,8 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(o.ShowLocks("", []string{"not-exist"}), HasLen, 0)
 
 	// wait operation for i23 become available.
-	ops, err = watchExactPutOperations(ctx, cli, i23.Task, i23.Source, i23.UpSchema, i23.UpTable, rev3, 1)
+	op23, err := watchExactOneOperation(ctx, cli, i23.Task, i23.Source, i23.UpSchema, i23.UpTable, rev3)
 	c.Assert(err, IsNil)
-	op23 := ops[0]
 	c.Assert(op23.DDLs, DeepEquals, i23.DDLs)
 	c.Assert(op23.ConflictStage, Equals, optimism.ConflictNone)
 
@@ -454,7 +449,7 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	rev2, err = optimism.PutInfo(cli, i12) // put i12 first to trigger DELETE for i12.
 	c.Assert(err, IsNil)
 	// wait until operation for i12 ready.
-	_, err = watchExactPutOperations(ctx, cli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, 1)
+	_, err = watchExactOneOperation(ctx, cli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2)
 	c.Assert(err, IsNil)
 
 	_, err = optimism.PutSourceTablesDeleteInfo(cli, st31, i12)
@@ -547,8 +542,8 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// wait operation for i31 become available.
-	ops, err = watchExactPutOperations(ctx, cli, i31.Task, i31.Source, i31.UpSchema, i31.UpTable, rev1, 1)
-	op31 := ops[0]
+	op31, err := watchExactOneOperation(ctx, cli, i31.Task, i31.Source, i31.UpSchema, i31.UpTable, rev1)
+	c.Assert(err, IsNil)
 	c.Assert(op31.DDLs, DeepEquals, []string{})
 	c.Assert(op31.ConflictStage, Equals, optimism.ConflictNone)
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
@@ -589,8 +584,8 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// wait operation for i33 become available.
-	ops, err = watchExactPutOperations(ctx, cli, i33.Task, i33.Source, i33.UpSchema, i33.UpTable, rev3, 1)
-	op33 := ops[0]
+	op33, err := watchExactOneOperation(ctx, cli, i33.Task, i33.Source, i33.UpSchema, i33.UpTable, rev3)
+	c.Assert(err, IsNil)
 	c.Assert(op33.DDLs, DeepEquals, DDLs3)
 	c.Assert(op33.ConflictStage, Equals, optimism.ConflictNone)
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)

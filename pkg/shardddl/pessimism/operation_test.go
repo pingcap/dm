@@ -114,6 +114,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 
 	// start the watch with an older revision for all tasks and sources.
 	ops, err = watchExactOperations(context.Background(), etcdTestCli, mvccpb.PUT, "", "", rev2, 3)
+	c.Assert(err, IsNil)
 	// watch should get 3 operations.
 	c.Assert(ops[0], DeepEquals, op11)
 	c.Assert(ops[1], DeepEquals, op12)
@@ -146,6 +147,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 
 	// start watch with an older revision for the deleted op11.
 	ops, err = watchExactOperations(context.Background(), etcdTestCli, mvccpb.DELETE, op11.Task, op11.Source, rev5, 1)
+	c.Assert(err, IsNil)
 	// watch should got the previous deleted operation.
 	op11d := ops[0]
 	c.Assert(op11d.IsDeleted, IsTrue)
