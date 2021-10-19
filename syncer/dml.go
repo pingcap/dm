@@ -613,7 +613,7 @@ func (dml *DML) genDeleteSQL() ([]string, [][]interface{}) {
 	return []string{buf.String()}, [][]interface{}{whereArgs}
 }
 
-// genInsertDuplicateSQL generates a `INSERT` SQL with WHERE
+// genInsertSQL generates a `INSERT` SQL with WHERE
 // if in safemode, generates a `INSERT ON DUPLICATE UPDATE` statement.
 func (dml *DML) genInsertSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
