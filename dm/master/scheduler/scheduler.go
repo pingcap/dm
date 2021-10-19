@@ -1851,8 +1851,13 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent, toLock bool) error {
 	return nil
 }
 
-// tryBoundForWorker tries to bound a source to the worker. first try last source of this worker, then randomly pick one
-// returns (true, nil) after bounded.
+// tryBoundForWorker tries to bind a source to the given worker. The order of picking source is
+// - try to bind the last bound source
+// - try to bind sources on which the worker has unfinished load task
+// - if enabled relay, bind to the relay source or keep unbound
+// - try to bind any unbound sources
+// if the source is bound to a relay enabled worker, we must check that the source is also the relay source of worker.
+// pulling binlog using relay or not is determined by whether the worker has enabled relay.
 func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	// 1. check if last bound is still available.
 	// if lastBound not found, or this source has been bounded to another worker (we also check that source still exists
@@ -1940,8 +1945,13 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	return true, nil
 }
 
-// tryBoundForSource tries to bound a source to a random Free worker.
-// returns (true, nil) after bounded.
+// tryBoundForSource tries to bound a source to a random Free worker. The order of picking worker is
+// - try to bind a worker which has unfinished load task
+// - try to bind a relay worker which has be bound to this source before
+// - try to bind any relay worker
+// - try to bind any worker which has be bound to this source before
+// - try to bind any free worker
+// pulling binlog using relay or not is determined by whether the worker has enabled relay.
 // caller should update the s.unbounds.
 // caller should make sure this source has source config.
 func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
@@ -1950,6 +1960,7 @@ func (s *Scheduler) tryBoundForSource(source string) (bool, error) {
 	// pick a worker which has subtask in load stage.
 	workerName, sourceID := s.getNextLoadTaskTransfer("", source)
 	if workerName != "" {
+		// TODO: check relay source conflict
 		err := s.transferWorkerAndSource("", source, workerName, sourceID)
 		return err == nil, err
 	}
