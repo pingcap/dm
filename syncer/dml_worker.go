@@ -214,8 +214,8 @@ func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job) {
 		}
 	})
 
-	var queries []string
-	var args [][]interface{}
+	queries := make([]string, 0, len(jobs))
+	args := make([][]interface{}, 0, len(jobs))
 	for _, j := range jobs {
 		query, arg := j.dml.genSQL()
 		queries = append(queries, query...)
