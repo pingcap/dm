@@ -17,7 +17,7 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/golang/protobuf/jsonpb"
+	"github.com/gogo/protobuf/jsonpb"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/common"
