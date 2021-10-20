@@ -513,7 +513,7 @@ type DMAPIStartTaskJSONBody CreateTaskRequest
 // DMAPIDeleteTaskParams defines parameters for DMAPIDeleteTask.
 type DMAPIDeleteTaskParams struct {
 	// source name list
-	SourceNameList *[]string `json:"source-name-list,omitempty"`
+	SourceNameList *[]string `json:"source_name_list,omitempty"`
 }
 
 // DMAPPauseTaskJSONBody defines parameters for DMAPPauseTask.

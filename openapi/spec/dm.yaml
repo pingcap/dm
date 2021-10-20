@@ -255,7 +255,7 @@ paths:
     post:
       tags:
         - source
-      summary: "transfer source  another free worker"
+      summary: "transfer source to a free worker"
       operationId: "DMAPITransferSource"
       parameters:
         - name: "source-name"
@@ -399,7 +399,7 @@ paths:
           schema:
             type: string
             example: "task-1"
-        - name: source-name-list
+        - name: source_name_list
           in: query
           description: "source name list"
           required: false
