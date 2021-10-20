@@ -534,9 +534,15 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 	if lcfg.To.Session == nil {
 		lcfg.To.Session = make(map[string]string)
 	}
-	if len(l.cfg.Timezone) > 0 {
-		lcfg.To.Session["time_zone"] = l.cfg.Timezone
+	timeZone := l.cfg.Timezone
+	if len(timeZone) == 0 {
+		var err1 error
+		timeZone, err1 = conn.FetchTZSetting(ctx, &lcfg.To)
+		if err1 != nil {
+			return err1
+		}
 	}
+	lcfg.To.Session["time_zone"] = timeZone
 
 	hasSQLMode := false
 	for k := range l.cfg.To.Session {

@@ -332,7 +332,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	vars := map[string]string{
 		"time_zone": s.timezone.String(),
 	}
-	sessCtx := utils.NewSession(vars)
+	sessCtx := utils.NewSessionCtx(vars)
 	s.sessCtx = sessCtx
 	s.exprFilterGroup = NewExprFilterGroup(sessCtx, s.cfg.ExprFilter)
 

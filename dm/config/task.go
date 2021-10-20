@@ -761,11 +761,12 @@ func AdjustTargetDBSessionCfg(dbConfig *DBConfig, version *semver.Version) {
 	dbConfig.Session = lowerMap
 }
 
-// AdjustTargetDBTimeZone force adjust session `time_zone` to UTC.
-func AdjustTargetDBTimeZone(config *DBConfig, timeZone string) {
+// AdjustDBTimeZone force adjust session `time_zone` to UTC.
+func AdjustDBTimeZone(config *DBConfig, timeZone string) {
 	for k, v := range config.Session {
 		if strings.ToLower(k) == "time_zone" {
-			if !strings.EqualFold(v, timeZone) {
+			// time_zone value is case sensitive, so no need to ignore case.
+			if v != timeZone {
 				log.L().Warn("session variable 'time_zone' is overwritten by task config timezone.",
 					zap.String("time_zone", config.Session[k]),
 					zap.String("time_zone_overwritten", timeZone))

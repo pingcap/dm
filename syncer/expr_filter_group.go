@@ -201,7 +201,6 @@ func SkipDMLByExpression(ctx sessionctx.Context, row []interface{}, expr express
 
 // getSimpleExprOfTable returns an expression of given `expr` string, using the table structure that is tracked before.
 func getSimpleExprOfTable(ctx sessionctx.Context, expr string, ti *model.TableInfo) (expression.Expression, error) {
-	// TODO: use upstream timezone?
 	e, err := expression.ParseSimpleExprWithTableInfo(ctx, expr, ti)
 	if err != nil {
 		// if expression contains an unknown column, we return an expression that skips nothing

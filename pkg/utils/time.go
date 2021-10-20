@@ -25,9 +25,9 @@ import (
 
 // ParseTimeZone parse the time zone location by name or offset
 //
-// NOTE: we don't support the `SYSTEM` time_zone.
+// NOTE: we don't support the "SYSTEM" or "Local" time_zone.
 func ParseTimeZone(s string) (*time.Location, error) {
-	if strings.EqualFold(s, "SYSTEM") {
+	if s == "SYSTEM" || s == "Local" {
 		return nil, terror.ErrConfigInvalidTimezone.New("'SYSTEM' time_zone is not supported")
 	}
 

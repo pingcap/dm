@@ -63,10 +63,6 @@ func (m *Dumpling) Init(ctx context.Context) error {
 	if m.dumpConfig, err = m.constructArgs(ctx); err != nil {
 		return err
 	}
-	m.detectSQLMode(ctx)
-	if m.cfg.Timezone != "" {
-		m.dumpConfig.SessionParams["time_zone"] = m.cfg.Timezone
-	}
 	m.logger.Info("create dumpling", zap.Stringer("config", m.dumpConfig))
 	return nil
 }
@@ -304,6 +300,8 @@ func (m *Dumpling) constructArgs(ctx context.Context) (*export.Config, error) {
 	}
 
 	dumpConfig.Labels = prometheus.Labels{"task": m.cfg.Name, "source_id": m.cfg.SourceID}
+	// update sql_mode if needed
+	m.detectSQLMode(ctx)
 
 	return dumpConfig, nil
 }

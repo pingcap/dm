@@ -108,7 +108,7 @@ create table t (
 				InsertValueExpr: ca.exprStr,
 			},
 		}
-		sessCtx := utils.NewSession(map[string]string{"time_zone": "UTC"})
+		sessCtx := utils.NewSessionCtx(map[string]string{"time_zone": "UTC"})
 		g := NewExprFilterGroup(sessCtx, exprConfig)
 		exprs, err := g.GetInsertExprs(table, ti)
 		c.Assert(err, IsNil)
@@ -367,7 +367,7 @@ create table t (
 				InsertValueExpr: ca.exprStr,
 			},
 		}
-		sessCtx := utils.NewSession(map[string]string{"time_zone": "UTC"})
+		sessCtx := utils.NewSessionCtx(map[string]string{"time_zone": "UTC"})
 		g := NewExprFilterGroup(sessCtx, exprConfig)
 		exprs, err := g.GetInsertExprs(table, ti)
 		c.Assert(err, IsNil)
@@ -416,7 +416,7 @@ create table t (
 			InsertValueExpr: exprStr,
 		},
 	}
-	sessCtx := utils.NewSession(map[string]string{"time_zone": "UTC"})
+	sessCtx := utils.NewSessionCtx(map[string]string{"time_zone": "UTC"})
 	g := NewExprFilterGroup(sessCtx, exprConfig)
 	exprs, err := g.GetInsertExprs(table, ti)
 	c.Assert(err, IsNil)
