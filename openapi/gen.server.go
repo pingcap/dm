@@ -48,10 +48,10 @@ type ServerInterface interface {
 	// (DELETE /api/v1/sources/{source-name})
 	DMAPIDeleteSource(ctx echo.Context, sourceName string, params DMAPIDeleteSourceParams) error
 	// pause relay log function for the data source
-	// (PATCH /api/v1/sources/{source-name}/pause-relay)
+	// (POST /api/v1/sources/{source-name}/pause-relay)
 	DMAPIPauseRelay(ctx echo.Context, sourceName string) error
 	// resume relay log function for the data source
-	// (PATCH /api/v1/sources/{source-name}/resume-relay)
+	// (POST /api/v1/sources/{source-name}/resume-relay)
 	DMAPIResumeRelay(ctx echo.Context, sourceName string) error
 	// get source schema list
 	// (GET /api/v1/sources/{source-name}/schemas)
@@ -60,16 +60,16 @@ type ServerInterface interface {
 	// (GET /api/v1/sources/{source-name}/schemas/{schema-name})
 	DMAPIGetSourceTableList(ctx echo.Context, sourceName string, schemaName string) error
 	// enable relay log function for the data source
-	// (PATCH /api/v1/sources/{source-name}/start-relay)
+	// (POST /api/v1/sources/{source-name}/start-relay)
 	DMAPIStartRelay(ctx echo.Context, sourceName string) error
 	// get the current status of the data source
 	// (GET /api/v1/sources/{source-name}/status)
 	DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	// disable relay log function for the data source
-	// (PATCH /api/v1/sources/{source-name}/stop-relay)
+	// (POST /api/v1/sources/{source-name}/stop-relay)
 	DMAPIStopRelay(ctx echo.Context, sourceName string) error
 	// transfer source  another free worker
-	// (PATCH /api/v1/sources/{source-name}/transfer)
+	// (POST /api/v1/sources/{source-name}/transfer)
 	DMAPITransferSource(ctx echo.Context, sourceName string) error
 	// get task list
 	// (GET /api/v1/tasks)
@@ -81,10 +81,10 @@ type ServerInterface interface {
 	// (DELETE /api/v1/tasks/{task-name})
 	DMAPIDeleteTask(ctx echo.Context, taskName string, params DMAPIDeleteTaskParams) error
 	// pause task
-	// (PATCH /api/v1/tasks/{task-name}/pause)
+	// (POST /api/v1/tasks/{task-name}/pause)
 	DMAPPauseTask(ctx echo.Context, taskName string) error
 	// resume task
-	// (PATCH /api/v1/tasks/{task-name}/resume)
+	// (POST /api/v1/tasks/{task-name}/resume)
 	DMAPIResumeTask(ctx echo.Context, taskName string) error
 	// get task source schema list
 	// (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas)
@@ -686,19 +686,19 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 	router.GET(baseURL+"/api/v1/sources", wrapper.DMAPIGetSourceList)
 	router.POST(baseURL+"/api/v1/sources", wrapper.DMAPICreateSource)
 	router.DELETE(baseURL+"/api/v1/sources/:source-name", wrapper.DMAPIDeleteSource)
-	router.PATCH(baseURL+"/api/v1/sources/:source-name/pause-relay", wrapper.DMAPIPauseRelay)
-	router.PATCH(baseURL+"/api/v1/sources/:source-name/resume-relay", wrapper.DMAPIResumeRelay)
+	router.POST(baseURL+"/api/v1/sources/:source-name/pause-relay", wrapper.DMAPIPauseRelay)
+	router.POST(baseURL+"/api/v1/sources/:source-name/resume-relay", wrapper.DMAPIResumeRelay)
 	router.GET(baseURL+"/api/v1/sources/:source-name/schemas", wrapper.DMAPIGetSourceSchemaList)
 	router.GET(baseURL+"/api/v1/sources/:source-name/schemas/:schema-name", wrapper.DMAPIGetSourceTableList)
-	router.PATCH(baseURL+"/api/v1/sources/:source-name/start-relay", wrapper.DMAPIStartRelay)
+	router.POST(baseURL+"/api/v1/sources/:source-name/start-relay", wrapper.DMAPIStartRelay)
 	router.GET(baseURL+"/api/v1/sources/:source-name/status", wrapper.DMAPIGetSourceStatus)
-	router.PATCH(baseURL+"/api/v1/sources/:source-name/stop-relay", wrapper.DMAPIStopRelay)
-	router.PATCH(baseURL+"/api/v1/sources/:source-name/transfer", wrapper.DMAPITransferSource)
+	router.POST(baseURL+"/api/v1/sources/:source-name/stop-relay", wrapper.DMAPIStopRelay)
+	router.POST(baseURL+"/api/v1/sources/:source-name/transfer", wrapper.DMAPITransferSource)
 	router.GET(baseURL+"/api/v1/tasks", wrapper.DMAPIGetTaskList)
 	router.POST(baseURL+"/api/v1/tasks", wrapper.DMAPIStartTask)
 	router.DELETE(baseURL+"/api/v1/tasks/:task-name", wrapper.DMAPIDeleteTask)
-	router.PATCH(baseURL+"/api/v1/tasks/:task-name/pause", wrapper.DMAPPauseTask)
-	router.PATCH(baseURL+"/api/v1/tasks/:task-name/resume", wrapper.DMAPIResumeTask)
+	router.POST(baseURL+"/api/v1/tasks/:task-name/pause", wrapper.DMAPPauseTask)
+	router.POST(baseURL+"/api/v1/tasks/:task-name/resume", wrapper.DMAPIResumeTask)
 	router.GET(baseURL+"/api/v1/tasks/:task-name/sources/:source-name/schemas", wrapper.DMAPIGetTaskSourceSchemaList)
 	router.GET(baseURL+"/api/v1/tasks/:task-name/sources/:source-name/schemas/:schema-name", wrapper.DMAPIGetTaskSourceTableList)
 	router.DELETE(baseURL+"/api/v1/tasks/:task-name/sources/:source-name/schemas/:schema-name/:table-name", wrapper.DMAPIDeleteTaskSourceTableStructure)
@@ -776,19 +776,19 @@ var swaggerSpec = []string{
 	"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",
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
