@@ -199,12 +199,12 @@ func (s *Server) DMAPIStopRelay(ctx echo.Context, sourceName string) error {
 	return s.scheduler.StopRelay(sourceName, req.WorkerNameList)
 }
 
-// DMAPIPauseRelay pause relay log function for the data source url is: (PATCH /api/v1/sources/{source-name}/pause-relay).
+// DMAPIPauseRelay pause relay log function for the data source url is: (POST /api/v1/sources/{source-name}/pause-relay).
 func (s *Server) DMAPIPauseRelay(ctx echo.Context, sourceName string) error {
 	return nil
 }
 
-// DMAPIResumeRelay resume relay log function for the data source url is: (PATCH /api/v1/sources/{source-name}/resume-relay).
+// DMAPIResumeRelay resume relay log function for the data source url is: (POST /api/v1/sources/{source-name}/resume-relay).
 func (s *Server) DMAPIResumeRelay(ctx echo.Context, sourceName string) error {
 	return nil
 }
@@ -259,7 +259,7 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	return ctx.JSON(http.StatusOK, resp)
 }
 
-// DMAPITransferSource transfer source  another free worker url is: (PATCH /api/v1/sources/{source-name}/transfer).
+// DMAPITransferSource transfer source  another free worker url is: (POST /api/v1/sources/{source-name}/transfer).
 func (s *Server) DMAPITransferSource(ctx echo.Context, sourceName string) error {
 	return nil
 }
@@ -456,12 +456,12 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string, params op
 	return ctx.JSON(http.StatusOK, resp)
 }
 
-// DMAPPauseTask pause task url is: (PATCH /api/v1/tasks/{task-name}/pause).
+// DMAPPauseTask pause task url is: (POST /api/v1/tasks/{task-name}/pause).
 func (s *Server) DMAPPauseTask(ctx echo.Context, taskName string) error {
 	return nil
 }
 
-// DMAPIResumeTask resume task url is: (PATCH /api/v1/tasks/{task-name}/resume).
+// DMAPIResumeTask resume task url is: (POST /api/v1/tasks/{task-name}/resume).
 func (s *Server) DMAPIResumeTask(ctx echo.Context, taskName string) error {
 	return nil
 }
