@@ -431,7 +431,7 @@ paths:
           schema:
             type: string
             example: "task-1"
-        - name: source-name-list
+        - name: source_name_list
           in: query
           description: "source name list"
           required: false

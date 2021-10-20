@@ -528,7 +528,7 @@ type DMAPIOperateTaskSourceTableStructureJSONBody OperateTaskTableStructureReque
 // DMAPIGetTaskStatusParams defines parameters for DMAPIGetTaskStatus.
 type DMAPIGetTaskStatusParams struct {
 	// source name list
-	SourceNameList *SourceNameList `json:"source-name-list,omitempty"`
+	SourceNameList *SourceNameList `json:"source_name_list,omitempty"`
 
 	// subtask stage
 	Stage *string `json:"stage,omitempty"`
