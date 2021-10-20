@@ -408,13 +408,13 @@ func checkLogColumns(skipped [][]int) error {
 
 // DML stores param for DML.
 type DML struct {
-	tableID         string
+	targetTableID   string
 	sourceTable     *filter.Table
 	op              opType
 	oldValues       []interface{} // only for update SQL
 	values          []interface{}
 	columns         []*model.ColumnInfo
-	ti              *model.TableInfo
+	sourceTableInfo *model.TableInfo
 	originOldValues []interface{} // use to gen `WHERE` for update SQL
 	originValues    []interface{} // use to gen `WHERE` for delete SQL
 	safeMode        bool
@@ -422,16 +422,16 @@ type DML struct {
 }
 
 // newDML creates DML.
-func newDML(op opType, safeMode bool, tableID string, sourceTable *filter.Table, oldValues, values, originOldValues, originValues []interface{}, columns []*model.ColumnInfo, ti *model.TableInfo) *DML {
+func newDML(op opType, safeMode bool, targetTableID string, sourceTable *filter.Table, oldValues, values, originOldValues, originValues []interface{}, columns []*model.ColumnInfo, sourceTableInfo *model.TableInfo) *DML {
 	return &DML{
 		op:              op,
 		safeMode:        safeMode,
-		tableID:         tableID,
+		targetTableID:   targetTableID,
 		sourceTable:     sourceTable,
 		oldValues:       oldValues,
 		values:          values,
 		columns:         columns,
-		ti:              ti,
+		sourceTableInfo: sourceTableInfo,
 		originOldValues: originOldValues,
 		originValues:    originValues,
 	}
@@ -444,11 +444,11 @@ func (dml *DML) identifyKeys() []string {
 	var keys []string
 	// for UPDATE statement
 	if dml.originOldValues != nil {
-		keys = append(keys, genMultipleKeys(dml.ti, dml.originOldValues, dml.tableID)...)
+		keys = append(keys, genMultipleKeys(dml.sourceTableInfo, dml.originOldValues, dml.targetTableID)...)
 	}
 
 	if dml.originValues != nil {
-		keys = append(keys, genMultipleKeys(dml.ti, dml.originValues, dml.tableID)...)
+		keys = append(keys, genMultipleKeys(dml.sourceTableInfo, dml.originValues, dml.targetTableID)...)
 	}
 	return keys
 }
@@ -456,19 +456,19 @@ func (dml *DML) identifyKeys() []string {
 // whereColumnsAndValues gets columns and values of unique column with not null value.
 // This is used to generete where condition.
 func (dml *DML) whereColumnsAndValues() ([]string, []interface{}) {
-	columns, values := dml.ti.Columns, dml.originValues
+	columns, values := dml.sourceTableInfo.Columns, dml.originValues
 
 	if dml.op == update {
 		values = dml.originOldValues
 	}
 
-	defaultIndexColumns := findFitIndex(dml.ti)
+	defaultIndexColumns := findFitIndex(dml.sourceTableInfo)
 
 	if defaultIndexColumns == nil {
-		defaultIndexColumns = getAvailableIndexColumn(dml.ti, values)
+		defaultIndexColumns = getAvailableIndexColumn(dml.sourceTableInfo, values)
 	}
 	if defaultIndexColumns != nil {
-		columns, values = getColumnData(dml.ti.Columns, defaultIndexColumns, values)
+		columns, values = getColumnData(dml.sourceTableInfo.Columns, defaultIndexColumns, values)
 	}
 
 	columnNames := make([]string, 0, len(columns))
@@ -581,7 +581,7 @@ func (dml *DML) genUpdateSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
 	buf.Grow(2048)
 	buf.WriteString("UPDATE ")
-	buf.WriteString(dml.tableID)
+	buf.WriteString(dml.targetTableID)
 	buf.WriteString(" SET ")
 
 	for i, column := range dml.columns {
@@ -606,7 +606,7 @@ func (dml *DML) genDeleteSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
 	buf.Grow(1024)
 	buf.WriteString("DELETE FROM ")
-	buf.WriteString(dml.tableID)
+	buf.WriteString(dml.targetTableID)
 	buf.WriteString(" WHERE ")
 	whereArgs := dml.genWhere(&buf)
 	buf.WriteString(" LIMIT 1")
@@ -614,13 +614,13 @@ func (dml *DML) genDeleteSQL() ([]string, [][]interface{}) {
 	return []string{buf.String()}, [][]interface{}{whereArgs}
 }
 
-// genInsertSQL generates a `INSERT` SQL with WHERE
+// genInsertSQL generates a `INSERT`.
 // if in safemode, generates a `INSERT ON DUPLICATE UPDATE` statement.
 func (dml *DML) genInsertSQL() ([]string, [][]interface{}) {
 	var buf strings.Builder
 	buf.Grow(256)
 	buf.WriteString("INSERT INTO ")
-	buf.WriteString(dml.tableID)
+	buf.WriteString(dml.targetTableID)
 	buf.WriteString(" (")
 	for i, column := range dml.columns {
 		if i != len(dml.columns)-1 {
