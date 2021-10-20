@@ -130,19 +130,17 @@ func (h *realRelayHolder) Close() {
 }
 
 func (h *realRelayHolder) run() {
+	if !h.setStageIfNot(pb.Stage_Running, pb.Stage_Running) {
+		return
+	}
 	h.ctx, h.cancel = context.WithCancel(context.Background())
-	pr := make(chan pb.ProcessResult, 1)
 	h.setResult(nil) // clear previous result
-	h.setStage(pb.Stage_Running)
 
-	h.relay.Process(h.ctx, pr)
+	r := h.relay.Process(h.ctx)
 
-	for len(pr) > 0 {
-		r := <-pr
-		h.setResult(&r)
-		for _, err := range r.Errors {
-			h.l.Error("process error", zap.Stringer("type", err))
-		}
+	h.setResult(&r)
+	for _, err := range r.Errors {
+		h.l.Error("process error", zap.Stringer("type", err))
 	}
 
 	h.setStageIfNot(pb.Stage_Stopped, pb.Stage_Paused)
@@ -241,12 +239,6 @@ func (h *realRelayHolder) Stage() pb.Stage {
 	h.RLock()
 	defer h.RUnlock()
 	return h.stage
-}
-
-func (h *realRelayHolder) setStage(stage pb.Stage) {
-	h.Lock()
-	defer h.Unlock()
-	h.stage = stage
 }
 
 // setStageIfNot sets stage to newStage if its current value is not oldStage, similar to CAS.
