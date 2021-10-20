@@ -219,9 +219,9 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) (err e
 		return err
 	}
 
-	// check if we can bound free source and workers
+	// check if we can bind free or relay source and workers
 	for _, w := range s.workers {
-		if w.stage == WorkerFree {
+		if w.stage == WorkerFree || w.stage == WorkerRelay {
 			bound, err := s.tryBoundForWorker(w)
 			if err != nil {
 				return err
@@ -1588,14 +1588,16 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 			if bound, ok := sbm[name]; ok {
 				// source bounds without source configuration should be deleted later
 				if _, ok := scm[bound.Source]; ok {
-					boundsToTrigger = append(boundsToTrigger, bound)
-					// TODO: if etcd has saved KV that worker1 started relay for source1, but bound to source2, should
-					// we stop relay or stop source to avoid DM master leader failed to bootstrap?
-					// TODO: add a test
 					err2 = s.updateStatusForBound(w, bound)
 					if err2 != nil {
+						// if etcd has saved KV that worker1 started relay for source1, but bound to source2,
+						// we remove the bound to avoid DM master leader failed to bootstrap
+						if terror.ErrSchedulerBoundDiffWithStartedRelay.Equal(err2) {
+							continue
+						}
 						return 0, err2
 					}
+					boundsToTrigger = append(boundsToTrigger, bound)
 					delete(sbm, name)
 				} else {
 					s.logger.Warn("find source bound without config", zap.Stringer("bound", bound))
@@ -1852,16 +1854,25 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent, toLock bool) error {
 }
 
 // tryBoundForWorker tries to bind a source to the given worker. The order of picking source is
-// - try to bind the last bound source
 // - try to bind sources on which the worker has unfinished load task
+// - try to bind the last bound source
 // - if enabled relay, bind to the relay source or keep unbound
 // - try to bind any unbound sources
 // if the source is bound to a relay enabled worker, we must check that the source is also the relay source of worker.
 // pulling binlog using relay or not is determined by whether the worker has enabled relay.
 func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
-	// 1. check if last bound is still available.
-	// if lastBound not found, or this source has been bounded to another worker (we also check that source still exists
-	// here), use its relay source. if no relay source, randomly pick one from unbounds.
+	// 1. handle this worker has unfinished load task.
+	worker, sourceID := s.getNextLoadTaskTransfer(w.BaseInfo().Name, "")
+	if sourceID != "" {
+		s.logger.Info("found unfinished load task source when worker bound",
+			zap.String("worker", w.BaseInfo().Name),
+			zap.String("source", sourceID))
+		// TODO: tolerate a failed transfer because of start-relay conflicts with loadTask
+		err = s.transferWorkerAndSource(w.BaseInfo().Name, "", worker, sourceID)
+		return err == nil, err
+	}
+
+	// check if last bound is still available.
 	// NOTE: if worker isn't in lastBound, we'll get "zero" SourceBound and it's OK, because "zero" string is not in
 	// unbounds
 	source := s.lastBound[w.baseInfo.Name].Source
@@ -1878,19 +1889,6 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 			s.logger.Info("found history source when worker bound",
 				zap.String("worker", w.BaseInfo().Name),
 				zap.String("source", source))
-		}
-	}
-
-	// pick a source which has subtask in load stage.
-	if source == "" {
-		worker, sourceID := s.getNextLoadTaskTransfer(w.BaseInfo().Name, "")
-		if sourceID != "" {
-			s.logger.Info("found unfinished load task source when worker bound",
-				zap.String("worker", w.BaseInfo().Name),
-				zap.String("source", source))
-			// TODO: tolerate a failed transfer because of start-relay conflicts with loadTask
-			err = s.transferWorkerAndSource(w.BaseInfo().Name, "", worker, sourceID)
-			return err == nil, err
 		}
 	}
 
@@ -2115,7 +2113,7 @@ func (s *Scheduler) updateStatusForBound(w *Worker, b ha.SourceBound) error {
 }
 
 // updateStatusForUnbound updates the in-memory status for unbound, including:
-// - update the stage of worker to `Free`.
+// - update the stage of worker to `Free` or `Relay`.
 // - remove the bound relationship in the scheduler.
 // this func is called after the bound relationship removed from etcd.
 func (s *Scheduler) updateStatusForUnbound(source string) {
@@ -2123,7 +2121,9 @@ func (s *Scheduler) updateStatusForUnbound(source string) {
 	if !ok {
 		return
 	}
-	w.ToFree()
+	if err := w.Unbound(); err != nil {
+		s.logger.DPanic("can updateStatusForUnbound", zap.Error(err))
+	}
 	delete(s.bounds, source)
 }
 

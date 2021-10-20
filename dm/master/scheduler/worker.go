@@ -18,13 +18,14 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/metrics"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-	"go.uber.org/zap"
 )
 
 // WorkerStage represents the stage of a DM-worker instance.
