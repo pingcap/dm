@@ -164,7 +164,7 @@ func (r *Relay) process(ctx context.Context) error {
 		return err
 	}
 
-	db, err := conn.DefaultDBProvider.Apply(r.cfg.From)
+	db, err := conn.DefaultDBProvider.Apply(&r.cfg.From)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeUpstream)
 	}

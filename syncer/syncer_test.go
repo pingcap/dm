@@ -37,7 +37,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb/infoschema"
-	"github.com/pingcap/tidb/util/mock"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
