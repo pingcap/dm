@@ -335,3 +335,9 @@ func (t *testConfig) TestAdjustCaseSensitive(c *C) {
 
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
+
+func (t *testConfig) TestEmbedSampleFile(c *C) {
+	data, err := os.ReadFile("./source.yaml")
+	c.Assert(err, IsNil)
+	c.Assert(SampleConfigFile, Equals, string(data))
+}

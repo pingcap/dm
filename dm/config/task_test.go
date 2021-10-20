@@ -720,7 +720,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	stCfg2.RouteRules = []*router.TableRule{&routeRule4, &routeRule1, &routeRule2}
 	stCfg2.ExprFilter = []*ExpressionFilter{&exprFilter1}
 
-	cfg := FromSubTaskConfigs(stCfg1, stCfg2)
+	cfg := SubTaskConfigsToTaskConfig(stCfg1, stCfg2)
 
 	cfg2 := TaskConfig{
 		Name:                    name,

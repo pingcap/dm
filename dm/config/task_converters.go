@@ -14,6 +14,9 @@
 package config
 
 import (
+	"fmt"
+	"strings"
+
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -269,6 +272,228 @@ func GetTargetDBCfgFromOpenAPITask(task *openapi.Task) *DBConfig {
 	return toDBCfg
 }
 
+// SubTaskConfigsToTaskConfig constructs task configs from a list of valid subtask configs.
+func SubTaskConfigsToTaskConfig(stCfgs ...*SubTaskConfig) *TaskConfig {
+	c := &TaskConfig{}
+	// global configs.
+	stCfg0 := stCfgs[0]
+	c.Name = stCfg0.Name
+	c.TaskMode = stCfg0.Mode
+	c.IsSharding = stCfg0.IsSharding
+	c.ShardMode = stCfg0.ShardMode
+	c.IgnoreCheckingItems = stCfg0.IgnoreCheckingItems
+	c.MetaSchema = stCfg0.MetaSchema
+	c.EnableHeartbeat = stCfg0.EnableHeartbeat
+	c.HeartbeatUpdateInterval = stCfg0.HeartbeatUpdateInterval
+	c.HeartbeatReportInterval = stCfg0.HeartbeatReportInterval
+	c.CaseSensitive = stCfg0.CaseSensitive
+	c.TargetDB = &stCfg0.To // just ref
+	c.OnlineDDL = stCfg0.OnlineDDL
+	c.OnlineDDLScheme = stCfg0.OnlineDDLScheme
+	c.CleanDumpFile = stCfg0.CleanDumpFile
+	c.MySQLInstances = make([]*MySQLInstance, 0, len(stCfgs))
+	c.BAList = make(map[string]*filter.Rules)
+	c.Routes = make(map[string]*router.TableRule)
+	c.Filters = make(map[string]*bf.BinlogEventRule)
+	c.ColumnMappings = make(map[string]*column.Rule)
+	c.Mydumpers = make(map[string]*MydumperConfig)
+	c.Loaders = make(map[string]*LoaderConfig)
+	c.Syncers = make(map[string]*SyncerConfig)
+	c.ExprFilter = make(map[string]*ExpressionFilter)
+
+	baListMap := make(map[string]string, len(stCfgs))
+	routeMap := make(map[string]string, len(stCfgs))
+	filterMap := make(map[string]string, len(stCfgs))
+	dumpMap := make(map[string]string, len(stCfgs))
+	loadMap := make(map[string]string, len(stCfgs))
+	syncMap := make(map[string]string, len(stCfgs))
+	cmMap := make(map[string]string, len(stCfgs))
+	exprFilterMap := make(map[string]string, len(stCfgs))
+	var baListIdx, routeIdx, filterIdx, dumpIdx, loadIdx, syncIdx, cmIdx, efIdx int
+	var baListName, routeName, filterName, dumpName, loadName, syncName, cmName, efName string
+
+	// NOTE:
+	// - we choose to ref global configs for instances now.
+	for _, stCfg := range stCfgs {
+		baListName, baListIdx = getGenerateName(stCfg.BAList, baListIdx, "balist", baListMap)
+		c.BAList[baListName] = stCfg.BAList
+
+		routeNames := make([]string, 0, len(stCfg.RouteRules))
+		for _, rule := range stCfg.RouteRules {
+			routeName, routeIdx = getGenerateName(rule, routeIdx, "route", routeMap)
+			routeNames = append(routeNames, routeName)
+			c.Routes[routeName] = rule
+		}
+
+		filterNames := make([]string, 0, len(stCfg.FilterRules))
+		for _, rule := range stCfg.FilterRules {
+			filterName, filterIdx = getGenerateName(rule, filterIdx, "filter", filterMap)
+			filterNames = append(filterNames, filterName)
+			c.Filters[filterName] = rule
+		}
+
+		dumpName, dumpIdx = getGenerateName(stCfg.MydumperConfig, dumpIdx, "dump", dumpMap)
+		c.Mydumpers[dumpName] = &stCfg.MydumperConfig
+
+		loadName, loadIdx = getGenerateName(stCfg.LoaderConfig, loadIdx, "load", loadMap)
+		loaderCfg := stCfg.LoaderConfig
+		dirSuffix := "." + c.Name
+		// if ends with the task name, we remove to get user input dir.
+		loaderCfg.Dir = strings.TrimSuffix(loaderCfg.Dir, dirSuffix)
+		c.Loaders[loadName] = &loaderCfg
+
+		syncName, syncIdx = getGenerateName(stCfg.SyncerConfig, syncIdx, "sync", syncMap)
+		c.Syncers[syncName] = &stCfg.SyncerConfig
+
+		exprFilterNames := make([]string, 0, len(stCfg.ExprFilter))
+		for _, f := range stCfg.ExprFilter {
+			efName, efIdx = getGenerateName(f, efIdx, "expr-filter", exprFilterMap)
+			exprFilterNames = append(exprFilterNames, efName)
+			c.ExprFilter[efName] = f
+		}
+
+		cmNames := make([]string, 0, len(stCfg.ColumnMappingRules))
+		for _, rule := range stCfg.ColumnMappingRules {
+			cmName, cmIdx = getGenerateName(rule, cmIdx, "cm", cmMap)
+			cmNames = append(cmNames, cmName)
+			c.ColumnMappings[cmName] = rule
+		}
+
+		c.MySQLInstances = append(c.MySQLInstances, &MySQLInstance{
+			SourceID:           stCfg.SourceID,
+			Meta:               stCfg.Meta,
+			FilterRules:        filterNames,
+			ColumnMappingRules: cmNames,
+			RouteRules:         routeNames,
+			BAListName:         baListName,
+			MydumperConfigName: dumpName,
+			LoaderConfigName:   loadName,
+			SyncerConfigName:   syncName,
+			ExpressionFilters:  exprFilterNames,
+		})
+	}
+	return c
+}
+
+// SubTaskConfigsToOpenAPITask gets openapi task from sub task configs.
+func SubTaskConfigsToOpenAPITask(subTaskConfigMap map[string]map[string]SubTaskConfig) []openapi.Task {
+	taskList := []openapi.Task{}
+	for taskName, sourceMap := range subTaskConfigMap {
+		var oneSubtaskConfig SubTaskConfig // need this to get target db config
+		taskSourceConfig := openapi.TaskSourceConfig{}
+		sourceConfList := []openapi.TaskSourceConf{}
+		// source name -> filter rule list
+		filterMap := make(map[string][]*bf.BinlogEventRule)
+		// source name -> route rule list
+		routeMap := make(map[string][]*router.TableRule)
+		for sourceName, cfg := range sourceMap {
+			oneSubtaskConfig = cfg
+			oneConf := openapi.TaskSourceConf{
+				SourceName: sourceName,
+			}
+			if meta := cfg.Meta; meta != nil {
+				oneConf.BinlogGtid = &meta.BinLogGTID
+				oneConf.BinlogName = &meta.BinLogName
+				pos := int(meta.BinLogPos)
+				oneConf.BinlogPos = &pos
+			}
+			sourceConfList = append(sourceConfList, oneConf)
+			if len(cfg.FilterRules) > 0 {
+				filterMap[sourceName] = cfg.FilterRules
+			}
+			if len(cfg.RouteRules) > 0 {
+				routeMap[sourceName] = cfg.RouteRules
+			}
+		}
+		taskSourceConfig.SourceConf = sourceConfList
+
+		dirSuffix := "." + oneSubtaskConfig.Name
+		// if ends with the task name, we remove to get user input dir.
+		oneSubtaskConfig.LoaderConfig.Dir = strings.TrimSuffix(oneSubtaskConfig.LoaderConfig.Dir, dirSuffix)
+		taskSourceConfig.FullMigrateConf = &openapi.TaskFullMigrateConf{
+			DataDir:       &oneSubtaskConfig.LoaderConfig.Dir,
+			ExportThreads: &oneSubtaskConfig.MydumperConfig.Threads,
+			ImportThreads: &oneSubtaskConfig.LoaderConfig.PoolSize,
+		}
+		taskSourceConfig.IncrMigrateConf = &openapi.TaskIncrMigrateConf{
+			ReplBatch:   &oneSubtaskConfig.SyncerConfig.Batch,
+			ReplThreads: &oneSubtaskConfig.SyncerConfig.WorkerCount,
+		}
+		// set filter rules
+		filterRuleMap := openapi.Task_BinlogFilterRule{}
+		for sourceName, ruleList := range filterMap {
+			for idx, rule := range ruleList {
+				var events []string
+				if len(rule.Events) > 0 {
+					for _, event := range rule.Events {
+						events = append(events, string(event))
+					}
+				}
+				filterRuleMap.Set(genFilterRuleName(sourceName, idx), openapi.TaskBinLogFilterRule{
+					IgnoreEvent: &events, IgnoreSql: &rule.SQLPattern,
+				})
+			}
+		}
+		// set table migrate rules
+		tableMigrateRuleList := []openapi.TaskTableMigrateRule{}
+		for sourceName, ruleList := range routeMap {
+			for _, rule := range ruleList {
+				tableMigrateRule := openapi.TaskTableMigrateRule{
+					Source: struct {
+						Schema     string `json:"schema"`
+						SourceName string `json:"source_name"`
+						Table      string `json:"table"`
+					}{
+						Schema:     rule.SchemaPattern,
+						SourceName: sourceName,
+						Table:      rule.TablePattern,
+					},
+					Target: &struct {
+						Schema string `json:"schema"`
+						Table  string `json:"table"`
+					}{
+						Schema: rule.TargetSchema,
+						Table:  rule.TargetTable,
+					},
+				}
+				if filterRuleList, ok := filterMap[sourceName]; ok {
+					ruleNameList := make([]string, len(filterRuleList))
+					for idx := range filterRuleList {
+						ruleNameList[idx] = genFilterRuleName(sourceName, idx)
+					}
+					tableMigrateRule.BinlogFilterRule = &ruleNameList
+				}
+				tableMigrateRuleList = append(tableMigrateRuleList, tableMigrateRule)
+			}
+		}
+		// set basic global config
+		task := openapi.Task{
+			Name:                      taskName,
+			TaskMode:                  openapi.TaskTaskMode(oneSubtaskConfig.Mode),
+			EnhanceOnlineSchemaChange: oneSubtaskConfig.OnlineDDL,
+			MetaSchema:                &oneSubtaskConfig.MetaSchema,
+			OnDuplicate:               openapi.TaskOnDuplicateError,
+			SourceConfig:              taskSourceConfig,
+			TargetConfig: openapi.TaskTargetDataBase{
+				Host:     oneSubtaskConfig.To.Host,
+				Port:     oneSubtaskConfig.To.Port,
+				User:     oneSubtaskConfig.To.User,
+				Password: oneSubtaskConfig.To.Password,
+			},
+		}
+		if oneSubtaskConfig.ShardMode != "" {
+			taskShardMode := openapi.TaskShardMode(oneSubtaskConfig.ShardMode)
+			task.ShardMode = &taskShardMode
+		}
+		if len(filterMap) > 0 {
+			task.BinlogFilterRule = &filterRuleMap
+		}
+		task.TableMigrateRule = tableMigrateRuleList
+		taskList = append(taskList, task)
+	}
+	return taskList
+}
+
 func removeDuplication(in []string) []string {
 	m := make(map[string]struct{}, len(in))
 	j := 0
@@ -282,4 +507,9 @@ func removeDuplication(in []string) []string {
 		j++
 	}
 	return in[:j]
+}
+
+func genFilterRuleName(sourceName string, idx int) string {
+	// NOTE that we don't have user input filter rule name in sub task config, so we make one by ourself
+	return fmt.Sprintf("%s-filter-rule-%d", sourceName, idx)
 }
