@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
@@ -50,7 +49,7 @@ const (
 	TiDBClusteredIndex = "tidb_enable_clustered_index"
 	// downstream mock table id, consists of serial numbers of letters.
 	mockTableID    = 121402101900011104
-	defaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"
+	DefaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"
 )
 
 var (
@@ -72,10 +71,9 @@ type Tracker struct {
 
 // downstreamTracker tracks downstream schema.
 type downstreamTracker struct {
-	trackMutex     sync.Mutex     // downstream track mutex
-	downstreamConn *conn.BaseConn // downstream connection
-	stmtParser     *parser.Parser // statement parser
-	tableInfos     sync.Map       // downstream table infos
+	downstreamConn *conn.BaseConn                  // downstream connection
+	stmtParser     *parser.Parser                  // statement parser
+	tableInfos     map[string]*downstreamTableInfo // downstream table infos
 }
 
 // downstreamTableInfo contains tableinfo and index cache.
@@ -184,6 +182,7 @@ func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, 
 	// init downstreamTracker
 	dsTracker := &downstreamTracker{
 		downstreamConn: downstreamConn,
+		tableInfos:     make(map[string]*downstreamTableInfo),
 	}
 
 	return &Tracker{
@@ -365,38 +364,29 @@ func (tr *Tracker) GetSystemVar(name string) (string, bool) {
 // GetDownStreamIndexInfo gets downstream PK/UK(not null) Index.
 // note. this function will init downstreamTrack's table info.
 func (tr *Tracker) GetDownStreamIndexInfo(tctx *tcontext.Context, tableID string, originTi *model.TableInfo) (*model.IndexInfo, error) {
-	dti, ok := tr.dsTracker.tableInfos.Load(tableID)
+	dti, ok := tr.dsTracker.tableInfos[tableID]
 	if !ok {
-		tr.dsTracker.trackMutex.Lock()
-		defer tr.dsTracker.trackMutex.Unlock()
-		// index info maybe has been inited by other routine
-		dti, ok = tr.dsTracker.tableInfos.Load(tableID)
-		if ok {
-			return dti.(*downstreamTableInfo).indexCache, nil
-		}
-
-		log.L().Info("DownStream schema tracker init. ", zap.String("tableID", tableID))
+		log.L().Info("Downstream schema tracker init. ", zap.String("tableID", tableID))
 		ti, err := tr.getTIByCreateStmt(tctx, tableID, originTi.Name.O)
 		if err != nil {
+			log.L().Error("Init dowstream schema info error. ", zap.String("tableID", tableID), zap.Error(err))
 			return nil, err
 		}
 
 		dti = getDownStreamTi(ti, originTi)
-		tr.dsTracker.tableInfos.Store(tableID, dti)
+		tr.dsTracker.tableInfos[tableID] = dti
 	}
-	return dti.(*downstreamTableInfo).indexCache, nil
+	return dti.indexCache, nil
 }
 
 // GetAvailableDownStreamUKIndexInfo gets available downstream UK whose data is not null.
 // note. this function will not init downstreamTrack.
 func (tr *Tracker) GetAvailableDownStreamUKIndexInfo(tableID string, originTi *model.TableInfo, data []interface{}) *model.IndexInfo {
-	dtii, ok := tr.dsTracker.tableInfos.Load(tableID)
+	dti, ok := tr.dsTracker.tableInfos[tableID]
 
-	if !ok || dtii.(*downstreamTableInfo).availableUKCache == nil || len(dtii.(*downstreamTableInfo).availableUKCache) == 0 {
+	if !ok || len(dti.availableUKCache) == 0 {
 		return nil
 	}
-
-	dti := dtii.(*downstreamTableInfo)
 	// func for check data is not null
 	fn := func(i int) bool {
 		return data[i] != nil
@@ -425,19 +415,19 @@ func (tr *Tracker) ReTrackDownStreamIndex(targetTables []*filter.Table) {
 
 	for i := 0; i < len(targetTables); i++ {
 		tableID := utils.GenTableID(targetTables[i])
-		_, ok := tr.dsTracker.tableInfos.LoadAndDelete(tableID)
+		_, ok := tr.dsTracker.tableInfos[tableID]
 		if !ok {
 			// handle just have schema
 			if targetTables[i].Schema != "" && targetTables[i].Name == "" {
-				tr.dsTracker.tableInfos.Range(func(k, v interface{}) bool {
-					if strings.HasPrefix(k.(string), tableID+".") {
-						tr.dsTracker.tableInfos.Delete(k)
+				for k := range tr.dsTracker.tableInfos {
+					if strings.HasPrefix(k, tableID+".") {
+						delete(tr.dsTracker.tableInfos, k)
+						log.L().Info("Remove downstream schema tracker", zap.String("tableID", tableID))
 					}
-					return true
-				})
-				log.L().Info("Remove downstream schema tracker", zap.String("schema", targetTables[i].Schema))
+				}
 			}
 		} else {
+			delete(tr.dsTracker.tableInfos, tableID)
 			log.L().Info("Remove downstream schema tracker", zap.String("tableID", tableID))
 		}
 	}
@@ -481,15 +471,14 @@ func (tr *Tracker) getTIByCreateStmt(tctx *tcontext.Context, tableID string, ori
 
 // initDownStreamTrackerParser init downstream tracker parser by default sql_mode.
 func (tr *Tracker) initDownStreamSQLModeAndParser(tctx *tcontext.Context) error {
-	setSQLMode := fmt.Sprintf("SET SESSION SQL_MODE = '%s'", defaultSQLMode)
+	setSQLMode := fmt.Sprintf("SET SESSION SQL_MODE = '%s'", DefaultSQLMode)
 	_, err := tr.dsTracker.downstreamConn.DBConn.ExecContext(tctx.Ctx, setSQLMode)
 	if err != nil {
-		return dterror.ErrSchemaTrackerCannotSetDownstreamSQLMode.Delegate(err, defaultSQLMode)
+		return dterror.ErrSchemaTrackerCannotSetDownstreamSQLMode.Delegate(err, DefaultSQLMode)
 	}
-
-	stmtParser, err := utils.GetParserFromSQLModeStr(defaultSQLMode)
+	stmtParser, err := utils.GetParserFromSQLModeStr(DefaultSQLMode)
 	if err != nil {
-		return dterror.ErrSchemaTrackerCannotInitDownstreamParser.Delegate(err, defaultSQLMode)
+		return dterror.ErrSchemaTrackerCannotInitDownstreamParser.Delegate(err, DefaultSQLMode)
 	}
 	tr.dsTracker.stmtParser = stmtParser
 	return nil
