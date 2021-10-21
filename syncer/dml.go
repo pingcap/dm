@@ -415,8 +415,8 @@ type DML struct {
 	values          []interface{}
 	columns         []*model.ColumnInfo
 	sourceTableInfo *model.TableInfo
-	originOldValues []interface{} // use to gen `WHERE` for update SQL
-	originValues    []interface{} // use to gen `WHERE` for delete SQL
+	originOldValues []interface{} // only for update SQL
+	originValues    []interface{} // use to gen key and `WHERE`
 	safeMode        bool
 	key             string // use to detect causality
 }
