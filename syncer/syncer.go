@@ -311,7 +311,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
 
-	s.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, s.cfg.To.Session, s.downstreamTrackConn.BaseConn)
+	s.schemaTracker, err = schema.NewTracker(ctx, s.cfg.Name, s.cfg.To.Session, s.downstreamTrackConn)
 	if err != nil {
 		return terror.ErrSchemaTrackerInit.Delegate(err)
 	}
@@ -2730,7 +2730,7 @@ func (s *Syncer) trackDDL(usedSchema string, trackInfo *ddlInfo, ec *eventContex
 	}
 
 	if shouldReTrackDownstreamIndex {
-		s.schemaTracker.ReTrackDownStreamIndex(targetTables)
+		s.schemaTracker.RemoveDownstreamSchema(targetTables)
 	}
 
 	if shouldSchemaExist {

@@ -37,11 +37,11 @@ import (
 	"github.com/pingcap/tidb/util/mock"
 	"go.uber.org/zap"
 
-	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	dterror "github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 const (
@@ -72,7 +72,7 @@ type Tracker struct {
 
 // downstreamTracker tracks downstream schema.
 type downstreamTracker struct {
-	downstreamConn *conn.BaseConn                  // downstream connection
+	downstreamConn *dbconn.DBConn                  // downstream connection
 	stmtParser     *parser.Parser                  // statement parser
 	tableInfos     map[string]*downstreamTableInfo // downstream table infos
 }
@@ -87,7 +87,7 @@ type downstreamTableInfo struct {
 // NewTracker creates a new tracker. `sessionCfg` will be set as tracker's session variables if specified, or retrieve
 // some variable from downstream using `downstreamConn`.
 // NOTE **sessionCfg is a reference to caller**.
-func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, downstreamConn *conn.BaseConn) (*Tracker, error) {
+func NewTracker(ctx context.Context, task string, sessionCfg map[string]string, downstreamConn *dbconn.DBConn) (*Tracker, error) {
 	// NOTE: tidb uses a **global** config so can't isolate tracker's config from each other. If that isolation is needed,
 	// we might SetGlobalConfig before every call to tracker, or use some patch like https://github.com/bouk/monkey
 	tidbConfig.UpdateGlobal(func(conf *tidbConfig.Config) {
@@ -368,7 +368,7 @@ func (tr *Tracker) GetDownStreamIndexInfo(tctx *tcontext.Context, tableID string
 	dti, ok := tr.dsTracker.tableInfos[tableID]
 	if !ok {
 		log.L().Info("Downstream schema tracker init. ", zap.String("tableID", tableID))
-		ti, err := tr.getTIByCreateStmt(tctx, tableID, originTi.Name.O)
+		ti, err := tr.getTableInfoByCreateStmt(tctx, tableID, originTi.Name.O)
 		if err != nil {
 			log.L().Error("Init dowstream schema info error. ", zap.String("tableID", tableID), zap.Error(err))
 			return nil, err
@@ -408,18 +408,18 @@ func (tr *Tracker) GetAvailableDownStreamUKIndexInfo(tableID string, originTi *m
 	return nil
 }
 
-// ReTrackDownStreamIndex just remove schema or table in downstreamTrack.
-func (tr *Tracker) ReTrackDownStreamIndex(targetTables []*filter.Table) {
+// RemoveDownstreamSchema just remove schema or table in downstreamTrack.
+func (tr *Tracker) RemoveDownstreamSchema(targetTables []*filter.Table) {
 	if len(targetTables) == 0 {
 		return
 	}
 
-	for i := 0; i < len(targetTables); i++ {
-		tableID := utils.GenTableID(targetTables[i])
+	for _, targetTable := range targetTables {
+		tableID := utils.GenTableID(targetTable)
 		_, ok := tr.dsTracker.tableInfos[tableID]
 		if !ok {
 			// handle just have schema
-			if targetTables[i].Schema != "" && targetTables[i].Name == "" {
+			if targetTable.Schema != "" && targetTable.Name == "" {
 				for k := range tr.dsTracker.tableInfos {
 					if strings.HasPrefix(k, tableID+".") {
 						delete(tr.dsTracker.tableInfos, k)
@@ -434,8 +434,8 @@ func (tr *Tracker) ReTrackDownStreamIndex(targetTables []*filter.Table) {
 	}
 }
 
-// getTIByCreateStmt get downstream tableInfo by "SHOW CREATE TABLE" stmt.
-func (tr *Tracker) getTIByCreateStmt(tctx *tcontext.Context, tableID string, originTableName string) (*model.TableInfo, error) {
+// getTableInfoByCreateStmt get downstream tableInfo by "SHOW CREATE TABLE" stmt.
+func (tr *Tracker) getTableInfoByCreateStmt(tctx *tcontext.Context, tableID string, originTableName string) (*model.TableInfo, error) {
 	if tr.dsTracker.stmtParser == nil {
 		err := tr.initDownStreamSQLModeAndParser(tctx)
 		if err != nil {
@@ -473,7 +473,7 @@ func (tr *Tracker) getTIByCreateStmt(tctx *tcontext.Context, tableID string, ori
 // initDownStreamTrackerParser init downstream tracker parser by default sql_mode.
 func (tr *Tracker) initDownStreamSQLModeAndParser(tctx *tcontext.Context) error {
 	setSQLMode := fmt.Sprintf("SET SESSION SQL_MODE = '%s'", DefaultSQLMode)
-	_, err := tr.dsTracker.downstreamConn.DBConn.ExecContext(tctx.Ctx, setSQLMode)
+	_, err := tr.dsTracker.downstreamConn.BaseConn.DBConn.ExecContext(tctx.Ctx, setSQLMode)
 	if err != nil {
 		return dterror.ErrSchemaTrackerCannotSetDownstreamSQLMode.Delegate(err, DefaultSQLMode)
 	}
