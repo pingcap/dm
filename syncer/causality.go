@@ -14,31 +14,84 @@
 package syncer
 
 import (
-	"github.com/pingcap/dm/pkg/terror"
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/syncer/metrics"
 )
 
 // causality provides a simple mechanism to improve the concurrency of SQLs execution under the premise of ensuring correctness.
 // causality groups sqls that maybe contain causal relationships, and syncer executes them linearly.
-// if some conflicts exist in more than one groups, then syncer waits all SQLs that are grouped be executed and reset causality.
+// if some conflicts exist in more than one groups, causality generate a conflict job and reset.
 // this mechanism meets quiescent consistency to ensure correctness.
 type causality struct {
 	relations map[string]string
+	outCh     chan *job
+	inCh      chan *job
+	logger    log.Logger
+
+	// for metrics
+	task   string
+	source string
 }
 
-func newCausality() *causality {
-	return &causality{
+// causalityWrap creates and runs a causality instance.
+func causalityWrap(inCh chan *job, syncer *Syncer) chan *job {
+	causality := &causality{
 		relations: make(map[string]string),
+		task:      syncer.cfg.Name,
+		source:    syncer.cfg.SourceID,
+		logger:    syncer.tctx.Logger.WithFields(zap.String("component", "causality")),
+		inCh:      inCh,
+		outCh:     make(chan *job, syncer.cfg.QueueSize),
+	}
+
+	go func() {
+		causality.run()
+		causality.close()
+	}()
+
+	return causality.outCh
+}
+
+// run receives dml jobs and send causality jobs by adding causality key.
+// When meet conflict, sends a conflict job.
+func (c *causality) run() {
+	for j := range c.inCh {
+		metrics.QueueSizeGauge.WithLabelValues(c.task, "causality_input", c.source).Set(float64(len(c.inCh)))
+
+		startTime := time.Now()
+		if j.tp == flush {
+			c.reset()
+		} else {
+			// detectConflict before add
+			if c.detectConflict(j.keys) {
+				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", j.keys))
+				c.outCh <- newConflictJob()
+				c.reset()
+			}
+			j.key = c.add(j.keys)
+			c.logger.Debug("key for keys", zap.String("key", j.key), zap.Strings("keys", j.keys))
+		}
+		metrics.ConflictDetectDurationHistogram.WithLabelValues(c.task, c.source).Observe(time.Since(startTime).Seconds())
+
+		c.outCh <- j
 	}
 }
 
-func (c *causality) add(keys []string) error {
+// close closes outer channel.
+func (c *causality) close() {
+	close(c.outCh)
+}
+
+// add adds keys relation and return the relation. The keys must `detectConflict` first to ensure correctness.
+func (c *causality) add(keys []string) string {
 	if len(keys) == 0 {
-		return nil
+		return ""
 	}
 
-	if c.detectConflict(keys) {
-		return terror.ErrSyncUnitCausalityConflict.Generate()
-	}
 	// find causal key
 	selectedRelation := keys[0]
 	var nonExistKeys []string
@@ -53,13 +106,11 @@ func (c *causality) add(keys []string) error {
 	for _, key := range nonExistKeys {
 		c.relations[key] = selectedRelation
 	}
-	return nil
+
+	return selectedRelation
 }
 
-func (c *causality) get(key string) string {
-	return c.relations[key]
-}
-
+// reset resets relations.
 func (c *causality) reset() {
 	c.relations = make(map[string]string)
 }

@@ -29,7 +29,6 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb/infoschema"
-	"github.com/pingcap/tidb/util/mock"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -262,8 +261,9 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	}
 
 	p := parser.New()
-	var err error
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	err = syncer.genRouter()
@@ -368,8 +368,9 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	}
 
 	p := parser.New()
-	var err error
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
@@ -403,8 +404,9 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	res := []bool{true, true, false, false, true, true, true, true, true, true, false, false}
 
 	p := parser.New()
-	var err error
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
@@ -495,8 +497,9 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	}
 
 	p := parser.New()
-	var err error
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
@@ -588,7 +591,9 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 	p := parser.New()
 	var err error
 
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil)
 	c.Assert(syncer.genRouter(), IsNil)
 
 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, s.cfg.FilterRules)
@@ -705,72 +710,11 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 }
 
 func (s *testSyncerSuite) TestcheckpointID(c *C) {
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil)
 	checkpointID := syncer.checkpointID()
 	c.Assert(checkpointID, Equals, "101")
-}
-
-func (s *testSyncerSuite) TestCasuality(c *C) {
-	p := parser.New()
-	se := mock.NewContext()
-	schema := "create table tb(a int primary key, b int unique);"
-	ti, err := createTableInfo(p, se, int64(0), schema)
-	c.Assert(err, IsNil)
-	insertValues := [][]interface{}{
-		{1, 2},
-		{3, 4},
-		{4, 1},
-		{1, 4}, // this insert conflict with the first one
-	}
-	keys := make([][]string, len(insertValues))
-	for i := range insertValues {
-		keys[i] = genMultipleKeys(ti, insertValues[i], "tb")
-	}
-
-	s.cfg.WorkerCount = 1
-	syncer := NewSyncer(s.cfg, nil)
-	syncer.jobs = []chan *job{make(chan *job, 1)}
-	syncer.queueBucketMapping = []string{"queue_0", adminQueueName}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		job := <-syncer.jobs[0]
-		c.Assert(job.tp, Equals, flush)
-		syncer.jobWg.Done()
-	}()
-
-	// no conflict
-	key1, err := syncer.resolveCasuality(keys[0])
-	c.Assert(err, IsNil)
-	c.Assert(key1, Equals, keys[0][0])
-
-	key2, err := syncer.resolveCasuality(keys[1])
-	c.Assert(err, IsNil)
-	c.Assert(key2, Equals, keys[1][0])
-
-	key3, err := syncer.resolveCasuality(keys[2])
-	c.Assert(err, IsNil)
-	c.Assert(key3, Equals, keys[2][0])
-
-	// will detect casuality and add a flush job
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	dbConn, err := db.Conn(context.Background())
-	c.Assert(err, IsNil)
-
-	syncer.setupMockCheckpoint(c, dbConn, mock)
-	mock.ExpectBegin()
-	mock.ExpectExec(".*INSERT INTO .* VALUES.* ON DUPLICATE KEY UPDATE.*").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectCommit()
-	key4, err := syncer.resolveCasuality(keys[3])
-	c.Assert(err, IsNil)
-	c.Assert(key4, Equals, keys[3][0])
-	if err := mock.ExpectationsWereMet(); err != nil {
-		c.Errorf("checkpoint db unfulfilled expectations: %s", err)
-	}
-	wg.Wait()
 }
 
 // TODO: add `TestSharding` later.
@@ -817,7 +761,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.WorkerCount = 2
 	s.cfg.MaxRetry = 1
 
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil)
 	syncer.cfg.CheckpointFlushInterval = 30
 	syncer.fromDB = &dbconn.UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
 	syncer.toDBConns = []*dbconn.DBConn{
@@ -916,10 +862,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
 			[]interface{}{int64(580981944116838401)},
 		}, {
-			flush,
-			"",
-			nil,
-		}, {
 			// in the first minute, safe mode is true, will split update to delete + replace
 			update,
 			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
@@ -952,6 +894,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		}, {
 			ddl,
 			"ALTER TABLE `test_1`.`t_3` ADD PRIMARY KEY(`id`, `name`)",
+			nil,
+		}, {
+			flush,
+			"",
 			nil,
 		},
 	}
@@ -1013,6 +959,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			del,
 			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1",
 			[]interface{}{int32(3)},
+		}, {
+			flush,
+			"",
+			nil,
 		},
 	}
 
@@ -1059,7 +1009,9 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 		},
 	}
 
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil)
 	syncer.fromDB = &dbconn.UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
 	syncer.toDBConns = []*dbconn.DBConn{
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
@@ -1172,6 +1124,10 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 			update,
 			"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1",
 			[]interface{}{int32(1), "b", int32(2)},
+		}, {
+			flush,
+			"",
+			nil,
 		},
 	}
 
@@ -1246,7 +1202,9 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	checkPointDBConn, err := checkPointDB.Conn(context.Background())
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil)
 	syncer.toDBConns = []*dbconn.DBConn{
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
