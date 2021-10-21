@@ -1165,6 +1165,10 @@ func (s *Syncer) doFlushCheckPointsAsync(wg *sync.WaitGroup, outCh chan error) {
 	}
 
 	snapshotID := s.checkpoint.Snapshot()
+	if snapshotID.id == 0  {
+		log.L().Info("checkpoint has no change, skip save checkpoint")
+		return
+	}
 	task := &flushCpTask{
 		snapshot: snapshotID,
 		wg: wg,

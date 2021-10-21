@@ -379,7 +379,9 @@ func (cp *RemoteCheckPoint)  Snapshot() SnapshotID {
 
 	// if there is no change just return an empty snapshot
 	if len(tableCheckPoints) == 0 && (cp.globalPoint == nil || !cp.globalPoint.outOfDate()) {
-		return 0
+		return SnapshotID{
+			id: 0,
+		}
 	}
 
 	snapshot := &removeCheckpointSnapshot{
