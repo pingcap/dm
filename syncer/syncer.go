@@ -3223,6 +3223,7 @@ func (s *Syncer) setSyncCfg() error {
 		Password:                s.cfg.From.Password,
 		TimestampStringLocation: s.timezone,
 		TLSConfig:               tlsConfig,
+		SemiSyncEnabled:         true,
 	}
 	// when retry count > 1, go-mysql will retry sync from the previous GTID set in GTID mode,
 	// which may get duplicate binlog event after retry success. so just set retry count = 1, and task
