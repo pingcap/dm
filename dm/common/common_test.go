@@ -62,6 +62,11 @@ func (t *testCommon) TestKeyAdapter(c *C) {
 			want:    "/dm-master/upstream/subtask/6d7973716c31/74657374",
 		},
 		{
+			keys:    []string{"mysql1"},
+			adapter: UpstreamEnableRelayKeyAdapter,
+			want:    "/dm-master/enable-relay/6d7973716c31",
+		},
+		{
 			keys:    []string{"test", "target_db", "target_table"},
 			adapter: ShardDDLOptimismInitSchemaKeyAdapter,
 			want:    "/dm-master/shardddl-optimism/init-schema/74657374/7461726765745f6462/7461726765745f7461626c65",

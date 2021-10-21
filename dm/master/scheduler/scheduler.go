@@ -149,6 +149,14 @@ type Scheduler struct {
 	// - stop-relay
 	relayWorkers map[string]map[string]struct{}
 
+	// sources that should start relay on its bound worker. set(source-id)
+	// add:
+	// - start-relay
+	// - recover from etcd (calling `recoverRelayConfigs`)
+	// delete:
+	// - stop-relay
+	enableRelaySources map[string]struct{}
+
 	// workers in load stage
 	// task -> source -> worker
 	loadTasks map[string]map[string]string
@@ -1486,13 +1494,18 @@ func (s *Scheduler) recoverSubTasks(cli *clientv3.Client) error {
 	return nil
 }
 
-// recoverRelayConfigs recovers history relay configs for each worker from etcd.
+// recoverRelayConfigs recovers history relay configs for each worker and source from etcd.
 func (s *Scheduler) recoverRelayConfigs(cli *clientv3.Client) error {
 	relayWorkers, _, err := ha.GetAllRelayConfig(cli)
 	if err != nil {
 		return err
 	}
 	s.relayWorkers = relayWorkers
+	sources, _, err := ha.GetAllEnabledRelaySources(cli)
+	if err != nil {
+		return err
+	}
+	s.enableRelaySources = sources
 	return nil
 }
 

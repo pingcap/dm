@@ -243,3 +243,44 @@ func WatchRelayConfig(ctx context.Context, cli *clientv3.Client,
 		}
 	}
 }
+
+// PutEnabledRelaySource puts the source ID which should start relay for its bound worker.
+func PutEnabledRelaySource(cli *clientv3.Client, source string) (int64, error) {
+	op := clientv3.OpPut(common.UpstreamEnableRelayKeyAdapter.Encode(source), "")
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, op)
+	return rev, err
+}
+
+// DeleteEnabledRelaySource deletes the source ID so it will not automatically start relay for bound worker.
+func DeleteEnabledRelaySource(cli *clientv3.Client, source string) (int64, error) {
+	op := clientv3.OpDelete(common.UpstreamEnableRelayKeyAdapter.Encode(source))
+	_, rev, err := etcdutil.DoOpsInOneTxnWithRetry(cli, op)
+	return rev, err
+}
+
+// GetAllEnabledRelaySources gets all sources that have enabled relay.
+// k/v: source ID -> empty.
+func GetAllEnabledRelaySources(cli *clientv3.Client) (map[string]struct{}, int64, error) {
+	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
+	defer cancel()
+
+	resp, err := cli.Get(ctx, common.UpstreamEnableRelayKeyAdapter.Path(), clientv3.WithPrefix())
+	if err != nil {
+		return nil, 0, err
+	}
+
+	ret := map[string]struct{}{}
+	for _, kv := range resp.Kvs {
+		keys, err2 := common.UpstreamEnableRelayKeyAdapter.Decode(string(kv.Key))
+		if err2 != nil {
+			return nil, 0, err2
+		}
+		if len(keys) != 1 {
+			// should not happened
+			return nil, 0, terror.Annotate(err, "illegal key of UpstreamRelayWorkerKeyAdapter")
+		}
+		sourceID := keys[0]
+		ret[sourceID] = struct{}{}
+	}
+	return ret, resp.Header.Revision, nil
+}

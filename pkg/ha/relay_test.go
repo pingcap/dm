@@ -62,3 +62,46 @@ func (t *testForEtcd) TestGetRelayConfigEtcd(c *C) {
 	c.Assert(rev6, Equals, rev5)
 	c.Assert(cfg3, IsNil)
 }
+
+func (t *testForEtcd) TestEnableRelaySourceEtcd(c *C) {
+	defer clearTestInfoOperation(c)
+
+	source := "mysql-replica-1"
+
+	sources, rev1, err := GetAllEnabledRelaySources(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(rev1, Greater, int64(0))
+	c.Assert(sources, HasLen, 0)
+
+	_, err = DeleteEnabledRelaySource(etcdTestCli, source)
+	c.Assert(err, IsNil)
+
+	rev2, err := PutEnabledRelaySource(etcdTestCli, source)
+	c.Assert(err, IsNil)
+	c.Assert(rev2, Greater, rev1)
+
+	sources, rev3, err := GetAllEnabledRelaySources(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(rev3, Equals, rev2)
+	c.Assert(sources, HasLen, 1)
+	c.Assert(sources, HasKey, source)
+
+	rev4, err := PutEnabledRelaySource(etcdTestCli, source)
+	c.Assert(err, IsNil)
+	c.Assert(rev4, Greater, rev3)
+
+	sources, rev5, err := GetAllEnabledRelaySources(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(rev5, Equals, rev4)
+	c.Assert(sources, HasLen, 1)
+	c.Assert(sources, HasKey, source)
+
+	rev6, err := DeleteEnabledRelaySource(etcdTestCli, source)
+	c.Assert(err, IsNil)
+	c.Assert(rev6, Greater, rev5)
+
+	sources, rev7, err := GetAllEnabledRelaySources(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(rev7, Equals, rev6)
+	c.Assert(sources, HasLen, 0)
+}

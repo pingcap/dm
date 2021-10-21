@@ -103,7 +103,7 @@ func TryUpgrade(cli *clientv3.Client, uctx Context) error {
 }
 
 // TryUpgradeBeforeSchedulerStart tries to upgrade the cluster before scheduler start.
-// This methods should have no side effects even calling multiple times.
+// This method should have no side effects even calling multiple times.
 func TryUpgradeBeforeSchedulerStart(ctx context.Context, cli *clientv3.Client) error {
 	// 1. get previous version from etcd.
 	preVer, _, err := GetVersion(cli)
@@ -275,3 +275,5 @@ func upgradeToVer3(ctx context.Context, cli *clientv3.Client) error {
 func upgradeToVer4(cli *clientv3.Client, uctx Context) error {
 	return nil
 }
+
+// TODO: should we set UpstreamEnableRelayKeyAdapter when upgrading from <2.0.2

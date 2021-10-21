@@ -57,6 +57,9 @@ var (
 	// StageSubTaskKeyAdapter is used to store the running stage of the subtask.
 	// k/v: Encode(source-id, task-name) -> the running stage of the subtask.
 	StageSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/stage/subtask/")
+	// UpstreamEnableRelayKeyAdapter is used to store sources whose bound worker should start relay before replicating.
+	// k/v Encode(source-id) -> nil.
+	UpstreamEnableRelayKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/enable-relay/")
 
 	// ShardDDLPessimismInfoKeyAdapter is used to store shard DDL info in pessimistic model.
 	// k/v: Encode(task-name, source-id) -> shard DDL info.
@@ -93,7 +96,7 @@ var (
 func keyAdapterKeysLen(s KeyAdapter) int {
 	switch s {
 	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter,
-		WorkerKeepAliveKeyAdapter, StageRelayKeyAdapter,
+		WorkerKeepAliveKeyAdapter, StageRelayKeyAdapter, UpstreamEnableRelayKeyAdapter,
 		UpstreamLastBoundWorkerKeyAdapter, UpstreamRelayWorkerKeyAdapter:
 		return 1
 	case UpstreamSubTaskKeyAdapter, StageSubTaskKeyAdapter,
