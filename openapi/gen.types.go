@@ -529,9 +529,6 @@ type DMAPIOperateTaskSourceTableStructureJSONBody OperateTaskTableStructureReque
 type DMAPIGetTaskStatusParams struct {
 	// source name list
 	SourceNameList *SourceNameList `json:"source_name_list,omitempty"`
-
-	// subtask stage
-	Stage *string `json:"stage,omitempty"`
 }
 
 // DMAPICreateSourceJSONRequestBody defines body for DMAPICreateSource for application/json ContentType.

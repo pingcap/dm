@@ -437,13 +437,6 @@ paths:
           required: false
           schema:
             $ref: "#/components/schemas/SourceNameList"
-        - name: stage
-          in: query
-          description: "subtask stage"
-          required: false
-          schema:
-            type: string
-            example: "running"
       responses:
         "200":
           description: "success"
