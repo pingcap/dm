@@ -64,28 +64,18 @@ func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, er
 			return nil, err
 		}
 	}
-	// get real tables before apply block-allow list
-	realTables := make([]*filter.Table, 0, len(ddlInfo.sourceTables))
-	for _, table := range ddlInfo.sourceTables {
-		realTableName := table.Name
-		if s.onlineDDL != nil {
-			realTableName = s.onlineDDL.RealName(table.Name)
-		}
-		realTables = append(realTables, &filter.Table{
-			Schema: table.Schema,
-			Name:   realTableName,
-		})
-	}
 
 	qec.tctx.L().Debug("will skip query event", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("ddlInfo", ddlInfo))
-	shouldSkip, err := s.skipQueryEvent(realTables, ddlInfo.originStmt, qec.originSQL)
+	sql, shouldSkip, err := s.skipQueryEvent(qec.originSQL, ddlInfo)
 	if err != nil {
 		return nil, err
 	}
 	if shouldSkip {
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 		qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("query event context", qec))
-		sql = ""
+		if len(sql) != 0 {
+			return nil, nil
+		}
 	}
 
 	if s.onlineDDL == nil {

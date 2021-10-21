@@ -15,32 +15,61 @@ package syncer
 
 import (
 	"github.com/go-mysql-org/go-mysql/replication"
-	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
 
-func (s *Syncer) skipQueryEvent(tables []*filter.Table, stmt ast.StmtNode, sql string) (bool, error) {
-	if utils.IsBuildInSkipDDL(sql) {
-		return true, nil
+func (s *Syncer) skipQueryEvent(originSQL string, ddlInfo *ddlInfo) (string, bool, error) {
+	if utils.IsBuildInSkipDDL(ddlInfo.originDDL) {
+		return ddlInfo.originDDL, true, nil
 	}
-	et := bf.AstToDDLEvent(stmt)
-	for _, table := range tables {
-		needSkip, err := s.skipOneEvent(table, et, sql)
-		if err != nil || needSkip {
-			return needSkip, err
+	et := bf.AstToDDLEvent(ddlInfo.originStmt)
+	// get real tables before apply block-allow list
+	realTables := make([]*filter.Table, 0, len(ddlInfo.sourceTables))
+	for _, table := range ddlInfo.sourceTables {
+		realTableName := table.Name
+		if s.onlineDDL != nil {
+			realTableName = s.onlineDDL.RealName(table.Name)
+		}
+		realTables = append(realTables, &filter.Table{
+			Schema: table.Schema,
+			Name:   realTableName,
+		})
+	}
+	for _, table := range realTables {
+		s.tctx.L().Debug("query event info", zap.String("event", "query"), zap.String("origin sql", originSQL), zap.Stringer("table", table), zap.Stringer("ddl info", ddlInfo))
+		if s.skipByTable(table) {
+			s.tctx.L().Debug("skip event by balist")
+			return ddlInfo.originDDL, true, nil
+		}
+		needSkip, err := s.skipOneEvent(table, et, originSQL)
+		if err != nil {
+			return ddlInfo.originDDL, needSkip, err
+		}
+
+		if needSkip {
+			s.tctx.L().Debug("skip event by binlog filter")
+			if s.onlineDDL == nil {
+				return ddlInfo.originDDL, true, nil
+			}
+			s.tctx.L().Warn("return empty string")
+			return "", true, nil
 		}
 	}
-	return false, nil
+	return ddlInfo.originDDL, false, nil
 }
 
 func (s *Syncer) skipRowsEvent(table *filter.Table, eventType replication.EventType) (bool, error) {
 	// skip un-realTable
 	if s.onlineDDL != nil && s.onlineDDL.TableType(table.Name) != onlineddl.RealTable {
+		return true, nil
+	}
+	if s.skipByTable(table) {
 		return true, nil
 	}
 	var et bf.EventType
@@ -52,9 +81,6 @@ func (s *Syncer) skipRowsEvent(table *filter.Table, eventType replication.EventT
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 		et = bf.DeleteEvent
 	default:
-		if s.skipByTable(table) {
-			return true, nil
-		}
 		return false, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
 	}
 	return s.skipOneEvent(table, et, "")
@@ -78,9 +104,6 @@ func (s *Syncer) skipSQLByPattern(sql string) (bool, error) {
 // - type of SQL doesn't pass binlog-filter.
 // - pattern of SQL doesn't pass binlog-filter.
 func (s *Syncer) skipOneEvent(table *filter.Table, et bf.EventType, sql string) (bool, error) {
-	if s.skipByTable(table) {
-		return true, nil
-	}
 	if s.binlogFilter == nil {
 		return false, nil
 	}

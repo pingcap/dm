@@ -45,6 +45,7 @@ function run() {
 		"\"result\": true" 1
 
 	# imitate a DM task is started during the running of online DDL tool
+	# *_ignore will be skipped by block-allow-list
 	run_sql_source1 "create table online_ddl.gho_ignore (c int); create table online_ddl._gho_ignore_gho (c int);"
 	run_sql_source1 "create table online_ddl.pt_ignore (c int); create table online_ddl._pt_ignore_new (c int);"
 
@@ -81,6 +82,7 @@ function run() {
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
 	# imitate a DM task is started during the processing of online DDL tool
+	# *_ignore will be skipped by block-allow-list
 	run_sql_source1 "rename /* gh-ost */ table online_ddl.gho_ignore to online_ddl._gho_ignore_del, online_ddl._gho_ignore_gho to online_ddl.gho_ignore;"
 	run_sql_source1 "rename table online_ddl.pt_ignore to online_ddl._pt_ignore_old, online_ddl._pt_ignore_new to online_ddl.pt_ignore;"
 
