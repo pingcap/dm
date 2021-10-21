@@ -638,13 +638,6 @@ func (w *ServerInterfaceWrapper) DMAPIGetTaskStatus(ctx echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source_name_list: %s", err))
 	}
 
-	// ------------- Optional query parameter "stage" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "stage", ctx.QueryParams(), &params.Stage)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter stage: %s", err))
-	}
-
 	// Invoke the callback with all the unmarshalled arguments
 	err = w.Handler.DMAPIGetTaskStatus(ctx, taskName, params)
 	return err
@@ -786,9 +779,9 @@ var swaggerSpec = []string{
 	"7o00uS7KZsJkS/btrt7U6p+zOH1+yranXym5e7mNgHuIhi0pdyrt/5COlyodrm9wD/F4WJeguEnSvVPw",
 	"HN3Vj5bFnxUTt/YtHizAG/YxCnHu3Mv4TqX5R1PlWapRsLPyyFqk580o3jiN8RQr/yWFH9r1zLSr33x3",
 	"rYnkmSx0pnnDL6S85NytroPSE/FawWcTJ/RDV37oyrdu3bX8KNSLdYqtCpmkTQrp/QjQD6W8N/DvRSUf",
-	"v0Cx9keo/ip9quIXszbQ3PaYttvpDe8jtN9ToX2jqlgdg3RmGeW+xhoE796F9ioaf8jlG7i2F3omxdHb",
-	"CmpVEczHCMRNJrjlu+Yrnm5FPIaEmZvmPU1kt0Dj70a0X26POHrgjfbhdUrQ1cAe5rMNtYHMfyK1JMG9",
-	"kF13X1L+Jkg69PK3A+V+V9TT9ACS2VXFfFz24O7z3b8DAAD//7pW++UdfgAA",
+	"v0Cx9keo/ip9quIXszbQ3PaYttvpDe8jtN9ToX2jqtg38Dcv9KCIkdZMeqrSab4QIG4yaSpfAF/xdCvi",
+	"MSTMXP/uaSK7BRp/zKH9xnnE0QOvmQ+vU4KuBvaEne1yDWT+u6UlseqFjK37vPE3QdKhl78dKPdjn576",
+	"BZDM7g/m47IHd5/v/h0AAP//ygaUOLJ9AAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
