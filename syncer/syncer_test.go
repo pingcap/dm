@@ -997,7 +997,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 }
 
 func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
-
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 	s.mockGetServerUnixTS(mock)

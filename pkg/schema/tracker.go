@@ -48,7 +48,8 @@ const (
 	// TiDBClusteredIndex is the variable name for clustered index.
 	TiDBClusteredIndex = "tidb_enable_clustered_index"
 	// downstream mock table id, consists of serial numbers of letters.
-	mockTableID    = 121402101900011104
+	mockTableID = 121402101900011104
+	// DefaultSQLMode is downstream schema track and paser SQLMode.
 	DefaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"
 )
 
