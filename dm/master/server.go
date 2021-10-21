@@ -726,9 +726,6 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 	}
 
 	resps := s.getStatusFromWorkers(ctx, sources, req.Name, queryRelayWorker)
-
-	s.fillUnsyncedStatus(resps)
-
 	workerRespMap := make(map[string][]*pb.QueryStatusResponse, len(sources))
 	for _, workerResp := range resps {
 		workerRespMap[workerResp.SourceStatus.Source] = append(workerRespMap[workerResp.SourceStatus.Source], workerResp)
@@ -1070,6 +1067,7 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, tas
 		}
 	}
 	wg.Wait()
+	s.fillUnsyncedStatus(workerResps)
 	return workerResps
 }
 
@@ -1229,6 +1227,11 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 			err      error
 		)
 		for _, cfg := range cfgs {
+			// tell user he should use `start-relay` to manually specify relay workers
+			if cfg.EnableRelay {
+				resp.Msg = "Please use `start-relay` to specify which workers should pull relay log of relay-enabled sources."
+			}
+
 			err = s.scheduler.AddSourceCfg(cfg)
 			// return first error and try to revert, so user could copy-paste same start command after error
 			if err != nil {
@@ -1303,12 +1306,6 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 	}
 
 	resp.Result = true
-	// tell user he should use `start-relay` to manually specify relay workers
-	for _, cfg := range cfgs {
-		if cfg.EnableRelay {
-			resp.Msg = "Please use `start-relay` to specify which workers should pull relay log of relay-enabled sources."
-		}
-	}
 
 	var noWorkerMsg string
 	switch req.Op {
@@ -2052,7 +2049,7 @@ func (s *Server) GetCfg(ctx context.Context, req *pb.GetCfgRequest) (*pb.GetCfgR
 			return subCfgList[i].SourceID < subCfgList[j].SourceID
 		})
 
-		taskCfg := config.FromSubTaskConfigs(subCfgList...)
+		taskCfg := config.SubTaskConfigsToTaskConfig(subCfgList...)
 		taskCfg.TargetDB.Password = "******"
 		if taskCfg.TargetDB.Security != nil {
 			taskCfg.TargetDB.Security.ClearSSLBytesData()
