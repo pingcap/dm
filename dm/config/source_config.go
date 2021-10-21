@@ -1,9 +1,23 @@
+// Copyright 2021 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package config
 
 import (
 	"bytes"
 	"context"
 	"database/sql"
+	_ "embed"
 	"encoding/json"
 	"math"
 	"math/rand"
@@ -33,9 +47,10 @@ const (
 
 var getAllServerIDFunc = utils.GetAllServerID
 
-// SampleConfigFile is sample config file of source
-// later we can read it from dm/master/source.yaml
-// and assign it to SampleConfigFile while we build dm-ctl.
+// SampleConfigFile is sample config file of source.
+// The embed source.yaml is a copy of dm/master/source.yaml, because embed
+// can only match regular files in the current directory and subdirectories.
+//go:embed source.yaml
 var SampleConfigFile string
 
 // PurgeConfig is the configuration for Purger.
