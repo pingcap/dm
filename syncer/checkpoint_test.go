@@ -399,12 +399,12 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	cp.SaveTablePoint(table, binlog.Location{Position: pos1}, ti)
 	rcp := cp.(*RemoteCheckPoint)
 	c.Assert(rcp.points[schemaName][tableName].TableInfo(), NotNil)
-	c.Assert(rcp.points[schemaName][tableName].flushedTI, IsNil)
+	c.Assert(rcp.points[schemaName][tableName].flushedLocation.ti, IsNil)
 
 	cp.Rollback(s.tracker)
 	rcp = cp.(*RemoteCheckPoint)
 	c.Assert(rcp.points[schemaName][tableName].TableInfo(), IsNil)
-	c.Assert(rcp.points[schemaName][tableName].flushedTI, IsNil)
+	c.Assert(rcp.points[schemaName][tableName].flushedLocation.ti, IsNil)
 
 	_, err = s.tracker.GetTableInfo(table)
 	c.Assert(strings.Contains(err.Error(), "doesn't exist"), IsTrue)
@@ -478,6 +478,6 @@ func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(cp.GlobalPoint(), DeepEquals, binlog.InitLocation(pos2, gs))
 	rcp = cp.(*RemoteCheckPoint)
 	c.Assert(rcp.points[schemaName][tableName].TableInfo(), NotNil)
-	c.Assert(rcp.points[schemaName][tableName].flushedTI, NotNil)
+	c.Assert(rcp.points[schemaName][tableName].flushedLocation.ti, NotNil)
 	c.Assert(*rcp.safeModeExitPoint, DeepEquals, binlog.InitLocation(pos2, gs))
 }

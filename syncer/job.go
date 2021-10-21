@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/go-mysql-org/go-mysql/replication"
@@ -83,6 +84,7 @@ type job struct {
 
 	eventHeader *replication.EventHeader
 	jobAddTime  time.Time // job commit time
+	wg          *sync.WaitGroup // wait group for flush/conflict job
 }
 
 func (j *job) String() string {
@@ -169,6 +171,7 @@ func newFlushJob() *job {
 		tp:          flush,
 		targetTable: &filter.Table{},
 		jobAddTime:  time.Now(),
+		wg:			 &sync.WaitGroup{},
 	}
 }
 
