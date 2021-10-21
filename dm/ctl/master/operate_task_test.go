@@ -67,3 +67,8 @@ func prepareTestCmd() *cobra.Command {
 	cmd.PersistentFlags().StringSliceVarP(&[]string{}, "source", "s", []string{}, "MySQL Source ID.")
 	return cmd
 }
+
+type A struct {
+	a string  // from required field
+	b *string // from  not required field
+}

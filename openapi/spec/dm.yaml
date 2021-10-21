@@ -716,7 +716,7 @@ paths:
             example: "db1"
         - name: table-name
           in: path
-          description: "schema name"
+          description: "table name"
           required: true
           schema:
             type: string
