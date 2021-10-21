@@ -35,6 +35,7 @@ const (
 	flush
 	skip // used by Syncer.recordSkipSQLsLocation to record global location, but not execute SQL
 	rotate
+	flushCheckpointSnapshot
 )
 
 func (t opType) String() string {
@@ -55,6 +56,8 @@ func (t opType) String() string {
 		return "skip"
 	case rotate:
 		return "rotate"
+	case flushCheckpointSnapshot:
+		return "flushCheckpointSnapshot"
 	}
 
 	return ""
@@ -79,6 +82,8 @@ type job struct {
 
 	eventHeader *replication.EventHeader
 	jobAddTime  time.Time // job commit time
+
+	checkPointSnapshotID string
 }
 
 func (j *job) String() string {
@@ -165,6 +170,14 @@ func newFlushJob() *job {
 		tp:          flush,
 		targetTable: &filter.Table{},
 		jobAddTime:  time.Now(),
+	}
+}
+
+func newFlushCheckpointSnapshotJob(checkpointSnapshotID string) *job {
+	return &job{
+		tp:                   flushCheckpointSnapshot,
+		checkPointSnapshotID: checkpointSnapshotID,
+		jobAddTime:           time.Now(),
 	}
 }
 

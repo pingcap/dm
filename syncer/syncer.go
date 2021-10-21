@@ -848,18 +848,6 @@ func (s *Syncer) updateReplicationLagMetric() {
 	}
 }
 
-func (s *Syncer) checkWait(job *job) bool {
-	if job.tp == ddl {
-		return true
-	}
-
-	if s.checkpoint.CheckGlobalPoint() {
-		return true
-	}
-
-	return false
-}
-
 func (s *Syncer) saveTablePoint(table *filter.Table, location binlog.Location) {
 	ti, err := s.schemaTracker.GetTableInfo(table)
 	if err != nil && table.Name != "" {
@@ -975,10 +963,20 @@ func (s *Syncer) addJob(job *job) error {
 			time.Sleep(100 * time.Millisecond)
 		})
 		metrics.AddJobDurationHistogram.WithLabelValues(job.tp.String(), s.cfg.Name, s.queueBucketMapping[queueBucket], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
+	case flushCheckpointSnapshot:
+		s.jobWg.Add(s.cfg.WorkerCount)
+		for i := 0; i < s.cfg.WorkerCount; i++ {
+			startTime := time.Now()
+			s.jobs[i] <- job
+			// flush for every DML queue
+			// TODO: evaluate correctness of metrics update
+			metrics.AddJobDurationHistogram.WithLabelValues("checkpoint", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
+		}
+		return nil
 	}
 
 	// nolint:ifshort
-	wait := s.checkWait(job)
+	wait := job.tp == ddl
 	failpoint.Inject("flushFirstJob", func() {
 		if waitJobsDone {
 			s.tctx.L().Info("trigger flushFirstJob")
@@ -1044,7 +1042,44 @@ func (s *Syncer) addJob(job *job) error {
 		return s.flushCheckPoints()
 	}
 
+	// Periodically create checkpoint snapshot and async flush checkpoint snapshot
+	// TODO: configurable flush interval
+	if s.checkpoint.CheckGlobalPoint() {
+		snapshotID := s.checkpoint.CreateSnapshot()
+
+		checkpointJob := newFlushCheckpointSnapshotJob(snapshotID)
+		s.jobWg.Add(s.cfg.WorkerCount)
+		for i := 0; i < s.cfg.WorkerCount; i++ {
+			startTime := time.Now()
+			s.jobs[i] <- checkpointJob
+			// flush for every DML queue
+			// TODO: evaluate correctness of metrics update
+			metrics.AddJobDurationHistogram.WithLabelValues("checkpoint", s.cfg.Name, s.queueBucketMapping[i], s.cfg.SourceID).Observe(time.Since(startTime).Seconds())
+		}
+	}
+
 	return nil
+}
+
+func (s *Syncer) flushCheckpointSnapshots() {
+	// traverse checkpoints and find the lastest one with all channel msg collected
+	task, err := s.checkpoint.CreateFlushSnapshotsTask(s.cfg.WorkerCount)
+	if err != nil {
+		s.tctx.L().Info("flushCheckpointSnapshots quit", zap.Error(err))
+		return
+	}
+
+	err = s.flushCheckPointSnapshot(task.flushSnapshotID)
+	if err != nil {
+		s.tctx.L().Warn("error detected when flushCheckPointSnapshot, skip flush checkpoint snapshot",
+			zap.String("checkpoint snapshot", task.flushSnapshotID),
+			zap.Error(err))
+		return
+	}
+	s.tctx.L().Info("flushed checkpoint snapshot", zap.Reflect("snapshot id", task.flushSnapshotID))
+
+	s.checkpoint.PurgeSnapshots(task.purgeSnapshotIDs)
+	s.tctx.L().Info(fmt.Sprintf("purged %d checkpoint snapshots together", len(task.purgeSnapshotIDs)), zap.Reflect("snapshots", task.purgeSnapshotIDs))
 }
 
 func (s *Syncer) saveGlobalPoint(globalLocation binlog.Location) {
@@ -1064,6 +1099,69 @@ func (s *Syncer) resetShardingGroup(table *filter.Table) {
 			group.Reset()
 		}
 	}
+}
+
+// TODO: the current implementation is heavily copied from flushCheckPoints() function, need to refactor code.
+func (s *Syncer) flushCheckPointSnapshot(snapshotID string) error {
+	err := s.execError.Load()
+	// TODO: for now, if any error occurred (including user canceled), checkpoint won't be updated. But if we have put
+	// optimistic shard info, DM-master may resolved the optimistic lock and let other worker execute DDL. So after this
+	// worker resume, it can not execute the DML/DDL in old binlog because of downstream table structure mismatching.
+	// We should find a way to (compensating) implement a transaction containing interaction with both etcd and SQL.
+	if err != nil && (terror.ErrDBExecuteFailed.Equal(err) || terror.ErrDBUnExpect.Equal(err)) {
+		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint",
+			zap.String("checkpoint snapshot id", snapshotID),
+			zap.Error(err))
+		return nil
+	}
+
+	// 这里可能会出现 flush 老的 snapshot 的时候，在打snapshot时候，那些table并没有resolved
+	var (
+		exceptTableIDs map[string]bool
+		exceptTables   []*filter.Table
+		shardMetaSQLs  []string
+		shardMetaArgs  [][]interface{}
+	)
+	if s.cfg.ShardMode == config.ShardPessimistic {
+		// flush all checkpoints except tables which are unresolved for sharding DDL for the pessimistic mode.
+		// NOTE: for the optimistic mode, because we don't handle conflicts automatically (or no re-direct supported),
+		// so we can simply flush checkpoint for all tables now, and after re-direct supported this should be updated.
+		exceptTableIDs, exceptTables = s.sgk.UnresolvedTables()
+		s.tctx.L().Info("async flush checkpoints except for these tables", zap.Reflect("tables", exceptTables))
+
+		shardMetaSQLs, shardMetaArgs = s.sgk.PrepareFlushSQLs(exceptTableIDs)
+		s.tctx.L().Info("prepare async flush sqls", zap.Strings("shard meta sqls", shardMetaSQLs), zap.Reflect("shard meta arguments", shardMetaArgs))
+	}
+
+	err = s.checkpoint.FlushSnapshotPointsExcept(snapshotID, s.tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
+	if err != nil {
+		return terror.Annotatef(err, "async flush checkpoint snapshot %s", snapshotID)
+	}
+	s.tctx.L().Info("async flushed checkpoint snapshot", zap.String("checkpoint snapshot", snapshotID))
+
+	// update current active relay log after checkpoint flushed
+	err = s.updateActiveRelayLog(s.checkpoint.GlobalPoint().Position)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	if !s.lastCheckpointFlushedTime.IsZero() {
+		duration := now.Sub(s.lastCheckpointFlushedTime).Seconds()
+		metrics.FlushCheckPointsTimeInterval.WithLabelValues(s.cfg.WorkerName, s.cfg.Name, s.cfg.SourceID).Observe(duration)
+	}
+	s.lastCheckpointFlushedTime = now
+
+	s.tctx.L().Info("after last async flushing checkpoint, DM has ignored row changes by expression filter",
+		zap.Int64("number of filtered insert", s.filteredInsert.Load()),
+		zap.Int64("number of filtered update", s.filteredUpdate.Load()),
+		zap.Int64("number of filtered delete", s.filteredDelete.Load()))
+
+	s.filteredInsert.Store(0)
+	s.filteredUpdate.Store(0)
+	s.filteredDelete.Store(0)
+
+	return nil
 }
 
 // flushCheckPoints flushes previous saved checkpoint in memory to persistent storage, like TiDB
@@ -1270,6 +1368,7 @@ func (s *Syncer) syncDML(
 
 	// clearF is used to reset job queue.
 	clearF := func() {
+		// TODO: catch potential panic caused by s.jobWg.Done() here
 		for i := 0; i < idx; i++ {
 			s.jobWg.Done()
 		}
@@ -1395,7 +1494,7 @@ func (s *Syncer) syncDML(
 				return
 			}
 			idx++
-			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
+			if sqlJob.tp != flush && sqlJob.tp != flushCheckpointSnapshot && len(sqlJob.sql) > 0 {
 				if len(jobs) == 0 {
 					// set job TS when received first job of this batch.
 					s.updateReplicationJobTS(sqlJob, workerJobIdx)
@@ -1409,6 +1508,10 @@ func (s *Syncer) syncDML(
 					tpCnt[schemaName][tableName] = make(map[opType]int64)
 				}
 				tpCnt[schemaName][tableName][sqlJob.tp]++
+			}
+
+			if sqlJob.tp == flushCheckpointSnapshot {
+				s.checkpoint.UpdateFlushSnapshotJob(sqlJob.checkPointSnapshotID, queueID)
 			}
 
 			if idx >= count || sqlJob.tp == flush {
@@ -1616,6 +1719,23 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			select {
 			case <-updateLagTicker.C:
 				s.updateReplicationLagMetric()
+			case <-runCtx.Done():
+				return
+			}
+		}
+	}()
+
+	// background routine to periodically flush checkpoint snapshots
+	// TODO: support configurable purge interval
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		flushCheckpointTicker := time.NewTicker(time.Second * 30)
+		defer flushCheckpointTicker.Stop()
+		for {
+			select {
+			case <-flushCheckpointTicker.C:
+				s.flushCheckpointSnapshots()
 			case <-runCtx.Done():
 				return
 			}
@@ -2027,10 +2147,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			err2 = s.addJobFunc(job)
 		case *replication.GenericEvent:
 			if e.Header.EventType == replication.HEARTBEAT_EVENT {
-				// flush checkpoint even if there are no real binlog events
+				// async flush checkpoint even if there are no real binlog events
 				if s.checkpoint.CheckGlobalPoint() {
 					tctx.L().Info("meet heartbeat event and then flush jobs")
-					err2 = s.flushJobs()
+					snapshotID := s.checkpoint.CreateSnapshot()
+					job := newFlushCheckpointSnapshotJob(snapshotID)
+					err2 = s.addJobFunc(job)
 				}
 			}
 		}

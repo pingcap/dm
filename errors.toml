@@ -1138,6 +1138,12 @@ description = ""
 workaround = ""
 tags = ["internal", "medium"]
 
+[error.DM-checkpoint-24007]
+message = "checkpoint snapshot %s cannot be found in checkpoint's snapshots"
+description = ""
+workaround = "Please check log to find out if such snapshot is already purged before"
+tags = ["internal", "medium"]
+
 [error.DM-task-check-26001]
 message = "same table name in case-insensitive %v"
 description = ""

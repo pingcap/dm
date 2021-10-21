@@ -261,6 +261,7 @@ const (
 	codeCheckpointDBNotExistInFile
 	codeCheckpointTableNotExistInFile
 	codeCheckpointRestoreCountGreater
+	codeCheckpointSnapshotNotExist
 )
 
 // Task check error code.
@@ -896,6 +897,8 @@ var (
 	ErrCheckpointDBNotExistInFile    = New(codeCheckpointDBNotExistInFile, ClassCheckpoint, ScopeInternal, LevelMedium, "db (%s) not exist in data files, but in checkpoint", "")
 	ErrCheckpointTableNotExistInFile = New(codeCheckpointTableNotExistInFile, ClassCheckpoint, ScopeInternal, LevelMedium, "table (%s) not exist in db (%s) data files, but in checkpoint", "")
 	ErrCheckpointRestoreCountGreater = New(codeCheckpointRestoreCountGreater, ClassCheckpoint, ScopeInternal, LevelMedium, "restoring count greater than total count for table[%v]", "")
+	// Checkpoint snapshot error.
+	ErrCheckpointSnapshotNotExist = New(codeCheckpointSnapshotNotExist, ClassCheckpoint, ScopeInternal, LevelMedium, "checkpoint snapshot %s cannot be found in checkpoint's snapshots", "Please check log to find out if such snapshot is already purged before")
 
 	// Task check error.
 	ErrTaskCheckSameTableName    = New(codeTaskCheckSameTableName, ClassTaskCheck, ScopeInternal, LevelMedium, "same table name in case-insensitive %v", "Please check `target-table` config in task configuration file.")
