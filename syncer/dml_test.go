@@ -228,8 +228,11 @@ func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
 func (s *testSyncerSuite) TestGenWhere(c *C) {
 	p := parser.New()
 	se := mock.NewContext()
-	schema := "create table test.tb(id int primary key, col1 int unique not null, col2 int unique, name varchar(24))"
-	ti, err := createTableInfo(p, se, 0, schema)
+	schema1 := "create table test.tb(id int primary key, col1 int unique not null, col2 int unique, name varchar(24))"
+	ti1, err := createTableInfo(p, se, 0, schema1)
+	c.Assert(err, IsNil)
+	schema2 := "create table test.tb(id int, col1 int, col2 int, name varchar(24))"
+	ti2, err := createTableInfo(p, se, 0, schema2)
 	c.Assert(err, IsNil)
 
 	testCases := []struct {
@@ -238,14 +241,24 @@ func (s *testSyncerSuite) TestGenWhere(c *C) {
 		values []interface{}
 	}{
 		{
-			newDML(del, false, "", &filter.Table{}, nil, []interface{}{1, 2, 3, "haha"}, nil, []interface{}{1, 2, 3, "haha"}, ti.Columns, ti),
+			newDML(del, false, "", &filter.Table{}, nil, []interface{}{1, 2, 3, "haha"}, nil, []interface{}{1, 2, 3, "haha"}, ti1.Columns, ti1),
 			"`id` = ?",
 			[]interface{}{1},
 		},
 		{
-			newDML(update, false, "", &filter.Table{}, []interface{}{1, 2, 3, "haha"}, []interface{}{4, 5, 6, "hihi"}, []interface{}{1, 2, 3, "haha"}, []interface{}{4, 5, 6, "hihi"}, ti.Columns, ti),
+			newDML(update, false, "", &filter.Table{}, []interface{}{1, 2, 3, "haha"}, []interface{}{4, 5, 6, "hihi"}, []interface{}{1, 2, 3, "haha"}, []interface{}{4, 5, 6, "hihi"}, ti1.Columns, ti1),
 			"`id` = ?",
 			[]interface{}{1},
+		},
+		{
+			newDML(del, false, "", &filter.Table{}, nil, []interface{}{1, 2, 3, "haha"}, nil, []interface{}{1, 2, 3, "haha"}, ti2.Columns, ti2),
+			"`id` = ? AND `col1` = ? AND `col2` = ? AND `name` = ?",
+			[]interface{}{1, 2, 3, "haha"},
+		},
+		{
+			newDML(update, false, "", &filter.Table{}, []interface{}{1, 2, 3, "haha"}, []interface{}{4, 5, 6, "hihi"}, []interface{}{1, 2, 3, "haha"}, []interface{}{4, 5, 6, "hihi"}, ti2.Columns, ti2),
+			"`id` = ? AND `col1` = ? AND `col2` = ? AND `name` = ?",
+			[]interface{}{1, 2, 3, "haha"},
 		},
 	}
 	for _, tc := range testCases {
