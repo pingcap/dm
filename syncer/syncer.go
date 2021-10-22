@@ -842,7 +842,7 @@ func (s *Syncer) updateReplicationLagMetric() {
 }
 
 func (s *Syncer) checkFlush() bool {
-	return s.checkpoint.CheckGlobalPoint()
+	return s.checkpoint.CheckGlobalPoint() && s.checkpoint.CheckLastSnapshotCreationTime()
 }
 
 func (s *Syncer) saveTablePoint(table *filter.Table, location binlog.Location) {
@@ -1019,8 +1019,6 @@ func (s *Syncer) addJob(job *job) error {
 	})
 
 	// Periodically create checkpoint snapshot and async flush checkpoint snapshot
-	// TODO: configurable flush interval
-	// TODO: avoid keeping send checkpoint snapshot when it exceeds the threshold
 	if needFlush {
 		snapshotID := s.checkpoint.CreateSnapshot()
 		checkpointJob := newFlushCheckpointSnapshotJob(snapshotID)
@@ -1042,7 +1040,7 @@ func (s *Syncer) flushCheckpointSnapshots() {
 	// traverse checkpoints and find the lastest one with all channel msg collected
 	task, err := s.checkpoint.CreateFlushSnapshotsTask(s.cfg.WorkerCount)
 	if err != nil {
-		s.tctx.L().Info("flushCheckpointSnapshots quit", zap.Error(err))
+		s.tctx.L().Info("no checkpoint snapshots are available to flush")
 		return
 	}
 
@@ -1056,7 +1054,7 @@ func (s *Syncer) flushCheckpointSnapshots() {
 	s.tctx.L().Info("flushed checkpoint snapshot", zap.Reflect("snapshot id", task.flushSnapshotID))
 
 	s.checkpoint.PurgeSnapshots(task.purgeSnapshotIDs)
-	s.tctx.L().Info(fmt.Sprintf("purged %d checkpoint snapshots together", len(task.purgeSnapshotIDs)), zap.Reflect("snapshots", task.purgeSnapshotIDs))
+	s.tctx.L().Info("purged checkpoint snapshots", zap.Reflect("snapshots", task.purgeSnapshotIDs))
 }
 
 func (s *Syncer) saveGlobalPoint(globalLocation binlog.Location) {
@@ -1092,7 +1090,8 @@ func (s *Syncer) flushCheckPointSnapshot(snapshotID string) error {
 		return nil
 	}
 
-	// 这里可能会出现 flush 老的 snapshot 的时候，在打snapshot时候，那些table并没有resolved
+	// TODO: record exceptTables and shardMetaSQLs at the time checkpoint created, and use that to avoid
+	// flush a table checkpoint which supposed to be excepted at the time checkpoint created.
 	var (
 		exceptTableIDs map[string]bool
 		exceptTables   []*filter.Table
@@ -1122,6 +1121,7 @@ func (s *Syncer) flushCheckPointSnapshot(snapshotID string) error {
 		return err
 	}
 
+	// TODO: use other metrics
 	now := time.Now()
 	if !s.lastCheckpointFlushedTime.IsZero() {
 		duration := now.Sub(s.lastCheckpointFlushedTime).Seconds()

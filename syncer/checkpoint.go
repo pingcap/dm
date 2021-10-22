@@ -304,6 +304,8 @@ type CheckPoint interface {
 
 	CreateSnapshot() string
 
+	CheckLastSnapshotCreationTime() bool
+
 	CreateFlushSnapshotsTask(workerCount int) (FlushSnapshotsTask, error)
 
 	// TODO: need to refactor, and potentially we can avoid to have CreateFlushSnapshotsTask func
@@ -380,8 +382,9 @@ type RemoteCheckPoint struct {
 
 	// checkpoint snapshots
 	// TODO: more granular lock for updating snapshots or flushSnapshotJobs
-	snapshots         map[string]*CheckPointSnapshot
-	flushSnapshotJobs map[string]map[int]bool
+	snapshots                map[string]*CheckPointSnapshot
+	flushSnapshotJobs        map[string]map[int]bool
+	lastSnapshotCreationTime time.Time
 }
 
 func (cp *RemoteCheckPoint) CreateSnapshot() string {
@@ -398,13 +401,20 @@ func (cp *RemoteCheckPoint) CreateSnapshot() string {
 		}
 	}
 
-	snapshotID := time.Now().Format(cpSnapshotTimeFormatString)
+	curTime := time.Now()
+	snapshotID := curTime.Format(cpSnapshotTimeFormatString)
 	snapshot := NewCheckPointSnapshot(snapshotID, points, cp.globalPoint.SnapshotBinlogPoint())
 
-	// TODO: error check if id is exist?
 	cp.snapshots[snapshotID] = snapshot
+	cp.lastSnapshotCreationTime = curTime
 
 	return snapshotID
+}
+
+func (cp *RemoteCheckPoint) CheckLastSnapshotCreationTime() bool {
+	cp.RLock()
+	defer cp.RUnlock()
+	return time.Since(cp.lastSnapshotCreationTime) >= time.Duration(cp.cfg.CheckpointFlushInterval)*time.Second
 }
 
 type FlushSnapshotsTask struct {
@@ -519,6 +529,7 @@ func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 
 	cp.globalPoint = newBinlogPoint(binlog.NewLocation(cp.cfg.Flavor), binlog.NewLocation(cp.cfg.Flavor), nil, nil, cp.cfg.EnableGTID)
 	cp.globalPointSaveTime = time.Time{}
+	cp.lastSnapshotCreationTime = time.Time{}
 	cp.points = make(map[string]map[string]*binlogPoint)
 	cp.safeModeExitPoint = nil
 
