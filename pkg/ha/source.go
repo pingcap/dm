@@ -126,7 +126,6 @@ func sourceCfgFromResp(source string, resp *clientv3.GetResponse) (map[string]*c
 // this function shouldn't be used in development environment.
 func ClearTestInfoOperation(cli *clientv3.Client) error {
 	clearSource := clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix())
-	clearTask := clientv3.OpDelete(common.TaskConfigKeyAdapter.Path(), clientv3.WithPrefix())
 	clearSubTask := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
 	clearWorkerInfo := clientv3.OpDelete(common.WorkerRegisterKeyAdapter.Path(), clientv3.WithPrefix())
 	clearWorkerKeepAlive := clientv3.OpDelete(common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix())
@@ -136,7 +135,7 @@ func ClearTestInfoOperation(cli *clientv3.Client) error {
 	clearRelayConfig := clientv3.OpDelete(common.UpstreamRelayWorkerKeyAdapter.Path(), clientv3.WithPrefix())
 	clearSubTaskStage := clientv3.OpDelete(common.StageSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
 	clearLoadTasks := clientv3.OpDelete(common.LoadTaskKeyAdapter.Path(), clientv3.WithPrefix())
-	_, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clearSource, clearTask, clearSubTask, clearWorkerInfo, clearBound,
+	_, _, err := etcdutil.DoOpsInOneTxnWithRetry(cli, clearSource, clearSubTask, clearWorkerInfo, clearBound,
 		clearLastBound, clearWorkerKeepAlive, clearRelayStage, clearRelayConfig, clearSubTaskStage, clearLoadTasks)
 	return err
 }

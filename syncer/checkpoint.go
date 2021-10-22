@@ -309,7 +309,7 @@ type CheckPoint interface {
 	// TODO: need to refactor, and potentially we can avoid to have CreateFlushSnapshotsTask func
 	PurgeSnapshots(snapshotIDs []string)
 
-	UpdateFlushSnapshotJob(snapshotID string, queueID string)
+	UpdateFlushSnapshotJob(snapshotID string, queueID int)
 }
 
 type CheckPointSnapshot struct {
@@ -381,7 +381,7 @@ type RemoteCheckPoint struct {
 	// checkpoint snapshots
 	// TODO: more granular lock for updating snapshots or flushSnapshotJobs
 	snapshots         map[string]*CheckPointSnapshot
-	flushSnapshotJobs map[string]map[string]bool
+	flushSnapshotJobs map[string]map[int]bool
 }
 
 func (cp *RemoteCheckPoint) CreateSnapshot() string {
@@ -449,12 +449,12 @@ func (cp *RemoteCheckPoint) PurgeSnapshots(snapshotIDs []string) {
 	}
 }
 
-func (cp *RemoteCheckPoint) UpdateFlushSnapshotJob(snapshotID string, queueID string) {
+func (cp *RemoteCheckPoint) UpdateFlushSnapshotJob(snapshotID string, queueID int) {
 	cp.Lock()
 	defer cp.Unlock()
 
 	if _, ok := cp.flushSnapshotJobs[snapshotID]; !ok {
-		cp.flushSnapshotJobs[snapshotID] = make(map[string]bool)
+		cp.flushSnapshotJobs[snapshotID] = make(map[int]bool)
 	}
 	cp.flushSnapshotJobs[snapshotID][queueID] = true
 }
@@ -469,7 +469,7 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 		globalPoint:       newBinlogPoint(binlog.NewLocation(cfg.Flavor), binlog.NewLocation(cfg.Flavor), nil, nil, cfg.EnableGTID),
 		logCtx:            tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
 		snapshots:         make(map[string]*CheckPointSnapshot),
-		flushSnapshotJobs: make(map[string]map[string]bool),
+		flushSnapshotJobs: make(map[string]map[int]bool),
 	}
 
 	return cp
@@ -816,7 +816,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 		point.flush()
 	}
 
-	cp.flushSnapshotJobs = make(map[string]map[string]bool)
+	cp.flushSnapshotJobs = make(map[string]map[int]bool)
 	cp.snapshots = make(map[string]*CheckPointSnapshot)
 
 	cp.globalPointSaveTime = time.Now()

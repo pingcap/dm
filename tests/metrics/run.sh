@@ -17,10 +17,8 @@ function run() {
 
 	check_dashboard_datasource
 
-	# add changeTickerInterval to keep metric from updating to zero too quickly when there is no work in the queue.
 	inject_points=(
 		"github.com/pingcap/dm/syncer/BlockDDLJob=return(1)"
-		"github.com/pingcap/dm/syncer/changeTickerInterval=return(10)"
 		"github.com/pingcap/dm/syncer/ShowLagInLog=return(1)" # test lag metric >= 1 beacuse we inject BlockDDLJob(ddl) to sleep(1)
 	)
 	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
@@ -78,7 +76,6 @@ function run() {
 	rm -rf $WORK_DIR/worker2/log/dm-worker.log # clean up the old log
 	inject_points=(
 		"github.com/pingcap/dm/syncer/BlockExecuteSQLs=return(2)"
-		"github.com/pingcap/dm/syncer/changeTickerInterval=return(10)"
 		"github.com/pingcap/dm/syncer/ShowLagInLog=return(2)" # test lag metric >= 2 beacuse we inject BlockExecuteSQLs to sleep(2) although skip lag is 0 (locally), but we use that lag of all dml/skip lag, so lag still >= 2
 	)
 	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
@@ -138,31 +135,18 @@ function run() {
 	wait_pattern_exit dm-worker1.toml
 
 	inject_points=(
-		"github.com/pingcap/dm/syncer/changeTickerInterval=return(5)"
 		"github.com/pingcap/dm/syncer/noJobInQueueLog=return()"
 		"github.com/pingcap/dm/syncer/IgnoreSomeTypeEvent=return(\"HeartbeatEvent\")"
 	)
-	# Since the following test needs to ensure that the dml queue is empty for a long time,
-	# it needs to ignore upstream heartbeat events to ensure that flushjobs are not triggered
 	export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
-	# First set the ticker interval to 5s -> expect the execSQL interval to be greater than 5s
-	# At 5s, the first no job log will appear in the log
-	# At 6s, the ticker has already waited 1s and the ticker goes to 1/5th of the way
-	# At 6s, a dml job is added to job chan and the ticker is reset
-	# At 11s the ticker write the log of the second no job
-	# Check that the interval between the two ticker logs is > 5s
-
 	rm -rf $WORK_DIR/worker1/log/dm-worker.log # clean up the old log
 	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
-	check_log_contain_with_retry 'no job in queue, update lag to zero' $WORK_DIR/worker1/log/dm-worker.log
 	echo "make a dml job"
 	run_sql_source1 "insert into metrics.t1 (id, name, ts) values (1004, 'zmj4', '2022-05-11 12:01:05')"
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-	echo "sleep 6s"
-	sleep 6
-	check_ticker_interval $WORK_DIR/worker1/log/dm-worker.log 5
+	check_log_contain_with_retry 'no job in queue, update lag to zero' $WORK_DIR/worker1/log/dm-worker.log
 	run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"stop-task test" \
 		"\"result\": true" 3

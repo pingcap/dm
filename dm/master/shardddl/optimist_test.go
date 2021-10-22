@@ -62,6 +62,43 @@ func createTableInfo(c *C, p *parser.Parser, se sessionctx.Context, tableID int6
 	return info
 }
 
+func watchExactOneOperation(
+	ctx context.Context,
+	cli *clientv3.Client,
+	task, source, upSchema, upTable string,
+	revision int64,
+) (optimism.Operation, error) {
+	opCh := make(chan optimism.Operation, 10)
+	errCh := make(chan error, 10)
+	done := make(chan struct{})
+	subCtx, cancel := context.WithCancel(ctx)
+	go func() {
+		optimism.WatchOperationPut(subCtx, cli, task, source, upSchema, upTable, revision, opCh, errCh)
+		close(done)
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+
+	var op optimism.Operation
+	select {
+	case op = <-opCh:
+	case err := <-errCh:
+		return op, err
+	case <-ctx.Done():
+		return op, ctx.Err()
+	}
+
+	// Wait 100ms to check if there is unexpected operation.
+	select {
+	case extraOp := <-opCh:
+		return op, fmt.Errorf("unpexecped operation %s", extraOp)
+	case <-time.After(time.Millisecond * 100):
+	}
+	return op, nil
+}
+
 func (t *testOptimist) TestOptimistSourceTables(c *C) {
 	defer clearOptimistTestSourceInfoOperation(c)
 
@@ -164,11 +201,10 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	}()
 
 	var (
-		backOff      = 30
-		waitTime     = 100 * time.Millisecond
-		watchTimeout = 500 * time.Millisecond
-		logger       = log.L()
-		o            = NewOptimist(&logger)
+		backOff  = 30
+		waitTime = 100 * time.Millisecond
+		logger   = log.L()
+		o        = NewOptimist(&logger)
 
 		rebuildOptimist = func(ctx context.Context) {
 			switch restart {
@@ -262,21 +298,10 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// wait operation for i11 become available.
-	opCh := make(chan optimism.Operation, 10)
-	errCh := make(chan error, 10)
-	ctx2, cancel2 := context.WithCancel(ctx)
-	go optimism.WatchOperationPut(ctx2, cli, i11.Task, i11.Source, i11.UpSchema, i11.UpTable, rev1, opCh, errCh)
-	utils.WaitSomething(10, watchTimeout, func() bool {
-		return len(opCh) != 0
-	})
-	cancel2()
-	close(opCh)
-	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
-	op11 := <-opCh
+	op11, err := watchExactOneOperation(ctx, cli, i11.Task, i11.Source, i11.UpSchema, i11.UpTable, rev1)
+	c.Assert(err, IsNil)
 	c.Assert(op11.DDLs, DeepEquals, DDLs1)
 	c.Assert(op11.ConflictStage, Equals, optimism.ConflictNone)
-	c.Assert(len(errCh), Equals, 0)
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// mark op11 as done.
@@ -320,21 +345,10 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// wait operation for i12 become available.
-	opCh = make(chan optimism.Operation, 10)
-	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithCancel(ctx)
-	go optimism.WatchOperationPut(ctx2, cli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, opCh, errCh)
-	utils.WaitSomething(10, watchTimeout, func() bool {
-		return len(opCh) != 0
-	})
-	cancel2()
-	close(opCh)
-	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
-	op12 := <-opCh
+	op12, err := watchExactOneOperation(ctx, cli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2)
+	c.Assert(err, IsNil)
 	c.Assert(op12.DDLs, DeepEquals, DDLs1)
 	c.Assert(op12.ConflictStage, Equals, optimism.ConflictNone)
-	c.Assert(len(errCh), Equals, 0)
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// mark op12 as done, the lock should be resolved.
@@ -370,21 +384,10 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(remain, Equals, 1)
 
 	// wait operation for i21 become available.
-	opCh = make(chan optimism.Operation, 10)
-	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithCancel(ctx)
-	go optimism.WatchOperationPut(ctx2, cli, i21.Task, i21.Source, i21.UpSchema, i21.UpTable, rev1, opCh, errCh)
-	utils.WaitSomething(10, watchTimeout, func() bool {
-		return len(opCh) != 0
-	})
-	cancel2()
-	close(opCh)
-	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
-	op21 := <-opCh
+	op21, err := watchExactOneOperation(ctx, cli, i21.Task, i21.Source, i21.UpSchema, i21.UpTable, rev1)
+	c.Assert(err, IsNil)
 	c.Assert(op21.DDLs, DeepEquals, i21.DDLs)
 	c.Assert(op12.ConflictStage, Equals, optimism.ConflictNone)
-	c.Assert(len(errCh), Equals, 0)
 
 	// CASE 3: start again with some previous shard DDL info and the lock is un-synced.
 	rebuildOptimist(ctx)
@@ -437,38 +440,17 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(o.ShowLocks("", []string{"not-exist"}), HasLen, 0)
 
 	// wait operation for i23 become available.
-	opCh = make(chan optimism.Operation, 10)
-	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithCancel(ctx)
-	go optimism.WatchOperationPut(ctx2, cli, i23.Task, i23.Source, i23.UpSchema, i23.UpTable, rev3, opCh, errCh)
-	utils.WaitSomething(10, watchTimeout, func() bool {
-		return len(opCh) != 0
-	})
-	cancel2()
-	close(opCh)
-	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
-	op23 := <-opCh
+	op23, err := watchExactOneOperation(ctx, cli, i23.Task, i23.Source, i23.UpSchema, i23.UpTable, rev3)
+	c.Assert(err, IsNil)
 	c.Assert(op23.DDLs, DeepEquals, i23.DDLs)
 	c.Assert(op23.ConflictStage, Equals, optimism.ConflictNone)
-	c.Assert(len(errCh), Equals, 0)
 
 	// delete i12 for a table (to simulate `DROP TABLE`), the lock should become synced again.
 	rev2, err = optimism.PutInfo(cli, i12) // put i12 first to trigger DELETE for i12.
 	c.Assert(err, IsNil)
 	// wait until operation for i12 ready.
-	opCh = make(chan optimism.Operation, 10)
-	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithCancel(ctx)
-	go optimism.WatchOperationPut(ctx2, cli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2, opCh, errCh)
-	utils.WaitSomething(10, watchTimeout, func() bool {
-		return len(opCh) != 0
-	})
-	cancel2()
-	close(opCh)
-	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
-	c.Assert(len(errCh), Equals, 0)
+	_, err = watchExactOneOperation(ctx, cli, i12.Task, i12.Source, i12.UpSchema, i12.UpTable, rev2)
+	c.Assert(err, IsNil)
 
 	_, err = optimism.PutSourceTablesDeleteInfo(cli, st31, i12)
 	c.Assert(err, IsNil)
@@ -560,21 +542,10 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// wait operation for i31 become available.
-	opCh = make(chan optimism.Operation, 10)
-	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithCancel(ctx)
-	go optimism.WatchOperationPut(ctx2, cli, i31.Task, i31.Source, i31.UpSchema, i31.UpTable, rev1, opCh, errCh)
-	utils.WaitSomething(10, watchTimeout, func() bool {
-		return len(opCh) != 0
-	})
-	cancel2()
-	close(opCh)
-	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
-	op31 := <-opCh
+	op31, err := watchExactOneOperation(ctx, cli, i31.Task, i31.Source, i31.UpSchema, i31.UpTable, rev1)
+	c.Assert(err, IsNil)
 	c.Assert(op31.DDLs, DeepEquals, []string{})
 	c.Assert(op31.ConflictStage, Equals, optimism.ConflictNone)
-	c.Assert(len(errCh), Equals, 0)
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// mark op31 as done.
@@ -613,21 +584,10 @@ func (t *testOptimist) testOptimist(c *C, cli *clientv3.Client, restart int) {
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// wait operation for i33 become available.
-	opCh = make(chan optimism.Operation, 10)
-	errCh = make(chan error, 10)
-	ctx2, cancel2 = context.WithCancel(ctx)
-	go optimism.WatchOperationPut(ctx2, cli, i33.Task, i33.Source, i33.UpSchema, i33.UpTable, rev3, opCh, errCh)
-	utils.WaitSomething(10, watchTimeout, func() bool {
-		return len(opCh) != 0
-	})
-	cancel2()
-	close(opCh)
-	close(errCh)
-	c.Assert(len(opCh), Equals, 1)
-	op33 := <-opCh
+	op33, err := watchExactOneOperation(ctx, cli, i33.Task, i33.Source, i33.UpSchema, i33.UpTable, rev3)
+	c.Assert(err, IsNil)
 	c.Assert(op33.DDLs, DeepEquals, DDLs3)
 	c.Assert(op33.ConflictStage, Equals, optimism.ConflictNone)
-	c.Assert(len(errCh), Equals, 0)
 	c.Assert(o.ShowLocks("", []string{}), DeepEquals, expectedLock)
 
 	// mark op33 as done, the lock should be resolved.

@@ -14,7 +14,6 @@
 package openapi
 
 import (
-	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -30,27 +29,4 @@ func (t *Task) Adjust() error {
 		return terror.ErrOpenAPICommonError.Generate("`on_duplicate` only supports `error` for now.")
 	}
 	return nil
-}
-
-// GetTargetDBCfg gets target db config.
-func (t *Task) GetTargetDBCfg() *config.DBConfig {
-	toDBCfg := &config.DBConfig{
-		Host:     t.TargetConfig.Host,
-		Port:     t.TargetConfig.Port,
-		User:     t.TargetConfig.User,
-		Password: t.TargetConfig.Password,
-	}
-	if t.TargetConfig.Security != nil {
-		var certAllowedCn []string
-		if t.TargetConfig.Security.CertAllowedCn != nil {
-			certAllowedCn = append(certAllowedCn, *t.TargetConfig.Security.CertAllowedCn...)
-		}
-		toDBCfg.Security = &config.Security{
-			SSLCABytes:    []byte(t.TargetConfig.Security.SslCaContent),
-			SSLKEYBytes:   []byte(t.TargetConfig.Security.SslKeyContent),
-			SSLCertBytes:  []byte(t.TargetConfig.Security.SslCertContent),
-			CertAllowedCN: certAllowedCn,
-		}
-	}
-	return toDBCfg
 }

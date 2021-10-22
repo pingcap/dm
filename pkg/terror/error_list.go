@@ -360,6 +360,7 @@ const (
 	codeLoadUnitGenBAList
 	codeLoadTaskWorkerNotMatch
 	codeLoadCheckPointNotMatch
+	codeLoadBackendNotMatch
 )
 
 // Sync unit error code.
@@ -634,6 +635,8 @@ const (
 	codeSchedulerSourceOpRelayExist
 	codeSchedulerLatchInUse
 	codeSchedulerSourceCfgUpdate
+	codeSchedulerWrongWorkerInput
+	codeSchedulerCantTransferToRelayWorker
 )
 
 // dmctl error code.
@@ -987,6 +990,7 @@ var (
 	ErrLoadUnitGenBAList           = New(codeLoadUnitGenBAList, ClassLoadUnit, ScopeInternal, LevelHigh, "generate block allow list", "Please check the `block-allow-list` config in task configuration file.")
 	ErrLoadTaskWorkerNotMatch      = New(codeLoadTaskWorkerNotMatch, ClassFunctional, ScopeInternal, LevelHigh, "different worker in load stage, previous worker: %s, current worker: %s", "Please check if the previous worker is online.")
 	ErrLoadTaskCheckPointNotMatch  = New(codeLoadCheckPointNotMatch, ClassFunctional, ScopeInternal, LevelHigh, "inconsistent checkpoints between loader and target database", "If you want to redo the whole task, please check that you have not forgotten to add -remove-meta flag for start-task command.")
+	ErrLoadBackendNotSupport       = New(codeLoadBackendNotMatch, ClassFunctional, ScopeInternal, LevelHigh, "DM do not support backend %s ", "If you do not understand the configure `tidb.backend` you can just delete it.")
 
 	// Sync unit error.
 	ErrSyncerUnitPanic                   = New(codeSyncerUnitPanic, ClassSyncUnit, ScopeInternal, LevelHigh, "panic error: %v", "")
@@ -1264,6 +1268,8 @@ var (
 	ErrSchedulerSourceOpRelayExist        = New(codeSchedulerSourceOpRelayExist, ClassScheduler, ScopeInternal, LevelHigh, "source with name %s need to operate has existing relay workers %s", "Please `stop-relay` first.")
 	ErrSchedulerLatchInUse                = New(codeSchedulerLatchInUse, ClassScheduler, ScopeInternal, LevelLow, "when %s, resource %s is in use by other client", "Please try again later")
 	ErrSchedulerSourceCfgUpdate           = New(codeSchedulerSourceCfgUpdate, ClassScheduler, ScopeInternal, LevelLow, "source can only update relay-log related parts for now", "")
+	ErrSchedulerWrongWorkerInput          = New(codeSchedulerWrongWorkerInput, ClassScheduler, ScopeInternal, LevelMedium, "require DM master to modify worker [%s] with source [%s], but currently the worker is bound to source [%s]", "")
+	ErrSchedulerCantTransferToRelayWorker = New(codeSchedulerCantTransferToRelayWorker, ClassScheduler, ScopeInternal, LevelMedium, "require DM worker to be bound to source [%s], but it has been started relay for source [%s]", "")
 
 	// dmctl.
 	ErrCtlGRPCCreateConn = New(codeCtlGRPCCreateConn, ClassDMCtl, ScopeInternal, LevelHigh, "can not create grpc connection", "Please check your network connection.")
