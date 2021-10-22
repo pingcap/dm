@@ -863,6 +863,7 @@ var (
 	waitJobsDone    bool
 	failExecuteSQL  bool
 	failOnce        atomic.Bool
+	flushFirstJob   bool
 )
 
 func (s *Syncer) addJob(job *job) error {
@@ -954,6 +955,23 @@ func (s *Syncer) addJob(job *job) error {
 		return nil
 	}
 
+	// nolint:ifshort
+	needFlush := s.checkFlush()
+
+	failpoint.Inject("flushFirstJob", func() {
+		if waitJobsDone {
+			s.tctx.L().Info("trigger flushFirstJob")
+			waitJobsDone = false
+			flushFirstJob = true
+		}
+	})
+
+	if flushFirstJob {
+		s.jobWg.Add(1)
+		s.dmlJobCh <- newFlushJob()
+		s.jobWg.Wait()
+	}
+
 	if s.execError.Load() != nil {
 		// nolint:nilerr
 		return nil
@@ -996,7 +1014,7 @@ func (s *Syncer) addJob(job *job) error {
 		}
 	}
 
-	if job.tp == ddl {
+	if flushFirstJob || job.tp == ddl {
 		// interrupted after save checkpoint and before flush checkpoint.
 		failpoint.Inject("FlushCheckpointStage", func(val failpoint.Value) {
 			err := handleFlushCheckpointStage(4, val.(int), "before flush checkpoint")
@@ -1007,18 +1025,7 @@ func (s *Syncer) addJob(job *job) error {
 		return s.flushCheckPoints()
 	}
 
-	// nolint:ifshort
-	// TODO: how to fix flushFirstJob test here
-	needFlush := s.checkFlush()
-	failpoint.Inject("flushFirstJob", func() {
-		if waitJobsDone {
-			s.tctx.L().Info("trigger flushFirstJob")
-			waitJobsDone = false
-			needFlush = true
-		}
-	})
-
-	// Periodically create checkpoint snapshot and async flush checkpoint snapshot
+	// Periodically create checkpoint snapshot and flush checkpoint snapshot
 	if needFlush {
 		snapshotID := s.checkpoint.CreateSnapshot()
 		checkpointJob := newFlushCheckpointSnapshotJob(snapshotID)
