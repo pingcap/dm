@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pingcap/parser"
@@ -203,11 +204,12 @@ type ddlInfo struct {
 }
 
 func (d *ddlInfo) String() string {
-	var sourceTables, targetTables string
+	sourceTables := make([]string, 0, len(d.sourceTables))
+	targetTables := make([]string, 0, len(d.targetTables))
 	for i := range d.sourceTables {
-		sourceTables += d.sourceTables[i].String() + ", "
-		targetTables += d.targetTables[i].String() + ", "
+		sourceTables = append(sourceTables, d.sourceTables[i].String())
+		targetTables = append(targetTables, d.targetTables[i].String())
 	}
 	return fmt.Sprintf("{originDDL: %s, routedDDL: %s, sourceTables: %s, targetTables: %s}",
-		d.originDDL, d.routedDDL, sourceTables, targetTables)
+		d.originDDL, d.routedDDL, strings.Join(sourceTables, ","), strings.Join(targetTables, ","))
 }

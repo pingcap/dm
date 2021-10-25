@@ -267,7 +267,7 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 	}
 }
 
-func (s *testDDLSuite) TestparseOneStmt(c *C) {
+func (s *testDDLSuite) TestParseOneStmt(c *C) {
 	cases := []struct {
 		sql      string
 		isDDL    bool
