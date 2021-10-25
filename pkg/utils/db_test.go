@@ -202,7 +202,7 @@ func (t *testDBSuite) TestGetSchemaList(c *C) {
 
 	schemaName := "information_schema"
 	rows := sqlmock.NewRows([]string{"Database"}).AddRow(schemaName)
-	mock.ExpectQuery("SHOW DATABASES;").WillReturnRows(rows)
+	mock.ExpectQuery("SHOW DATABASES").WillReturnRows(rows)
 
 	schemaList, err := GetSchemaList(ctx, db)
 	c.Assert(err, IsNil)

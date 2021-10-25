@@ -394,7 +394,7 @@ func GetServerUnixTS(ctx context.Context, db *sql.DB) (int64, error) {
 // GetSchemaList gets db schema list with `SHOW DATABASES`.
 func GetSchemaList(ctx context.Context, db *sql.DB) ([]string, error) {
 	schemaList := []string{}
-	rows, err := db.QueryContext(ctx, "SHOW DATABASES;")
+	rows, err := db.QueryContext(ctx, "SHOW DATABASES")
 	if err != nil {
 		return schemaList, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}

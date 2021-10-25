@@ -217,7 +217,6 @@ function test_shard_task() {
 	openapi_task_check "get_task_list" 0
 
 	# delete source success
-	# todo test delete source --force
 	openapi_source_check "delete_source_success" "mysql-01"
 	openapi_source_check "delete_source_success" "mysql-02"
 	openapi_source_check "list_source_success" 0
@@ -279,7 +278,7 @@ function test_noshard_task() {
 }
 
 function run() {
-	# make install_test_python_dep
+	make install_test_python_dep
 
 	# run dm-master1
 	run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
@@ -294,7 +293,7 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-	# test_source
+	test_source
 	test_relay
 
 	test_shard_task

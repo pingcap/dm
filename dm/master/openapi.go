@@ -166,7 +166,6 @@ func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string, params o
 	// force means delete source and stop all task of this source
 	if params.Force != nil && *params.Force {
 		newCtx := ctx.Request().Context()
-		// 1 list task of this source
 		for _, taskName := range s.scheduler.GetTaskNameListBySourceName(sourceName) {
 			if _, err := s.OperateTask(newCtx, &pb.OperateTaskRequest{
 				Op:      pb.TaskOp_Stop,
@@ -235,17 +234,18 @@ func (s *Server) DMAPIResumeRelay(ctx echo.Context, sourceName string) error {
 	return s.scheduler.UpdateExpectRelayStage(pb.Stage_Running, sourceName)
 }
 
-// DMAPIGetSourceSchemaList get source schema list url is: (GET /api/v1/sources/{source-name}/schemas).
-func (s *Server) DMAPIGetSourceSchemaList(ctx echo.Context, sourceName string) error {
+func (s *Server) getBaseDBBySourceName(sourceName string) (*conn.BaseDB, error) {
 	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
 	if sourceCfg == nil {
-		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
+		return nil, terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
 	}
 	dbCfg := sourceCfg.GenerateDBConfig()
-	baseDB, err := conn.DefaultDBProvider.Apply(*dbCfg)
-	if err != nil {
-		return err
-	}
+	return conn.DefaultDBProvider.Apply(*dbCfg)
+}
+
+// DMAPIGetSourceSchemaList get source schema list url is: (GET /api/v1/sources/{source-name}/schemas).
+func (s *Server) DMAPIGetSourceSchemaList(ctx echo.Context, sourceName string) error {
+	baseDB, err := s.getBaseDBBySourceName(sourceName)
 	defer baseDB.Close()
 	schemaList, err := utils.GetSchemaList(ctx.Request().Context(), baseDB.DB)
 	if err != nil {
@@ -256,13 +256,7 @@ func (s *Server) DMAPIGetSourceSchemaList(ctx echo.Context, sourceName string) e
 
 // DMAPIGetSourceTableList get source table list url is: (GET /api/v1/sources/{source-name}/schemas/{schema-name}).
 func (s *Server) DMAPIGetSourceTableList(ctx echo.Context, sourceName string, schemaName string) error {
-	// todo unify source db
-	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
-	if sourceCfg == nil {
-		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
-	}
-	dbCfg := sourceCfg.GenerateDBConfig()
-	baseDB, err := conn.DefaultDBProvider.Apply(*dbCfg)
+	baseDB, err := s.getBaseDBBySourceName(sourceName)
 	if err != nil {
 		return err
 	}
