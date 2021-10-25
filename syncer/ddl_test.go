@@ -379,7 +379,7 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 	syncer := NewSyncer(&config.SubTaskConfig{}, nil)
 	syncer.tctx = tctx
 	c.Assert(syncer.genRouter(), IsNil)
-	parser := parser.New()
+	p := parser.New()
 	for _, tc := range testCases {
 		qec := &queryEventContext{
 			eventContext: &eventContext{
@@ -388,7 +388,7 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 			originSQL:     tc.sql,
 			needRouteDDLs: make([]string, 0),
 			ddlSchema:     "test",
-			p:             parser,
+			p:             p,
 		}
 		stmt, err := parseOneStmt(qec)
 		c.Assert(err, IsNil)
