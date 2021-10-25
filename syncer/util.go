@@ -19,8 +19,8 @@ import (
 	dcontext "github.com/pingcap/dumpling/v4/context"
 	"github.com/pingcap/dumpling/v4/export"
 	dlog "github.com/pingcap/dumpling/v4/log"
-	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb/parser/ast"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/conn"

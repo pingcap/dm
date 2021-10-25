@@ -28,9 +28,9 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser/ast"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb/parser/ast"
 )
 
 func bytes2str(bs []byte) string {
