@@ -380,9 +380,13 @@ func (s *Server) DMAPIGetTaskList(ctx echo.Context) error {
 
 // DMAPIGetTaskStatus url is:(GET /api/v1/tasks/{task-name}/status).
 func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string, params openapi.DMAPIGetTaskStatusParams) error {
-	// todo support params
 	// 1. get task source list from scheduler
-	sourceList := s.getTaskResources(taskName)
+	var sourceList []string
+	if params.SourceNameList == nil {
+		sourceList = s.getTaskResources(taskName)
+	} else {
+		sourceList = *params.SourceNameList
+	}
 	if len(sourceList) == 0 {
 		return terror.ErrSchedulerTaskNotExist.Generate(taskName)
 	}
