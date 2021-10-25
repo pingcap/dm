@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"reflect"
@@ -212,6 +213,7 @@ type Syncer struct {
 	}
 
 	addJobFunc func(*job) error
+	seq        int64
 
 	// `lower_case_table_names` setting of upstream db
 	SourceTableNamesFlavor utils.LowerCaseTableNamesFlavor
@@ -922,6 +924,7 @@ func (s *Syncer) addJob(job *job) error {
 		s.tctx.L().Info("All jobs is completed before syncer close, the coming job will be reject", zap.Any("job", job))
 		return nil
 	}
+	job.seq = s.getSeq()
 	switch job.tp {
 	case xid:
 		s.waitXIDJob.CAS(int64(waiting), int64(waitComplete))
@@ -933,9 +936,9 @@ func (s *Syncer) addJob(job *job) error {
 	case flush:
 		s.addCount(false, adminQueueName, job.tp, 1, job.targetTable)
 		s.jobWg.Add(1)
-		s.dmlJobCh <- job
 		job.wg.Add(s.cfg.WorkerCount)
-		s.flushCheckPointsAsync(job.wg)
+		s.dmlJobCh <- job
+		s.flushCheckPointsAsync(job.wg, job.seq)
 		return nil
 	case ddl:
 		s.addCount(false, adminQueueName, job.tp, 1, job.targetTable)
@@ -968,8 +971,9 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobWg.Add(1)
 		j := newFlushJob()
 		j.wg.Add(s.cfg.WorkerCount)
+		j.seq = s.getSeq()
 		s.dmlJobCh <- newFlushJob()
-		s.flushCheckPointsAsync(j.wg)
+		s.flushCheckPointsAsync(j.wg, j.seq)
 	}
 
 	if s.execError.Load() != nil {
@@ -1050,6 +1054,8 @@ func (s *Syncer) resetShardingGroup(table *filter.Table) {
 type flushCpTask struct {
 	snapshot SnapshotID
 	wg *sync.WaitGroup
+	// job version, causality gc max version
+	version int64
 	// extra sharding ddl sqls
 	exceptTables   []*filter.Table
 	shardMetaSQLs []string
@@ -1061,7 +1067,7 @@ type flushCpTask struct {
 type checkpointFlushWorker struct {
 	input chan *flushCpTask
 	cp CheckPoint
-	afterFlushFn func(location binlog.Location) error
+	afterFlushFn func(task *flushCpTask, location binlog.Location) error
 }
 
 // Add add a new flush checkpoint job
@@ -1076,6 +1082,7 @@ func (w *checkpointFlushWorker) Run(ctx *tcontext.Context) {
 		if msg.wg != nil {
 			msg.wg.Wait()
 		}
+
 
 		err := w.cp.FlushSnapshotPointsExcept(ctx, msg.snapshot.id, msg.exceptTables, msg.shardMetaSQLs, msg.shardMetaArgs)
 		if err != nil {
@@ -1113,17 +1120,18 @@ func (w *checkpointFlushWorker) Close() {
 // we may need to refactor the concurrency model to make the work-flow more clearer later.
 func (s *Syncer) flushCheckPoints() error {
 	errCh := make(chan error, 1)
-	s.doFlushCheckPointsAsync(nil, errCh)
+	// use math.MaxInt64 to clear all the data in causality component.
+	s.doFlushCheckPointsAsync(nil, errCh, math.MaxInt64)
 	return <- errCh
 }
 
 // flushCheckPointsAsync flushes previous saved checkpoint asyncronously after all worker finsh flush.
 // it it triggered by intervals (and job executed)
-func (s *Syncer) flushCheckPointsAsync(wg *sync.WaitGroup) {
-	s.doFlushCheckPointsAsync(wg, nil)
+func (s *Syncer) flushCheckPointsAsync(wg *sync.WaitGroup, version int64) {
+	s.doFlushCheckPointsAsync(wg, nil, version)
 }
 
-func (s *Syncer) doFlushCheckPointsAsync(wg *sync.WaitGroup, outCh chan error) {
+func (s *Syncer) doFlushCheckPointsAsync(wg *sync.WaitGroup, outCh chan error, version int64) {
 	err := s.execError.Load()
 	// TODO: for now, if any error occurred (including user canceled), checkpoint won't be updated. But if we have put
 	// optimistic shard info, DM-master may resolved the optimistic lock and let other worker execute DDL. So after this
@@ -1165,11 +1173,16 @@ func (s *Syncer) doFlushCheckPointsAsync(wg *sync.WaitGroup, outCh chan error) {
 		shardMetaSQLs: shardMetaSQLs,
 		shardMetaArgs: shardMetaArgs,
 		resChan: outCh,
+		version: version,
 	}
 	s.flushCpWorker.Add(task)
 }
 
-func (s *Syncer) afterFlushCheckpoint(loc binlog.Location) error {
+func (s *Syncer) afterFlushCheckpoint(task *flushCpTask, loc binlog.Location) error {
+	s.dmlJobCh <- &job{
+		tp: gc,
+		seq: task.version,
+	}
 	s.addCount(true, adminQueueName, flush, 1, nil)
 	// update current active relay log after checkpoint flushed
 	err := s.updateActiveRelayLog(loc.Position)
@@ -2044,6 +2057,12 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 
 	ec.tctx.L().Info("", zap.String("event", "rotate"), log.WrapStringerField("location", ec.currentLocation))
 	return nil
+}
+
+func (s *Syncer) getSeq() int64 {
+	seq := s.seq
+	s.seq++
+	return seq
 }
 
 func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) error {

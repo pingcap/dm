@@ -37,6 +37,7 @@ const (
 	skip // used by Syncer.recordSkipSQLsLocation to record global location, but not execute SQL
 	rotate
 	conflict
+	gc	// used to clean up out dated causality keys
 )
 
 func (t opType) String() string {
@@ -59,6 +60,8 @@ func (t opType) String() string {
 		return "rotate"
 	case conflict:
 		return "conflict"
+	case gc:
+		return "gc"
 	}
 
 	return ""
@@ -84,6 +87,7 @@ type job struct {
 
 	eventHeader *replication.EventHeader
 	jobAddTime  time.Time // job commit time
+	seq			int64 // sequence number for this job
 	wg          *sync.WaitGroup // wait group for flush/conflict job
 }
 

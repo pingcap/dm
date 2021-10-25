@@ -113,21 +113,19 @@ func (w *DMLWorker) run() {
 		metrics.QueueSizeGauge.WithLabelValues(w.task, "dml_worker_input", w.source).Set(float64(len(w.inCh)))
 		if j.tp == flush || j.tp == conflict {
 			// todo how to track conflict job metrics
-			//if j.tp == conflict {
-			//	w.addCountFunc(false, adminQueueName, j.tp, 1, j.targetTable)
-			//}
+			if j.tp == conflict {
+				w.addCountFunc(false, adminQueueName, j.tp, 1, j.targetTable)
+			}
 			// flush for every DML queue
 			for i, jobCh := range jobChs {
 				startTime := time.Now()
 				jobCh <- j
 				metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[i], w.source).Observe(time.Since(startTime).Seconds())
 			}
-			//if j.tp == conflict {
-			//	w.addCountFunc(true, adminQueueName, j.tp, 1, j.targetTable)
-			//} else {
-			//	w.flushCh <- j
-			//}
-			if j.tp == flush {
+			if j.tp == conflict {
+				w.wg.Wait()
+				w.addCountFunc(true, adminQueueName, j.tp, 1, j.targetTable)
+			} else {
 				w.flushCh <- j
 			}
 		} else {

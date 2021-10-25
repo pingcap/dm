@@ -30,7 +30,7 @@ import (
 
 func (s *testSyncerSuite) TestDetectConflict(c *C) {
 	ca := &causality{
-		relations: make(map[string]string),
+		relations: newRollingMap(),
 	}
 	caseData := []string{"test_1", "test_2", "test_3"}
 	excepted := map[string]string{
@@ -47,8 +47,8 @@ func (s *testSyncerSuite) TestDetectConflict(c *C) {
 	c.Assert(ca.relations, DeepEquals, excepted)
 	conflictData := []string{"test_4", "test_3"}
 	c.Assert(ca.detectConflict(conflictData), IsTrue)
-	ca.reset()
-	c.Assert(ca.relations, HasLen, 0)
+	ca.relations.clear()
+	c.Assert(ca.relations.len(), Equals, 0)
 }
 
 func (s *testSyncerSuite) TestCasuality(c *C) {
