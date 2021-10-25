@@ -15,7 +15,9 @@ package syncer
 
 import (
 	. "github.com/pingcap/check"
+	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb/util/mock"
 
 	"github.com/pingcap/dm/pkg/binlog"
 )
@@ -79,25 +81,32 @@ func (t *testJobSuite) TestJob(c *C) {
 		needHandleDDLs:  []string{"create database test"},
 		shardingDDLInfo: ddlInfo,
 	}
+
+	schema := "create table test.tb(id int primary key, col1 int unique not null)"
+	p := parser.New()
+	se := mock.NewContext()
+	ti, err := createTableInfo(p, se, 0, schema)
+	c.Assert(err, IsNil)
+
 	testCases := []struct {
 		job    *job
 		jobStr string
 	}{
 		{
-			newDMLJob(insert, table, table, nil, ec),
-			"tp: insert, ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
+			newDMLJob(insert, table, table, newDML(insert, true, "targetTable", table, nil, []interface{}{2, 2}, nil, []interface{}{2, 2}, ti.Columns, ti), ec),
+			"tp: insert, dml: [safemode: true, targetTableID: targetTable, op: insert, columns: [id col1], oldValues: [], values: [2 2]], ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newDDLJob(qec),
-			"tp: ddl, ddls: [create database test], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
+			"tp: ddl, dml: , ddls: [create database test], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newXIDJob(binlog.NewLocation(""), binlog.NewLocation(""), binlog.NewLocation("")),
-			"tp: xid, ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
+			"tp: xid, dml: , ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 4), gtid-set: , current_location: position: (, 4), gtid-set: ",
 		}, {
 			newFlushJob(),
-			"tp: flush, ddls: [], last_location: position: (, 0), gtid-set: , start_location: position: (, 0), gtid-set: , current_location: position: (, 0), gtid-set: ",
+			"tp: flush, dml: , ddls: [], last_location: position: (, 0), gtid-set: , start_location: position: (, 0), gtid-set: , current_location: position: (, 0), gtid-set: ",
 		}, {
 			newSkipJob(ec),
-			"tp: skip, ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 0), gtid-set: , current_location: position: (, 0), gtid-set: ",
+			"tp: skip, dml: , ddls: [], last_location: position: (, 4), gtid-set: , start_location: position: (, 0), gtid-set: , current_location: position: (, 0), gtid-set: ",
 		},
 	}
 
