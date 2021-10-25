@@ -263,13 +263,19 @@ function test_noshard_task() {
 	# get task status success
 	openapi_task_check "get_task_status_success" "$task_name" 2
 
+	# delte source with force
+	openapi_source_check "delete_source_with_force_success" "mysql-01"
+
+	# after delete source-1, there is only one subtask status
+	openapi_task_check "get_task_status_success" "$task_name" 1
+
 	# get task list
 	openapi_task_check "get_task_list" 1
+
 	# stop task success
 	openapi_task_check "stop_task_success" "$task_name"
 
 	# delete source success
-	openapi_source_check "delete_source_success" "mysql-01"
 	openapi_source_check "delete_source_success" "mysql-02"
 	openapi_source_check "list_source_success" 0
 	run_sql_tidb "DROP DATABASE if exists openapi;"
@@ -293,10 +299,10 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-	test_source
-	test_relay
+	# test_source
+	# test_relay
 
-	test_shard_task
+	# test_shard_task
 	test_noshard_task
 }
 
