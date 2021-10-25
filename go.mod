@@ -3,7 +3,7 @@ module github.com/pingcap/dm
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
-	github.com/chaos-mesh/go-sqlsmith v0.0.0-20210914111832-b3d328d69449
+	github.com/chaos-mesh/go-sqlsmith v0.0.0-20211025024535-03ae33408684
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/coreos/go-semver v0.3.0
 	github.com/deepmap/oapi-codegen v1.8.2
@@ -21,13 +21,13 @@ require (
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/labstack/echo/v4 v4.4.0
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/dumpling v0.0.0-20211008101523-e13bfc29a093
+	github.com/pingcap/dumpling v0.0.0-20211025035249-dc2cee7df4a1
 	github.com/pingcap/errors v0.11.5-0.20210513014640-40f9a1999b3b
 	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
 	github.com/pingcap/log v0.0.0-20210906054005-afc726e70354
-	github.com/pingcap/parser v0.0.0-20211004012448-687005894c4e
-	github.com/pingcap/tidb v1.1.0-beta.0.20211011021924-2f9d591ef722
-	github.com/pingcap/tidb-tools v5.2.0-alpha.0.20210727084616-915b22e4d42c+incompatible
+	github.com/pingcap/tidb v1.1.0-beta.0.20211025024448-36e694bfc536
+	github.com/pingcap/tidb-tools v5.2.2-0.20211019062242-37a8bef2fa17+incompatible
+	github.com/pingcap/tidb/parser v0.0.0-20211025024448-36e694bfc536
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rakyll/statik v0.1.6
