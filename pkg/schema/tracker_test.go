@@ -25,8 +25,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/log"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb/parser/model"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/pingcap/dm/pkg/conn"

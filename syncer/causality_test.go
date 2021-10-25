@@ -17,8 +17,8 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/util/mock"
 
 	"github.com/pingcap/dm/dm/config"

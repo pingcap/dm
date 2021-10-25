@@ -16,6 +16,11 @@ package syncer
 import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+<<<<<<< HEAD
+=======
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/util/mock"
+>>>>>>> a3046087c (*: change pingcap/parser to pingcap/tidb/parser (#2254))
 
 	"github.com/pingcap/dm/pkg/binlog"
 )

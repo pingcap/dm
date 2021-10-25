@@ -17,12 +17,21 @@ import (
 	"math"
 
 	. "github.com/pingcap/check"
+<<<<<<< HEAD
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/types"
+=======
+	"github.com/pingcap/tidb-tools/pkg/filter"
+>>>>>>> a3046087c (*: change pingcap/parser to pingcap/tidb/parser (#2254))
 	tiddl "github.com/pingcap/tidb/ddl"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
+	"github.com/pingcap/tidb/parser/model"
+	"github.com/pingcap/tidb/parser/mysql"
+	"github.com/pingcap/tidb/parser/types"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/mock"
 )
