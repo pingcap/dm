@@ -277,7 +277,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	// start relay
 	startRelayURL := fmt.Sprintf("%s/%s/start-relay", baseURL, source1.SourceName)
 	openAPIStartRelayReq := openapi.StartRelayRequest{WorkerNameList: []string{workerName1}}
-	result4 := testutil.NewRequest().Patch(startRelayURL).WithJsonBody(openAPIStartRelayReq).Go(t.testT, s.echo)
+	result4 := testutil.NewRequest().Post(startRelayURL).WithJsonBody(openAPIStartRelayReq).Go(t.testT, s.echo)
 	// check http status code
 	c.Assert(result4.Code(), check.Equals, http.StatusOK)
 	relayWorkers, err := s.scheduler.GetRelayWorkers(source1Name)
@@ -312,7 +312,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	// test stop relay
 	stopRelayURL := fmt.Sprintf("%s/%s/stop-relay", baseURL, source1.SourceName)
 	stopRelayReq := openapi.StopRelayRequest{WorkerNameList: []string{workerName1}}
-	result7 := testutil.NewRequest().Patch(stopRelayURL).WithJsonBody(stopRelayReq).Go(t.testT, s.echo)
+	result7 := testutil.NewRequest().Post(stopRelayURL).WithJsonBody(stopRelayReq).Go(t.testT, s.echo)
 	c.Assert(result7.Code(), check.Equals, http.StatusOK)
 	relayWorkers, err = s.scheduler.GetRelayWorkers(source1Name)
 	c.Assert(err, check.IsNil)
