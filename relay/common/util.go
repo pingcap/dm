@@ -14,8 +14,8 @@
 package common
 
 import (
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
 
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"

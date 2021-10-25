@@ -20,9 +20,9 @@ import (
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/errno"
 	"github.com/pingcap/tidb/infoschema"
+	tmysql "github.com/pingcap/tidb/parser/mysql"
 
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
