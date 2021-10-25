@@ -125,7 +125,7 @@ func (s *Server) DMAPIGetClusterMasterList(ctx echo.Context) error {
 func (s *Server) DMAPIOfflineMasterNode(ctx echo.Context, masterName string) error {
 	newCtx := ctx.Request().Context()
 	if err := s.deleteMasterByName(newCtx, masterName); err != nil {
-		return terror.ErrOpenAPICommonError.New(err.Error())
+		return err
 	}
 	return ctx.NoContent(http.StatusNoContent)
 }
@@ -150,7 +150,7 @@ func (s *Server) DMAPIGetClusterWorkerList(ctx echo.Context) error {
 // DMAPIOfflineWorkerNode offline worker node url is: (DELETE /api/v1/cluster/workers/{worker-name}).
 func (s *Server) DMAPIOfflineWorkerNode(ctx echo.Context, workerName string) error {
 	if err := s.scheduler.RemoveWorker(workerName); err != nil {
-		return terror.ErrOpenAPICommonError.New(err.Error())
+		return err
 	}
 	return ctx.NoContent(http.StatusNoContent)
 }

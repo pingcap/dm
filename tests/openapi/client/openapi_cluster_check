@@ -18,7 +18,7 @@ def list_master_success(master_count):
 
 def delete_master_with_retry_success(master_name):
     url = API_ENDPOINT + "/masters/" + master_name
-    for i in range(0, 10):
+    for i in range(0, 30):
         resp = requests.delete(url=url)
         if resp.status_code != 204:
             print("delete_master_failed resp=", resp.json(), "retry cnt=", i)
@@ -48,7 +48,7 @@ def delete_worker_failed(worker_name):
 
 def delete_worker_with_retry_success(worker_name):
     url = API_ENDPOINT + "/workers/" + worker_name
-    for i in range(0, 10):
+    for i in range(0, 30):
         resp = requests.delete(url=url)
         if resp.status_code != 204:
             print("delete_worker_failed resp=", resp.json(), "retry cnt=", i)
