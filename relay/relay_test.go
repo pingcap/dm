@@ -35,12 +35,8 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/gtid"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/dm/relay/reader"
-	"github.com/pingcap/dm/relay/retry"
 	"github.com/pingcap/dm/relay/transformer"
-	"github.com/pingcap/dm/relay/writer"
 )
 
 var _ = Suite(&testRelaySuite{})
@@ -52,7 +48,7 @@ func TestSuite(t *testing.T) {
 type testRelaySuite struct{}
 
 func (t *testRelaySuite) SetUpSuite(c *C) {
-	c.Assert(log.InitLogger(&log.Config{}), IsNil)
+	// c.Assert(log.InitLogger(&log.Config{}), IsNil)
 }
 
 func newRelayCfg(c *C, flavor string) *Config {
@@ -68,7 +64,7 @@ func newRelayCfg(c *C, flavor string) *Config {
 			User:     dbCfg.User,
 			Password: dbCfg.Password,
 		},
-		ReaderRetry: retry.ReaderRetryConfig{
+		ReaderRetry: ReaderRetryConfig{
 			BackoffRollback: 200 * time.Millisecond,
 			BackoffMax:      1 * time.Second,
 			BackoffMin:      1 * time.Millisecond,
@@ -102,7 +98,7 @@ func getDBConfigForTest() config.DBConfig {
 
 // mockReader is used only for relay testing.
 type mockReader struct {
-	result reader.Result
+	result ReadResult
 	err    error
 }
 
@@ -114,10 +110,10 @@ func (r *mockReader) Close() error {
 	return nil
 }
 
-func (r *mockReader) GetEvent(ctx context.Context) (reader.Result, error) {
+func (r *mockReader) GetEvent(ctx context.Context) (ReadResult, error) {
 	select {
 	case <-ctx.Done():
-		return reader.Result{}, ctx.Err()
+		return ReadResult{}, ctx.Err()
 	default:
 	}
 	return r.result, r.err
@@ -125,7 +121,7 @@ func (r *mockReader) GetEvent(ctx context.Context) (reader.Result, error) {
 
 // mockWriter is used only for relay testing.
 type mockWriter struct {
-	result      writer.Result
+	result      WResult
 	err         error
 	latestEvent *replication.BinlogEvent
 }
@@ -138,11 +134,11 @@ func (w *mockWriter) Close() error {
 	return nil
 }
 
-func (w *mockWriter) Recover(ctx context.Context) (writer.RecoverResult, error) {
-	return writer.RecoverResult{}, nil
+func (w *mockWriter) Recover(ctx context.Context) (RecoverResult, error) {
+	return RecoverResult{}, nil
 }
 
-func (w *mockWriter) WriteEvent(ev *replication.BinlogEvent) (writer.Result, error) {
+func (w *mockWriter) WriteEvent(ev *replication.BinlogEvent) (WResult, error) {
 	w.latestEvent = ev // hold it
 	return w.result, w.err
 }

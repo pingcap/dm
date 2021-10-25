@@ -24,8 +24,8 @@ import (
 	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
 	"github.com/pingcap/dm/pkg/binlog"
-	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/relay"
 	"github.com/pingcap/dm/syncer"
 
 	. "github.com/pingcap/check"
@@ -177,7 +177,7 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 	defer func() {
 		createUnits = createRealUnits
 	}()
-	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string, notifier streamer.EventNotifier) []unit.Unit {
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string, notifier relay.EventNotifier) []unit.Unit {
 		return nil
 	}
 	st.Run(pb.Stage_Running)
@@ -186,7 +186,7 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
 	mockLoader := NewMockUnit(pb.UnitType_Load)
-	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string, notifier streamer.EventNotifier) []unit.Unit {
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string, notifier relay.EventNotifier) []unit.Unit {
 		return []unit.Unit{mockDumper, mockLoader}
 	}
 
@@ -297,7 +297,7 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	defer func() {
 		createUnits = createRealUnits
 	}()
-	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string, notifier streamer.EventNotifier) []unit.Unit {
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string, notifier relay.EventNotifier) []unit.Unit {
 		return []unit.Unit{mockDumper, mockLoader}
 	}
 
@@ -421,7 +421,7 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 	defer func() {
 		createUnits = createRealUnits
 	}()
-	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string, notifier streamer.EventNotifier) []unit.Unit {
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string, notifier relay.EventNotifier) []unit.Unit {
 		return []unit.Unit{mockDumper, mockLoader}
 	}
 
@@ -446,7 +446,7 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 
 	st = NewSubTaskWithStage(cfg, pb.Stage_Finished, nil, "worker")
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_Finished)
-	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string, notifier streamer.EventNotifier) []unit.Unit {
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, worker string, notifier relay.EventNotifier) []unit.Unit {
 		return []unit.Unit{mockDumper, mockLoader}
 	}
 

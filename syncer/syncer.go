@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/dm/relay"
+
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/errors"
@@ -220,11 +222,11 @@ type Syncer struct {
 	workerJobTSArray          []*atomic.Int64 // worker's sync job TS array, note that idx=0 is skip idx and idx=1 is ddl idx,sql worker job idx=(queue id + 2)
 	lastCheckpointFlushedTime time.Time
 
-	notifier streamer.EventNotifier
+	notifier relay.EventNotifier
 }
 
 // NewSyncer creates a new Syncer.
-func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, notifier streamer.EventNotifier) *Syncer {
+func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, notifier relay.EventNotifier) *Syncer {
 	logger := log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"))
 	syncer := &Syncer{
 		pessimist: shardddl.NewPessimist(&logger, etcdClient, cfg.Name, cfg.SourceID),
@@ -1625,7 +1627,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err1
 			}
 			continue
-		case err == streamer.ErrorMaybeDuplicateEvent:
+		case err == relay.ErrorMaybeDuplicateEvent:
 			tctx.L().Warn("read binlog met a truncated file, need to open safe-mode until the next transaction")
 			err = maybeSkipNRowsEvent(eventIndex)
 			if err == nil {

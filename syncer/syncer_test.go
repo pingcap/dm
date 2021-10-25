@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	streamer2 "github.com/pingcap/dm/relay"
+
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/failpoint"
 
@@ -40,7 +42,6 @@ import (
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/schema"
-	streamer2 "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/go-mysql-org/go-mysql/mysql"
