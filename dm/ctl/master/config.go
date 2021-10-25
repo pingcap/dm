@@ -379,7 +379,7 @@ func writeTaskCfgs(taskDir string, subTaskCfgsMap map[string]map[string]config.S
 		sort.Slice(subTaskCfgs, func(i, j int) bool {
 			return subTaskCfgs[i].SourceID < subTaskCfgs[j].SourceID
 		})
-		taskCfg := config.FromSubTaskConfigs(subTaskCfgs...)
+		taskCfg := config.SubTaskConfigsToTaskConfig(subTaskCfgs...)
 
 		taskFile := path.Join(taskDir, task)
 		taskFile += yamlSuffix
