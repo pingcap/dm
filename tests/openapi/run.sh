@@ -44,6 +44,18 @@ function test_source() {
 	# get source list success
 	openapi_source_check "list_source_success" 1
 
+	# get source list with status
+	openapi_source_check "list_source_with_status_success" 1 1
+
+	# transfer source
+	openapi_source_check "transfer_source_success" "mysql-01" "worker2"
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s mysql-01" \
+		"\"worker\": \"worker2\"" 1
+
+	# test get source schemas and tables
+	openapi_source_check "get_source_schemas_and_tables_success" "mysql-01"
+
 	# delete source success
 	openapi_source_check "delete_source_success" "mysql-01"
 
@@ -81,7 +93,6 @@ function test_relay() {
 
 	# start relay success
 	openapi_source_check "start_relay_success" "mysql-01" "worker1"
-
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status -s mysql-01" \
 		"\"worker\": \"worker1\"" 1 \
@@ -93,6 +104,21 @@ function test_relay() {
 	# get source status success
 	openapi_source_check "get_source_status_success" "mysql-01"
 	openapi_source_check "get_source_status_success_with_relay" "mysql-01"
+
+	# pause relay success
+	openapi_source_check "pause_relay_success" "mysql-01"
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s mysql-01" \
+		"\"worker\": \"worker1\"" 1 \
+		"\"stage\": \"Paused\"" 1
+
+	# resume relay success
+	openapi_source_check "resume_relay_success" "mysql-01"
+	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		"query-status -s mysql-01" \
+		"\"worker\": \"worker1\"" 1 \
+		"\"stage\": \"Running\"" 1 \
+		"\"relayCatchUpMaster\": true" 1
 
 	# stop relay failed: not pass worker name
 	openapi_source_check "stop_relay_failed" "mysql-01" "no-worker"
@@ -117,7 +143,7 @@ function test_relay() {
 		"\"worker\": \"worker1\"" 1 \
 		"\"worker\": \"worker2\"" 1
 
-	# stop relay on two worker success
+	# stop source on two worker success
 	openapi_source_check "stop_relay_success" "mysql-01" "worker1"
 	openapi_source_check "stop_relay_success" "mysql-01" "worker2"
 
@@ -191,6 +217,7 @@ function test_shard_task() {
 	openapi_task_check "get_task_list" 0
 
 	# delete source success
+	# todo test delete source --force
 	openapi_source_check "delete_source_success" "mysql-01"
 	openapi_source_check "delete_source_success" "mysql-02"
 	openapi_source_check "list_source_success" 0
@@ -252,7 +279,7 @@ function test_noshard_task() {
 }
 
 function run() {
-	make install_test_python_dep
+	# make install_test_python_dep
 
 	# run dm-master1
 	run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
@@ -267,7 +294,7 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-	test_source
+	# test_source
 	test_relay
 
 	test_shard_task

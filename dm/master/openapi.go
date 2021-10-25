@@ -16,6 +16,7 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -30,8 +31,10 @@ import (
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/openapi"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 const (
@@ -138,11 +141,21 @@ func (s *Server) DMAPICreateSource(ctx echo.Context) error {
 
 // DMAPIGetSourceList url is:(GET /api/v1/sources).
 func (s *Server) DMAPIGetSourceList(ctx echo.Context, params openapi.DMAPIGetSourceListParams) error {
-	// todo: support params
 	sourceMap := s.scheduler.GetSourceCfgs()
 	sourceList := []openapi.Source{}
 	for key := range sourceMap {
 		sourceList = append(sourceList, sourceCfgToModel(sourceMap[key]))
+	}
+	// fill status
+	if params.WithStatus != nil && *params.WithStatus {
+		nexCtx := ctx.Request().Context()
+		for idx := range sourceList {
+			sourceStatusList, err := s.getSourceStatusListFromWorker(nexCtx, sourceList[idx].SourceName)
+			if err != nil {
+				return err
+			}
+			sourceList[idx].StatusList = &sourceStatusList
+		}
 	}
 	resp := openapi.GetSourceListResponse{Total: len(sourceList), Data: sourceList}
 	return ctx.JSON(http.StatusOK, resp)
@@ -150,7 +163,20 @@ func (s *Server) DMAPIGetSourceList(ctx echo.Context, params openapi.DMAPIGetSou
 
 // DMAPIDeleteSource url is:(DELETE /api/v1/sources).
 func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string, params openapi.DMAPIDeleteSourceParams) error {
-	// todo: support params
+	// force means delete source and stop all task of this source
+	if params.Force != nil && *params.Force {
+		newCtx := ctx.Request().Context()
+		// 1 list task of this source
+		for _, taskName := range s.scheduler.GetTaskNameListBySourceName(sourceName) {
+			if _, err := s.OperateTask(newCtx, &pb.OperateTaskRequest{
+				Op:      pb.TaskOp_Stop,
+				Name:    taskName,
+				Sources: []string{sourceName},
+			}); err != nil {
+				return terror.ErrOpenAPICommonError.Delegate(err, "failed to stop source related task %s", taskName)
+			}
+		}
+	}
 	if err := s.scheduler.RemoveSourceCfg(sourceName); err != nil {
 		return err
 	}
@@ -201,22 +227,77 @@ func (s *Server) DMAPIStopRelay(ctx echo.Context, sourceName string) error {
 
 // DMAPIPauseRelay pause relay log function for the data source url is: (POST /api/v1/sources/{source-name}/pause-relay).
 func (s *Server) DMAPIPauseRelay(ctx echo.Context, sourceName string) error {
-	return nil
+	return s.scheduler.UpdateExpectRelayStage(pb.Stage_Paused, sourceName)
 }
 
 // DMAPIResumeRelay resume relay log function for the data source url is: (POST /api/v1/sources/{source-name}/resume-relay).
 func (s *Server) DMAPIResumeRelay(ctx echo.Context, sourceName string) error {
-	return nil
+	return s.scheduler.UpdateExpectRelayStage(pb.Stage_Running, sourceName)
 }
 
 // DMAPIGetSourceSchemaList get source schema list url is: (GET /api/v1/sources/{source-name}/schemas).
 func (s *Server) DMAPIGetSourceSchemaList(ctx echo.Context, sourceName string) error {
-	return nil
+	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
+	if sourceCfg == nil {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
+	}
+	dbCfg := sourceCfg.GenerateDBConfig()
+	baseDB, err := conn.DefaultDBProvider.Apply(*dbCfg)
+	if err != nil {
+		return err
+	}
+	defer baseDB.Close()
+	schemaList, err := utils.GetSchemaList(ctx.Request().Context(), baseDB.DB)
+	if err != nil {
+		return err
+	}
+	return ctx.JSON(http.StatusOK, schemaList)
 }
 
 // DMAPIGetSourceTableList get source table list url is: (GET /api/v1/sources/{source-name}/schemas/{schema-name}).
 func (s *Server) DMAPIGetSourceTableList(ctx echo.Context, sourceName string, schemaName string) error {
-	return nil
+	// todo unify source db
+	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
+	if sourceCfg == nil {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(sourceName)
+	}
+	dbCfg := sourceCfg.GenerateDBConfig()
+	baseDB, err := conn.DefaultDBProvider.Apply(*dbCfg)
+	if err != nil {
+		return err
+	}
+	defer baseDB.Close()
+	tableList, err := utils.GetTableList(ctx.Request().Context(), baseDB.DB, schemaName)
+	if err != nil {
+		return err
+	}
+	return ctx.JSON(http.StatusOK, tableList)
+}
+
+func (s *Server) getSourceStatusListFromWorker(ctx context.Context, sourceName string) ([]openapi.SourceStatus, error) {
+	workerRespList := s.getStatusFromWorkers(ctx, []string{sourceName}, "", true)
+	sourceStatusList := []openapi.SourceStatus{}
+	for _, workerStatus := range workerRespList {
+		if workerStatus == nil {
+			// this should not happen unless the rpc in the worker server has been modified
+			return nil, terror.ErrOpenAPICommonError.New("worker's query-status response is nil")
+		}
+		sourceStatus := openapi.SourceStatus{SourceName: sourceName, WorkerName: workerStatus.SourceStatus.Worker}
+		if !workerStatus.Result {
+			sourceStatus.ErrorMsg = &workerStatus.Msg
+		} else if relayStatus := workerStatus.SourceStatus.GetRelayStatus(); relayStatus != nil {
+			sourceStatus.RelayStatus = &openapi.RelayStatus{
+				MasterBinlog:       relayStatus.MasterBinlog,
+				MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
+				RelayBinlogGtid:    relayStatus.RelayBinlogGtid,
+				RelayCatchUpMaster: relayStatus.RelayCatchUpMaster,
+				RelayDir:           relayStatus.RelaySubDir,
+				Stage:              relayStatus.Stage.String(),
+			}
+		}
+		sourceStatusList = append(sourceStatusList, sourceStatus)
+	}
+	return sourceStatusList, nil
 }
 
 // DMAPIGetSourceStatus url is: (GET /api/v1/sources/{source-id}/status).
@@ -233,35 +314,22 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 		resp.Total = len(resp.Data)
 		return ctx.JSON(http.StatusOK, resp)
 	}
-	// get status from worker
-	workerRespList := s.getStatusFromWorkers(ctx.Request().Context(), []string{sourceName}, "", true)
-	for _, workerStatus := range workerRespList {
-		if workerStatus == nil {
-			// this should not happen unless the rpc in the worker server has been modified
-			return terror.ErrOpenAPICommonError.New("worker's query-status response is nil")
-		}
-		sourceStatus := openapi.SourceStatus{SourceName: sourceName, WorkerName: workerStatus.SourceStatus.Worker}
-		if !workerStatus.Result {
-			sourceStatus.ErrorMsg = &workerStatus.Msg
-		} else if relayStatus := workerStatus.SourceStatus.GetRelayStatus(); relayStatus != nil {
-			sourceStatus.RelayStatus = &openapi.RelayStatus{
-				MasterBinlog:       relayStatus.MasterBinlog,
-				MasterBinlogGtid:   relayStatus.MasterBinlogGtid,
-				RelayBinlogGtid:    relayStatus.RelayBinlogGtid,
-				RelayCatchUpMaster: relayStatus.RelayCatchUpMaster,
-				RelayDir:           relayStatus.RelaySubDir,
-				Stage:              relayStatus.Stage.String(),
-			}
-		}
-		resp.Data = append(resp.Data, sourceStatus)
+	sourceStatusList, err := s.getSourceStatusListFromWorker(ctx.Request().Context(), sourceName)
+	if err != nil {
+		return err
 	}
+	resp.Data = append(resp.Data, sourceStatusList...)
 	resp.Total = len(resp.Data)
 	return ctx.JSON(http.StatusOK, resp)
 }
 
 // DMAPITransferSource transfer source  another free worker url is: (POST /api/v1/sources/{source-name}/transfer).
 func (s *Server) DMAPITransferSource(ctx echo.Context, sourceName string) error {
-	return nil
+	var req openapi.WorkerNameRequest
+	if err := ctx.Bind(&req); err != nil {
+		return err
+	}
+	return s.scheduler.TransferSource(sourceName, req.WorkerName)
 }
 
 // DMAPIStartTask url is:(POST /api/v1/tasks).
