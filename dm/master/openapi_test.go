@@ -448,7 +448,7 @@ func (t *openAPISuite) TestClusterAPI(c *check.C) {
 		s1.Close()
 	}()
 
-	// join to an existing cluster
+	// join a new master node to an existing cluster
 	cfg2 := NewConfig()
 	c.Assert(cfg2.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
 	cfg2.Name = "dm-master-2"
@@ -461,7 +461,10 @@ func (t *openAPISuite) TestClusterAPI(c *check.C) {
 	s2 := NewServer(cfg2)
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	c.Assert(s2.Start(ctx2), check.IsNil)
-	defer s2.Close()
+	defer func() {
+		s2.Close()
+		cancel2()
+	}()
 
 	baseURL := "/api/v1/cluster/"
 	masterURL := baseURL + "masters"
@@ -486,7 +489,7 @@ func (t *openAPISuite) TestClusterAPI(c *check.C) {
 			errResp := &openapi.ErrorWithMessage{}
 			err = result.UnmarshalBodyToObject(&errResp)
 			c.Assert(err, check.IsNil)
-			c.Assert(errResp.ErrorMsg, check.Matches, ".* etcdserver: unhealthy cluster")
+			c.Assert(errResp.ErrorMsg, check.Matches, "etcdserver: unhealthy cluster")
 			time.Sleep(time.Second)
 		} else {
 			c.Assert(result.Code(), check.Equals, http.StatusNoContent)
@@ -500,7 +503,6 @@ func (t *openAPISuite) TestClusterAPI(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resultMasters.Total, check.Equals, 1)
 
-	// ctx3, cancel3 := context.WithCancel(context.Background())
 	workerName1 := "worker1"
 	c.Assert(s1.scheduler.AddWorker(workerName1, "172.16.10.72:8262"), check.IsNil)
 	// list worker node
@@ -514,7 +516,7 @@ func (t *openAPISuite) TestClusterAPI(c *check.C) {
 	// offline worker-1
 	result = testutil.NewRequest().Delete(fmt.Sprintf("%s/%s", workerURL, workerName1)).Go(t.testT, s1.echo)
 	c.Assert(result.Code(), check.Equals, http.StatusNoContent)
-	// after offline no worker node
+	// after offline, no worker node
 	result = testutil.NewRequest().Get(workerURL).Go(t.testT, s1.echo)
 	err = result.UnmarshalBodyToObject(&resultWorkers)
 	c.Assert(err, check.IsNil)

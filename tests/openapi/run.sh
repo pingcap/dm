@@ -269,7 +269,6 @@ function test_cluster() {
 
 	openapi_cluster_check "delete_worker_with_retry_success" "worker1"
 	openapi_cluster_check "list_worker_success" 1
-
 }
 
 function run() {
