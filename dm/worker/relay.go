@@ -312,14 +312,10 @@ func (h *realRelayHolder) EarliestActiveRelayLog() *streamer.RelayLogInfo {
 }
 
 func (h *realRelayHolder) RegisterListener(el relay.Listener) {
-	h.Lock()
-	defer h.Unlock()
 	h.relay.RegisterListener(el)
 }
 
 func (h *realRelayHolder) UnRegisterListener(el relay.Listener) {
-	h.Lock()
-	defer h.Unlock()
 	h.relay.UnRegisterListener(el)
 }
 
