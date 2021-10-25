@@ -81,13 +81,13 @@ func newBinlogPoint(location, flushedLocation binlog.Location, ti, flushedTI *mo
 	return &binlogPoint{
 		location: tablePoint{
 			location: location,
-			ti:	ti,
+			ti:       ti,
 		},
 		flushedLocation: tablePoint{
 			location: flushedLocation,
 			ti:       flushedTI,
 		},
-		enableGTID:      enableGTID,
+		enableGTID: enableGTID,
 	}
 }
 
@@ -291,11 +291,11 @@ type CheckPoint interface {
 }
 
 type removeCheckpointSnapshot struct {
-	id  int
-	globalPoint         *tablePoint
-	globalPointSaveTime time.Time
+	id                         int
+	globalPoint                *tablePoint
+	globalPointSaveTime        time.Time
 	needFlushSafeModeExitPoint bool
-	points map[string]map[string]tablePoint
+	points                     map[string]map[string]tablePoint
 }
 
 // RemoteCheckPoint implements CheckPoint
@@ -337,7 +337,7 @@ type RemoteCheckPoint struct {
 	logCtx *tcontext.Context
 
 	// these fields are used for async flush checkpoint
-	snapshots []*removeCheckpointSnapshot
+	snapshots   []*removeCheckpointSnapshot
 	snapshotSeq int
 }
 
@@ -356,10 +356,10 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 }
 
 // Snapshot make a snapshot of checkpoint and return the snapshot id
-func (cp *RemoteCheckPoint)  Snapshot() SnapshotID {
+func (cp *RemoteCheckPoint) Snapshot() SnapshotID {
 	cp.RLock()
 	defer cp.RUnlock()
-	//make snapshot is visit in single thread, so depend on rlock should be enough
+	// make snapshot is visit in single thread, so depend on rlock should be enough
 	cp.snapshotSeq++
 
 	id := cp.snapshotSeq
@@ -385,10 +385,10 @@ func (cp *RemoteCheckPoint)  Snapshot() SnapshotID {
 	}
 
 	snapshot := &removeCheckpointSnapshot{
-		id: id,
-		globalPointSaveTime: cp.globalPointSaveTime,
+		id:                         id,
+		globalPointSaveTime:        cp.globalPointSaveTime,
 		needFlushSafeModeExitPoint: cp.needFlushSafeModeExitPoint,
-		points: tableCheckPoints,
+		points:                     tableCheckPoints,
 	}
 	if cp.globalPoint != nil {
 		snapshot.globalPoint = &cp.globalPoint.location
@@ -396,7 +396,7 @@ func (cp *RemoteCheckPoint)  Snapshot() SnapshotID {
 
 	cp.snapshots = append(cp.snapshots, snapshot)
 	return SnapshotID{
-		id: id,
+		id:  id,
 		pos: cp.globalPoint.location.location,
 	}
 }
@@ -702,7 +702,7 @@ func (cp *RemoteCheckPoint) FlushSnapshotPointsExcept(
 	}
 
 	type binlogPointSp struct {
-		pos *binlogPoint
+		pos   *binlogPoint
 		spLoc tablePoint
 	}
 
@@ -728,7 +728,7 @@ func (cp *RemoteCheckPoint) FlushSnapshotPointsExcept(
 				args = append(args, arg)
 
 				points = append(points, &binlogPointSp{
-					pos: tableCP,
+					pos:   tableCP,
 					spLoc: point,
 				})
 			}

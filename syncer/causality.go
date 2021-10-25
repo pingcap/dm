@@ -134,7 +134,7 @@ func (c *causality) detectConflict(keys []string) bool {
 }
 
 type versionedMap struct {
-	data map[string]string
+	data   map[string]string
 	maxVer int64
 }
 
@@ -154,7 +154,7 @@ func newRollingMap() *rollingMap {
 }
 
 func (m *rollingMap) get(key string) (string, bool) {
-	for i := len(m.maps)-1; i >=0; i-- {
+	for i := len(m.maps) - 1; i >= 0; i-- {
 		if v, ok := m.maps[i].data[key]; ok {
 			return v, true
 		}
@@ -198,7 +198,7 @@ func (m *rollingMap) gc(version int64) {
 			break
 		}
 	}
-	if idx == len(m.maps) -1 {
+	if idx == len(m.maps)-1 {
 		m.maps = m.maps[:0]
 		m.rotate()
 	} else if idx > 0 {

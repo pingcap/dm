@@ -184,9 +184,9 @@ type Syncer struct {
 
 	done chan struct{}
 
-	checkpoint CheckPoint
+	checkpoint    CheckPoint
 	flushCpWorker checkpointFlushWorker
-	onlineDDL  onlineddl.OnlinePlugin
+	onlineDDL     onlineddl.OnlinePlugin
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
@@ -402,8 +402,8 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		}
 	}
 	s.flushCpWorker = checkpointFlushWorker{
-		input: make(chan *flushCpTask, 16),
-		cp: s.checkpoint,
+		input:        make(chan *flushCpTask, 16),
+		cp:           s.checkpoint,
 		afterFlushFn: s.afterFlushCheckpoint,
 	}
 
@@ -1053,11 +1053,11 @@ func (s *Syncer) resetShardingGroup(table *filter.Table) {
 
 type flushCpTask struct {
 	snapshot SnapshotID
-	wg *sync.WaitGroup
+	wg       *sync.WaitGroup
 	// job version, causality gc max version
 	version int64
 	// extra sharding ddl sqls
-	exceptTables   []*filter.Table
+	exceptTables  []*filter.Table
 	shardMetaSQLs []string
 	shardMetaArgs [][]interface{}
 	// result chan
@@ -1065,9 +1065,9 @@ type flushCpTask struct {
 }
 
 type checkpointFlushWorker struct {
-	input chan *flushCpTask
-	cp CheckPoint
-	afterFlushFn func(task *flushCpTask, location binlog.Location) error
+	input        chan *flushCpTask
+	cp           CheckPoint
+	afterFlushFn func(task *flushCpTask) error
 }
 
 // Add add a new flush checkpoint job
@@ -1083,7 +1083,6 @@ func (w *checkpointFlushWorker) Run(ctx *tcontext.Context) {
 			msg.wg.Wait()
 		}
 
-
 		err := w.cp.FlushSnapshotPointsExcept(ctx, msg.snapshot.id, msg.exceptTables, msg.shardMetaSQLs, msg.shardMetaArgs)
 		if err != nil {
 			ctx.L().Warn("flush checkpoint snapshot failed, ignore this error", zap.Any("snapshot", msg))
@@ -1094,7 +1093,7 @@ func (w *checkpointFlushWorker) Run(ctx *tcontext.Context) {
 		}
 		ctx.L().Info("flushed checkpoint", zap.Int("snapshot_id", msg.snapshot.id),
 			zap.Stringer("pos", msg.snapshot.pos))
-		if err = w.afterFlushFn(msg.snapshot.pos); err != nil {
+		if err = w.afterFlushFn(msg); err != nil {
 			if msg.resChan != nil {
 				msg.resChan <- err
 			}
@@ -1122,7 +1121,7 @@ func (s *Syncer) flushCheckPoints() error {
 	errCh := make(chan error, 1)
 	// use math.MaxInt64 to clear all the data in causality component.
 	s.doFlushCheckPointsAsync(nil, errCh, math.MaxInt64)
-	return <- errCh
+	return <-errCh
 }
 
 // flushCheckPointsAsync flushes previous saved checkpoint asyncronously after all worker finsh flush.
@@ -1162,30 +1161,30 @@ func (s *Syncer) doFlushCheckPointsAsync(wg *sync.WaitGroup, outCh chan error, v
 	}
 
 	snapshotID := s.checkpoint.Snapshot()
-	if snapshotID.id == 0  {
+	if snapshotID.id == 0 {
 		log.L().Info("checkpoint has no change, skip save checkpoint")
 		return
 	}
 	task := &flushCpTask{
-		snapshot: snapshotID,
-		wg: wg,
-		exceptTables: exceptTables,
+		snapshot:      snapshotID,
+		wg:            wg,
+		exceptTables:  exceptTables,
 		shardMetaSQLs: shardMetaSQLs,
 		shardMetaArgs: shardMetaArgs,
-		resChan: outCh,
-		version: version,
+		resChan:       outCh,
+		version:       version,
 	}
 	s.flushCpWorker.Add(task)
 }
 
-func (s *Syncer) afterFlushCheckpoint(task *flushCpTask, loc binlog.Location) error {
+func (s *Syncer) afterFlushCheckpoint(task *flushCpTask) error {
 	s.dmlJobCh <- &job{
-		tp: gc,
+		tp:  gc,
 		seq: task.version,
 	}
 	s.addCount(true, adminQueueName, flush, 1, nil)
 	// update current active relay log after checkpoint flushed
-	err := s.updateActiveRelayLog(loc.Position)
+	err := s.updateActiveRelayLog(task.snapshot.pos.Position)
 	if err != nil {
 		return err
 	}

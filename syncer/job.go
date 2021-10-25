@@ -37,7 +37,7 @@ const (
 	skip // used by Syncer.recordSkipSQLsLocation to record global location, but not execute SQL
 	rotate
 	conflict
-	gc	// used to clean up out dated causality keys
+	gc // used to clean up out dated causality keys
 )
 
 func (t opType) String() string {
@@ -86,8 +86,8 @@ type job struct {
 	originSQL       string // show origin sql when error, only DDL now
 
 	eventHeader *replication.EventHeader
-	jobAddTime  time.Time // job commit time
-	seq			int64 // sequence number for this job
+	jobAddTime  time.Time       // job commit time
+	seq         int64           // sequence number for this job
 	wg          *sync.WaitGroup // wait group for flush/conflict job
 }
 
@@ -175,7 +175,7 @@ func newFlushJob() *job {
 		tp:          flush,
 		targetTable: &filter.Table{},
 		jobAddTime:  time.Now(),
-		wg:			 &sync.WaitGroup{},
+		wg:          &sync.WaitGroup{},
 	}
 }
 
