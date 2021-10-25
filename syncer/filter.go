@@ -23,7 +23,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
-
+// skipQueryEvent changes ddlInfo.originDDL if skip by binlog-filter.
 func (s *Syncer) skipQueryEvent(originSQL string, ddlInfo *ddlInfo) (bool, error) {
 	if utils.IsBuildInSkipDDL(originSQL) {
 		return true, nil
