@@ -143,7 +143,7 @@ function test_relay() {
 		"\"worker\": \"worker1\"" 1 \
 		"\"worker\": \"worker2\"" 1
 
-	# stop source on two worker success
+	# stop relay on two worker success
 	openapi_source_check "stop_relay_success" "mysql-01" "worker1"
 	openapi_source_check "stop_relay_success" "mysql-01" "worker2"
 
