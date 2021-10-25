@@ -208,7 +208,7 @@ check_third_party_binary:
 	@which bin/tidb-server
 	@which bin/sync_diff_inspector
 
-integration_test: check_third_party_binary
+integration_test: check_third_party_binary install_test_python_dep
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
 	@which bin/dm-syncer.test
