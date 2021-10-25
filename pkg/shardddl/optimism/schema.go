@@ -16,7 +16,7 @@ package optimism
 import (
 	"encoding/json"
 
-	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb/parser/model"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/clientv3/clientv3util"
 

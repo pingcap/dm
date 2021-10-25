@@ -18,7 +18,7 @@ import (
 
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	tmysql "github.com/pingcap/parser/mysql"
+	tmysql "github.com/pingcap/tidb/parser/mysql"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"

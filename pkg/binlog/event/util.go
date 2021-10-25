@@ -28,8 +28,8 @@ import (
 
 	gmysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/mysql"
 
 	"github.com/pingcap/dm/pkg/terror"
 )

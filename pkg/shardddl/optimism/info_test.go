@@ -21,10 +21,10 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/parser/model"
 	tiddl "github.com/pingcap/tidb/ddl"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
+	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/mock"
 	"go.etcd.io/etcd/clientv3"
