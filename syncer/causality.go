@@ -70,14 +70,15 @@ func (c *causality) run() {
 		case gc:
 			c.relations.gc(j.seq)
 		default:
+			keys := j.dml.identifyKeys()
 			// detectConflict before add
-			if c.detectConflict(j.keys) {
-				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", j.keys))
+			if c.detectConflict(keys) {
+				c.logger.Debug("meet causality key, will generate a conflict job to flush all sqls", zap.Strings("keys", keys))
 				c.outCh <- newConflictJob()
 				c.relations.clear()
 			}
-			j.key = c.add(j.keys, j.seq)
-			c.logger.Debug("key for keys", zap.String("key", j.key), zap.Strings("keys", j.keys))
+			j.dml.key = c.add(keys, j.seq)
+			c.logger.Debug("key for keys", zap.String("key", j.dml.key), zap.Strings("keys", keys))
 		}
 		metrics.ConflictDetectDurationHistogram.WithLabelValues(c.task, c.source).Observe(time.Since(startTime).Seconds())
 

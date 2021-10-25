@@ -129,10 +129,10 @@ func (w *DMLWorker) run() {
 				w.flushCh <- j
 			}
 		} else {
-			queueBucket := int(utils.GenHashKey(j.key)) % w.workerCount
+			queueBucket := int(utils.GenHashKey(j.dml.key)) % w.workerCount
 			w.addCountFunc(false, queueBucketMapping[queueBucket], j.tp, 1, j.targetTable)
 			startTime := time.Now()
-			w.logger.Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.key))
+			w.logger.Debug("queue for key", zap.Int("queue", queueBucket), zap.String("key", j.dml.key))
 			jobChs[queueBucket] <- j
 			metrics.AddJobDurationHistogram.WithLabelValues(j.tp.String(), w.task, queueBucketMapping[queueBucket], w.source).Observe(time.Since(startTime).Seconds())
 		}
@@ -220,8 +220,9 @@ func (w *DMLWorker) executeBatchJobs(queueID int, jobs []*job) {
 	queries := make([]string, 0, len(jobs))
 	args := make([][]interface{}, 0, len(jobs))
 	for _, j := range jobs {
-		queries = append(queries, j.sql)
-		args = append(args, j.args)
+		query, arg := j.dml.genSQL()
+		queries = append(queries, query...)
+		args = append(args, arg...)
 	}
 	failpoint.Inject("WaitUserCancel", func(v failpoint.Value) {
 		t := v.(int)

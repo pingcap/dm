@@ -74,10 +74,7 @@ type job struct {
 	// sql example: drop table `s1`.`t1`, `s2`.`t2`.
 	sourceTbls      map[string][]*filter.Table
 	targetTable     *filter.Table
-	sql             string
-	args            []interface{}
-	key             string
-	keys            []string
+	dml             *DML
 	retry           bool
 	location        binlog.Location // location of last received (ROTATE / QUERY / XID) event, for global/table checkpoint
 	startLocation   binlog.Location // start location of the sql in binlog, for handle_error
@@ -93,18 +90,19 @@ type job struct {
 
 func (j *job) String() string {
 	// only output some important information, maybe useful in execution.
-	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.sql, j.args, j.key, j.ddls, j.location, j.startLocation, j.currentLocation)
+	var dmlStr string
+	if j.dml != nil {
+		dmlStr = j.dml.String()
+	}
+	return fmt.Sprintf("tp: %s, dml: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, dmlStr, j.ddls, j.location, j.startLocation, j.currentLocation)
 }
 
-func newDMLJob(tp opType, sourceTable, targetTable *filter.Table, sql string, args []interface{},
-	keys []string, ec *eventContext) *job {
+func newDMLJob(tp opType, sourceTable, targetTable *filter.Table, dml *DML, ec *eventContext) *job {
 	return &job{
 		tp:          tp,
 		sourceTbls:  map[string][]*filter.Table{sourceTable.Schema: {sourceTable}},
 		targetTable: targetTable,
-		sql:         sql,
-		args:        args,
-		keys:        keys,
+		dml:         dml,
 		retry:       true,
 
 		location:        *ec.lastLocation,
