@@ -17,7 +17,8 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"go.uber.org/zap"
+	"github.com/pingcap/tidb/parser/ast"
+  "go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"

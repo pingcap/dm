@@ -20,9 +20,9 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-mysql-org/go-mysql/replication"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/parser"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb/parser"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"

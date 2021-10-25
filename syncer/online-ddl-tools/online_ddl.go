@@ -29,11 +29,11 @@ import (
 	"github.com/pingcap/dm/syncer/dbconn"
 
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+  "github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
+	"github.com/pingcap/tidb/parser/model"
 	"go.uber.org/zap"
 )
 

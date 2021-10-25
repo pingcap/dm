@@ -18,9 +18,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
+	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"

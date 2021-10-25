@@ -33,6 +33,32 @@ const (
 	TaskTaskModeIncremental TaskTaskMode = "incremental"
 )
 
+// ClusterMaster defines model for ClusterMaster.
+type ClusterMaster struct {
+	// address of the current master node
+	Addr string `json:"addr"`
+
+	// online status of this master
+	Alive bool `json:"alive"`
+
+	// is this master the leader
+	Leader bool   `json:"leader"`
+	Name   string `json:"name"`
+}
+
+// ClusterWorker defines model for ClusterWorker.
+type ClusterWorker struct {
+	// address of the current master node
+	Addr string `json:"addr"`
+
+	// bound source name of this worker node
+	BoundSourceName string `json:"bound_source_name"`
+
+	// bound stage of this worker node
+	BoundStage string `json:"bound_stage"`
+	Name       string `json:"name"`
+}
+
 // CreateTaskRequest defines model for CreateTaskRequest.
 type CreateTaskRequest struct {
 	// whether to remove meta database in downstream database
@@ -45,6 +71,12 @@ type CreateTaskRequest struct {
 	Task Task `json:"task"`
 }
 
+// DeleteSourceResponse defines model for DeleteSourceResponse.
+type DeleteSourceResponse struct {
+	// task name list
+	TaskNameList *TaskNameList `json:"task_name_list,omitempty"`
+}
+
 // operation error
 type ErrorWithMessage struct {
 	// error code
@@ -52,6 +84,18 @@ type ErrorWithMessage struct {
 
 	// error message
 	ErrorMsg string `json:"error_msg"`
+}
+
+// GetClusterMasterListResponse defines model for GetClusterMasterListResponse.
+type GetClusterMasterListResponse struct {
+	Data  []ClusterMaster `json:"data"`
+	Total int             `json:"total"`
+}
+
+// GetClusterWorkerListResponse defines model for GetClusterWorkerListResponse.
+type GetClusterWorkerListResponse struct {
+	Data  []ClusterWorker `json:"data"`
+	Total int             `json:"total"`
 }
 
 // GetSourceListResponse defines model for GetSourceListResponse.
@@ -78,6 +122,13 @@ type GetTaskStatusResponse struct {
 	Total int             `json:"total"`
 }
 
+// GetTaskTableStructureResponse defines model for GetTaskTableStructureResponse.
+type GetTaskTableStructureResponse struct {
+	SchemaCreateSql *string `json:"schema_create_sql,omitempty"`
+	SchemaName      *string `json:"schema_name,omitempty"`
+	TableName       string  `json:"table_name"`
+}
+
 // status of load unit
 type LoadStatus struct {
 	FinishedBytes  int64  `json:"finished_bytes"`
@@ -85,6 +136,18 @@ type LoadStatus struct {
 	MetaBinlogGtid string `json:"meta_binlog_gtid"`
 	Progress       string `json:"progress"`
 	TotalBytes     int64  `json:"total_bytes"`
+}
+
+// action to operate table request
+type OperateTaskTableStructureRequest struct {
+	// Writes the schema to the checkpoint so that DM can load it after restarting the task
+	Flush *bool `json:"flush,omitempty"`
+
+	// sql you want to operate
+	SqlContent string `json:"sql_content"`
+
+	// Updates the optimistic sharding metadata with this schema only used when an error occurs in the optimistic sharding DDL mode
+	Sync *bool `json:"sync,omitempty"`
 }
 
 // relay log cleanup policy configuration
@@ -119,6 +182,9 @@ type RelayStatus struct {
 	// current status
 	Stage string `json:"stage"`
 }
+
+// schema name list
+type SchemaNameList []string
 
 // data source ssl configuration, the field will be hidden when getting the data source configuration from the interface
 type Security struct {
@@ -165,7 +231,8 @@ type Source struct {
 	Security *Security `json:"security"`
 
 	// source name
-	SourceName string `json:"source_name"`
+	SourceName string          `json:"source_name"`
+	StatusList *[]SourceStatus `json:"status_list,omitempty"`
 
 	// source username
 	User string `json:"user"`
@@ -255,6 +322,9 @@ type SyncStatus struct {
 	UnresolvedGroups []ShardingGroup `json:"unresolved_groups"`
 }
 
+// schema name list
+type TableNameList []string
+
 // task
 type Task struct {
 	BinlogFilterRule *Task_BinlogFilterRule `json:"binlog_filter_rule,omitempty"`
@@ -312,6 +382,9 @@ type TaskBinLogFilterRule struct {
 
 // configuration of full migrate tasks
 type TaskFullMigrateConf struct {
+	// to control the way in which data is exported for consistency assurance
+	Consistency *string `json:"consistency,omitempty"`
+
 	// storage dir name
 	DataDir *string `json:"data_dir,omitempty"`
 
@@ -330,6 +403,9 @@ type TaskIncrMigrateConf struct {
 	// incremental task of concurrent
 	ReplThreads *int `json:"repl_threads,omitempty"`
 }
+
+// task name list
+type TaskNameList []string
 
 // TaskSourceConf defines model for TaskSourceConf.
 type TaskSourceConf struct {
@@ -401,8 +477,26 @@ type TaskTargetDataBase struct {
 // worker name list
 type WorkerNameList []string
 
+// requests related to workers
+type WorkerNameRequest struct {
+	// worker name
+	WorkerName string `json:"worker_name"`
+}
+
+// DMAPIGetSourceListParams defines parameters for DMAPIGetSourceList.
+type DMAPIGetSourceListParams struct {
+	// get source with status
+	WithStatus *bool `json:"with_status,omitempty"`
+}
+
 // DMAPICreateSourceJSONBody defines parameters for DMAPICreateSource.
 type DMAPICreateSourceJSONBody Source
+
+// DMAPIDeleteSourceParams defines parameters for DMAPIDeleteSource.
+type DMAPIDeleteSourceParams struct {
+	// force stop task also stop the related tasks
+	Force *bool `json:"force,omitempty"`
+}
 
 // DMAPIStartRelayJSONBody defines parameters for DMAPIStartRelay.
 type DMAPIStartRelayJSONBody StartRelayRequest
@@ -410,13 +504,31 @@ type DMAPIStartRelayJSONBody StartRelayRequest
 // DMAPIStopRelayJSONBody defines parameters for DMAPIStopRelay.
 type DMAPIStopRelayJSONBody StopRelayRequest
 
+// DMAPITransferSourceJSONBody defines parameters for DMAPITransferSource.
+type DMAPITransferSourceJSONBody WorkerNameRequest
+
 // DMAPIStartTaskJSONBody defines parameters for DMAPIStartTask.
 type DMAPIStartTaskJSONBody CreateTaskRequest
 
 // DMAPIDeleteTaskParams defines parameters for DMAPIDeleteTask.
 type DMAPIDeleteTaskParams struct {
 	// source name list
-	SourceNameList *[]string `json:"source-name-list,omitempty"`
+	SourceNameList *[]string `json:"source_name_list,omitempty"`
+}
+
+// DMAPPauseTaskJSONBody defines parameters for DMAPPauseTask.
+type DMAPPauseTaskJSONBody SourceNameList
+
+// DMAPIResumeTaskJSONBody defines parameters for DMAPIResumeTask.
+type DMAPIResumeTaskJSONBody SourceNameList
+
+// DMAPIOperateTaskSourceTableStructureJSONBody defines parameters for DMAPIOperateTaskSourceTableStructure.
+type DMAPIOperateTaskSourceTableStructureJSONBody OperateTaskTableStructureRequest
+
+// DMAPIGetTaskStatusParams defines parameters for DMAPIGetTaskStatus.
+type DMAPIGetTaskStatusParams struct {
+	// source name list
+	SourceNameList *SourceNameList `json:"source_name_list,omitempty"`
 }
 
 // DMAPICreateSourceJSONRequestBody defines body for DMAPICreateSource for application/json ContentType.
@@ -428,8 +540,20 @@ type DMAPIStartRelayJSONRequestBody DMAPIStartRelayJSONBody
 // DMAPIStopRelayJSONRequestBody defines body for DMAPIStopRelay for application/json ContentType.
 type DMAPIStopRelayJSONRequestBody DMAPIStopRelayJSONBody
 
+// DMAPITransferSourceJSONRequestBody defines body for DMAPITransferSource for application/json ContentType.
+type DMAPITransferSourceJSONRequestBody DMAPITransferSourceJSONBody
+
 // DMAPIStartTaskJSONRequestBody defines body for DMAPIStartTask for application/json ContentType.
 type DMAPIStartTaskJSONRequestBody DMAPIStartTaskJSONBody
+
+// DMAPPauseTaskJSONRequestBody defines body for DMAPPauseTask for application/json ContentType.
+type DMAPPauseTaskJSONRequestBody DMAPPauseTaskJSONBody
+
+// DMAPIResumeTaskJSONRequestBody defines body for DMAPIResumeTask for application/json ContentType.
+type DMAPIResumeTaskJSONRequestBody DMAPIResumeTaskJSONBody
+
+// DMAPIOperateTaskSourceTableStructureJSONRequestBody defines body for DMAPIOperateTaskSourceTableStructure for application/json ContentType.
+type DMAPIOperateTaskSourceTableStructureJSONRequestBody DMAPIOperateTaskSourceTableStructureJSONBody
 
 // Getter for additional properties for Task_BinlogFilterRule. Returns the specified
 // element and whether it was found

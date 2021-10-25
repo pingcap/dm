@@ -49,11 +49,11 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/parser"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb/parser"
 	"go.uber.org/zap"
 )
 
@@ -814,85 +814,80 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		// now every ddl job will start with a flush job
 		{
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE DATABASE IF NOT EXISTS `test_1`",
+			[]string{"CREATE DATABASE IF NOT EXISTS `test_1`"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int64(580981944116838401), "a"},
+			[]string{"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`name`=VALUES(`name`)"},
+			[][]interface{}{{int64(580981944116838401), "a"}},
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`name`)",
+			[]string{"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`name`)"},
 			nil,
 		}, {
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int64(580981944116838402), "b"},
+			[]string{"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`name`=VALUES(`name`)"},
+			[][]interface{}{{int64(580981944116838402), "b"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int64(580981944116838401)},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int64(580981944116838401)}},
 		}, {
-			// in the first minute, safe mode is true, will split update to delete + replace
+			// safe mode is true, will split update to delete + replace
 			update,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int64(580981944116838402)},
-		}, {
-			// in the first minute, safe mode is true, will split update to delete + replace
-			update,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int64(580981944116838401), "b"},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1", "INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`name`=VALUES(`name`)"},
+			[][]interface{}{{int64(580981944116838402)}, {int64(580981944116838401), "b"}},
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_3` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_3` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"ALTER TABLE `test_1`.`t_3` DROP PRIMARY KEY",
+			[]string{"ALTER TABLE `test_1`.`t_3` DROP PRIMARY KEY"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"ALTER TABLE `test_1`.`t_3` ADD PRIMARY KEY(`id`, `name`)",
+			[]string{"ALTER TABLE `test_1`.`t_3` ADD PRIMARY KEY(`id`, `name`)"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		},
 	}
@@ -948,15 +943,15 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	expectJobs2 := []*expectJob{
 		{
 			insert,
-			"INSERT INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(3), "c"},
+			[]string{"INSERT INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?)"},
+			[][]interface{}{{int32(3), "c"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(3)},
+			[]string{"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(3)}},
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		},
 	}
@@ -1076,52 +1071,48 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 		// now every ddl job will start with a flush job
 		{
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE DATABASE IF NOT EXISTS `test_1`",
+			[]string{"CREATE DATABASE IF NOT EXISTS `test_1`"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(1), "a"},
+			[]string{"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`name`=VALUES(`name`)"},
+			[][]interface{}{{int32(1), "a"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(1)},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(1)}},
 		}, {
 			update,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(2)},
-		}, {
-			update,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(1), "b"},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1", "INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`name`=VALUES(`name`)"},
+			[][]interface{}{{int32(2)}, {int32(1), "b"}},
 		}, {
 			// start from this event, location passes safeModeExitLocation and safe mode should exit
 			insert,
-			"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(1), "a"},
+			[]string{"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)"},
+			[][]interface{}{{int32(1), "a"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(1)},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(1)}},
 		}, {
 			update,
-			"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(1), "b", int32(2)},
+			[]string{"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(1), "b", int32(2)}},
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		},
 	}
@@ -1371,21 +1362,20 @@ func executeSQLAndWait(expectJobNum int) {
 
 type expectJob struct {
 	tp       opType
-	sqlInJob string
-	args     []interface{}
+	sqlInJob []string
+	args     [][]interface{}
 }
 
 func checkJobs(c *C, jobs []*job, expectJobs []*expectJob) {
 	c.Assert(len(jobs), Equals, len(expectJobs), Commentf("jobs = %q", jobs))
 	for i, job := range jobs {
-		c.Log(i, job.tp, job.ddls, job.sql, job.args)
-
 		c.Assert(job.tp, Equals, expectJobs[i].tp)
 		if job.tp == ddl {
-			c.Assert(job.ddls[0], Equals, expectJobs[i].sqlInJob)
-		} else {
-			c.Assert(job.sql, Equals, expectJobs[i].sqlInJob)
-			c.Assert(job.args, DeepEquals, expectJobs[i].args)
+			c.Assert(job.ddls, DeepEquals, expectJobs[i].sqlInJob)
+		} else if job.tp == insert || job.tp == update || job.tp == del {
+			sqls, args := job.dml.genSQL()
+			c.Assert(sqls, DeepEquals, expectJobs[i].sqlInJob)
+			c.Assert(args, DeepEquals, expectJobs[i].args)
 		}
 	}
 }
