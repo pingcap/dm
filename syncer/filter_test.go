@@ -77,7 +77,6 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 
 	cases := []struct {
 		sql           string
-		tables        []*filter.Table
 		schema        string
 		expectSkipped bool
 		isEmptySQL    bool
@@ -85,38 +84,32 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 		{
 			// system table
 			"create table mysql.test (id int)",
-			[]*filter.Table{{Schema: "mysql", Name: "test"}},
 			"mysql",
 			true,
 			false,
 		}, {
 			// test filter one event
 			"drop table foo.test",
-			[]*filter.Table{{Schema: "foo", Name: "test"}},
 			"foo",
 			false,
 			false,
 		}, {
 			"create table foo.test (id int)",
-			[]*filter.Table{{Schema: "foo", Name: "test"}},
 			"foo",
 			true,
 			true,
 		}, {
 			"rename table s1.test to s1.test1",
-			[]*filter.Table{{Schema: "s1", Name: "test"}, {Schema: "s1", Name: "test1"}},
 			"s1",
 			true,
 			false,
 		}, {
 			"rename table s1.test1 to s1.test",
-			[]*filter.Table{{Schema: "s1", Name: "test1"}, {Schema: "s1", Name: "test"}},
 			"s1",
 			true,
 			false,
 		}, {
 			"rename table s1.test1 to s1.test2",
-			[]*filter.Table{{Schema: "s1", Name: "test1"}, {Schema: "s1", Name: "test2"}},
 			"s1",
 			false,
 			false,
