@@ -24,9 +24,9 @@ import (
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
 
-func (s *Syncer) skipQueryEvent(originSQL string, ddlInfo *ddlInfo) (string, bool, error) {
-	if utils.IsBuildInSkipDDL(ddlInfo.originDDL) {
-		return ddlInfo.originDDL, true, nil
+func (s *Syncer) skipQueryEvent(originSQL string, ddlInfo *ddlInfo) (bool, error) {
+	if utils.IsBuildInSkipDDL(originSQL) {
+		return true, nil
 	}
 	et := bf.AstToDDLEvent(ddlInfo.originStmt)
 	// get real tables before apply block-allow list
@@ -45,23 +45,21 @@ func (s *Syncer) skipQueryEvent(originSQL string, ddlInfo *ddlInfo) (string, boo
 		s.tctx.L().Debug("query event info", zap.String("event", "query"), zap.String("origin sql", originSQL), zap.Stringer("table", table), zap.Stringer("ddl info", ddlInfo))
 		if s.skipByTable(table) {
 			s.tctx.L().Debug("skip event by balist")
-			return ddlInfo.originDDL, true, nil
+			return true, nil
 		}
 		needSkip, err := s.skipOneEvent(table, et, originSQL)
 		if err != nil {
-			return ddlInfo.originDDL, needSkip, err
+			return needSkip, err
 		}
 
 		if needSkip {
 			s.tctx.L().Debug("skip event by binlog filter")
-			if s.onlineDDL == nil {
-				return ddlInfo.originDDL, true, nil
-			}
 			s.tctx.L().Warn("return empty string")
-			return "", true, nil
+			ddlInfo.originDDL = ""
+			return true, nil
 		}
 	}
-	return ddlInfo.originDDL, false, nil
+	return false, nil
 }
 
 func (s *Syncer) skipRowsEvent(table *filter.Table, eventType replication.EventType) (bool, error) {

@@ -66,23 +66,23 @@ func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, er
 	}
 
 	qec.tctx.L().Debug("will skip query event", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("ddlInfo", ddlInfo))
-	sql, shouldSkip, err := s.skipQueryEvent(qec.originSQL, ddlInfo)
+	shouldSkip, err := s.skipQueryEvent(qec.originSQL, ddlInfo)
 	if err != nil {
 		return nil, err
 	}
 	if shouldSkip {
 		metrics.SkipBinlogDurationHistogram.WithLabelValues("query", s.cfg.Name, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 		qec.tctx.L().Warn("skip event", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("query event context", qec))
-		if len(sql) != 0 {
+		if s.onlineDDL == nil || len(ddlInfo.originDDL) != 0 {
 			return nil, nil
 		}
 	}
 
 	if s.onlineDDL == nil {
-		return []string{sql}, nil
+		return []string{ddlInfo.originDDL}, nil
 	}
 	// filter and save ghost table ddl
-	sqls, err := s.onlineDDL.Apply(qec.tctx, ddlInfo.sourceTables, sql, ddlInfo.originStmt, qec.p)
+	sqls, err := s.onlineDDL.Apply(qec.tctx, ddlInfo.sourceTables, ddlInfo.originDDL, ddlInfo.originStmt, qec.p)
 	if err != nil {
 		return nil, err
 	}

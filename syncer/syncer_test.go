@@ -283,13 +283,10 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		c.Assert(ok, IsTrue)
 
 		query := string(ev.Query)
-		stmt, err := p.ParseOneStmt(query, "", "")
+		ddlInfo, err := syncer.routeDDL(p, string(ev.Schema), query)
 		c.Assert(err, IsNil)
 
-		tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
-		c.Assert(err, IsNil)
-
-		needSkip, err := syncer.skipQueryEvent(tables, stmt, query)
+		needSkip, err := syncer.skipQueryEvent(query, ddlInfo)
 		c.Assert(err, IsNil)
 		c.Assert(needSkip, Equals, cs.skip)
 	}
@@ -417,12 +414,10 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 			continue
 		}
 		sql := string(ev.Query)
-		stmt, err := p.ParseOneStmt(sql, "", "")
+		ddlInfo, err := syncer.routeDDL(p, string(ev.Schema), sql)
 		c.Assert(err, IsNil)
 
-		tables, err := parserpkg.FetchDDLTables(sql, stmt, syncer.SourceTableNamesFlavor)
-		c.Assert(err, IsNil)
-		needSkip, err := syncer.skipQueryEvent(tables, stmt, sql)
+		needSkip, err := syncer.skipQueryEvent(sql, ddlInfo)
 		c.Assert(err, IsNil)
 		c.Assert(needSkip, Equals, res[i])
 		i++
@@ -1338,12 +1333,10 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 			}
 
 			for j, sql := range qec.needRouteDDLs {
-				stmt, err := p.ParseOneStmt(sql, "", "")
+				ddlInfo, err := syncer.routeDDL(p, string(ev.Schema), sql)
 				c.Assert(err, IsNil)
 
-				tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
-				c.Assert(err, IsNil)
-				needSkip, err := syncer.skipQueryEvent(tables, stmt, sql)
+				needSkip, err := syncer.skipQueryEvent(sql, ddlInfo)
 				c.Assert(err, IsNil)
 				c.Assert(needSkip, Equals, res[i][j])
 			}

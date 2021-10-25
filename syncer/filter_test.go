@@ -57,6 +57,7 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 		},
 	}
 	syncer := NewSyncer(cfg, nil)
+	c.Assert(syncer.genRouter(), IsNil)
 	var err error
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
@@ -77,43 +78,58 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 	cases := []struct {
 		sql           string
 		tables        []*filter.Table
+		schema        string
 		expectSkipped bool
+		isEmptySQL    bool
 	}{
 		{
 			// system table
 			"create table mysql.test (id int)",
 			[]*filter.Table{{Schema: "mysql", Name: "test"}},
+			"mysql",
 			true,
+			false,
 		}, {
 			// test filter one event
 			"drop table foo.test",
 			[]*filter.Table{{Schema: "foo", Name: "test"}},
+			"foo",
+			false,
 			false,
 		}, {
 			"create table foo.test (id int)",
 			[]*filter.Table{{Schema: "foo", Name: "test"}},
+			"foo",
+			true,
 			true,
 		}, {
 			"rename table s1.test to s1.test1",
 			[]*filter.Table{{Schema: "s1", Name: "test"}, {Schema: "s1", Name: "test1"}},
+			"s1",
 			true,
+			false,
 		}, {
 			"rename table s1.test1 to s1.test",
 			[]*filter.Table{{Schema: "s1", Name: "test1"}, {Schema: "s1", Name: "test"}},
+			"s1",
 			true,
+			false,
 		}, {
 			"rename table s1.test1 to s1.test2",
 			[]*filter.Table{{Schema: "s1", Name: "test1"}, {Schema: "s1", Name: "test2"}},
+			"s1",
+			false,
 			false,
 		},
 	}
 	p := parser.New()
 	for _, ca := range cases {
-		stmt, err := p.ParseOneStmt(ca.sql, "", "")
+		ddlInfo, err := syncer.routeDDL(p, ca.schema, ca.sql)
 		c.Assert(err, IsNil)
-		skipped, err2 := syncer.skipQueryEvent(ca.tables, stmt, ca.sql)
+		skipped, err2 := syncer.skipQueryEvent(ca.sql, ddlInfo)
 		c.Assert(err2, IsNil)
 		c.Assert(skipped, Equals, ca.expectSkipped)
+		c.Assert(len(ddlInfo.originDDL) == 0, Equals, ca.isEmptySQL)
 	}
 }
 
@@ -211,12 +227,6 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 		expectSkipped bool
 	}{
 		{
-			// system table
-			"create table mysql.test (id int)",
-			&filter.Table{Schema: "mysql", Name: "test"},
-			"",
-			true,
-		}, {
 			// test binlog filter
 			"drop table tx.test",
 			&filter.Table{Schema: "tx", Name: "test"},
@@ -230,12 +240,6 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 		}, {
 			"create table foo.bar (id int)",
 			&filter.Table{Schema: "foo", Name: "bar"},
-			bf.CreateTable,
-			true,
-		}, {
-			// test balist
-			"create table s1.test (id int)",
-			&filter.Table{Schema: "s1", Name: "test"},
 			bf.CreateTable,
 			true,
 		},
