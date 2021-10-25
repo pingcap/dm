@@ -208,15 +208,17 @@ function test_noshard_task() {
 	# create source succesfully
 	openapi_source_check "create_source1_success"
 	openapi_source_check "list_source_success" 1
+
 	# get source status success
-	# openapi_source_check "get_source_status_success" "mysql-01"
+	openapi_source_check "get_source_status_success" "mysql-01"
 
 	# create source succesfully
 	openapi_source_check "create_source2_success"
 	# get source list success
 	openapi_source_check "list_source_success" 2
+
 	# get source status success
-	# openapi_source_check "get_source_status_success" "mysql-02"
+	openapi_source_check "get_source_status_success" "mysql-02"
 
 	# start task success: not vaild task create request
 	openapi_task_check "start_task_failed"
@@ -239,6 +241,16 @@ function test_noshard_task() {
 
 	# get task list
 	openapi_task_check "get_task_list" 1
+
+	# stop  task
+	openapi_task_check "pause_task_success" "$task_name" "mysql-01"
+
+	# opreate schema
+	openapi_task_check "operate_schema_and_table_success" "$task_name" "mysql-01"
+
+	# resume task
+	openapi_task_check "resume_task_success" "$task_name" "mysql-01"
+
 	# stop task success
 	openapi_task_check "stop_task_success" "$task_name"
 

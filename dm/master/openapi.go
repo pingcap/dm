@@ -639,7 +639,7 @@ func (s *Server) DMAPIOperateTaskSourceTableStructure(ctx echo.Context, taskName
 	if !resp.OperateSchema.Result {
 		return terror.ErrOpenAPICommonError.New(resp.OperateSchema.Msg)
 	}
-	return ctx.NoContent(http.StatusNoContent)
+	return nil
 }
 
 func terrorHTTPErrorHandler(err error, c echo.Context) {
