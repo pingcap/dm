@@ -32,7 +32,7 @@ import (
 
 // genDMLParam stores pruned columns, data as well as the original columns, data, index.
 type genDMLParam struct {
-	tableID         string              // as a key in map like `schema`.`table`
+	targetTableID   string              // as a key in map like `schema`.`table`
 	sourceTable     *filter.Table       // origin table
 	safeMode        bool                // only used in update
 	data            [][]interface{}     // pruned data
@@ -81,7 +81,7 @@ RowLoop:
 			}
 		}
 
-		dmls = append(dmls, newDML(insert, param.safeMode, param.tableID, param.sourceTable, nil, value, nil, originalValue, columns, ti))
+		dmls = append(dmls, newDML(insert, param.safeMode, param.targetTableID, param.sourceTable, nil, value, nil, originalValue, columns, ti))
 	}
 
 	return dmls, nil
@@ -145,7 +145,7 @@ RowLoop:
 			}
 		}
 
-		dmls = append(dmls, newDML(update, param.safeMode, param.tableID, param.sourceTable, oldValues, changedValues, oriOldValues, oriChangedValues, columns, ti))
+		dmls = append(dmls, newDML(update, param.safeMode, param.targetTableID, param.sourceTable, oldValues, changedValues, oriOldValues, oriChangedValues, columns, ti))
 	}
 
 	return dmls, nil
@@ -176,7 +176,7 @@ RowLoop:
 				continue RowLoop
 			}
 		}
-		dmls = append(dmls, newDML(del, false, param.tableID, param.sourceTable, nil, value, nil, value, ti.Columns, ti))
+		dmls = append(dmls, newDML(del, false, param.targetTableID, param.sourceTable, nil, value, nil, value, ti.Columns, ti))
 	}
 
 	return dmls, nil
@@ -437,6 +437,11 @@ func newDML(op opType, safeMode bool, targetTableID string, sourceTable *filter.
 	}
 }
 
+// String returns the DML's string.
+func (dml *DML) String() string {
+	return fmt.Sprintf("[safemode: %t, targetTableID: %s, op: %s, columns: %v, oldValues: %v, values: %v]", dml.safeMode, dml.targetTableID, dml.op.String(), dml.columnNames(), dml.originOldValues, dml.originValues)
+}
+
 // identifyKeys gens keys by unique not null value.
 // This is used for causality.
 // PK or (UK + NOT NULL) or (UK + NULL + NOT NULL VALUE).
@@ -451,6 +456,15 @@ func (dml *DML) identifyKeys() []string {
 		keys = append(keys, genMultipleKeys(dml.sourceTableInfo, dml.originValues, dml.targetTableID)...)
 	}
 	return keys
+}
+
+// columnNames return column names of DML.
+func (dml *DML) columnNames() []string {
+	columnNames := make([]string, 0, len(dml.columns))
+	for _, column := range dml.columns {
+		columnNames = append(columnNames, column.Name.O)
+	}
+	return columnNames
 }
 
 // whereColumnsAndValues gets columns and values of unique column with not null value.
@@ -521,7 +535,6 @@ func genMultipleKeys(ti *model.TableInfo, value []interface{}, table string) []s
 		key := genKeyList(table, cols, vals)
 		if len(key) > 0 { // ignore `null` value.
 			multipleKeys = append(multipleKeys, key)
-			// TODO: break here? one unique index is enough?
 		} else {
 			log.L().Debug("ignore empty key", zap.String("table", table))
 		}

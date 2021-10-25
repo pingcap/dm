@@ -84,7 +84,11 @@ type job struct {
 
 func (j *job) String() string {
 	// only output some important information, maybe useful in execution.
-	return fmt.Sprintf("tp: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, j.ddls, j.location, j.startLocation, j.currentLocation)
+	var dmlStr string
+	if j.dml != nil {
+		dmlStr = j.dml.String()
+	}
+	return fmt.Sprintf("tp: %s, dml: %s, ddls: %s, last_location: %s, start_location: %s, current_location: %s", j.tp, dmlStr, j.ddls, j.location, j.startLocation, j.currentLocation)
 }
 
 func newDMLJob(tp opType, sourceTable, targetTable *filter.Table, dml *DML, ec *eventContext) *job {
