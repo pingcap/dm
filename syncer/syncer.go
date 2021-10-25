@@ -401,7 +401,6 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	s.flushCpWorker = checkpointFlushWorker{
 		input: make(chan *flushCpTask, 16),
-		wg: sync.WaitGroup{},
 		cp: s.checkpoint,
 		afterFlushFn: s.afterFlushCheckpoint,
 	}
@@ -1061,15 +1060,12 @@ type flushCpTask struct {
 
 type checkpointFlushWorker struct {
 	input chan *flushCpTask
-	// wg is used to sync whether all the flush msg are done
-	wg sync.WaitGroup
 	cp CheckPoint
 	afterFlushFn func(location binlog.Location) error
 }
 
 // Add add a new flush checkpoint job
 func (w *checkpointFlushWorker) Add(msg *flushCpTask) {
-	w.wg.Add(1)
 	w.input <- msg
 }
 
@@ -1082,7 +1078,6 @@ func (w *checkpointFlushWorker) Run(ctx *tcontext.Context) {
 		}
 
 		err := w.cp.FlushSnapshotPointsExcept(ctx, msg.snapshot.id, msg.exceptTables, msg.shardMetaSQLs, msg.shardMetaArgs)
-		w.wg.Done()
 		if err != nil {
 			ctx.L().Warn("flush checkpoint snapshot failed, ignore this error", zap.Any("snapshot", msg))
 			if msg.resChan != nil {
@@ -1101,15 +1096,9 @@ func (w *checkpointFlushWorker) Run(ctx *tcontext.Context) {
 	}
 }
 
-// Wait wait all pending flus checkpoint jobs finish.
-func (w *checkpointFlushWorker) Wait() {
-	w.wg.Wait()
-}
-
 // Close wait all pending job finish and stop this worker
 func (w *checkpointFlushWorker) Close() {
 	close(w.input)
-	w.Wait()
 }
 
 // flushCheckPoints flushes previous saved checkpoint in memory to persistent storage, like TiDB
@@ -1387,6 +1376,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}()
 
 	go func() {
+		// close flush checkpoint worker after all jobs are done.
+		defer s.flushCpWorker.Close()
 		<-ctx.Done()
 		select {
 		case <-runCtx.Done():
@@ -1425,6 +1416,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return err
 		}
 	}
+
+	// start flush checkpoints worker.
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.flushCpWorker.Run(s.tctx)
+	}()
 
 	var (
 		flushCheckpoint bool
@@ -1518,12 +1516,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return terror.Annotate(err, "fail to restart streamer controller")
 		}
 	}
-
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		s.flushCpWorker.Run(s.tctx)
-	}()
 
 	s.wg.Add(1)
 	go s.syncDML()
