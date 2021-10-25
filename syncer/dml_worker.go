@@ -62,7 +62,7 @@ func dmlWorkerWrap(inCh chan *job, syncer *Syncer) chan *job {
 	dmlWorker := &DMLWorker{
 		batch:        syncer.cfg.Batch,
 		workerCount:  syncer.cfg.WorkerCount,
-		chanSize:     syncer.cfg.QueueSize,
+		chanSize:     syncer.cfg.QueueSize / 4,
 		task:         syncer.cfg.Name,
 		source:       syncer.cfg.SourceID,
 		worker:       syncer.cfg.WorkerName,
