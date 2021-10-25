@@ -16,6 +16,7 @@
 package master
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/master/scheduler"
+	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/pkg/log"
@@ -458,42 +460,182 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string, params op
 
 // DMAPPauseTask pause task url is: (POST /api/v1/tasks/{task-name}/pause).
 func (s *Server) DMAPPauseTask(ctx echo.Context, taskName string) error {
-	return nil
+	var sourceName openapi.SchemaNameList
+	if err := ctx.Bind(&sourceName); err != nil {
+		return err
+	}
+	if len(sourceName) == 0 {
+		sourceName = s.getTaskResources(taskName)
+	}
+	return s.scheduler.UpdateExpectSubTaskStage(pb.Stage_Paused, taskName, sourceName...)
 }
 
 // DMAPIResumeTask resume task url is: (POST /api/v1/tasks/{task-name}/resume).
 func (s *Server) DMAPIResumeTask(ctx echo.Context, taskName string) error {
-	return nil
+	var sourceName openapi.SchemaNameList
+	if err := ctx.Bind(&sourceName); err != nil {
+		return err
+	}
+	if len(sourceName) == 0 {
+		sourceName = s.getTaskResources(taskName)
+	}
+	return s.scheduler.UpdateExpectSubTaskStage(pb.Stage_Running, taskName, sourceName...)
 }
 
 // DMAPIGetTaskSourceSchemaList get task source schema list url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas).
 func (s *Server) DMAPIGetTaskSourceSchemaList(ctx echo.Context, taskName string, sourceName string) error {
-	return nil
-}
-
-// DMAPIGetTaskSchemaStructure get task source schema structure url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}).
-func (s *Server) DMAPIGetTaskSchemaStructure(ctx echo.Context, taskName string, sourceName string, schemaName string) error {
-	return nil
+	worker := s.scheduler.GetWorkerBySource(sourceName)
+	if worker == nil {
+		return terror.ErrWorkerNoStart.Generate()
+	}
+	workerReq := workerrpc.Request{
+		Type: workerrpc.CmdOperateSchema,
+		OperateSchema: &pb.OperateWorkerSchemaRequest{
+			Op:     pb.SchemaOp_ListSchema,
+			Task:   taskName,
+			Source: sourceName,
+		},
+	}
+	newCtx := ctx.Request().Context()
+	resp, err := worker.SendRequest(newCtx, &workerReq, s.cfg.RPCTimeout)
+	if err != nil {
+		return err
+	}
+	if !resp.OperateSchema.Result {
+		return terror.ErrOpenAPICommonError.New(resp.OperateSchema.Msg)
+	}
+	schemaList := openapi.SchemaNameList{}
+	if err := json.Unmarshal([]byte(resp.OperateSchema.Msg), &schemaList); err != nil {
+		return err
+	}
+	return ctx.JSON(http.StatusOK, schemaList)
 }
 
 // DMAPIGetTaskSourceTableList get task source table list url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}).
 func (s *Server) DMAPIGetTaskSourceTableList(ctx echo.Context, taskName string, sourceName string, schemaName string) error {
-	return nil
-}
-
-// DMAPIDeleteTaskSourceTableStructure delete task source table structure url is: (DELETE /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name}).
-func (s *Server) DMAPIDeleteTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error {
-	return nil
+	worker := s.scheduler.GetWorkerBySource(sourceName)
+	if worker == nil {
+		return terror.ErrWorkerNoStart.Generate()
+	}
+	workerReq := workerrpc.Request{
+		Type: workerrpc.CmdOperateSchema,
+		OperateSchema: &pb.OperateWorkerSchemaRequest{
+			Op:       pb.SchemaOp_ListTable,
+			Task:     taskName,
+			Source:   sourceName,
+			Database: schemaName,
+		},
+	}
+	newCtx := ctx.Request().Context()
+	resp, err := worker.SendRequest(newCtx, &workerReq, s.cfg.RPCTimeout)
+	if err != nil {
+		return err
+	}
+	if !resp.OperateSchema.Result {
+		return terror.ErrOpenAPICommonError.New(resp.OperateSchema.Msg)
+	}
+	tableList := openapi.TableNameList{}
+	if err := json.Unmarshal([]byte(resp.OperateSchema.Msg), &tableList); err != nil {
+		return err
+	}
+	return ctx.JSON(http.StatusOK, tableList)
 }
 
 // DMAPIGetTaskSourceTableStructure get task source table structure url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name}).
 func (s *Server) DMAPIGetTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error {
-	return nil
+	worker := s.scheduler.GetWorkerBySource(sourceName)
+	if worker == nil {
+		return terror.ErrWorkerNoStart.Generate()
+	}
+	workerReq := workerrpc.Request{
+		Type: workerrpc.CmdOperateSchema,
+		OperateSchema: &pb.OperateWorkerSchemaRequest{
+			Op:       pb.SchemaOp_GetSchema,
+			Task:     taskName,
+			Source:   sourceName,
+			Database: schemaName,
+			Table:    tableName,
+		},
+	}
+	newCtx := ctx.Request().Context()
+	resp, err := worker.SendRequest(newCtx, &workerReq, s.cfg.RPCTimeout)
+	if err != nil {
+		return err
+	}
+	if !resp.OperateSchema.Result {
+		return terror.ErrOpenAPICommonError.New(resp.OperateSchema.Msg)
+	}
+	taskTableStruct := openapi.GetTaskTableStructureResponse{
+		SchemaCreateSql: &resp.OperateSchema.Msg,
+		SchemaName:      &schemaName,
+		TableName:       tableName,
+	}
+	return ctx.JSON(http.StatusOK, taskTableStruct)
+}
+
+// DMAPIDeleteTaskSourceTableStructure delete task source table structure url is: (DELETE /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name}).
+func (s *Server) DMAPIDeleteTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error {
+	worker := s.scheduler.GetWorkerBySource(sourceName)
+	if worker == nil {
+		return terror.ErrWorkerNoStart.Generate()
+	}
+	workerReq := workerrpc.Request{
+		Type: workerrpc.CmdOperateSchema,
+		OperateSchema: &pb.OperateWorkerSchemaRequest{
+			Op:       pb.SchemaOp_RemoveSchema,
+			Task:     taskName,
+			Source:   sourceName,
+			Database: schemaName,
+			Table:    tableName,
+		},
+	}
+	newCtx := ctx.Request().Context()
+	resp, err := worker.SendRequest(newCtx, &workerReq, s.cfg.RPCTimeout)
+	if err != nil {
+		return err
+	}
+	if !resp.OperateSchema.Result {
+		return terror.ErrOpenAPICommonError.New(resp.OperateSchema.Msg)
+	}
+	return ctx.NoContent(http.StatusNoContent)
 }
 
 // DMAPIOperateTaskSourceTableStructure operate task source table structure url is: (PUT /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name}).
 func (s *Server) DMAPIOperateTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error {
-	return nil
+	var req openapi.OperateTaskTableStructureRequest
+	if err := ctx.Bind(&req); err != nil {
+		return err
+	}
+	worker := s.scheduler.GetWorkerBySource(sourceName)
+	if worker == nil {
+		return terror.ErrWorkerNoStart.Generate()
+	}
+	opReq := &pb.OperateWorkerSchemaRequest{
+		Op:       pb.SchemaOp_SetSchema,
+		Task:     taskName,
+		Source:   sourceName,
+		Database: schemaName,
+		Table:    tableName,
+		Schema:   req.SqlContent,
+		Sync:     *req.Sync,
+		Flush:    *req.Flush,
+	}
+	if req.Sync != nil {
+		opReq.Sync = *req.Sync
+	}
+	if req.Flush != nil {
+		opReq.Flush = *req.Flush
+	}
+	workerReq := workerrpc.Request{Type: workerrpc.CmdOperateSchema, OperateSchema: opReq}
+	newCtx := ctx.Request().Context()
+	resp, err := worker.SendRequest(newCtx, &workerReq, s.cfg.RPCTimeout)
+	if err != nil {
+		return err
+	}
+	if !resp.OperateSchema.Result {
+		return terror.ErrOpenAPICommonError.New(resp.OperateSchema.Msg)
+	}
+	return ctx.NoContent(http.StatusNoContent)
 }
 
 func terrorHTTPErrorHandler(err error, c echo.Context) {
