@@ -17,8 +17,8 @@ import (
 	"math/rand"
 
 	"github.com/chaos-mesh/go-sqlsmith"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
 )
 
 type dmlType int
