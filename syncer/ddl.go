@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
