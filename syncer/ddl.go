@@ -51,7 +51,6 @@ func parseOneStmt(qec *queryEventContext) (stmt ast.StmtNode, err error) {
 // 2. skip sql by filterQueryEvent;
 // 3. apply online ddl if onlineDDL is not nil:
 //    * specially, if skip, apply empty string;
-// 4. handle online ddl SQL by handleOnlineDDL.
 func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, error) {
 	ddlInfo, err := s.routeDDL(qec.p, qec.ddlSchema, sql)
 	if err != nil {
