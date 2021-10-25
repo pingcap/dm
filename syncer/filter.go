@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
+
 // skipQueryEvent changes ddlInfo.originDDL if skip by binlog-filter.
 func (s *Syncer) skipQueryEvent(originSQL string, ddlInfo *ddlInfo) (bool, error) {
 	if utils.IsBuildInSkipDDL(originSQL) {
@@ -47,7 +48,7 @@ func (s *Syncer) skipQueryEvent(originSQL string, ddlInfo *ddlInfo) (bool, error
 			s.tctx.L().Debug("skip event by balist")
 			return true, nil
 		}
-		needSkip, err := s.skipOneEvent(table, et, originSQL)
+		needSkip, err := s.skipByFilter(table, et, originSQL)
 		if err != nil {
 			return needSkip, err
 		}
@@ -81,7 +82,7 @@ func (s *Syncer) skipRowsEvent(table *filter.Table, eventType replication.EventT
 	default:
 		return false, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
 	}
-	return s.skipOneEvent(table, et, "")
+	return s.skipByFilter(table, et, "")
 }
 
 // skipSQLByPattern skip unsupported sql in tidb and global sql-patterns in binlog-filter config file.
@@ -96,12 +97,10 @@ func (s *Syncer) skipSQLByPattern(sql string) (bool, error) {
 	return action == bf.Ignore, nil
 }
 
-// skipOneEvent will return true when
-// - any schema of table names is system schema.
-// - any table name doesn't pass block-allow list.
-// - type of SQL doesn't pass binlog-filter.
-// - pattern of SQL doesn't pass binlog-filter.
-func (s *Syncer) skipOneEvent(table *filter.Table, et bf.EventType, sql string) (bool, error) {
+// skipByFilter returns true when
+// * type of SQL doesn't pass binlog-filter.
+// * pattern of SQL doesn't pass binlog-filter.
+func (s *Syncer) skipByFilter(table *filter.Table, et bf.EventType, sql string) (bool, error) {
 	if s.binlogFilter == nil {
 		return false, nil
 	}
@@ -112,6 +111,9 @@ func (s *Syncer) skipOneEvent(table *filter.Table, et bf.EventType, sql string) 
 	return action == bf.Ignore, nil
 }
 
+// skipByTable returns true when
+// * any schema of table names is system schema.
+// * any table name doesn't pass block-allow list.
 func (s *Syncer) skipByTable(table *filter.Table) bool {
 	if filter.IsSystemSchema(table.Schema) {
 		return true

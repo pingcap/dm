@@ -48,7 +48,7 @@ func parseOneStmt(qec *queryEventContext) (stmt ast.StmtNode, err error) {
 
 // processOneDDL processes already split ddl as following step:
 // 1. track ddl no matter whether skip it; (TODO: will implement in https://github.com/pingcap/dm/pull/1975)
-// 2. skip sql by filterQueryEvent;
+// 2. skip sql by skipQueryEvent;
 // 3. apply online ddl if onlineDDL is not nil:
 //    * specially, if skip, apply empty string;
 func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, error) {

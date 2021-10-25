@@ -174,7 +174,7 @@ func (s *testFilterSuite) TestSkipRowsEvent(c *C) {
 	}
 }
 
-func (s *testFilterSuite) TestFilterOneEvent(c *C) {
+func (s *testFilterSuite) TestSkipByFilter(c *C) {
 	cfg := &config.SubTaskConfig{
 		BAList: &filter.Rules{
 			IgnoreDBs: []string{"s1"},
@@ -238,7 +238,7 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 		},
 	}
 	for _, ca := range cases {
-		skipped, err2 := syncer.skipOneEvent(ca.table, ca.eventType, ca.sql)
+		skipped, err2 := syncer.skipByFilter(ca.table, ca.eventType, ca.sql)
 		c.Assert(err2, IsNil)
 		c.Assert(skipped, Equals, ca.expectSkipped)
 	}
