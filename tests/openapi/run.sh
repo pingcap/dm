@@ -251,6 +251,27 @@ function test_noshard_task() {
 	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: NO SHARD TASK SUCCESS"
 }
 
+function test_cluster() {
+	# list master and worker node
+	openapi_cluster_check "list_master_success" 2
+
+	openapi_cluster_check "list_worker_success" 2
+
+	# delete master node
+	openapi_cluster_check "delete_master_with_retry_success" "master2"
+	openapi_cluster_check "list_master_success" 1
+
+	# delete worker node fialed because of worker is still online
+	openapi_cluster_check "delete_worker_failed" "worker1"
+	kill_dm_worker
+	check_port_offline $WORKER1_PORT 20
+	check_port_offline $WORKER2_PORT 20
+
+	openapi_cluster_check "delete_worker_with_retry_success" "worker1"
+	openapi_cluster_check "list_worker_success" 1
+
+}
+
 function run() {
 	make install_test_python_dep
 
@@ -272,6 +293,8 @@ function run() {
 
 	test_shard_task
 	test_noshard_task
+
+	test_cluster
 }
 
 cleanup_data openapi
