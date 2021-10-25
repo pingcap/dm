@@ -17,10 +17,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pingcap/parser"
+	"github.com/pingcap/tidb/parser"
 
 	"github.com/go-mysql-org/go-mysql/replication"
-	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/tidb/parser/ast"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
