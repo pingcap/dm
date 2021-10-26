@@ -480,8 +480,7 @@ func (t *openAPISuite) TestClusterAPI(c *check.C) {
 	c.Assert(resultMasters.Data[0].Leader, check.IsTrue)
 	c.Assert(resultMasters.Data[0].Alive, check.IsTrue)
 
-	cancel2() // stop s2 before offline
-	// offline master-3 with retry
+	// offline master-2 with  retry
 	for i := 0; i < 20; i++ {
 		result = testutil.NewRequest().Delete(fmt.Sprintf("%s/%s", masterURL, s2.cfg.Name)).Go(t.testT, s1.echo)
 		if result.Code() == http.StatusBadRequest {
@@ -496,6 +495,8 @@ func (t *openAPISuite) TestClusterAPI(c *check.C) {
 			break
 		}
 	}
+	cancel2() // stop dm-master-2
+
 	// list master again get one node
 	result = testutil.NewRequest().Get(masterURL).Go(t.testT, s1.echo)
 	c.Assert(result.Code(), check.Equals, http.StatusOK)
