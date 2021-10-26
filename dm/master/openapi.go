@@ -100,6 +100,26 @@ func (s *Server) GetDocHTML(ctx echo.Context) error {
 	return ctx.HTML(http.StatusOK, html)
 }
 
+// DMAPIGetClusterMasterList get cluster master node list url is:(GET /api/v1/cluster/masters).
+func (s *Server) DMAPIGetClusterMasterList(ctx echo.Context) error {
+	return nil
+}
+
+// DMAPIOfflineMasterNode offline master node url is: (DELETE /api/v1/cluster/masters/{master-name}).
+func (s *Server) DMAPIOfflineMasterNode(ctx echo.Context, masterName string) error {
+	return nil
+}
+
+// DMAPIGetClusterWorkerList get cluster worker node list url is: (GET /api/v1/cluster/workers).
+func (s *Server) DMAPIGetClusterWorkerList(ctx echo.Context) error {
+	return nil
+}
+
+// DMAPIOfflineWorkerNode offline worker node url is: (DELETE /api/v1/cluster/workers/{worker-name}).
+func (s *Server) DMAPIOfflineWorkerNode(ctx echo.Context, workerName string) error {
+	return nil
+}
+
 // DMAPICreateSource url is:(POST /api/v1/sources).
 func (s *Server) DMAPICreateSource(ctx echo.Context) error {
 	var createSourceReq openapi.Source
@@ -117,7 +137,8 @@ func (s *Server) DMAPICreateSource(ctx echo.Context) error {
 }
 
 // DMAPIGetSourceList url is:(GET /api/v1/sources).
-func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
+func (s *Server) DMAPIGetSourceList(ctx echo.Context, params openapi.DMAPIGetSourceListParams) error {
+	// todo: support params
 	sourceMap := s.scheduler.GetSourceCfgs()
 	sourceList := []openapi.Source{}
 	for key := range sourceMap {
@@ -128,7 +149,8 @@ func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
 }
 
 // DMAPIDeleteSource url is:(DELETE /api/v1/sources).
-func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string) error {
+func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string, params openapi.DMAPIDeleteSourceParams) error {
+	// todo: support params
 	if err := s.scheduler.RemoveSourceCfg(sourceName); err != nil {
 		return err
 	}
@@ -177,7 +199,27 @@ func (s *Server) DMAPIStopRelay(ctx echo.Context, sourceName string) error {
 	return s.scheduler.StopRelay(sourceName, req.WorkerNameList)
 }
 
-// DMAPIGetSourceStatus url is:(GET /api/v1/sources/{source-id}/status).
+// DMAPIPauseRelay pause relay log function for the data source url is: (POST /api/v1/sources/{source-name}/pause-relay).
+func (s *Server) DMAPIPauseRelay(ctx echo.Context, sourceName string) error {
+	return nil
+}
+
+// DMAPIResumeRelay resume relay log function for the data source url is: (POST /api/v1/sources/{source-name}/resume-relay).
+func (s *Server) DMAPIResumeRelay(ctx echo.Context, sourceName string) error {
+	return nil
+}
+
+// DMAPIGetSourceSchemaList get source schema list url is: (GET /api/v1/sources/{source-name}/schemas).
+func (s *Server) DMAPIGetSourceSchemaList(ctx echo.Context, sourceName string) error {
+	return nil
+}
+
+// DMAPIGetSourceTableList get source table list url is: (GET /api/v1/sources/{source-name}/schemas/{schema-name}).
+func (s *Server) DMAPIGetSourceTableList(ctx echo.Context, sourceName string, schemaName string) error {
+	return nil
+}
+
+// DMAPIGetSourceStatus url is: (GET /api/v1/sources/{source-id}/status).
 func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error {
 	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
 	if sourceCfg == nil {
@@ -215,6 +257,11 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	}
 	resp.Total = len(resp.Data)
 	return ctx.JSON(http.StatusOK, resp)
+}
+
+// DMAPITransferSource transfer source  another free worker url is: (POST /api/v1/sources/{source-name}/transfer).
+func (s *Server) DMAPITransferSource(ctx echo.Context, sourceName string) error {
+	return nil
 }
 
 // DMAPIStartTask url is:(POST /api/v1/tasks).
@@ -330,7 +377,8 @@ func (s *Server) DMAPIGetTaskList(ctx echo.Context) error {
 }
 
 // DMAPIGetTaskStatus url is:(GET /api/v1/tasks/{task-name}/status).
-func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
+func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string, params openapi.DMAPIGetTaskStatusParams) error {
+	// todo support params
 	// 1. get task source list from scheduler
 	sourceList := s.getTaskResources(taskName)
 	if len(sourceList) == 0 {
@@ -406,6 +454,46 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
 	}
 	resp := openapi.GetTaskStatusResponse{Total: len(subTaskStatusList), Data: subTaskStatusList}
 	return ctx.JSON(http.StatusOK, resp)
+}
+
+// DMAPPauseTask pause task url is: (POST /api/v1/tasks/{task-name}/pause).
+func (s *Server) DMAPPauseTask(ctx echo.Context, taskName string) error {
+	return nil
+}
+
+// DMAPIResumeTask resume task url is: (POST /api/v1/tasks/{task-name}/resume).
+func (s *Server) DMAPIResumeTask(ctx echo.Context, taskName string) error {
+	return nil
+}
+
+// DMAPIGetTaskSourceSchemaList get task source schema list url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas).
+func (s *Server) DMAPIGetTaskSourceSchemaList(ctx echo.Context, taskName string, sourceName string) error {
+	return nil
+}
+
+// DMAPIGetTaskSchemaStructure get task source schema structure url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}).
+func (s *Server) DMAPIGetTaskSchemaStructure(ctx echo.Context, taskName string, sourceName string, schemaName string) error {
+	return nil
+}
+
+// DMAPIGetTaskSourceTableList get task source table list url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}).
+func (s *Server) DMAPIGetTaskSourceTableList(ctx echo.Context, taskName string, sourceName string, schemaName string) error {
+	return nil
+}
+
+// DMAPIDeleteTaskSourceTableStructure delete task source table structure url is: (DELETE /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name}).
+func (s *Server) DMAPIDeleteTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error {
+	return nil
+}
+
+// DMAPIGetTaskSourceTableStructure get task source table structure url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name}).
+func (s *Server) DMAPIGetTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error {
+	return nil
+}
+
+// DMAPIOperateTaskSourceTableStructure operate task source table structure url is: (PUT /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name}).
+func (s *Server) DMAPIOperateTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error {
+	return nil
 }
 
 func terrorHTTPErrorHandler(err error, c echo.Context) {
