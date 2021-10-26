@@ -25,7 +25,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser"
+	"github.com/pingcap/tidb/parser"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/gtid"

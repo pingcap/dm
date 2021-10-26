@@ -16,7 +16,7 @@ package transformer
 import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
-	"github.com/pingcap/parser"
+	"github.com/pingcap/tidb/parser"
 
 	"github.com/pingcap/dm/relay/common"
 )

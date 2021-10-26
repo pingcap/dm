@@ -284,8 +284,6 @@ function test_noshard_task() {
 }
 
 function run() {
-	make install_test_python_dep
-
 	# run dm-master1
 	run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
