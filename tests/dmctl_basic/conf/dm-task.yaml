@@ -96,5 +96,5 @@ filters:
   user-filter-2:
     schema-pattern: "dmctl"
     table-pattern: "t_2"
-    sql-pattern: ["alter table .* add column `aaa` int"]
+    sql-pattern: ["alter table .* add column aaa int"]
     action: Ignore
