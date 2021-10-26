@@ -56,7 +56,7 @@ func NewExprFilterGroup(ctx sessionctx.Context, exprConfig []*config.ExpressionF
 		hasUpdateOldFilter: map[string]struct{}{},
 		hasUpdateNewFilter: map[string]struct{}{},
 		hasDeleteFilter:    map[string]struct{}{},
-		ctx:				ctx,
+		ctx:                ctx,
 	}
 	for _, c := range exprConfig {
 		tableName := dbutil.TableName(c.Schema, c.Table)

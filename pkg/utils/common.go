@@ -335,8 +335,8 @@ func NewSessionCtx(vars map[string]string) sessionctx.Context {
 	}
 
 	return &session{
-		vars: 				  variables,
-		values: 			  make(map[fmt.Stringer]interface{}, 1),
+		vars:                 variables,
+		values:               make(map[fmt.Stringer]interface{}, 1),
 		builtinFunctionUsage: make(map[string]uint32),
 	}
 }

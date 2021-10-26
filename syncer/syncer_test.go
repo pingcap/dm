@@ -136,7 +136,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	s.cfg = &config.SubTaskConfig{
 		From:             config.GetDBConfigForTest(),
 		To:               config.GetDBConfigForTest(),
-		Timezone: 		  "UTC",
+		Timezone:         "UTC",
 		ServerID:         101,
 		MetaSchema:       "test",
 		Name:             "syncer_ut",
