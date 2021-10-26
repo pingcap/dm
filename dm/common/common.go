@@ -58,7 +58,7 @@ var (
 	// k/v: Encode(source-id, task-name) -> the running stage of the subtask.
 	StageSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/stage/subtask/")
 	// UpstreamEnableRelayKeyAdapter is used to store sources whose bound worker should start relay before replicating.
-	// k/v Encode(source-id) -> nil.
+	// k/v Encode(source-id) -> "".
 	UpstreamEnableRelayKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/enable-relay/")
 
 	// ShardDDLPessimismInfoKeyAdapter is used to store shard DDL info in pessimistic model.
