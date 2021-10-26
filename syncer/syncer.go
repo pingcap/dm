@@ -30,16 +30,16 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/parser/format"
-	"github.com/pingcap/parser/model"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
+	"github.com/pingcap/tidb/parser/format"
+	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/sessionctx"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
@@ -2040,18 +2040,17 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	var (
-		sqls    []string
-		keys    [][]string
-		args    [][]interface{}
+		dmls    []*DML
 		jobType opType
 	)
 
 	param := &genDMLParam{
-		tableID:         utils.GenTableID(targetTable),
+		targetTableID:   utils.GenTableID(targetTable),
 		data:            prunedRows,
 		originalData:    rows,
 		columns:         prunedColumns,
 		sourceTableInfo: tableInfo,
+		sourceTable:     sourceTable,
 	}
 
 	switch ec.header.EventType {
@@ -2062,7 +2061,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode
-		sqls, keys, args, err = s.genInsertSQLs(param, exprFilter)
+		dmls, err = s.genAndFilterInsertDMLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen insert sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
@@ -2076,7 +2075,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 
 		param.safeMode = ec.safeMode
-		sqls, keys, args, err = s.genUpdateSQLs(param, oldExprFilter, newExprFilter)
+		dmls, err = s.genAndFilterUpdateDMLs(param, oldExprFilter, newExprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen update sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
@@ -2089,7 +2088,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			return err2
 		}
 
-		sqls, keys, args, err = s.genDeleteSQLs(param, exprFilter)
+		dmls, err = s.genAndFilterDeleteDMLs(param, exprFilter)
 		if err != nil {
 			return terror.Annotatef(err, "gen delete sqls failed, sourceTable: %v, targetTable: %v", sourceTable, targetTable)
 		}
@@ -2102,17 +2101,8 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	startTime := time.Now()
-	for i := range sqls {
-		var arg []interface{}
-		var key []string
-		if args != nil {
-			arg = args[i]
-		}
-		if keys != nil {
-			key = keys[i]
-		}
-
-		job := newDMLJob(jobType, sourceTable, targetTable, sqls[i], arg, key, &ec)
+	for i := range dmls {
+		job := newDMLJob(jobType, sourceTable, targetTable, dmls[i], &ec)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err

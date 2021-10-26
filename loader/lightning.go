@@ -20,11 +20,11 @@ import (
 
 	"github.com/docker/go-units"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/br/pkg/lightning"
 	"github.com/pingcap/tidb/br/pkg/lightning/common"
 	lcfg "github.com/pingcap/tidb/br/pkg/lightning/config"
+	"github.com/pingcap/tidb/parser/mysql"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -58,6 +58,7 @@ type LightningLoader struct {
 	toDB            *conn.BaseDB
 	toDBConns       []*DBConn
 	lightningConfig *lcfg.GlobalConfig
+	timeZone        string
 
 	finish         atomic.Bool
 	closed         atomic.Bool
@@ -119,6 +120,15 @@ func (l *LightningLoader) Init(ctx context.Context) (err error) {
 	})
 	l.checkPoint = checkpoint
 	l.toDB, l.toDBConns, err = createConns(tctx, l.cfg, 1)
+	timeZone := l.cfg.Timezone
+	if len(timeZone) == 0 {
+		var err1 error
+		timeZone, err1 = conn.FetchTZSetting(ctx, &l.cfg.To)
+		if err1 != nil {
+			return err1
+		}
+	}
+	l.timeZone = timeZone
 	return err
 }
 
@@ -162,6 +172,9 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		}
 		cfg.Checkpoint.DSN = param.ToDSN()
 		cfg.TiDB.StrSQLMode = l.cfg.LoaderConfig.SQLMode
+		cfg.TiDB.Vars = map[string]string{
+			"time_zone": l.timeZone,
+		}
 		if err = cfg.Adjust(ctx); err != nil {
 			return err
 		}

@@ -17,7 +17,7 @@ import (
 	"testing"
 
 	"github.com/pingcap/check"
-	"github.com/pingcap/parser"
+	"github.com/pingcap/tidb/parser"
 )
 
 func TestSuite(t *testing.T) {
