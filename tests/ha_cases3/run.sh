@@ -80,7 +80,7 @@ function test_stop_task() {
 
 	for idx in $(seq 0 1); do
 		echo "start tasks $cur/conf/${task_config[$idx]}"
-		# if relay hasn't catch up with current sync pos(rarely happens), start-task may start with an error
+		# if relay hasn't catch up with current sync pos(such as when workload too high), start-task may start with an error
 		# so we don't check "\"result\": true" here, and check it using query-status
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"start-task $cur/conf/${task_config[$idx]}" \
