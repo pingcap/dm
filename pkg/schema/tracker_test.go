@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/ddl"
 	timock "github.com/pingcap/tidb/util/mock"
@@ -551,7 +552,10 @@ func (s *trackerSuite) TestInitDownStreamSQLModeAndParser(c *C) {
 	tracker, err := NewTracker(context.Background(), "test-tracker", defaultTestSessionCfg, dbConn)
 	c.Assert(err, IsNil)
 
-	mock.ExpectExec(fmt.Sprintf("SET SESSION SQL_MODE = '%s'", DefaultSQLMode)).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectBegin()
+	mock.ExpectExec(fmt.Sprintf("SET SESSION SQL_MODE = '%s'", mysql.DefaultSQLMode)).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+
 	tctx := tcontext.NewContext(context.Background(), dlog.L())
 
 	err = tracker.initDownStreamSQLModeAndParser(tctx)
@@ -580,7 +584,10 @@ func (s *trackerSuite) TestGetDownStreamIndexInfo(c *C) {
 	dbConn := &dbconn.DBConn{Cfg: s.cfg, BaseConn: baseConn}
 	tracker, err := NewTracker(context.Background(), "test-tracker", defaultTestSessionCfg, dbConn)
 	c.Assert(err, IsNil)
-	mock.ExpectExec(fmt.Sprintf("SET SESSION SQL_MODE = '%s'", DefaultSQLMode)).WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectBegin()
+	mock.ExpectExec(fmt.Sprintf("SET SESSION SQL_MODE = '%s'", mysql.DefaultSQLMode)).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
 
 	tableID := "`test`.`test`"
 
@@ -683,7 +690,10 @@ func (s *trackerSuite) TestGetAvailableDownStreanUKIndexInfo(c *C) {
 	dbConn := &dbconn.DBConn{Cfg: s.cfg, BaseConn: baseConn}
 	tracker, err := NewTracker(context.Background(), "test-tracker", defaultTestSessionCfg, dbConn)
 	c.Assert(err, IsNil)
-	mock.ExpectExec(fmt.Sprintf("SET SESSION SQL_MODE = '%s'", DefaultSQLMode)).WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectBegin()
+	mock.ExpectExec(fmt.Sprintf("SET SESSION SQL_MODE = '%s'", mysql.DefaultSQLMode)).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
 
 	tableID := "`test`.`test`"
 
@@ -695,7 +705,7 @@ func (s *trackerSuite) TestGetAvailableDownStreanUKIndexInfo(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(indexinfo, IsNil)
 	data := []interface{}{1, 2, 3}
-	indexinfo = tracker.GetAvailableDownStreamUKIndexInfo(tableID, oriTi, data)
+	indexinfo = tracker.GetAvailableDownStreamUKIndexInfo(tableID, data)
 	c.Assert(indexinfo, IsNil)
 	delete(tracker.dsTracker.tableInfos, tableID)
 
@@ -707,7 +717,7 @@ func (s *trackerSuite) TestGetAvailableDownStreanUKIndexInfo(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(indexinfo, IsNil)
 	data = []interface{}{nil, 2, 3}
-	indexinfo = tracker.GetAvailableDownStreamUKIndexInfo(tableID, oriTi, data)
+	indexinfo = tracker.GetAvailableDownStreamUKIndexInfo(tableID, data)
 	c.Assert(indexinfo, IsNil)
 	delete(tracker.dsTracker.tableInfos, tableID)
 
@@ -719,7 +729,7 @@ func (s *trackerSuite) TestGetAvailableDownStreanUKIndexInfo(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(indexinfo, IsNil)
 	data = []interface{}{1, 2, 3}
-	indexinfo = tracker.GetAvailableDownStreamUKIndexInfo(tableID, oriTi, data)
+	indexinfo = tracker.GetAvailableDownStreamUKIndexInfo(tableID, data)
 	c.Assert(indexinfo, NotNil)
 	delete(tracker.dsTracker.tableInfos, tableID)
 
@@ -731,7 +741,7 @@ func (s *trackerSuite) TestGetAvailableDownStreanUKIndexInfo(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(indexinfo, IsNil)
 	data = []interface{}{1, nil, 3}
-	indexinfo = tracker.GetAvailableDownStreamUKIndexInfo(tableID, oriTi, data)
+	indexinfo = tracker.GetAvailableDownStreamUKIndexInfo(tableID, data)
 	c.Assert(indexinfo, IsNil)
 	delete(tracker.dsTracker.tableInfos, tableID)
 
@@ -743,7 +753,7 @@ func (s *trackerSuite) TestGetAvailableDownStreanUKIndexInfo(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(indexinfo, IsNil)
 	data = []interface{}{1, 2, 3}
-	indexinfo = tracker.GetAvailableDownStreamUKIndexInfo(tableID, oriTi, data)
+	indexinfo = tracker.GetAvailableDownStreamUKIndexInfo(tableID, data)
 	c.Assert(indexinfo, NotNil)
 	delete(tracker.dsTracker.tableInfos, tableID)
 }
@@ -769,7 +779,10 @@ func (s *trackerSuite) TestReTrackDownStreamIndex(c *C) {
 	dbConn := &dbconn.DBConn{Cfg: s.cfg, BaseConn: baseConn}
 	tracker, err := NewTracker(context.Background(), "test-tracker", defaultTestSessionCfg, dbConn)
 	c.Assert(err, IsNil)
-	mock.ExpectExec(fmt.Sprintf("SET SESSION SQL_MODE = '%s'", DefaultSQLMode)).WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectBegin()
+	mock.ExpectExec(fmt.Sprintf("SET SESSION SQL_MODE = '%s'", mysql.DefaultSQLMode)).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
 
 	tableID := "`test`.`test`"
 

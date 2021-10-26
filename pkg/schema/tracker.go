@@ -49,8 +49,6 @@ const (
 	TiDBClusteredIndex = "tidb_enable_clustered_index"
 	// downstream mock table id, consists of serial numbers of letters.
 	mockTableID = 121402101900011104
-	// DefaultSQLMode is downstream schema track and paser SQLMode.
-	DefaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"
 )
 
 var (
@@ -382,7 +380,7 @@ func (tr *Tracker) GetDownStreamIndexInfo(tctx *tcontext.Context, tableID string
 
 // GetAvailableDownStreamUKIndexInfo gets available downstream UK whose data is not null.
 // note. this function will not init downstreamTrack.
-func (tr *Tracker) GetAvailableDownStreamUKIndexInfo(tableID string, originTi *model.TableInfo, data []interface{}) *model.IndexInfo {
+func (tr *Tracker) GetAvailableDownStreamUKIndexInfo(tableID string, data []interface{}) *model.IndexInfo {
 	dti, ok := tr.dsTracker.tableInfos[tableID]
 
 	if !ok || len(dti.availableUKCache) == 0 {
@@ -398,9 +396,7 @@ func (tr *Tracker) GetAvailableDownStreamUKIndexInfo(tableID string, originTi *m
 		if isSpecifiedIndexColumn(uk, fn) {
 			if i != 0 {
 				// exchange available uk to the first of the array to reduce judgements for next row
-				temp := dti.availableUKCache[0]
-				dti.availableUKCache[0] = uk
-				dti.availableUKCache[i] = temp
+				dti.availableUKCache[0], dti.availableUKCache[i] = dti.availableUKCache[i], dti.availableUKCache[0]
 			}
 			return uk
 		}
@@ -472,14 +468,14 @@ func (tr *Tracker) getTableInfoByCreateStmt(tctx *tcontext.Context, tableID stri
 
 // initDownStreamTrackerParser init downstream tracker parser by default sql_mode.
 func (tr *Tracker) initDownStreamSQLModeAndParser(tctx *tcontext.Context) error {
-	setSQLMode := fmt.Sprintf("SET SESSION SQL_MODE = '%s'", DefaultSQLMode)
-	_, err := tr.dsTracker.downstreamConn.BaseConn.DBConn.ExecContext(tctx.Ctx, setSQLMode)
+	setSQLMode := fmt.Sprintf("SET SESSION SQL_MODE = '%s'", mysql.DefaultSQLMode)
+	_, err := tr.dsTracker.downstreamConn.ExecuteSQL(tctx, []string{setSQLMode})
 	if err != nil {
-		return dterror.ErrSchemaTrackerCannotSetDownstreamSQLMode.Delegate(err, DefaultSQLMode)
+		return dterror.ErrSchemaTrackerCannotSetDownstreamSQLMode.Delegate(err, mysql.DefaultSQLMode)
 	}
-	stmtParser, err := utils.GetParserFromSQLModeStr(DefaultSQLMode)
+	stmtParser, err := utils.GetParserFromSQLModeStr(mysql.DefaultSQLMode)
 	if err != nil {
-		return dterror.ErrSchemaTrackerCannotInitDownstreamParser.Delegate(err, DefaultSQLMode)
+		return dterror.ErrSchemaTrackerCannotInitDownstreamParser.Delegate(err, mysql.DefaultSQLMode)
 	}
 	tr.dsTracker.stmtParser = stmtParser
 	return nil

@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/types"
@@ -173,7 +174,7 @@ RowLoop:
 		}
 
 		if defaultIndexColumns == nil {
-			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreamUKIndexInfo(tableID, ti, oriOldValues)
+			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreamUKIndexInfo(tableID, oriOldValues)
 		}
 
 		ks := genMultipleKeys(ti, oriOldValues, tableID)
@@ -182,6 +183,9 @@ RowLoop:
 		if param.safeMode {
 			// generate delete sql from old data
 			sql, value := genDeleteSQL(tableID, oriOldValues, ti.Columns, defaultIndexColumns)
+			failpoint.Inject("UpdateSqlCheck", func() {
+				log.L().Info("UpdateSqlCheck", zap.String("SQL", sql))
+			})
 			sqls = append(sqls, sql)
 			values = append(values, value)
 			keys = append(keys, ks)
@@ -216,6 +220,9 @@ RowLoop:
 		value = append(value, whereValues...)
 
 		sql := genUpdateSQL(tableID, updateColumns, whereColumns, whereValues)
+		failpoint.Inject("UpdateSqlCheck", func() {
+			log.L().Info("UpdateSqlCheck", zap.String("SQL", sql))
+		})
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -260,11 +267,14 @@ RowLoop:
 		}
 
 		if defaultIndexColumns == nil {
-			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreamUKIndexInfo(tableID, ti, value)
+			defaultIndexColumns = s.schemaTracker.GetAvailableDownStreamUKIndexInfo(tableID, value)
 		}
 		ks := genMultipleKeys(ti, value, tableID)
 
 		sql, value := genDeleteSQL(tableID, value, ti.Columns, defaultIndexColumns)
+		failpoint.Inject("DeleteSqlCheck", func() {
+			log.L().Info("DeleteSqlCheck", zap.String("SQL", sql))
+		})
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
