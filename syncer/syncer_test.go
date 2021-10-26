@@ -54,17 +54,6 @@ import (
 	streamer2 "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/dbconn"
-
-	"github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/replication"
-	_ "github.com/go-sql-driver/mysql"
-	. "github.com/pingcap/check"
-	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
-	"github.com/pingcap/tidb-tools/pkg/filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/pingcap/tidb/parser"
-	"go.uber.org/zap"
 )
 
 var _ = Suite(&testSyncerSuite{})
