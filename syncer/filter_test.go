@@ -26,6 +26,10 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/retry"
+	"github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 type testFilterSuite struct {
@@ -61,6 +65,15 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 	var err error
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
+
+	db, _, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+	syncer.ddlDBConn = &dbconn.DBConn{Cfg: syncer.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.schemaTracker, err = schema.NewTracker(context.Background(), syncer.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.BaseConn)
+	c.Assert(err, IsNil)
+	syncer.exprFilterGroup = NewExprFilterGroup(nil)
 
 	// test binlog filter
 	filterRules := []*bf.BinlogEventRule{
@@ -116,10 +129,16 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 		},
 	}
 	p := parser.New()
+	qec := &queryEventContext{
+		eventContext: &eventContext{tctx: tcontext.Background()},
+		p:            p,
+	}
 	for _, ca := range cases {
 		ddlInfo, err := syncer.routeDDL(p, ca.schema, ca.sql)
 		c.Assert(err, IsNil)
-		skipped, err2 := syncer.skipQueryEvent(ca.sql, ddlInfo)
+		qec.ddlSchema = ca.schema
+		qec.originSQL = ca.sql
+		skipped, err2 := syncer.skipQueryEvent(qec, ddlInfo)
 		c.Assert(err2, IsNil)
 		c.Assert(skipped, Equals, ca.expectSkipped)
 		c.Assert(len(ddlInfo.originDDL) == 0, Equals, ca.isEmptySQL)

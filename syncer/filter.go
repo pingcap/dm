@@ -25,8 +25,8 @@ import (
 )
 
 // skipQueryEvent changes ddlInfo.originDDL if skip by binlog-filter.
-func (s *Syncer) skipQueryEvent(originSQL string, ddlInfo *ddlInfo) (bool, error) {
-	if utils.IsBuildInSkipDDL(originSQL) {
+func (s *Syncer) skipQueryEvent(qec *queryEventContext, ddlInfo *ddlInfo) (bool, error) {
+	if utils.IsBuildInSkipDDL(qec.originSQL) {
 		return true, nil
 	}
 	et := bf.AstToDDLEvent(ddlInfo.originStmt)
@@ -43,19 +43,20 @@ func (s *Syncer) skipQueryEvent(originSQL string, ddlInfo *ddlInfo) (bool, error
 		})
 	}
 	for _, table := range realTables {
-		s.tctx.L().Debug("query event info", zap.String("event", "query"), zap.String("origin sql", originSQL), zap.Stringer("table", table), zap.Stringer("ddl info", ddlInfo))
+		s.tctx.L().Debug("query event info", zap.String("event", "query"), zap.String("origin sql", qec.originSQL), zap.Stringer("table", table), zap.Stringer("ddl info", ddlInfo))
 		if s.skipByTable(table) {
 			s.tctx.L().Debug("skip event by balist")
 			return true, nil
 		}
-		needSkip, err := s.skipByFilter(table, et, originSQL)
+		needSkip, err := s.skipByFilter(table, et, qec.originSQL)
 		if err != nil {
 			return needSkip, err
 		}
 
 		if needSkip {
 			s.tctx.L().Debug("skip event by binlog filter")
-			s.tctx.L().Warn("return empty string")
+			s.trackDDL(qec.ddlSchema, ddlInfo, qec.eventContext)
+			s.tctx.L().Warn("track ddl and return empty string")
 			ddlInfo.originDDL = ""
 			return true, nil
 		}
