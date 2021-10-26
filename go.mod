@@ -3,7 +3,7 @@ module github.com/pingcap/dm
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
-	github.com/chaos-mesh/go-sqlsmith v0.0.0-20210914111832-b3d328d69449
+	github.com/chaos-mesh/go-sqlsmith v0.0.0-20211025024535-03ae33408684
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/coreos/go-semver v0.3.0
 	github.com/deepmap/oapi-codegen v1.8.2

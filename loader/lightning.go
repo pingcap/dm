@@ -15,11 +15,10 @@ package loader
 
 import (
 	"context"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"path/filepath"
 	"strings"
 	"sync"
-
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -179,7 +178,8 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		}
 		cfg.Routes = l.cfg.RouteRules
 		cfg.Checkpoint.Driver = lcfg.CheckpointDriverMySQL
-		cfg.Checkpoint.Schema = config.TiDBLightningCheckpointPrefix + dbutil.TableName(l.cfg.Name, l.checkpointID())
+		//cfg.Checkpoint.Schema = config.TiDBLightningCheckpointPrefix + dbutil.TableName(l.cfg.Name, l.checkpointID())
+		cfg.Checkpoint.Schema = config.TiDBLightningCheckpointPrefix + dbutil.ColumnName(l.workerName)
 		cfg.Checkpoint.KeepAfterSuccess = lcfg.CheckpointOrigin
 		param := common.MySQLConnectParam{
 			Host:             cfg.TiDB.Host,
@@ -198,6 +198,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 			}
 		}
 		cfg.TiDB.Vars["time_zone"] = "+00:00"
+
 		cfg.TiDB.StrSQLMode = l.cfg.LoaderConfig.SQLMode
 		if err = cfg.Adjust(ctx); err != nil {
 			return err

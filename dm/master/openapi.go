@@ -22,15 +22,13 @@ import (
 	"github.com/deepmap/oapi-codegen/pkg/middleware"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
-	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	"github.com/pingcap/tidb-tools/pkg/filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/master/scheduler"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/openapi"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -102,6 +100,26 @@ func (s *Server) GetDocHTML(ctx echo.Context) error {
 	return ctx.HTML(http.StatusOK, html)
 }
 
+// DMAPIGetClusterMasterList get cluster master node list url is:(GET /api/v1/cluster/masters).
+func (s *Server) DMAPIGetClusterMasterList(ctx echo.Context) error {
+	return nil
+}
+
+// DMAPIOfflineMasterNode offline master node url is: (DELETE /api/v1/cluster/masters/{master-name}).
+func (s *Server) DMAPIOfflineMasterNode(ctx echo.Context, masterName string) error {
+	return nil
+}
+
+// DMAPIGetClusterWorkerList get cluster worker node list url is: (GET /api/v1/cluster/workers).
+func (s *Server) DMAPIGetClusterWorkerList(ctx echo.Context) error {
+	return nil
+}
+
+// DMAPIOfflineWorkerNode offline worker node url is: (DELETE /api/v1/cluster/workers/{worker-name}).
+func (s *Server) DMAPIOfflineWorkerNode(ctx echo.Context, workerName string) error {
+	return nil
+}
+
 // DMAPICreateSource url is:(POST /api/v1/sources).
 func (s *Server) DMAPICreateSource(ctx echo.Context) error {
 	var createSourceReq openapi.Source
@@ -119,7 +137,8 @@ func (s *Server) DMAPICreateSource(ctx echo.Context) error {
 }
 
 // DMAPIGetSourceList url is:(GET /api/v1/sources).
-func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
+func (s *Server) DMAPIGetSourceList(ctx echo.Context, params openapi.DMAPIGetSourceListParams) error {
+	// todo: support params
 	sourceMap := s.scheduler.GetSourceCfgs()
 	sourceList := []openapi.Source{}
 	for key := range sourceMap {
@@ -130,7 +149,8 @@ func (s *Server) DMAPIGetSourceList(ctx echo.Context) error {
 }
 
 // DMAPIDeleteSource url is:(DELETE /api/v1/sources).
-func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string) error {
+func (s *Server) DMAPIDeleteSource(ctx echo.Context, sourceName string, params openapi.DMAPIDeleteSourceParams) error {
+	// todo: support params
 	if err := s.scheduler.RemoveSourceCfg(sourceName); err != nil {
 		return err
 	}
@@ -179,7 +199,27 @@ func (s *Server) DMAPIStopRelay(ctx echo.Context, sourceName string) error {
 	return s.scheduler.StopRelay(sourceName, req.WorkerNameList)
 }
 
-// DMAPIGetSourceStatus url is:(GET /api/v1/sources/{source-id}/status).
+// DMAPIPauseRelay pause relay log function for the data source url is: (POST /api/v1/sources/{source-name}/pause-relay).
+func (s *Server) DMAPIPauseRelay(ctx echo.Context, sourceName string) error {
+	return nil
+}
+
+// DMAPIResumeRelay resume relay log function for the data source url is: (POST /api/v1/sources/{source-name}/resume-relay).
+func (s *Server) DMAPIResumeRelay(ctx echo.Context, sourceName string) error {
+	return nil
+}
+
+// DMAPIGetSourceSchemaList get source schema list url is: (GET /api/v1/sources/{source-name}/schemas).
+func (s *Server) DMAPIGetSourceSchemaList(ctx echo.Context, sourceName string) error {
+	return nil
+}
+
+// DMAPIGetSourceTableList get source table list url is: (GET /api/v1/sources/{source-name}/schemas/{schema-name}).
+func (s *Server) DMAPIGetSourceTableList(ctx echo.Context, sourceName string, schemaName string) error {
+	return nil
+}
+
+// DMAPIGetSourceStatus url is: (GET /api/v1/sources/{source-id}/status).
 func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error {
 	sourceCfg := s.scheduler.GetSourceCfgByID(sourceName)
 	if sourceCfg == nil {
@@ -219,28 +259,41 @@ func (s *Server) DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	return ctx.JSON(http.StatusOK, resp)
 }
 
+// DMAPITransferSource transfer source  another free worker url is: (POST /api/v1/sources/{source-name}/transfer).
+func (s *Server) DMAPITransferSource(ctx echo.Context, sourceName string) error {
+	return nil
+}
+
 // DMAPIStartTask url is:(POST /api/v1/tasks).
 func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 	var req openapi.CreateTaskRequest
 	if err := ctx.Bind(&req); err != nil {
 		return err
 	}
-	task := req.Task
+	task := &req.Task
 	if err := task.Adjust(); err != nil {
 		return err
 	}
 	// prepare target db config
 	newCtx := ctx.Request().Context()
-	toDBCfg := task.GetTargetDBCfg()
+	toDBCfg := config.GetTargetDBCfgFromOpenAPITask(task)
 	if adjustDBErr := adjustTargetDB(newCtx, toDBCfg); adjustDBErr != nil {
 		return terror.WithClass(adjustDBErr, terror.ClassDMMaster)
 	}
-	// generate sub task config list
-	subTaskConfigList, err := s.modelToSubTaskConfigList(toDBCfg, &task)
+	// prepare source db config source name -> source config
+	sourceCfgMap := make(map[string]*config.SourceConfig)
+	for _, cfg := range task.SourceConfig.SourceConf {
+		if sourceCfg := s.scheduler.GetSourceCfgByID(cfg.SourceName); sourceCfg != nil {
+			sourceCfgMap[cfg.SourceName] = sourceCfg
+		} else {
+			return terror.ErrOpenAPITaskSourceNotFound.Generatef("source name %s", cfg.SourceName)
+		}
+	}
+	// generate sub task configs
+	subTaskConfigList, err := config.OpenAPITaskToSubTaskConfigs(task, toDBCfg, sourceCfgMap)
 	if err != nil {
 		return err
 	}
-	var needStartSubTaskList []config.SubTaskConfig
 	// check subtask config
 	subTaskConfigPList := make([]*config.SubTaskConfig, len(subTaskConfigList))
 	for i := range subTaskConfigList {
@@ -251,6 +304,7 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		return terror.WithClass(err, terror.ClassDMMaster)
 	}
 	// specify only start task on partial sources
+	var needStartSubTaskList []config.SubTaskConfig
 	if req.SourceNameList != nil {
 		// source name -> sub task config
 		subTaskCfgM := make(map[string]*config.SubTaskConfig, len(subTaskConfigList))
@@ -261,7 +315,7 @@ func (s *Server) DMAPIStartTask(ctx echo.Context) error {
 		for _, sourceName := range *req.SourceNameList {
 			subTaskCfg, ok := subTaskCfgM[sourceName]
 			if !ok {
-				return terror.ErrOpenAPICommonError.Generatef("source %s not found.", sourceName)
+				return terror.ErrOpenAPITaskSourceNotFound.Generatef("source name %s", sourceName)
 			}
 			needStartSubTaskList = append(needStartSubTaskList, *subTaskCfg)
 		}
@@ -315,11 +369,130 @@ func (s *Server) DMAPIDeleteTask(ctx echo.Context, taskName string, params opena
 
 // DMAPIGetTaskList url is:(GET /api/v1/tasks).
 func (s *Server) DMAPIGetTaskList(ctx echo.Context) error {
-	return nil
+	// get sub task config by task name task name->source name->subtask config
+	subTaskConfigMap := s.scheduler.GetSubTaskCfgs()
+	taskList := config.SubTaskConfigsToOpenAPITask(subTaskConfigMap)
+	resp := openapi.GetTaskListResponse{Total: len(taskList), Data: taskList}
+	return ctx.JSON(http.StatusOK, resp)
 }
 
 // DMAPIGetTaskStatus url is:(GET /api/v1/tasks/{task-name}/status).
-func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string) error {
+func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string, params openapi.DMAPIGetTaskStatusParams) error {
+	// todo support params
+	// 1. get task source list from scheduler
+	sourceList := s.getTaskResources(taskName)
+	if len(sourceList) == 0 {
+		return terror.ErrSchedulerTaskNotExist.Generate(taskName)
+	}
+	// 2. get status from workers
+	workerRespList := s.getStatusFromWorkers(ctx.Request().Context(), sourceList, taskName, true)
+	subTaskStatusList := make([]openapi.SubTaskStatus, len(workerRespList))
+	for i, workerStatus := range workerRespList {
+		if workerStatus == nil || workerStatus.SourceStatus == nil {
+			// this should not happen unless the rpc in the worker server has been modified
+			return terror.ErrOpenAPICommonError.New("worker's query-status response is nil")
+		}
+		sourceStatus := workerStatus.SourceStatus
+		// find right task name
+		var subTaskStatus *pb.SubTaskStatus
+		for _, cfg := range workerStatus.SubTaskStatus {
+			if cfg.Name == taskName {
+				subTaskStatus = cfg
+			}
+		}
+		if subTaskStatus == nil {
+			// this may not happen
+			return terror.ErrOpenAPICommonError.Generatef("can not find subtask status task name: %s.", taskName)
+		}
+		openapiSubTaskStatus := openapi.SubTaskStatus{
+			Name:                taskName,
+			SourceName:          sourceStatus.GetSource(),
+			WorkerName:          sourceStatus.GetWorker(),
+			Stage:               subTaskStatus.GetStage().String(),
+			Unit:                subTaskStatus.GetUnit().String(),
+			UnresolvedDdlLockId: &subTaskStatus.UnresolvedDDLLockID,
+		}
+		// add load status
+		if loadS := subTaskStatus.GetLoad(); loadS != nil {
+			openapiSubTaskStatus.LoadStatus = &openapi.LoadStatus{
+				FinishedBytes:  loadS.FinishedBytes,
+				MetaBinlog:     loadS.MetaBinlog,
+				MetaBinlogGtid: loadS.MetaBinlogGTID,
+				Progress:       loadS.Progress,
+				TotalBytes:     loadS.TotalBytes,
+			}
+		}
+		// add syncer status
+		if syncerS := subTaskStatus.GetSync(); syncerS != nil {
+			openapiSubTaskStatus.SyncStatus = &openapi.SyncStatus{
+				BinlogType:          syncerS.GetBinlogType(),
+				BlockingDdls:        syncerS.GetBlockingDDLs(),
+				MasterBinlog:        syncerS.GetMasterBinlog(),
+				MasterBinlogGtid:    syncerS.GetMasterBinlogGtid(),
+				RecentTps:           syncerS.RecentTps,
+				SecondsBehindMaster: syncerS.SecondsBehindMaster,
+				Synced:              syncerS.Synced,
+				SyncerBinlog:        syncerS.SyncerBinlog,
+				SyncerBinlogGtid:    syncerS.SyncerBinlogGtid,
+				TotalEvents:         syncerS.TotalEvents,
+				TotalTps:            syncerS.TotalTps,
+			}
+			if unResolvedGroups := syncerS.GetUnresolvedGroups(); len(unResolvedGroups) > 0 {
+				openapiSubTaskStatus.SyncStatus.UnresolvedGroups = make([]openapi.ShardingGroup, len(unResolvedGroups))
+				for i, unResolvedGroup := range unResolvedGroups {
+					openapiSubTaskStatus.SyncStatus.UnresolvedGroups[i] = openapi.ShardingGroup{
+						DdlList:       unResolvedGroup.DDLs,
+						FirstLocation: unResolvedGroup.FirstLocation,
+						Synced:        unResolvedGroup.Synced,
+						Target:        unResolvedGroup.Target,
+						Unsynced:      unResolvedGroup.Unsynced,
+					}
+				}
+			}
+		}
+		subTaskStatusList[i] = openapiSubTaskStatus
+	}
+	resp := openapi.GetTaskStatusResponse{Total: len(subTaskStatusList), Data: subTaskStatusList}
+	return ctx.JSON(http.StatusOK, resp)
+}
+
+// DMAPPauseTask pause task url is: (POST /api/v1/tasks/{task-name}/pause).
+func (s *Server) DMAPPauseTask(ctx echo.Context, taskName string) error {
+	return nil
+}
+
+// DMAPIResumeTask resume task url is: (POST /api/v1/tasks/{task-name}/resume).
+func (s *Server) DMAPIResumeTask(ctx echo.Context, taskName string) error {
+	return nil
+}
+
+// DMAPIGetTaskSourceSchemaList get task source schema list url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas).
+func (s *Server) DMAPIGetTaskSourceSchemaList(ctx echo.Context, taskName string, sourceName string) error {
+	return nil
+}
+
+// DMAPIGetTaskSchemaStructure get task source schema structure url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}).
+func (s *Server) DMAPIGetTaskSchemaStructure(ctx echo.Context, taskName string, sourceName string, schemaName string) error {
+	return nil
+}
+
+// DMAPIGetTaskSourceTableList get task source table list url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}).
+func (s *Server) DMAPIGetTaskSourceTableList(ctx echo.Context, taskName string, sourceName string, schemaName string) error {
+	return nil
+}
+
+// DMAPIDeleteTaskSourceTableStructure delete task source table structure url is: (DELETE /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name}).
+func (s *Server) DMAPIDeleteTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error {
+	return nil
+}
+
+// DMAPIGetTaskSourceTableStructure get task source table structure url is: (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name}).
+func (s *Server) DMAPIGetTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error {
+	return nil
+}
+
+// DMAPIOperateTaskSourceTableStructure operate task source table structure url is: (PUT /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name}).
+func (s *Server) DMAPIOperateTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error {
 	return nil
 }
 
@@ -399,169 +572,4 @@ func modelToSourceCfg(source openapi.Source) *config.SourceConfig {
 		}
 	}
 	return cfg
-}
-
-func (s *Server) modelToSubTaskConfigList(toDBCfg *config.DBConfig, task *openapi.Task) ([]config.SubTaskConfig, error) {
-	// prepare source db config source name -> source config
-	sourceCfgMap := make(map[string]*config.SourceConfig)
-	for _, cfg := range task.SourceConfig.SourceConf {
-		if sourceCfg := s.scheduler.GetSourceCfgByID(cfg.SourceName); sourceCfg != nil {
-			sourceCfgMap[cfg.SourceName] = sourceCfg
-		} else {
-			return nil, terror.ErrOpenAPITaskSourceNotFound.Generatef("source name=%s", cfg.SourceName)
-		}
-	}
-	// source name -> meta config
-	sourceDBMetaMap := make(map[string]*config.Meta)
-	for _, cfg := range task.SourceConfig.SourceConf {
-		// check if need to set source meta
-		var needAddMeta bool
-		meta := &config.Meta{}
-		if cfg.BinlogGtid != nil {
-			meta.BinLogGTID = *cfg.BinlogGtid
-			needAddMeta = true
-		}
-		if cfg.BinlogName != nil {
-			meta.BinLogName = *cfg.BinlogName
-			needAddMeta = true
-		}
-		if cfg.BinlogPos != nil {
-			pos := uint32(*cfg.BinlogPos)
-			meta.BinLogPos = pos
-			needAddMeta = true
-		}
-		if needAddMeta {
-			sourceDBMetaMap[cfg.SourceName] = meta
-		}
-	}
-	// source name -> migrate rule list
-	tableMigrateRuleMap := make(map[string][]openapi.TaskTableMigrateRule)
-	for _, rule := range task.TableMigrateRule {
-		tableMigrateRuleMap[rule.Source.SourceName] = append(tableMigrateRuleMap[rule.Source.SourceName], rule)
-	}
-	// rule name -> rule template
-	eventFilterTemplateMap := make(map[string]bf.BinlogEventRule)
-	if task.BinlogFilterRule != nil {
-		for ruleName, rule := range task.BinlogFilterRule.AdditionalProperties {
-			ruleT := bf.BinlogEventRule{Action: bf.Ignore}
-			if rule.IgnoreEvent != nil {
-				events := make([]bf.EventType, len(*rule.IgnoreEvent))
-				for i, eventStr := range *rule.IgnoreEvent {
-					events[i] = bf.EventType(eventStr)
-				}
-				ruleT.Events = events
-			}
-			if rule.IgnoreSql != nil {
-				ruleT.SQLPattern = *rule.IgnoreSql
-			}
-			eventFilterTemplateMap[ruleName] = ruleT
-		}
-	}
-	// start to generate sub task configs
-	subTaskCfgList := make([]config.SubTaskConfig, len(task.SourceConfig.SourceConf))
-	for i, sourceCfg := range task.SourceConfig.SourceConf {
-		subTaskCfg := config.NewSubTaskConfig()
-		// set task name and mode
-		subTaskCfg.Name = task.Name
-		subTaskCfg.Mode = string(task.TaskMode)
-		// set task meta
-		subTaskCfg.MetaFile = *task.MetaSchema
-		if meta, ok := sourceDBMetaMap[sourceCfg.SourceName]; ok {
-			subTaskCfg.Meta = meta
-		}
-		// set shard config
-		if task.ShardMode != nil {
-			subTaskCfg.IsSharding = true
-			mode := *task.ShardMode
-			subTaskCfg.ShardMode = string(mode)
-		} else {
-			subTaskCfg.IsSharding = false
-		}
-		// set online ddl pulgin config
-		subTaskCfg.OnlineDDL = task.EnhanceOnlineSchemaChange
-		// set case sensitive from source
-		subTaskCfg.CaseSensitive = sourceCfgMap[sourceCfg.SourceName].CaseSensitive
-		// set source db config
-		subTaskCfg.SourceID = sourceCfg.SourceName
-		subTaskCfg.From = sourceCfgMap[sourceCfg.SourceName].From
-		// set target db config
-		subTaskCfg.To = *toDBCfg.Clone()
-		// TODO set meet error policy
-		// TODO ExprFilter
-		// set full unit config
-		subTaskCfg.MydumperConfig = config.DefaultMydumperConfig()
-		subTaskCfg.LoaderConfig = config.DefaultLoaderConfig()
-		if fullCfg := task.SourceConfig.FullMigrateConf; fullCfg != nil {
-			if fullCfg.ExportThreads != nil {
-				subTaskCfg.MydumperConfig.Threads = *fullCfg.ExportThreads
-			}
-			if fullCfg.ImportThreads != nil {
-				subTaskCfg.LoaderConfig.PoolSize = *fullCfg.ImportThreads
-			}
-			if fullCfg.DataDir != nil {
-				subTaskCfg.LoaderConfig.Dir = *fullCfg.DataDir
-			}
-		}
-		// set incremental config
-		subTaskCfg.SyncerConfig = config.DefaultSyncerConfig()
-		if incrCfg := task.SourceConfig.IncrMigrateConf; incrCfg != nil {
-			if incrCfg.ReplThreads != nil {
-				subTaskCfg.SyncerConfig.WorkerCount = *incrCfg.ReplThreads
-			}
-			if incrCfg.ReplBatch != nil {
-				subTaskCfg.SyncerConfig.Batch = *incrCfg.ReplBatch
-			}
-		}
-		// set route,blockAllowList,filter config
-		doDBs := []string{}
-		doTables := []*filter.Table{}
-		routeRules := []*router.TableRule{}
-		filterRules := []*bf.BinlogEventRule{}
-		for _, rule := range tableMigrateRuleMap[sourceCfg.SourceName] {
-			// route
-			routeRules = append(routeRules, &router.TableRule{
-				SchemaPattern: rule.Source.Schema, TablePattern: rule.Source.Table,
-				TargetSchema: rule.Target.Schema, TargetTable: rule.Target.Table,
-			})
-			// filter
-			if rule.BinlogFilterRule != nil {
-				for _, name := range *rule.BinlogFilterRule {
-					filterRule, ok := eventFilterTemplateMap[name] // NOTE: this return a copied value
-					if !ok {
-						return nil, terror.ErrOpenAPICommonError.Generatef("filter rule name %s not found.", name)
-					}
-					filterRule.SchemaPattern = rule.Source.Schema
-					filterRule.TablePattern = rule.Source.Table
-					filterRules = append(filterRules, &filterRule)
-				}
-			}
-			// BlockAllowList
-			doDBs = append(doDBs, rule.Source.Schema)
-			doTables = append(doTables, &filter.Table{Schema: rule.Source.Schema, Name: rule.Source.Table})
-		}
-		subTaskCfg.RouteRules = routeRules
-		subTaskCfg.FilterRules = filterRules
-		subTaskCfg.BAList = &filter.Rules{DoDBs: removeDuplication(doDBs), DoTables: doTables}
-		// adjust sub task config
-		if err := subTaskCfg.Adjust(true); err != nil {
-			return nil, terror.Annotatef(err, "source name=%s", sourceCfg.SourceName)
-		}
-		subTaskCfgList[i] = *subTaskCfg
-	}
-	return subTaskCfgList, nil
-}
-
-func removeDuplication(in []string) []string {
-	m := make(map[string]struct{}, len(in))
-	j := 0
-	for _, v := range in {
-		_, ok := m[v]
-		if ok {
-			continue
-		}
-		m[v] = struct{}{}
-		in[j] = v
-		j++
-	}
-	return in[:j]
 }

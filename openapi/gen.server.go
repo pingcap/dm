@@ -20,6 +20,18 @@ import (
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// get cluster master node list
+	// (GET /api/v1/cluster/masters)
+	DMAPIGetClusterMasterList(ctx echo.Context) error
+	// offline master node
+	// (DELETE /api/v1/cluster/masters/{master-name})
+	DMAPIOfflineMasterNode(ctx echo.Context, masterName string) error
+	// get cluster worker node list
+	// (GET /api/v1/cluster/workers)
+	DMAPIGetClusterWorkerList(ctx echo.Context) error
+	// offline worker node
+	// (DELETE /api/v1/cluster/workers/{worker-name})
+	DMAPIOfflineWorkerNode(ctx echo.Context, workerName string) error
 	// get doc json
 	// (GET /api/v1/dm.json)
 	GetDocJSON(ctx echo.Context) error
@@ -28,22 +40,37 @@ type ServerInterface interface {
 	GetDocHTML(ctx echo.Context) error
 	// get data source list
 	// (GET /api/v1/sources)
-	DMAPIGetSourceList(ctx echo.Context) error
+	DMAPIGetSourceList(ctx echo.Context, params DMAPIGetSourceListParams) error
 	// create new data source
 	// (POST /api/v1/sources)
 	DMAPICreateSource(ctx echo.Context) error
 	// delete a data source
 	// (DELETE /api/v1/sources/{source-name})
-	DMAPIDeleteSource(ctx echo.Context, sourceName string) error
+	DMAPIDeleteSource(ctx echo.Context, sourceName string, params DMAPIDeleteSourceParams) error
+	// pause relay log function for the data source
+	// (POST /api/v1/sources/{source-name}/pause-relay)
+	DMAPIPauseRelay(ctx echo.Context, sourceName string) error
+	// resume relay log function for the data source
+	// (POST /api/v1/sources/{source-name}/resume-relay)
+	DMAPIResumeRelay(ctx echo.Context, sourceName string) error
+	// get source schema list
+	// (GET /api/v1/sources/{source-name}/schemas)
+	DMAPIGetSourceSchemaList(ctx echo.Context, sourceName string) error
+	// get source table list
+	// (GET /api/v1/sources/{source-name}/schemas/{schema-name})
+	DMAPIGetSourceTableList(ctx echo.Context, sourceName string, schemaName string) error
 	// enable relay log function for the data source
-	// (PATCH /api/v1/sources/{source-name}/start-relay)
+	// (POST /api/v1/sources/{source-name}/start-relay)
 	DMAPIStartRelay(ctx echo.Context, sourceName string) error
 	// get the current status of the data source
 	// (GET /api/v1/sources/{source-name}/status)
 	DMAPIGetSourceStatus(ctx echo.Context, sourceName string) error
 	// disable relay log function for the data source
-	// (PATCH /api/v1/sources/{source-name}/stop-relay)
+	// (POST /api/v1/sources/{source-name}/stop-relay)
 	DMAPIStopRelay(ctx echo.Context, sourceName string) error
+	// transfer source to a free worker
+	// (POST /api/v1/sources/{source-name}/transfer)
+	DMAPITransferSource(ctx echo.Context, sourceName string) error
 	// get task list
 	// (GET /api/v1/tasks)
 	DMAPIGetTaskList(ctx echo.Context) error
@@ -53,14 +80,85 @@ type ServerInterface interface {
 	// delete and stop task
 	// (DELETE /api/v1/tasks/{task-name})
 	DMAPIDeleteTask(ctx echo.Context, taskName string, params DMAPIDeleteTaskParams) error
+	// pause task
+	// (POST /api/v1/tasks/{task-name}/pause)
+	DMAPPauseTask(ctx echo.Context, taskName string) error
+	// resume task
+	// (POST /api/v1/tasks/{task-name}/resume)
+	DMAPIResumeTask(ctx echo.Context, taskName string) error
+	// get task source schema list
+	// (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas)
+	DMAPIGetTaskSourceSchemaList(ctx echo.Context, taskName string, sourceName string) error
+	// get task source table list
+	// (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name})
+	DMAPIGetTaskSourceTableList(ctx echo.Context, taskName string, sourceName string, schemaName string) error
+	// delete task source table structure
+	// (DELETE /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name})
+	DMAPIDeleteTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error
+	// get task source table structure
+	// (GET /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name})
+	DMAPIGetTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error
+	// operate task source table structure
+	// (PUT /api/v1/tasks/{task-name}/sources/{source-name}/schemas/{schema-name}/{table-name})
+	DMAPIOperateTaskSourceTableStructure(ctx echo.Context, taskName string, sourceName string, schemaName string, tableName string) error
 	// get task status
 	// (GET /api/v1/tasks/{task-name}/status)
-	DMAPIGetTaskStatus(ctx echo.Context, taskName string) error
+	DMAPIGetTaskStatus(ctx echo.Context, taskName string, params DMAPIGetTaskStatusParams) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler ServerInterface
+}
+
+// DMAPIGetClusterMasterList converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIGetClusterMasterList(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIGetClusterMasterList(ctx)
+	return err
+}
+
+// DMAPIOfflineMasterNode converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIOfflineMasterNode(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "master-name" -------------
+	var masterName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "master-name", runtime.ParamLocationPath, ctx.Param("master-name"), &masterName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter master-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIOfflineMasterNode(ctx, masterName)
+	return err
+}
+
+// DMAPIGetClusterWorkerList converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIGetClusterWorkerList(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIGetClusterWorkerList(ctx)
+	return err
+}
+
+// DMAPIOfflineWorkerNode converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIOfflineWorkerNode(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "worker-name" -------------
+	var workerName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "worker-name", runtime.ParamLocationPath, ctx.Param("worker-name"), &workerName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter worker-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIOfflineWorkerNode(ctx, workerName)
+	return err
 }
 
 // GetDocJSON converts echo context to params.
@@ -85,8 +183,17 @@ func (w *ServerInterfaceWrapper) GetDocHTML(ctx echo.Context) error {
 func (w *ServerInterfaceWrapper) DMAPIGetSourceList(ctx echo.Context) error {
 	var err error
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DMAPIGetSourceListParams
+	// ------------- Optional query parameter "with_status" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "with_status", ctx.QueryParams(), &params.WithStatus)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter with_status: %s", err))
+	}
+
 	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.DMAPIGetSourceList(ctx)
+	err = w.Handler.DMAPIGetSourceList(ctx, params)
 	return err
 }
 
@@ -110,8 +217,89 @@ func (w *ServerInterfaceWrapper) DMAPIDeleteSource(ctx echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name: %s", err))
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DMAPIDeleteSourceParams
+	// ------------- Optional query parameter "force" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "force", ctx.QueryParams(), &params.Force)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter force: %s", err))
+	}
+
 	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.DMAPIDeleteSource(ctx, sourceName)
+	err = w.Handler.DMAPIDeleteSource(ctx, sourceName, params)
+	return err
+}
+
+// DMAPIPauseRelay converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIPauseRelay(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "source-name" -------------
+	var sourceName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "source-name", runtime.ParamLocationPath, ctx.Param("source-name"), &sourceName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIPauseRelay(ctx, sourceName)
+	return err
+}
+
+// DMAPIResumeRelay converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIResumeRelay(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "source-name" -------------
+	var sourceName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "source-name", runtime.ParamLocationPath, ctx.Param("source-name"), &sourceName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIResumeRelay(ctx, sourceName)
+	return err
+}
+
+// DMAPIGetSourceSchemaList converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIGetSourceSchemaList(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "source-name" -------------
+	var sourceName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "source-name", runtime.ParamLocationPath, ctx.Param("source-name"), &sourceName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIGetSourceSchemaList(ctx, sourceName)
+	return err
+}
+
+// DMAPIGetSourceTableList converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIGetSourceTableList(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "source-name" -------------
+	var sourceName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "source-name", runtime.ParamLocationPath, ctx.Param("source-name"), &sourceName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name: %s", err))
+	}
+
+	// ------------- Path parameter "schema-name" -------------
+	var schemaName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "schema-name", runtime.ParamLocationPath, ctx.Param("schema-name"), &schemaName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter schema-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIGetSourceTableList(ctx, sourceName, schemaName)
 	return err
 }
 
@@ -163,6 +351,22 @@ func (w *ServerInterfaceWrapper) DMAPIStopRelay(ctx echo.Context) error {
 	return err
 }
 
+// DMAPITransferSource converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPITransferSource(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "source-name" -------------
+	var sourceName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "source-name", runtime.ParamLocationPath, ctx.Param("source-name"), &sourceName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPITransferSource(ctx, sourceName)
+	return err
+}
+
 // DMAPIGetTaskList converts echo context to params.
 func (w *ServerInterfaceWrapper) DMAPIGetTaskList(ctx echo.Context) error {
 	var err error
@@ -194,15 +398,223 @@ func (w *ServerInterfaceWrapper) DMAPIDeleteTask(ctx echo.Context) error {
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params DMAPIDeleteTaskParams
-	// ------------- Optional query parameter "source-name-list" -------------
+	// ------------- Optional query parameter "source_name_list" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "source-name-list", ctx.QueryParams(), &params.SourceNameList)
+	err = runtime.BindQueryParameter("form", true, false, "source_name_list", ctx.QueryParams(), &params.SourceNameList)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name-list: %s", err))
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source_name_list: %s", err))
 	}
 
 	// Invoke the callback with all the unmarshalled arguments
 	err = w.Handler.DMAPIDeleteTask(ctx, taskName, params)
+	return err
+}
+
+// DMAPPauseTask converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPPauseTask(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "task-name" -------------
+	var taskName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "task-name", runtime.ParamLocationPath, ctx.Param("task-name"), &taskName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter task-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPPauseTask(ctx, taskName)
+	return err
+}
+
+// DMAPIResumeTask converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIResumeTask(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "task-name" -------------
+	var taskName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "task-name", runtime.ParamLocationPath, ctx.Param("task-name"), &taskName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter task-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIResumeTask(ctx, taskName)
+	return err
+}
+
+// DMAPIGetTaskSourceSchemaList converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIGetTaskSourceSchemaList(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "task-name" -------------
+	var taskName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "task-name", runtime.ParamLocationPath, ctx.Param("task-name"), &taskName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter task-name: %s", err))
+	}
+
+	// ------------- Path parameter "source-name" -------------
+	var sourceName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "source-name", runtime.ParamLocationPath, ctx.Param("source-name"), &sourceName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIGetTaskSourceSchemaList(ctx, taskName, sourceName)
+	return err
+}
+
+// DMAPIGetTaskSourceTableList converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIGetTaskSourceTableList(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "task-name" -------------
+	var taskName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "task-name", runtime.ParamLocationPath, ctx.Param("task-name"), &taskName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter task-name: %s", err))
+	}
+
+	// ------------- Path parameter "source-name" -------------
+	var sourceName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "source-name", runtime.ParamLocationPath, ctx.Param("source-name"), &sourceName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name: %s", err))
+	}
+
+	// ------------- Path parameter "schema-name" -------------
+	var schemaName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "schema-name", runtime.ParamLocationPath, ctx.Param("schema-name"), &schemaName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter schema-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIGetTaskSourceTableList(ctx, taskName, sourceName, schemaName)
+	return err
+}
+
+// DMAPIDeleteTaskSourceTableStructure converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIDeleteTaskSourceTableStructure(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "task-name" -------------
+	var taskName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "task-name", runtime.ParamLocationPath, ctx.Param("task-name"), &taskName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter task-name: %s", err))
+	}
+
+	// ------------- Path parameter "source-name" -------------
+	var sourceName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "source-name", runtime.ParamLocationPath, ctx.Param("source-name"), &sourceName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name: %s", err))
+	}
+
+	// ------------- Path parameter "schema-name" -------------
+	var schemaName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "schema-name", runtime.ParamLocationPath, ctx.Param("schema-name"), &schemaName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter schema-name: %s", err))
+	}
+
+	// ------------- Path parameter "table-name" -------------
+	var tableName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "table-name", runtime.ParamLocationPath, ctx.Param("table-name"), &tableName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter table-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIDeleteTaskSourceTableStructure(ctx, taskName, sourceName, schemaName, tableName)
+	return err
+}
+
+// DMAPIGetTaskSourceTableStructure converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIGetTaskSourceTableStructure(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "task-name" -------------
+	var taskName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "task-name", runtime.ParamLocationPath, ctx.Param("task-name"), &taskName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter task-name: %s", err))
+	}
+
+	// ------------- Path parameter "source-name" -------------
+	var sourceName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "source-name", runtime.ParamLocationPath, ctx.Param("source-name"), &sourceName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name: %s", err))
+	}
+
+	// ------------- Path parameter "schema-name" -------------
+	var schemaName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "schema-name", runtime.ParamLocationPath, ctx.Param("schema-name"), &schemaName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter schema-name: %s", err))
+	}
+
+	// ------------- Path parameter "table-name" -------------
+	var tableName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "table-name", runtime.ParamLocationPath, ctx.Param("table-name"), &tableName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter table-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIGetTaskSourceTableStructure(ctx, taskName, sourceName, schemaName, tableName)
+	return err
+}
+
+// DMAPIOperateTaskSourceTableStructure converts echo context to params.
+func (w *ServerInterfaceWrapper) DMAPIOperateTaskSourceTableStructure(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "task-name" -------------
+	var taskName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "task-name", runtime.ParamLocationPath, ctx.Param("task-name"), &taskName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter task-name: %s", err))
+	}
+
+	// ------------- Path parameter "source-name" -------------
+	var sourceName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "source-name", runtime.ParamLocationPath, ctx.Param("source-name"), &sourceName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source-name: %s", err))
+	}
+
+	// ------------- Path parameter "schema-name" -------------
+	var schemaName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "schema-name", runtime.ParamLocationPath, ctx.Param("schema-name"), &schemaName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter schema-name: %s", err))
+	}
+
+	// ------------- Path parameter "table-name" -------------
+	var tableName string
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "table-name", runtime.ParamLocationPath, ctx.Param("table-name"), &tableName)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter table-name: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.DMAPIOperateTaskSourceTableStructure(ctx, taskName, sourceName, schemaName, tableName)
 	return err
 }
 
@@ -217,8 +629,17 @@ func (w *ServerInterfaceWrapper) DMAPIGetTaskStatus(ctx echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter task-name: %s", err))
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DMAPIGetTaskStatusParams
+	// ------------- Optional query parameter "source_name_list" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "source_name_list", ctx.QueryParams(), &params.SourceNameList)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter source_name_list: %s", err))
+	}
+
 	// Invoke the callback with all the unmarshalled arguments
-	err = w.Handler.DMAPIGetTaskStatus(ctx, taskName)
+	err = w.Handler.DMAPIGetTaskStatus(ctx, taskName, params)
 	return err
 }
 
@@ -249,81 +670,118 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 		Handler: si,
 	}
 
+	router.GET(baseURL+"/api/v1/cluster/masters", wrapper.DMAPIGetClusterMasterList)
+	router.DELETE(baseURL+"/api/v1/cluster/masters/:master-name", wrapper.DMAPIOfflineMasterNode)
+	router.GET(baseURL+"/api/v1/cluster/workers", wrapper.DMAPIGetClusterWorkerList)
+	router.DELETE(baseURL+"/api/v1/cluster/workers/:worker-name", wrapper.DMAPIOfflineWorkerNode)
 	router.GET(baseURL+"/api/v1/dm.json", wrapper.GetDocJSON)
 	router.GET(baseURL+"/api/v1/docs", wrapper.GetDocHTML)
 	router.GET(baseURL+"/api/v1/sources", wrapper.DMAPIGetSourceList)
 	router.POST(baseURL+"/api/v1/sources", wrapper.DMAPICreateSource)
 	router.DELETE(baseURL+"/api/v1/sources/:source-name", wrapper.DMAPIDeleteSource)
-	router.PATCH(baseURL+"/api/v1/sources/:source-name/start-relay", wrapper.DMAPIStartRelay)
+	router.POST(baseURL+"/api/v1/sources/:source-name/pause-relay", wrapper.DMAPIPauseRelay)
+	router.POST(baseURL+"/api/v1/sources/:source-name/resume-relay", wrapper.DMAPIResumeRelay)
+	router.GET(baseURL+"/api/v1/sources/:source-name/schemas", wrapper.DMAPIGetSourceSchemaList)
+	router.GET(baseURL+"/api/v1/sources/:source-name/schemas/:schema-name", wrapper.DMAPIGetSourceTableList)
+	router.POST(baseURL+"/api/v1/sources/:source-name/start-relay", wrapper.DMAPIStartRelay)
 	router.GET(baseURL+"/api/v1/sources/:source-name/status", wrapper.DMAPIGetSourceStatus)
-	router.PATCH(baseURL+"/api/v1/sources/:source-name/stop-relay", wrapper.DMAPIStopRelay)
+	router.POST(baseURL+"/api/v1/sources/:source-name/stop-relay", wrapper.DMAPIStopRelay)
+	router.POST(baseURL+"/api/v1/sources/:source-name/transfer", wrapper.DMAPITransferSource)
 	router.GET(baseURL+"/api/v1/tasks", wrapper.DMAPIGetTaskList)
 	router.POST(baseURL+"/api/v1/tasks", wrapper.DMAPIStartTask)
 	router.DELETE(baseURL+"/api/v1/tasks/:task-name", wrapper.DMAPIDeleteTask)
+	router.POST(baseURL+"/api/v1/tasks/:task-name/pause", wrapper.DMAPPauseTask)
+	router.POST(baseURL+"/api/v1/tasks/:task-name/resume", wrapper.DMAPIResumeTask)
+	router.GET(baseURL+"/api/v1/tasks/:task-name/sources/:source-name/schemas", wrapper.DMAPIGetTaskSourceSchemaList)
+	router.GET(baseURL+"/api/v1/tasks/:task-name/sources/:source-name/schemas/:schema-name", wrapper.DMAPIGetTaskSourceTableList)
+	router.DELETE(baseURL+"/api/v1/tasks/:task-name/sources/:source-name/schemas/:schema-name/:table-name", wrapper.DMAPIDeleteTaskSourceTableStructure)
+	router.GET(baseURL+"/api/v1/tasks/:task-name/sources/:source-name/schemas/:schema-name/:table-name", wrapper.DMAPIGetTaskSourceTableStructure)
+	router.PUT(baseURL+"/api/v1/tasks/:task-name/sources/:source-name/schemas/:schema-name/:table-name", wrapper.DMAPIOperateTaskSourceTableStructure)
 	router.GET(baseURL+"/api/v1/tasks/:task-name/status", wrapper.DMAPIGetTaskStatus)
 }
 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"Rl7xdmyzP/BRMf7ocHP4TwAAAP//ujWHXglIAAA=",
+	"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",
+	"BZDM7g/m47IHd5/v/h0AAP//ygaUOLJ9AAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

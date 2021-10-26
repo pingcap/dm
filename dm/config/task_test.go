@@ -700,7 +700,6 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 				MaxRetry:                10,
 				AutoFixGTID:             true,
 				EnableGTID:              true,
-				DisableCausality:        false,
 				SafeMode:                true,
 			},
 			CleanDumpFile:    true,
@@ -721,7 +720,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	stCfg2.RouteRules = []*router.TableRule{&routeRule4, &routeRule1, &routeRule2}
 	stCfg2.ExprFilter = []*ExpressionFilter{&exprFilter1}
 
-	cfg := FromSubTaskConfigs(stCfg1, stCfg2)
+	cfg := SubTaskConfigsToTaskConfig(stCfg1, stCfg2)
 
 	cfg2 := TaskConfig{
 		Name:                    name,
@@ -809,7 +808,7 @@ func (t *testConfig) TestGenAndFromSubTaskConfigs(c *C) {
 	c.Assert(WordCount(cfg.String()), DeepEquals, WordCount(cfg2.String())) // since rules are unordered, so use WordCount to compare
 
 	c.Assert(cfg.adjust(), IsNil)
-	stCfgs, err := cfg.SubTaskConfigs(map[string]DBConfig{source1: source1DBCfg, source2: source2DBCfg})
+	stCfgs, err := TaskConfigToSubTaskConfigs(cfg, map[string]DBConfig{source1: source1DBCfg, source2: source2DBCfg})
 	c.Assert(err, IsNil)
 	// revert ./dumpped_data.from-sub-tasks
 	stCfgs[0].LoaderConfig.Dir = stCfg1.LoaderConfig.Dir
