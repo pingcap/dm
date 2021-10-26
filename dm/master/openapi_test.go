@@ -480,7 +480,8 @@ func (t *openAPISuite) TestClusterAPI(c *check.C) {
 	c.Assert(resultMasters.Data[0].Leader, check.IsTrue)
 	c.Assert(resultMasters.Data[0].Alive, check.IsTrue)
 
-	// offline master-2 with  retry
+	// offline master-2 with retry
+	// operate etcd cluster may met `etcdserver: unhealthy cluster`, add some retry
 	for i := 0; i < 20; i++ {
 		result = testutil.NewRequest().Delete(fmt.Sprintf("%s/%s", masterURL, s2.cfg.Name)).Go(t.testT, s1.echo)
 		if result.Code() == http.StatusBadRequest {
