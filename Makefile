@@ -76,7 +76,6 @@ tools_setup:
 
 install_test_python_dep:
 	@echo "install python requirments for test"
-	pip install --user -r tests/requirements.txt
 
 generate_proto: tools_setup
 	./generate-dm.sh
