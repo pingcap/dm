@@ -18,7 +18,7 @@ def list_master_success(master_count):
 
 def delete_master_with_retry_success(master_name):
     """
-    offline dm-master node is done by offlie etcd member but operate etcd cluster may met `etcdserver: unhealthy cluster`
+    offline dm-master node is done by offline etcd member but operate etcd cluster may met `etcdserver: unhealthy cluster`
     so add some retry here
     """
     url = API_ENDPOINT + "/masters/" + master_name
@@ -52,7 +52,7 @@ def delete_worker_failed(worker_name):
 
 def delete_worker_with_retry_success(worker_name):
     """
-    offline dm-worker node is done by offlie etcd member but operate etcd cluster may met `etcdserver: unhealthy cluster`
+    offline dm-worker node is done by offline etcd member but operate etcd cluster may met `etcdserver: unhealthy cluster`
     so add some retry here
     """
     url = API_ENDPOINT + "/workers/" + worker_name
