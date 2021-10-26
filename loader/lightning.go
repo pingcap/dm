@@ -137,7 +137,7 @@ func (l *LightningLoader) runLightning(ctx context.Context, cfg *lcfg.Config) er
 	l.cancel = cancel
 	l.Unlock()
 	err := l.core.RunOnce(taskCtx, cfg, nil)
-	failpoint.Inject("LoadDataSlowDownByTask", func(val failpoint.Value) {
+	failpoint.Inject("LightningLoadDataSlowDownByTask", func(val failpoint.Value) {
 		tasks := val.(string)
 		taskNames := strings.Split(tasks, ",")
 		for _, taskName := range taskNames {
