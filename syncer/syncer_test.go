@@ -37,6 +37,7 @@ import (
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -283,13 +284,10 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		c.Assert(ok, IsTrue)
 
 		query := string(ev.Query)
-		stmt, err := p.ParseOneStmt(query, "", "")
+		ddlInfo, err := syncer.routeDDL(p, string(ev.Schema), query)
 		c.Assert(err, IsNil)
 
-		tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
-		c.Assert(err, IsNil)
-
-		needSkip, err := syncer.skipQueryEvent(tables, stmt, query)
+		needSkip, err := syncer.skipQueryEvent(query, ddlInfo)
 		c.Assert(err, IsNil)
 		c.Assert(needSkip, Equals, cs.skip)
 	}
@@ -417,12 +415,10 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 			continue
 		}
 		sql := string(ev.Query)
-		stmt, err := p.ParseOneStmt(sql, "", "")
+		ddlInfo, err := syncer.routeDDL(p, string(ev.Schema), sql)
 		c.Assert(err, IsNil)
 
-		tables, err := parserpkg.FetchDDLTables(sql, stmt, syncer.SourceTableNamesFlavor)
-		c.Assert(err, IsNil)
-		needSkip, err := syncer.skipQueryEvent(tables, stmt, sql)
+		needSkip, err := syncer.skipQueryEvent(sql, ddlInfo)
 		c.Assert(err, IsNil)
 		c.Assert(needSkip, Equals, res[i])
 		i++
@@ -1177,6 +1173,11 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		testTbl  = "test_tbl"
 		testTbl2 = "test_tbl2"
 		ec       = &eventContext{tctx: tcontext.Background()}
+		qec      = &queryEventContext{
+			eventContext: ec,
+			ddlSchema:    testDB,
+			p:            parser.New(),
+		}
 	)
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
@@ -1276,11 +1277,9 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		}},
 	}
 
-	p := parser.New()
 	for _, ca := range cases {
-		ddlInfo, err := syncer.routeDDL(p, testDB, ca.sql)
+		ddlInfo, err := syncer.routeDDL(qec.p, qec.ddlSchema, ca.sql)
 		c.Assert(err, IsNil)
-
 		ca.callback()
 
 		c.Assert(syncer.trackDDL(testDB, ddlInfo, ec), IsNil)
@@ -1293,37 +1292,45 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.BinlogEvent, p *parser.Parser, res [][]bool) {
 	i := 0
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "checkEventWithTableResult")))
-	ec := eventContext{
+	ec := &eventContext{
 		tctx: tctx,
 	}
 	for _, e := range allEvents {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
-			query := string(ev.Query)
-
-			result, err := syncer.parseDDLSQL(query, p, string(ev.Schema))
+			qec := &queryEventContext{
+				eventContext: ec,
+				originSQL:    string(ev.Query),
+				ddlSchema:    string(ev.Schema),
+				p:            p,
+			}
+			stmt, err := parseOneStmt(qec)
 			c.Assert(err, IsNil)
-			if !result.isDDL {
+
+			if _, ok := stmt.(ast.DDLNode); !ok {
 				continue // BEGIN event
 			}
-			querys, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, string(ev.Schema))
+			qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 			c.Assert(err, IsNil)
-			if len(querys) == 0 {
+			for _, sql := range qec.splitDDLs {
+				sqls, err := syncer.processOneDDL(qec, sql)
+				c.Assert(err, IsNil)
+				qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
+			}
+			if len(qec.needRouteDDLs) == 0 {
 				c.Assert(res[i], HasLen, 1)
 				c.Assert(res[i][0], Equals, true)
 				i++
 				continue
 			}
 
-			for j, sql := range querys {
-				stmt, err := p.ParseOneStmt(sql, "", "")
+			for j, sql := range qec.needRouteDDLs {
+				ddlInfo, err := syncer.routeDDL(p, string(ev.Schema), sql)
 				c.Assert(err, IsNil)
 
-				tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
+				needSkip, err := syncer.skipQueryEvent(sql, ddlInfo)
 				c.Assert(err, IsNil)
-				r, err := syncer.skipQueryEvent(tables, stmt, sql)
-				c.Assert(err, IsNil)
-				c.Assert(r, Equals, res[i][j])
+				c.Assert(needSkip, Equals, res[i][j])
 			}
 		case *replication.RowsEvent:
 			table := &filter.Table{

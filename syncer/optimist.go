@@ -90,7 +90,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		return nil
 	}
 
-	switch trackInfos[0].stmt.(type) {
+	switch trackInfos[0].originStmt.(type) {
 	case *ast.CreateDatabaseStmt, *ast.DropDatabaseStmt, *ast.AlterDatabaseStmt:
 		isDBDDL = true
 	}
@@ -105,7 +105,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 	}
 
 	if !isDBDDL {
-		if _, ok := trackInfos[0].stmt.(*ast.CreateTableStmt); !ok {
+		if _, ok := trackInfos[0].originStmt.(*ast.CreateTableStmt); !ok {
 			tiBefore, err = s.getTableInfo(qec.tctx, upTable, downTable)
 			if err != nil {
 				return err
@@ -136,7 +136,7 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		skipOp bool
 		op     optimism.Operation
 	)
-	switch trackInfos[0].stmt.(type) {
+	switch trackInfos[0].originStmt.(type) {
 	case *ast.CreateDatabaseStmt, *ast.AlterDatabaseStmt:
 		// need to execute the DDL to the downstream, but do not do the coordination with DM-master.
 		op.DDLs = qec.needHandleDDLs
@@ -203,15 +203,15 @@ func (s *Syncer) handleQueryEventOptimistic(qec *queryEventContext) error {
 		return nil
 	}
 
-	for _, table := range qec.onlineDDLTables {
+	if qec.onlineDDLTable != nil {
 		s.tctx.L().Info("finish online ddl and clear online ddl metadata in optimistic shard mode",
 			zap.String("event", "query"),
 			zap.Strings("ddls", qec.needHandleDDLs),
 			zap.String("raw statement", qec.originSQL),
-			zap.Stringer("table", table))
-		err = s.onlineDDL.Finish(qec.tctx, table)
+			zap.Stringer("table", qec.onlineDDLTable))
+		err = s.onlineDDL.Finish(qec.tctx, qec.onlineDDLTable)
 		if err != nil {
-			return terror.Annotatef(err, "finish online ddl on %v", table)
+			return terror.Annotatef(err, "finish online ddl on %v", qec.onlineDDLTable)
 		}
 	}
 

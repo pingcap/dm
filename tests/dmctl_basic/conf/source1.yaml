@@ -13,9 +13,9 @@ from:
 filters:
   - schema-pattern: "dmctl"
     table-pattern: "t_1"
-    sql-pattern: ["alter table .* add column `aaa` int"]
+    sql-pattern: ["alter table .* add column aaa int"]
     action: Ignore
   - schema-pattern: "dmctl"
     table-pattern: "t_2"
-    sql-pattern: ["alter table .* add column `aaa` int"]
+    sql-pattern: ["alter table .* add column aaa int"]
     action: Ignore
