@@ -938,8 +938,14 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobWg.Add(1)
 		job.wg.Add(s.cfg.WorkerCount)
 		s.dmlJobCh <- job
-		s.flushCheckPointsAsync(job.wg, job.seq)
-		return nil
+		var err error
+		if job.sync {
+			err = s.flushCheckPoints()
+		} else {
+			s.flushCheckPointsAsync(job.wg, job.seq)
+		}
+
+		return err
 	case ddl:
 		s.addCount(false, adminQueueName, job.tp, 1, job.targetTable)
 		s.updateReplicationJobTS(job, ddlJobIdx)
@@ -1589,7 +1595,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.checkpoint.SaveSafeModeExitPoint(&exitSafeModeLoc)
 
 		// flush all jobs before exit
-		if err2 = s.flushJobs(); err2 != nil {
+		if err2 = s.flushJobs(true); err2 != nil {
 			tctx.L().Warn("failed to flush jobs when exit task", zap.Error(err2))
 		}
 
@@ -1844,7 +1850,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						currentLocation = startLocation
 					} else if op == pb.ErrorOp_Skip {
 						s.saveGlobalPoint(currentLocation)
-						err = s.flushJobs()
+						err = s.flushJobs(true)
 						if err != nil {
 							tctx.L().Warn("failed to flush jobs when handle-error skip", zap.Error(err))
 						} else {
@@ -1959,7 +1965,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				// flush checkpoint even if there are no real binlog events
 				if s.checkpoint.CheckGlobalPoint() {
 					tctx.L().Info("meet heartbeat event and then flush jobs")
-					err2 = s.flushJobs()
+					err2 = s.flushJobs(false)
 				}
 			}
 		}
@@ -2470,7 +2476,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 
 	// flush previous DMLs and checkpoint if needing to handle the DDL.
 	// NOTE: do this flush before operations on shard groups which may lead to skip a table caused by `UnresolvedTables`.
-	if err = s.flushJobs(); err != nil {
+	if err = s.flushJobs(true); err != nil {
 		return err
 	}
 
@@ -3035,9 +3041,10 @@ func (s *Syncer) recordSkipSQLsLocation(ec *eventContext) error {
 }
 
 // flushJobs add a flush job and wait for all jobs finished.
-func (s *Syncer) flushJobs() error {
+func (s *Syncer) flushJobs(sync bool) error {
 	s.tctx.L().Info("flush all jobs", zap.Stringer("global checkpoint", s.checkpoint))
 	job := newFlushJob()
+	job.sync = sync
 	return s.addJobFunc(job)
 }
 

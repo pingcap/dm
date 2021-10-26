@@ -39,10 +39,10 @@ func (s *testSyncerSuite) TestDetectConflict(c *C) {
 		"test_3": "test_1",
 	}
 	c.Assert(ca.detectConflict(caseData), IsFalse)
-	ca.add(caseData)
+	ca.add(caseData, 1)
 	c.Assert(ca.relations, DeepEquals, excepted)
 	c.Assert(ca.detectConflict([]string{"test_4"}), IsFalse)
-	ca.add([]string{"test_4"})
+	ca.add([]string{"test_4"}, 2)
 	excepted["test_4"] = "test_4"
 	c.Assert(ca.relations, DeepEquals, excepted)
 	conflictData := []string{"test_4", "test_3"}

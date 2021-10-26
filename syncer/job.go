@@ -85,7 +85,8 @@ type job struct {
 	eventHeader *replication.EventHeader
 	jobAddTime  time.Time       // job commit time
 	seq         int64           // sequence number for this job
-	wg          *sync.WaitGroup // wait group for flush/conflict job
+	sync 		bool			// whether the flush job is sync or async
+	wg          *sync.WaitGroup // wait group for flush job
 }
 
 func (j *job) String() string {

@@ -271,7 +271,7 @@ func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	s.cfg.Dir = dir
 	c.Assert(cp.LoadMeta(), IsNil)
 
-	// should flush because globalPointSaveTime is zero
+	// should flush because globalPointCheckOrSaveTime is zero
 	s.mock.ExpectBegin()
 	s.mock.ExpectExec("(202)?"+flushCheckPointSQL).WithArgs(cpid, "", "", pos1.Name, pos1.Pos, "", "", 0, "", "null", true).WillReturnResult(sqlmock.NewResult(0, 1))
 	s.mock.ExpectCommit()
@@ -310,7 +310,7 @@ SHOW MASTER STATUS: /* AFTER CONNECTION POOL ESTABLISHED */
 	c.Assert(err, IsNil)
 	c.Assert(cp.LoadMeta(), IsNil)
 
-	// should flush because globalPointSaveTime is zero
+	// should flush because globalPointCheckOrSaveTime is zero
 	s.mock.ExpectBegin()
 	s.mock.ExpectExec("(202)?"+flushCheckPointSQL).WithArgs(cpid, "", "", pos1.Name, pos1.Pos, "", pos2.Name, pos2.Pos, "", "null", true).WillReturnResult(sqlmock.NewResult(0, 1))
 	s.mock.ExpectCommit()
