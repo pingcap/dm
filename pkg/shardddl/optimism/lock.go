@@ -17,9 +17,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
