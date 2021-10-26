@@ -31,12 +31,12 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb/infoschema"
+	"github.com/pingcap/tidb/parser"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
