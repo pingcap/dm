@@ -2242,7 +2242,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	for _, sql := range qec.splitDDLs {
 		sqls, err2 := s.processOneDDL(qec, sql)
 		if err2 != nil {
-			qec.tctx.L().Error("fail to split statement", zap.String("event", "query"), zap.Stringer("queryEventContext", qec), log.ShortError(err2))
+			qec.tctx.L().Error("fail to process ddl", zap.String("event", "query"), zap.Stringer("queryEventContext", qec), log.ShortError(err2))
 			return err2
 		}
 		qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
