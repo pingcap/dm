@@ -246,6 +246,9 @@ func (s *Server) getBaseDBBySourceName(sourceName string) (*conn.BaseDB, error) 
 // DMAPIGetSourceSchemaList get source schema list url is: (GET /api/v1/sources/{source-name}/schemas).
 func (s *Server) DMAPIGetSourceSchemaList(ctx echo.Context, sourceName string) error {
 	baseDB, err := s.getBaseDBBySourceName(sourceName)
+	if err != nil {
+		return err
+	}
 	defer baseDB.Close()
 	schemaList, err := utils.GetSchemaList(ctx.Request().Context(), baseDB.DB)
 	if err != nil {
