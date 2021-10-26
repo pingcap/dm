@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/model"
 	"go.uber.org/zap"
@@ -48,7 +49,7 @@ type OnlinePlugin interface {
 	// * record changes
 	// * apply online ddl on real table
 	// returns sqls, error
-	Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error)
+	Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode, p *parser.Parser) ([]string, error)
 	// Finish would delete online ddl from memory and storage
 	Finish(tctx *tcontext.Context, table *filter.Table) error
 	// TableType returns ghost/real table
@@ -422,7 +423,7 @@ func NewRealOnlinePlugin(tctx *tcontext.Context, cfg *config.SubTaskConfig) (Onl
 
 // Apply implements interface.
 // returns ddls, error.
-func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error) {
+func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode, p *parser.Parser) ([]string, error) {
 	if len(tables) < 1 {
 		return nil, terror.ErrSyncerUnitGhostApplyEmptyTable.Generate()
 	}
@@ -431,6 +432,7 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 	targetTable := r.RealName(table)
 	tp := r.TableType(table)
 
+	tctx.L().Debug("online ddl", zap.Any("table name", table), zap.Any("table type", tp))
 	switch tp {
 	case RealTable:
 		if _, ok := stmt.(*ast.RenameTableStmt); ok {
@@ -480,7 +482,7 @@ func (r *RealOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table,
 			if tp1 == RealTable {
 				ghostInfo := r.storage.Get(schema, table)
 				if ghostInfo != nil {
-					return ghostInfo.DDLs, nil
+					return renameOnlineDDLTable(p, tables[1], ghostInfo.DDLs)
 				}
 				return nil, terror.ErrSyncerUnitGhostOnlineDDLOnGhostTbl.Generate(schema, table)
 			} else if tp1 == GhostTable {
@@ -645,4 +647,26 @@ func fetchTable(t *ast.TableName, flavor utils.LowerCaseTableNamesFlavor) *filte
 		tb = &filter.Table{Schema: t.Schema.L, Name: t.Name.L}
 	}
 	return tb
+}
+
+// renameOnlineDDLTable renames the given ddl sqls by given targetTable.
+func renameOnlineDDLTable(p *parser.Parser, targetTable *filter.Table, sqls []string) ([]string, error) {
+	renamedSQLs := make([]string, 0, len(sqls))
+	targetTables := []*filter.Table{targetTable}
+	for _, sql := range sqls {
+		if len(sql) == 0 {
+			continue
+		}
+		stmt, err := p.ParseOneStmt(sql, "", "")
+		if err != nil {
+			return nil, terror.ErrSyncerUnitParseStmt.New(err.Error())
+		}
+
+		sql, err = parserpkg.RenameDDLTable(stmt, targetTables)
+		if err != nil {
+			return nil, err
+		}
+		renamedSQLs = append(renamedSQLs, sql)
+	}
+	return renamedSQLs, nil
 }
