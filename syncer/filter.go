@@ -55,7 +55,10 @@ func (s *Syncer) skipQueryEvent(qec *queryEventContext, ddlInfo *ddlInfo) (bool,
 
 		if needSkip {
 			s.tctx.L().Debug("skip event by binlog filter")
-			s.trackDDL(qec.ddlSchema, ddlInfo, qec.eventContext)
+			err := s.trackDDL(qec.ddlSchema, ddlInfo, qec.eventContext)
+			if err != nil {
+				return false, err
+			}
 			s.tctx.L().Warn("track ddl and return empty string")
 			ddlInfo.originDDL = ""
 			return true, nil
