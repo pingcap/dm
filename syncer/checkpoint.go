@@ -290,7 +290,7 @@ type CheckPoint interface {
 	CheckAndUpdate(ctx context.Context, schemas map[string]string, tables map[string]map[string]string) error
 }
 
-type removeCheckpointSnapshot struct {
+type remoteCheckpointSnapshot struct {
 	id                         int
 	globalPoint                *tablePoint
 	globalPointSaveTime        time.Time
@@ -337,7 +337,7 @@ type RemoteCheckPoint struct {
 	logCtx *tcontext.Context
 
 	// these fields are used for async flush checkpoint
-	snapshots   []*removeCheckpointSnapshot
+	snapshots   []*remoteCheckpointSnapshot
 	snapshotSeq int
 }
 
@@ -384,7 +384,7 @@ func (cp *RemoteCheckPoint) Snapshot() SnapshotID {
 		}
 	}
 
-	snapshot := &removeCheckpointSnapshot{
+	snapshot := &remoteCheckpointSnapshot{
 		id:                         id,
 		globalPointSaveTime:        cp.globalPointSaveTime,
 		needFlushSafeModeExitPoint: cp.needFlushSafeModeExitPoint,

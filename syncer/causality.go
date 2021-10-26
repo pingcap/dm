@@ -193,8 +193,11 @@ func (m *rollingMap) clear() {
 
 func (m *rollingMap) gc(version int64) {
 	idx := 0
-	for i, m := range m.maps {
-		if m.maxVer == 0 || m.maxVer > version {
+	for i, d := range m.maps {
+		if d.maxVer > 0 && d.maxVer <= version {
+			// set nil value to trigger go gc
+			m.maps[i] = nil
+		} else {
 			idx = i
 			break
 		}

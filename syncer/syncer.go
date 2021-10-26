@@ -972,7 +972,7 @@ func (s *Syncer) addJob(job *job) error {
 		j := newFlushJob()
 		j.wg.Add(s.cfg.WorkerCount)
 		j.seq = s.getSeq()
-		s.dmlJobCh <- newFlushJob()
+		s.dmlJobCh <- j
 		s.flushCheckPointsAsync(j.wg, j.seq)
 	}
 
