@@ -442,6 +442,7 @@ func (dml *DML) String() string {
 	return fmt.Sprintf("[safemode: %t, targetTableID: %s, op: %s, columns: %v, oldValues: %v, values: %v]", dml.safeMode, dml.targetTableID, dml.op.String(), dml.columnNames(), dml.originOldValues, dml.originValues)
 }
 
+// updateToDelAndInsert turns updateDML to delDML and insertDML.
 func updateToDelAndInsert(updateDML *DML) (*DML, *DML) {
 	delDML := &DML{}
 	*delDML = *updateDML

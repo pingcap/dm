@@ -31,7 +31,7 @@ func newCompactItem(j *job) *compactItem {
 	return &compactItem{j: j}
 }
 
-// compactors compact multiple statements into one statement.
+// compactor compacts multiple statements into one statement.
 type compactor struct {
 	inCh       chan *job
 	outCh      chan *job
@@ -47,7 +47,7 @@ type compactor struct {
 	source string
 }
 
-// compactorWrap creates and runs a Compactor instance.
+// compactorWrap creates and runs a compactor instance.
 func compactorWrap(inCh chan *job, syncer *Syncer) chan *job {
 	bufferSize := syncer.cfg.QueueSize * syncer.cfg.WorkerCount / 4
 	compactor := &compactor{
@@ -112,7 +112,7 @@ func (c *compactor) run() {
 	}
 }
 
-// close close outer channels.
+// close closes outer channels.
 func (c *compactor) close() {
 	close(c.outCh)
 }

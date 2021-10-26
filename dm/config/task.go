@@ -877,7 +877,7 @@ type SyncerConfigForDowngrade struct {
 	Compact bool `yaml:"compact,omitempty"`
 }
 
-// NewSyncerConfigs creates [string]*SyncerConfigForDowngrade.
+// NewSyncerConfigs converts SyncerConfig to SyncerConfigForDowngrade.
 func NewSyncerConfigs(syncerConfigs map[string]*SyncerConfig) map[string]*SyncerConfigForDowngrade {
 	syncerConfigsForDowngrade := make(map[string]*SyncerConfigForDowngrade, len(syncerConfigs))
 	for configName, syncerConfig := range syncerConfigs {
