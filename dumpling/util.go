@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pingcap/tidb/dumpling/export"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
+	"github.com/pingcap/tidb/dumpling/export"
 	"github.com/spf13/pflag"
 
 	dutils "github.com/pingcap/dm/pkg/dumpling"

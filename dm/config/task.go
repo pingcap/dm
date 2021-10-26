@@ -709,7 +709,6 @@ func (c *TaskConfig) adjust() error {
 	return nil
 }
 
-
 // getGenerateName generates name by rule or gets name from nameMap
 // if it's a new name, increase nameIdx
 // otherwise return current nameIdx.
