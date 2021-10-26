@@ -55,6 +55,7 @@ func (s *Syncer) skipQueryEvent(qec *queryEventContext, ddlInfo *ddlInfo) (bool,
 
 		if needSkip {
 			s.tctx.L().Debug("skip event by binlog filter")
+			// In the case of online-ddl, if the generated table is skipped, track ddl will failed.
 			// nolint: errcheck
 			s.trackDDL(qec.ddlSchema, ddlInfo, qec.eventContext)
 			s.tctx.L().Warn("track ddl and return empty string")
