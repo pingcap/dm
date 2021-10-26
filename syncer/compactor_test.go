@@ -150,7 +150,7 @@ func (s *testSyncerSuite) TestCompactJob(c *C) {
 		for _, compactItem := range compactor.buffer {
 			if !compactItem.compacted {
 				compactKV = mockExecute(compactKV, []*DML{compactItem.j.dml})
-				compactNumber += 1
+				compactNumber++
 				c.Logf("after compact, dml: %s", compactItem.j.dml.String())
 			}
 		}
