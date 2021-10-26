@@ -14,7 +14,7 @@
 package dumpling
 
 import (
-	"github.com/pingcap/dumpling/v4/export"
+	"github.com/pingcap/tidb/dumpling/export"
 	"github.com/pingcap/failpoint"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"

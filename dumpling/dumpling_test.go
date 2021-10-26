@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pingcap/dumpling/v4/export"
+	"github.com/pingcap/tidb/dumpling/export"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 

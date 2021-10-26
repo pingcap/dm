@@ -32,11 +32,10 @@ import (
 
 	"github.com/docker/go-units"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/br/pkg/lightning"
 	"github.com/pingcap/tidb/br/pkg/lightning/common"
 	lcfg "github.com/pingcap/tidb/br/pkg/lightning/config"
-	ctl "github.com/pingcap/tidb/br/cmd/tidb-lightning-ctl"
+	"github.com/pingcap/tidb/parser/mysql"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -206,7 +205,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		err = l.runLightning(ctx, cfg)
 		if err == nil {
 			l.finish.Store(true)
-			ctl.CheckpointRemove(ctx, cfg, "all")
+			lightning.CheckpointRemove(ctx, cfg, "all")
 			offsetSQL := l.checkPoint.GenSQL(lightningCheckpointFile, 1)
 			err = l.toDBConns[0].executeSQL(tctx, []string{offsetSQL})
 			_ = l.checkPoint.UpdateOffset(lightningCheckpointFile, 1)
