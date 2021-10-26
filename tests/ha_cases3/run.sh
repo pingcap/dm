@@ -65,11 +65,11 @@ function test_stop_task() {
 	task_config=(dm-task.yaml dm-task2.yaml)
 	for name in ${task_name[@]}; do
 		echo "stop tasks $name"
-		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"stop-task $name" \
 			"\"result\": true" 3
 
-		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"query-status $name" \
 			"\"result\": false" 1
 	done
@@ -80,13 +80,14 @@ function test_stop_task() {
 
 	for idx in $(seq 0 1); do
 		echo "start tasks $cur/conf/${task_config[$idx]}"
+		# if relay hasn't catch up with current sync pos(rarely happens), start-task may start with an error
+		# so we don't check "\"result\": true" here, and check it using query-status
 		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"start-task $cur/conf/${task_config[$idx]}" \
-			"\"result\": true" 3 \
 			"\"source\": \"$SOURCE_ID1\"" 1 \
 			"\"source\": \"$SOURCE_ID2\"" 1
 
-		run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+		run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 			"query-status ${task_name[$idx]}" \
 			"\"stage\": \"Running\"" 4
 	done
