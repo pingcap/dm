@@ -1090,11 +1090,12 @@ func (w *checkpointFlushWorker) Run(ctx *tcontext.Context) {
 		}
 
 		err := w.cp.FlushSnapshotPointsExcept(ctx, msg.snapshot.id, msg.exceptTables, msg.shardMetaSQLs, msg.shardMetaArgs)
+		if msg.resChan != nil {
+			msg.resChan <- err
+		}
 		if err != nil {
 			ctx.L().Warn("flush checkpoint snapshot failed, ignore this error", zap.Any("snapshot", msg))
-			if msg.resChan != nil {
-				msg.resChan <- err
-			}
+
 			continue
 		}
 		ctx.L().Info("flushed checkpoint", zap.Int("snapshot_id", msg.snapshot.id),

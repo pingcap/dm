@@ -391,7 +391,11 @@ func (cp *RemoteCheckPoint) Snapshot() SnapshotID {
 		points:                     tableCheckPoints,
 	}
 	if cp.globalPoint != nil {
-		snapshot.globalPoint = &cp.globalPoint.location
+		globalLocation := &tablePoint{
+			location: cp.globalPoint.location.location.Clone(),
+			ti: cp.globalPoint.location.ti,
+		}
+		snapshot.globalPoint = globalLocation
 	}
 
 	cp.snapshots = append(cp.snapshots, snapshot)
