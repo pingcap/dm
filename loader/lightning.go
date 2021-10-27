@@ -33,7 +33,6 @@ import (
 	"github.com/pingcap/tidb/br/pkg/lightning"
 	"github.com/pingcap/tidb/br/pkg/lightning/common"
 	lcfg "github.com/pingcap/tidb/br/pkg/lightning/config"
-	lightningLog "github.com/pingcap/tidb/br/pkg/lightning/log"
 	"github.com/pingcap/tidb/parser/mysql"
 
 	"github.com/docker/go-units"
@@ -73,7 +72,6 @@ type LightningLoader struct {
 func NewLightning(cfg *config.SubTaskConfig, cli *clientv3.Client, workerName string) *LightningLoader {
 	lightningCfg := makeGlobalConfig(cfg)
 	core := lightning.New(lightningCfg)
-	lightningLog.SetAppLogger(log.L().Logger)
 	loader := &LightningLoader{
 		cfg:             cfg,
 		cli:             cli,

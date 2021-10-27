@@ -23,6 +23,7 @@ import (
 
 	"github.com/pingcap/errors"
 	globalLog "github.com/pingcap/log"
+	lightningLog "github.com/pingcap/tidb/br/pkg/lightning/log"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -92,6 +93,7 @@ func main() {
 	}
 	s.Close() // wait until closed
 	log.L().Info("dm-worker exit")
+	lightningLog.SetAppLogger(log.L().Logger)
 
 	syncErr := log.L().Sync()
 	if syncErr != nil {
