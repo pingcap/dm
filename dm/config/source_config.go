@@ -421,7 +421,7 @@ type SourceConfigForDowngrade struct {
 	CaseSensitive bool                  `yaml:"case-sensitive,omitempty"`
 	Filters       []*bf.BinlogEventRule `yaml:"filters,omitempty"`
 	// deprecated, DM will not write this field when exporting
-	EnableRelay     bool                   `yaml:"enable-relay,omitempty"`
+	EnableRelay bool `yaml:"enable-relay,omitempty"`
 }
 
 // NewSourceConfigForDowngrade creates a new base config for downgrade.
