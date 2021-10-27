@@ -29,12 +29,14 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 
-	"github.com/docker/go-units"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/br/pkg/lightning"
 	"github.com/pingcap/tidb/br/pkg/lightning/common"
 	lcfg "github.com/pingcap/tidb/br/pkg/lightning/config"
+	lightningLog "github.com/pingcap/tidb/br/pkg/lightning/log"
 	"github.com/pingcap/tidb/parser/mysql"
+
+	"github.com/docker/go-units"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -70,6 +72,7 @@ type LightningLoader struct {
 // NewLightning creates a new Loader importing data with lightning.
 func NewLightning(cfg *config.SubTaskConfig, cli *clientv3.Client, workerName string) *LightningLoader {
 	lightningCfg := makeGlobalConfig(cfg)
+	lightningLog.SetAppLogger(log.L().Logger)
 	core := lightning.New(lightningCfg)
 	loader := &LightningLoader{
 		cfg:             cfg,
@@ -137,6 +140,7 @@ func (l *LightningLoader) runLightning(ctx context.Context, cfg *lcfg.Config) er
 	taskCtx, cancel := context.WithCancel(ctx)
 	l.cancel = cancel
 	l.Unlock()
+	l.logger.Info("start RunOnce")
 	err := l.core.RunOnce(taskCtx, cfg, nil)
 	l.logger.Info("end runLightning")
 	failpoint.Inject("LightningLoadDataSlowDownByTask", func(val failpoint.Value) {
