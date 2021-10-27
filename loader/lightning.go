@@ -72,15 +72,14 @@ type LightningLoader struct {
 // NewLightning creates a new Loader importing data with lightning.
 func NewLightning(cfg *config.SubTaskConfig, cli *clientv3.Client, workerName string) *LightningLoader {
 	lightningCfg := makeGlobalConfig(cfg)
-	logger := log.With(zap.String("task", cfg.Name), zap.String("unit", "lightning-load"))
 	core := lightning.New(lightningCfg)
-	lightningLog.SetAppLogger(logger.Logger)
+	lightningLog.SetAppLogger(log.L().Logger)
 	loader := &LightningLoader{
 		cfg:             cfg,
 		cli:             cli,
 		core:            core,
 		lightningConfig: lightningCfg,
-		logger:          logger,
+		logger:          log.With(zap.String("task", cfg.Name), zap.String("unit", "lightning-load")),
 		workerName:      workerName,
 	}
 	return loader
