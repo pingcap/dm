@@ -39,7 +39,7 @@ type compactor struct {
 	logger     log.Logger
 	safeMode   bool
 
-	keyMap map[string]map[string]int // table -> pk -> pos
+	keyMap map[string]map[string]int // table -> key(pk or (uk + not null)) -> index in buffer
 	buffer []*compactItem
 
 	// for metrics
