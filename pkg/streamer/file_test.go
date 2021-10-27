@@ -569,8 +569,6 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 
 	// got notified
 	en = newDummyEventNotifier(1)
-	newCtx, cancel = context.WithTimeout(ctx, time.Second)
-	defer cancel()
 	checker = &relayLogFileChecker{
 		notifier:          en,
 		relayDir:          relayDir,
@@ -581,7 +579,27 @@ func (t *testFileSuite) TestrelayLogUpdatedOrNewCreated(c *C) {
 		beginOffset:       0,
 		endOffset:         size,
 	}
-	checker.relayLogUpdatedOrNewCreated(newCtx, updatePathCh, switchCh, errCh)
+	checker.relayLogUpdatedOrNewCreated(context.Background(), updatePathCh, switchCh, errCh)
+	c.Assert(len(errCh), Equals, 0)
+	c.Assert(len(updatePathCh), Equals, 1)
+	c.Assert(len(switchCh), Equals, 0)
+	up = <-updatePathCh
+	c.Assert(up, Equals, relayPaths[0])
+	c.Assert(len(en.Notified()), Equals, 0)
+
+	// got notified on timer
+	en = newDummyEventNotifier(0)
+	checker = &relayLogFileChecker{
+		notifier:          en,
+		relayDir:          relayDir,
+		currentUUID:       "xxx.000002",
+		latestRelayLogDir: subDir,
+		latestFilePath:    relayPaths[0],
+		latestFile:        relayFiles[0],
+		beginOffset:       0,
+		endOffset:         size,
+	}
+	checker.relayLogUpdatedOrNewCreated(context.Background(), updatePathCh, switchCh, errCh)
 	c.Assert(len(errCh), Equals, 0)
 	c.Assert(len(updatePathCh), Equals, 1)
 	c.Assert(len(switchCh), Equals, 0)

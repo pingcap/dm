@@ -274,7 +274,7 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 		r                 = NewBinlogReader(newDummyEventNotifier(1), log.L(), cfg)
 	)
 
-	// create the current relay log file and write some events
+	// create the current relay log file and meta
 	err := os.MkdirAll(relayDir, 0o700)
 	c.Assert(err, IsNil)
 	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0o600)
