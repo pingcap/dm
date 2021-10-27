@@ -18,14 +18,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/pingcap/dm/relay"
-
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/relay"
 )
 
 // subRelayFiles represents relay log files in one sub directory.

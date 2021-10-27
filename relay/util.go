@@ -19,10 +19,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/pingcap/dm/pkg/terror"
-
 	"github.com/pingcap/errors"
 
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 

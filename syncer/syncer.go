@@ -26,8 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/relay"
-
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/errors"
@@ -65,6 +63,7 @@ import (
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/relay"
 	"github.com/pingcap/dm/syncer/dbconn"
 	operator "github.com/pingcap/dm/syncer/err-operator"
 	"github.com/pingcap/dm/syncer/metrics"

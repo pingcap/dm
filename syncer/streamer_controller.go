@@ -20,8 +20,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/relay"
-
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/failpoint"
@@ -34,6 +32,7 @@ import (
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/relay"
 	"github.com/pingcap/dm/syncer/dbconn"
 )
 

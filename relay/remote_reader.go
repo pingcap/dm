@@ -28,8 +28,8 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// ReadResult represents a read operation result.
-type ReadResult struct {
+// RResult represents a read operation result.
+type RResult struct {
 	Event *replication.BinlogEvent
 }
 
@@ -48,7 +48,7 @@ type Reader interface {
 
 	// GetEvent gets the binlog event one by one, it will block if no event can be read.
 	// You can pass a context (like Cancel) to break the block.
-	GetEvent(ctx context.Context) (ReadResult, error)
+	GetEvent(ctx context.Context) (RResult, error)
 }
 
 // RConfig is the configuration used by the Reader.
@@ -124,11 +124,11 @@ func (r *remoteReader) Close() error {
 
 // GetEvent implements Reader.GetEvent.
 // NOTE: can only close the reader after this returned.
-func (r *remoteReader) GetEvent(ctx context.Context) (ReadResult, error) {
+func (r *remoteReader) GetEvent(ctx context.Context) (RResult, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var result ReadResult
+	var result RResult
 	if r.stage != common.StagePrepared {
 		return result, terror.ErrRelayReaderNeedStart.Generate(r.stage, common.StagePrepared)
 	}

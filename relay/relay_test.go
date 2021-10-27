@@ -47,10 +47,6 @@ func TestSuite(t *testing.T) {
 
 type testRelaySuite struct{}
 
-func (t *testRelaySuite) SetUpSuite(c *C) {
-	// c.Assert(log.InitLogger(&log.Config{}), IsNil)
-}
-
 func newRelayCfg(c *C, flavor string) *Config {
 	dbCfg := getDBConfigForTest()
 	return &Config{
@@ -98,7 +94,7 @@ func getDBConfigForTest() config.DBConfig {
 
 // mockReader is used only for relay testing.
 type mockReader struct {
-	result ReadResult
+	result RResult
 	err    error
 }
 
@@ -110,10 +106,10 @@ func (r *mockReader) Close() error {
 	return nil
 }
 
-func (r *mockReader) GetEvent(ctx context.Context) (ReadResult, error) {
+func (r *mockReader) GetEvent(ctx context.Context) (RResult, error) {
 	select {
 	case <-ctx.Done():
-		return ReadResult{}, ctx.Err()
+		return RResult{}, ctx.Err()
 	default:
 	}
 	return r.result, r.err
