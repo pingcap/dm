@@ -319,6 +319,7 @@ func (l *LightningLoader) Update(cfg *config.SubTaskConfig) error {
 // Status returns the unit's current status.
 func (l *LightningLoader) Status(_ *binlog.SourceStatus) interface{} {
 	finished, total := l.core.Status()
+	l.logger.Debug("QueryStatus", zap.Int64("finished", finished), zap.Int64("total", total))
 	progress := percent(finished, total, l.finish.Load())
 	s := &pb.LoadStatus{
 		FinishedBytes:  finished,

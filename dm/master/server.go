@@ -429,7 +429,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		// nolint:nilerr
 		return resp, nil
 	}
-	log.L().Info("", zap.String("task name", cfg.Name), zap.String("task", cfg.JSON()), zap.String("request", "StartTask"))
+	log.L().Info("StartTask", zap.String("task name", cfg.Name), zap.String("task", cfg.JSON()), zap.String("request", "StartTask"))
 
 	sourceRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs))
 	if len(req.Sources) > 0 {
@@ -481,11 +481,13 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 					"while remove-meta is true").Error()
 				return resp, nil
 			}
+			log.L().Info("RemoveMeta Begin")
 			err = s.removeMetaData(ctx, cfg.Name, cfg.MetaSchema, cfg.TargetDB)
 			if err != nil {
 				resp.Msg = terror.Annotate(err, "while removing metadata").Error()
 				return resp, nil
 			}
+			log.L().Info("RemoveMeta End")
 		}
 		err = s.scheduler.AddSubTasks(latched, subtaskCfgPointersToInstances(stCfgs...)...)
 		if err != nil {
@@ -705,6 +707,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 		resp2 *pb.QueryStatusListResponse
 		err2  error
 	)
+	log.L().Info("QueryStatus in master")
 	shouldRet := s.sharedLogic(ctx, req, &resp2, &err2)
 	if shouldRet {
 		return resp2, err2
