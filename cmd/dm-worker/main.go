@@ -16,6 +16,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	lightningLog "github.com/pingcap/tidb/br/pkg/lightning/log"
 	"os"
 	"os/signal"
 	"strings"
@@ -23,7 +24,6 @@ import (
 
 	"github.com/pingcap/errors"
 	globalLog "github.com/pingcap/log"
-	lightningLog "github.com/pingcap/tidb/br/pkg/lightning/log"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -63,6 +63,7 @@ func main() {
 	lg, r, _ := globalLog.InitLogger(conf)
 	lg = lg.With(zap.String("component", "ddl tracker"))
 	globalLog.ReplaceGlobals(lg, r)
+	lightningLog.SetAppLogger(log.L().Logger)
 
 	utils.PrintInfo("dm-worker", func() {
 		log.L().Info("", zap.Stringer("dm-worker config", cfg))
@@ -93,7 +94,6 @@ func main() {
 	}
 	s.Close() // wait until closed
 	log.L().Info("dm-worker exit")
-	lightningLog.SetAppLogger(log.L().Logger)
 
 	syncErr := log.L().Sync()
 	if syncErr != nil {
