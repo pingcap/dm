@@ -24,7 +24,9 @@ import (
 	onlineddl "github.com/pingcap/dm/syncer/online-ddl-tools"
 )
 
-// skipQueryEvent changes ddlInfo.originDDL if skip by binlog-filter.
+// skipQueryEvent if skip by binlog-filter:
+// * track the ddlInfo;
+// * changes ddlInfo.originDDL to empty string.
 func (s *Syncer) skipQueryEvent(qec *queryEventContext, ddlInfo *ddlInfo) (bool, error) {
 	if utils.IsBuildInSkipDDL(qec.originSQL) {
 		return true, nil
@@ -56,7 +58,6 @@ func (s *Syncer) skipQueryEvent(qec *queryEventContext, ddlInfo *ddlInfo) (bool,
 		if needSkip {
 			s.tctx.L().Debug("skip event by binlog filter")
 			// In the case of online-ddl, if the generated table is skipped, track ddl will failed.
-			// nolint: errcheck
 			err := s.trackDDL(qec.ddlSchema, ddlInfo, qec.eventContext)
 			if err != nil {
 				s.tctx.L().Warn("track ddl failed", zap.Stringer("ddl info", ddlInfo))

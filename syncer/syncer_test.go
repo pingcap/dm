@@ -286,7 +286,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 
 		sql := string(ev.Query)
 		schema := string(ev.Schema)
-		ddlInfo, err := syncer.routeDDL(p, schema, sql)
+		ddlInfo, err := syncer.genDDLInfo(p, schema, sql)
 		c.Assert(err, IsNil)
 
 		qec.ddlSchema = schema
@@ -424,7 +424,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 		}
 		sql := string(ev.Query)
 		schema := string(ev.Schema)
-		ddlInfo, err := syncer.routeDDL(p, schema, sql)
+		ddlInfo, err := syncer.genDDLInfo(p, schema, sql)
 		c.Assert(err, IsNil)
 
 		qec.ddlSchema = schema
@@ -1289,7 +1289,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	}
 
 	for _, ca := range cases {
-		ddlInfo, err := syncer.routeDDL(qec.p, qec.ddlSchema, ca.sql)
+		ddlInfo, err := syncer.genDDLInfo(qec.p, qec.ddlSchema, ca.sql)
 		c.Assert(err, IsNil)
 		ca.callback()
 
@@ -1326,17 +1326,17 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 			for _, sql := range qec.splitDDLs {
 				sqls, err := syncer.processOneDDL(qec, sql)
 				c.Assert(err, IsNil)
-				qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
+				qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
 			}
-			if len(qec.needRouteDDLs) == 0 {
+			if len(qec.appliedDDLs) == 0 {
 				c.Assert(res[i], HasLen, 1)
 				c.Assert(res[i][0], Equals, true)
 				i++
 				continue
 			}
 
-			for j, sql := range qec.needRouteDDLs {
-				ddlInfo, err := syncer.routeDDL(p, string(ev.Schema), sql)
+			for j, sql := range qec.appliedDDLs {
+				ddlInfo, err := syncer.genDDLInfo(p, string(ev.Schema), sql)
 				c.Assert(err, IsNil)
 
 				needSkip, err := syncer.skipQueryEvent(qec, ddlInfo)
