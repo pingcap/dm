@@ -54,7 +54,7 @@ func (s *testSyncerSuite) TestIgnoreDDLError(c *C) {
 
 func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 	var (
-		syncer = NewSyncer(s.cfg, nil)
+		syncer = NewSyncer(s.cfg, nil, nil)
 		tctx   = tcontext.Background()
 		conn2  = &dbconn.DBConn{Cfg: s.cfg, ResetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
 			return nil, nil

@@ -79,10 +79,11 @@ type BinlogReader struct {
 
 	usingGTID          bool
 	prevGset, currGset mysql.GTIDSet
+	notifier           EventNotifier
 }
 
 // NewBinlogReader creates a new BinlogReader.
-func NewBinlogReader(logger log.Logger, cfg *BinlogReaderConfig) *BinlogReader {
+func NewBinlogReader(notifier EventNotifier, logger log.Logger, cfg *BinlogReaderConfig) *BinlogReader {
 	ctx, cancel := context.WithCancel(context.Background()) // only can be canceled in `Close`
 	parser := replication.NewBinlogParser()
 	parser.SetVerifyChecksum(true)
@@ -100,6 +101,7 @@ func NewBinlogReader(logger log.Logger, cfg *BinlogReaderConfig) *BinlogReader {
 		indexPath: path.Join(cfg.RelayDir, utils.UUIDIndexFilename),
 		cancel:    cancel,
 		tctx:      newtctx,
+		notifier:  notifier,
 	}
 }
 
@@ -451,7 +453,12 @@ func (r *BinlogReader) parseFile(
 
 		switch ev := e.Event.(type) {
 		case *replication.FormatDescriptionEvent:
-			// ignore FORMAT_DESCRIPTION event, because go-mysql will send this fake event
+			// go-mysql will send a duplicate FormatDescriptionEvent event when offset > 4, ignore it
+			if offset > 4 {
+				return nil
+			}
+			// else just update lastPos
+			latestPos = int64(e.Header.LogPos)
 		case *replication.RotateEvent:
 			// add master UUID suffix to pos.Name
 			parsed, _ := binlog.ParseFilename(string(ev.NextLogName))
@@ -576,7 +583,6 @@ func (r *BinlogReader) parseFile(
 	}
 
 	switchCh := make(chan SwitchPath, 1)
-	switchErrCh := make(chan error, 1)
 	updatePathCh := make(chan string, 1)
 	updateErrCh := make(chan error, 1)
 	newCtx, cancel := context.WithCancel(ctx)
@@ -587,27 +593,26 @@ func (r *BinlogReader) parseFile(
 	}()
 
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		needSwitchSubDir(newCtx, r.cfg.RelayDir, currentUUID, switchCh, switchErrCh)
-	}()
-
-	wg.Add(1)
 	go func(latestPos int64) {
 		defer wg.Done()
-		relayLogUpdatedOrNewCreated(newCtx, watcherInterval, relayLogDir, fullPath, relayLogFile, latestPos, updatePathCh, updateErrCh)
+		checker := relayLogFileChecker{
+			notifier:          r.notifier,
+			relayDir:          r.cfg.RelayDir,
+			currentUUID:       currentUUID,
+			latestRelayLogDir: relayLogDir,
+			latestFilePath:    fullPath,
+			latestFile:        relayLogFile,
+			beginOffset:       offset,
+			endOffset:         latestPos,
+		}
+		// TODO no need to be a goroutine now, maybe refactored when refactoring parseFile itself.
+		checker.relayLogUpdatedOrNewCreated(newCtx, updatePathCh, switchCh, updateErrCh)
 	}(latestPos)
 
 	select {
 	case <-ctx.Done():
 		return false, false, 0, "", "", false, nil
 	case switchResp := <-switchCh:
-		// wait to ensure old file not updated
-		pathUpdated := utils.WaitSomething(3, watcherInterval, func() bool { return len(updatePathCh) > 0 })
-		if pathUpdated {
-			// re-parse it
-			return false, true, latestPos, "", "", replaceWithHeartbeat, nil
-		}
 		// update new uuid
 		if err = r.updateUUIDs(); err != nil {
 			return false, false, 0, "", "", false, nil
@@ -620,8 +625,6 @@ func (r *BinlogReader) parseFile(
 		}
 		// need parse next relay log file or re-collect files
 		return false, false, latestPos, "", "", false, nil
-	case err := <-switchErrCh:
-		return false, false, 0, "", "", false, err
 	case err := <-updateErrCh:
 		return false, false, 0, "", "", false, err
 	}
