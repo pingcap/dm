@@ -489,6 +489,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			}
 			log.L().Info("RemoveMeta End")
 		}
+		log.L().Info("AddSubTasks")
 		err = s.scheduler.AddSubTasks(latched, subtaskCfgPointersToInstances(stCfgs...)...)
 		if err != nil {
 			resp.Msg = err.Error()
@@ -504,6 +505,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		if cfg.RemoveMeta {
 			resp.Msg = "`remove-meta` in task config is deprecated, please use `start-task ... --remove-meta` instead"
 		}
+		log.L().Info("AddSubTasks End")
 		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, sources, []string{}, req)
 	}
 
@@ -1668,10 +1670,13 @@ func (s *Server) handleOperationResult(ctx context.Context, cli *scheduler.Worke
 		return errorCommonWorkerResponse(sourceID+" relevant worker-client not found", sourceID, "")
 	}
 	var response *pb.CommonWorkerResponse
+	log.L().Info("handleOperationResult")
 	ok, msg, queryResp, err := s.waitOperationOk(ctx, cli, taskName, sourceID, req)
 	if err != nil {
+		log.L().Info("handleOperationResult Error")
 		response = errorCommonWorkerResponse(err.Error(), sourceID, cli.BaseInfo().Name)
 	} else {
+		log.L().Info("handleOperationResult OK")
 		response = &pb.CommonWorkerResponse{
 			Result: ok,
 			Msg:    msg,
