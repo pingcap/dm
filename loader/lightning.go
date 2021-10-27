@@ -142,17 +142,18 @@ func (l *LightningLoader) runLightning(ctx context.Context, cfg *lcfg.Config) er
 	l.Unlock()
 	l.logger.Info("start RunOnce")
 	err := l.core.RunOnce(taskCtx, cfg, nil)
-	l.logger.Info("end runLightning")
+	l.logger.Info("end RunOnce")
 	failpoint.Inject("LightningLoadDataSlowDownByTask", func(val failpoint.Value) {
 		tasks := val.(string)
 		taskNames := strings.Split(tasks, ",")
 		for _, taskName := range taskNames {
 			if l.cfg.Name == taskName {
-				l.logger.Info("inject failpoint LoadDataSlowDownByTask", zap.String("task", taskName))
+				l.logger.Info("inject failpoint LightningLoadDataSlowDownByTask", zap.String("task", taskName))
 				<-taskCtx.Done()
 			}
 		}
 	})
+	l.logger.Info("end runLightning")
 	return err
 }
 
@@ -218,6 +219,8 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 			offsetSQL := l.checkPoint.GenSQL(lightningCheckpointFile, 1)
 			err = l.toDBConns[0].executeSQL(tctx, []string{offsetSQL})
 			_ = l.checkPoint.UpdateOffset(lightningCheckpointFile, 1)
+		} else {
+			l.logger.Error("runlightning error: ", zap.Error(err))
 		}
 	} else {
 		l.finish.Store(true)
@@ -327,7 +330,8 @@ func (l *LightningLoader) Update(cfg *config.SubTaskConfig) error {
 // Status returns the unit's current status.
 func (l *LightningLoader) Status(_ *binlog.SourceStatus) interface{} {
 	finished, total := l.core.Status()
-	l.logger.Debug("QueryStatus", zap.Int64("finished", finished), zap.Int64("total", total))
+	l.logger.Debug("QueryStatus", zap.Int64("finished", finished),
+		zap.Int64("total", total), zap.Bool("finish", l.finish.Load()))
 	progress := percent(finished, total, l.finish.Load())
 	s := &pb.LoadStatus{
 		FinishedBytes:  finished,
