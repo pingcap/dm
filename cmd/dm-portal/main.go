@@ -18,11 +18,12 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/rakyll/statik/fs"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/dm/portal"
 	_ "github.com/pingcap/dm/dm/portal/statik"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/rakyll/statik/fs"
-	"go.uber.org/zap"
 )
 
 func main() {

@@ -20,8 +20,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pingcap/dm/pkg/streamer"
-
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
@@ -34,6 +32,7 @@ import (
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 )
 

@@ -18,14 +18,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/dm/pkg/streamer"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/dumpling"
 	"github.com/pingcap/dm/loader"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 
