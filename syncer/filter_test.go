@@ -59,7 +59,7 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 			IgnoreTables: []*filter.Table{{Schema: "s1", Name: "test"}},
 		},
 	}
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	c.Assert(syncer.genRouter(), IsNil)
 	var err error
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
@@ -194,7 +194,7 @@ func (s *testFilterSuite) TestSkipByFilter(c *C) {
 			IgnoreDBs: []string{"s1"},
 		},
 	}
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	var err error
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
@@ -264,7 +264,7 @@ func (s *testFilterSuite) TestSkipByTable(c *C) {
 			IgnoreDBs: []string{"s1"},
 		},
 	}
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	var err error
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)

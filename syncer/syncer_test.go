@@ -262,7 +262,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	p := parser.New()
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	err = syncer.genRouter()
@@ -372,7 +372,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	p := parser.New()
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
@@ -408,7 +408,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	p := parser.New()
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
@@ -506,7 +506,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	p := parser.New()
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
@@ -600,7 +600,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	c.Assert(syncer.genRouter(), IsNil)
 
 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, s.cfg.FilterRules)
@@ -719,7 +719,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 func (s *testSyncerSuite) TestcheckpointID(c *C) {
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	checkpointID := syncer.checkpointID()
 	c.Assert(checkpointID, Equals, "101")
 }
@@ -770,7 +770,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.cfg.CheckpointFlushInterval = 30
 	syncer.fromDB = &dbconn.UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
 	syncer.toDBConns = []*dbconn.DBConn{
@@ -1013,7 +1013,7 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.fromDB = &dbconn.UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
 	syncer.toDBConns = []*dbconn.DBConn{
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
@@ -1156,7 +1156,7 @@ func (s *testSyncerSuite) TestRemoveMetadataIsFine(c *C) {
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
 	cfg.Mode = config.ModeAll
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	fresh, err := syncer.IsFreshTask(context.Background())
 	c.Assert(err, IsNil)
 	c.Assert(fresh, IsTrue)
@@ -1202,7 +1202,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.toDBConns = []*dbconn.DBConn{
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},

@@ -114,7 +114,7 @@ func (s *testDDLSuite) TestCommentQuote(c *C) {
 	qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(&config.SubTaskConfig{}, nil)
+	syncer := NewSyncer(&config.SubTaskConfig{}, nil, nil)
 	syncer.tctx = tctx
 	c.Assert(syncer.genRouter(), IsNil)
 
@@ -217,7 +217,7 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 		},
 	}
 	var err error
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.tctx = tctx
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
@@ -376,7 +376,7 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 	}
 
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveGeneratedColumnSQL")))
-	syncer := NewSyncer(&config.SubTaskConfig{}, nil)
+	syncer := NewSyncer(&config.SubTaskConfig{}, nil, nil)
 	syncer.tctx = tctx
 	c.Assert(syncer.genRouter(), IsNil)
 	p := parser.New()
@@ -460,7 +460,7 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	for _, ca := range cases {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
-		syncer := NewSyncer(cfg, nil)
+		syncer := NewSyncer(cfg, nil, nil)
 		syncer.tctx = tctx
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
@@ -541,7 +541,7 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 	for _, ca := range cases {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
-		syncer := NewSyncer(cfg, nil)
+		syncer := NewSyncer(cfg, nil, nil)
 		c.Assert(syncer.genRouter(), IsNil)
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
@@ -593,7 +593,7 @@ func (s *testDDLSuite) TestDropSchemaInSharding(c *C) {
 	dbCfg := config.GetDBConfigForTest()
 	cfg := s.newSubTaskCfg(dbCfg)
 	cfg.ShardMode = config.ShardPessimistic
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	// nolint:dogsled
 	_, _, _, _, err := syncer.sgk.AddGroup(targetTable, []string{source1}, nil, true)
 	c.Assert(err, IsNil)
@@ -620,7 +620,7 @@ func (s *testDDLSuite) TestClearOnlineDDL(c *C) {
 	dbCfg := config.GetDBConfigForTest()
 	cfg := s.newSubTaskCfg(dbCfg)
 	cfg.ShardMode = config.ShardPessimistic
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	mock := mockOnlinePlugin{
 		map[string]struct{}{key1: {}, key2: {}},
 	}
