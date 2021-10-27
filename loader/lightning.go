@@ -132,11 +132,13 @@ func (l *LightningLoader) Init(ctx context.Context) (err error) {
 }
 
 func (l *LightningLoader) runLightning(ctx context.Context, cfg *lcfg.Config) error {
+	l.logger.Info("start runLightning")
 	l.Lock()
 	taskCtx, cancel := context.WithCancel(ctx)
 	l.cancel = cancel
 	l.Unlock()
 	err := l.core.RunOnce(taskCtx, cfg, nil)
+	l.logger.Info("end runLightning")
 	failpoint.Inject("LightningLoadDataSlowDownByTask", func(val failpoint.Value) {
 		tasks := val.(string)
 		taskNames := strings.Split(tasks, ",")
@@ -206,7 +208,9 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		err = l.runLightning(ctx, cfg)
 		if err == nil {
 			l.finish.Store(true)
+			l.logger.Info("Before remove checkpoint")
 			lightning.CheckpointRemove(ctx, cfg, "all")
+			l.logger.Info("After remove checkpoint")
 			offsetSQL := l.checkPoint.GenSQL(lightningCheckpointFile, 1)
 			err = l.toDBConns[0].executeSQL(tctx, []string{offsetSQL})
 			_ = l.checkPoint.UpdateOffset(lightningCheckpointFile, 1)
