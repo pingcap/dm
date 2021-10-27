@@ -16,9 +16,10 @@ package syncer
 import (
 	"go.uber.org/zap"
 
+	"github.com/pingcap/failpoint"
+
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/syncer/metrics"
-	"github.com/pingcap/failpoint"
 )
 
 // compactItem represents whether a job is compacted.
