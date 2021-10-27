@@ -18,6 +18,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/syncer/metrics"
+	"github.com/pingcap/failpoint"
 )
 
 // compactItem represents whether a job is compacted.
@@ -105,6 +106,9 @@ func (c *compactor) run() {
 			c.compactJob(j)
 		}
 
+		failpoint.Inject("SkipFlushCompactor", func() {
+			failpoint.Continue()
+		})
 		// if no inner jobs, buffer is full or outer jobs less than half of bufferSize(chanSize), flush the buffer
 		if len(c.inCh) == 0 || len(c.buffer) >= c.bufferSize || len(c.outCh) < c.bufferSize/2 {
 			c.flushBuffer()

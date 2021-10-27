@@ -14,15 +14,21 @@
 package syncer
 
 import (
+	"context"
 	"math/rand"
+	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/util/mock"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // mockExecute mock a kv store.
@@ -158,5 +164,93 @@ func (s *testSyncerSuite) TestCompactJob(c *C) {
 		c.Assert(compactKV, DeepEquals, kv)
 		compactor.keyMap = make(map[string]map[string]int)
 		compactor.buffer = compactor.buffer[0:0]
+	}
+}
+
+func (s *testSyncerSuite) TestCompactorSafeMode(c *C) {
+	location := binlog.NewLocation("")
+	ec := &eventContext{startLocation: &location, currentLocation: &location, lastLocation: &location}
+	p := parser.New()
+	se := mock.NewContext()
+	targetTableID := "`test`.`tb`"
+	sourceTable := &filter.Table{Schema: "test", Name: "tb1"}
+	targetTable := &filter.Table{Schema: "test", Name: "tb"}
+	schema := "create table test.tb(id int primary key, col1 int, name varchar(24))"
+	ti, err := createTableInfo(p, se, 0, schema)
+	c.Assert(err, IsNil)
+
+	testCases := []struct {
+		input  []*DML
+		output []*DML
+	}{
+		// nolint:dupl
+		{
+			input: []*DML{
+				newDML(insert, true, targetTableID, sourceTable, nil, []interface{}{1, 1, "a"}, nil, []interface{}{1, 1, "a"}, ti.Columns, ti),
+				newDML(insert, true, targetTableID, sourceTable, nil, []interface{}{2, 2, "b"}, nil, []interface{}{2, 2, "b"}, ti.Columns, ti),
+				newDML(update, true, targetTableID, sourceTable, []interface{}{1, 1, "a"}, []interface{}{3, 3, "c"}, []interface{}{1, 1, "a"}, []interface{}{3, 3, "c"}, ti.Columns, ti),
+				newDML(del, false, targetTableID, sourceTable, nil, []interface{}{2, 2, "b"}, nil, []interface{}{2, 2, "b"}, ti.Columns, ti),
+				newDML(insert, false, targetTableID, sourceTable, nil, []interface{}{1, 1, "a"}, nil, []interface{}{1, 1, "a"}, ti.Columns, ti),
+			},
+			output: []*DML{
+				newDML(insert, true, targetTableID, sourceTable, nil, []interface{}{3, 3, "c"}, nil, []interface{}{3, 3, "c"}, ti.Columns, ti),
+				newDML(del, true, targetTableID, sourceTable, nil, []interface{}{2, 2, "b"}, nil, []interface{}{2, 2, "b"}, ti.Columns, ti),
+				newDML(insert, true, targetTableID, sourceTable, nil, []interface{}{1, 1, "a"}, nil, []interface{}{1, 1, "a"}, ti.Columns, ti),
+			},
+		},
+		// nolint:dupl
+		{
+			input: []*DML{
+				newDML(insert, false, targetTableID, sourceTable, nil, []interface{}{1, 1, "a"}, nil, []interface{}{1, 1, "a"}, ti.Columns, ti),
+				newDML(insert, false, targetTableID, sourceTable, nil, []interface{}{2, 2, "b"}, nil, []interface{}{2, 2, "b"}, ti.Columns, ti),
+				newDML(update, false, targetTableID, sourceTable, []interface{}{1, 1, "a"}, []interface{}{3, 3, "c"}, []interface{}{1, 1, "a"}, []interface{}{3, 3, "c"}, ti.Columns, ti),
+				newDML(del, false, targetTableID, sourceTable, nil, []interface{}{2, 2, "b"}, nil, []interface{}{2, 2, "b"}, ti.Columns, ti),
+				newDML(insert, false, targetTableID, sourceTable, nil, []interface{}{1, 1, "a"}, nil, []interface{}{1, 1, "a"}, ti.Columns, ti),
+			},
+			output: []*DML{
+				newDML(insert, false, targetTableID, sourceTable, nil, []interface{}{3, 3, "c"}, nil, []interface{}{3, 3, "c"}, ti.Columns, ti),
+				newDML(del, false, targetTableID, sourceTable, nil, []interface{}{2, 2, "b"}, nil, []interface{}{2, 2, "b"}, ti.Columns, ti),
+				newDML(insert, false, targetTableID, sourceTable, nil, []interface{}{1, 1, "a"}, nil, []interface{}{1, 1, "a"}, ti.Columns, ti),
+			},
+		},
+	}
+
+	inCh := make(chan *job, 100)
+	syncer := &Syncer{
+		tctx: tcontext.NewContext(context.Background(), log.L()),
+		cfg: &config.SubTaskConfig{
+			Name:     "task",
+			SourceID: "source",
+			SyncerConfig: config.SyncerConfig{
+				QueueSize:   100,
+				WorkerCount: 100,
+			},
+		},
+	}
+
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/syncer/SkipFlushCompactor", `return()`), IsNil)
+	//nolint:errcheck
+	defer failpoint.Disable("github.com/pingcap/dm/syncer/SkipFlushCompactor")
+
+	outCh := compactorWrap(inCh, syncer)
+
+	for _, tc := range testCases {
+		for _, dml := range tc.input {
+			j := newDMLJob(dml.op, sourceTable, targetTable, dml, ec)
+			inCh <- j
+		}
+		inCh <- newFlushJob()
+		c.Assert(
+			utils.WaitSomething(10, time.Millisecond, func() bool {
+				return len(outCh) == len(tc.output)+1
+			}), Equals, true)
+		for i := 0; i <= len(tc.output); i++ {
+			j := <-outCh
+			if i < len(tc.output) {
+				c.Assert(j.dml, DeepEquals, tc.output[i])
+			} else {
+				c.Assert(j.tp, Equals, flush)
+			}
+		}
 	}
 }
