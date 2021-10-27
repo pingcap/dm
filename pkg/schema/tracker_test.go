@@ -613,6 +613,16 @@ func (s *trackerSuite) TestGetDownStreamIndexInfo(c *C) {
 	c.Assert(indexinfo, NotNil)
 	delete(tracker.dsTracker.tableInfos, tableID)
 
+	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow("test", "create table t(a int primary key, b int, c varchar(10))"))
+	indexinfo, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
+	c.Assert(err, IsNil)
+	_, ok = tracker.dsTracker.tableInfos[tableID]
+	c.Assert(ok, IsTrue)
+	c.Assert(indexinfo, NotNil)
+	delete(tracker.dsTracker.tableInfos, tableID)
+
 	// downstream has composite pks
 	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
 		sqlmock.NewRows([]string{"Table", "Create Table"}).
@@ -666,6 +676,64 @@ func (s *trackerSuite) TestGetDownStreamIndexInfo(c *C) {
 	indexinfo, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
 	c.Assert(err, IsNil)
 	c.Assert(indexinfo.Primary, IsTrue)
+	delete(tracker.dsTracker.tableInfos, tableID)
+
+	// downstream has more columns than upstream, and that column in used in PK
+	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow("test", "create table t(a int , d int PRIMARY KEY, c varchar(10), b int unique not null)"))
+	indexinfo, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
+	c.Assert(err, IsNil)
+	c.Assert(indexinfo, NotNil)
+	c.Assert(indexinfo.Primary, IsFalse)
+	delete(tracker.dsTracker.tableInfos, tableID)
+
+	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow("test", "create table t(a int , d int PRIMARY KEY, c varchar(10), b int unique)"))
+	indexinfo, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
+	c.Assert(err, IsNil)
+	c.Assert(indexinfo, IsNil)
+	dti, ok = tracker.dsTracker.tableInfos[tableID]
+	c.Assert(ok, IsTrue)
+	c.Assert(len(dti.availableUKCache) == 1, IsTrue)
+	delete(tracker.dsTracker.tableInfos, tableID)
+
+	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow("test", "create table t(a int , d int PRIMARY KEY, c varchar(10), b int)"))
+	indexinfo, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
+	c.Assert(err, IsNil)
+	c.Assert(indexinfo, IsNil)
+	delete(tracker.dsTracker.tableInfos, tableID)
+
+	// downstream has more columns than upstream, and that column in used in UK(not null)
+	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow("test", "create table t(a int , d int unique not null, c varchar(10), b int unique not null)"))
+	indexinfo, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
+	c.Assert(err, IsNil)
+	c.Assert(indexinfo, NotNil)
+	c.Assert(indexinfo.Columns[0].Name.L == "b", IsTrue)
+	delete(tracker.dsTracker.tableInfos, tableID)
+
+	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow("test", "create table t(a int , d int unique not null, c varchar(10), b int unique)"))
+	indexinfo, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
+	c.Assert(err, IsNil)
+	c.Assert(indexinfo, IsNil)
+	dti, ok = tracker.dsTracker.tableInfos[tableID]
+	c.Assert(ok, IsTrue)
+	c.Assert(len(dti.availableUKCache) == 1, IsTrue)
+	delete(tracker.dsTracker.tableInfos, tableID)
+
+	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow("test", "create table t(a int , d int unique not null, c varchar(10), b int)"))
+	indexinfo, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
+	c.Assert(err, IsNil)
+	c.Assert(indexinfo, IsNil)
 	delete(tracker.dsTracker.tableInfos, tableID)
 }
 
@@ -745,6 +813,17 @@ func (s *trackerSuite) TestGetAvailableDownStreanUKIndexInfo(c *C) {
 	c.Assert(indexinfo, IsNil)
 	delete(tracker.dsTracker.tableInfos, tableID)
 
+	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow("test", "create table t(a int, b int, c varchar(10), unique key(a, b))"))
+	indexinfo, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
+	c.Assert(err, IsNil)
+	c.Assert(indexinfo, IsNil)
+	data = []interface{}{1, nil, nil}
+	indexinfo = tracker.GetAvailableDownStreamUKIndexInfo(tableID, data)
+	c.Assert(indexinfo, IsNil)
+	delete(tracker.dsTracker.tableInfos, tableID)
+
 	// downstream has union uk but data has null
 	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
 		sqlmock.NewRows([]string{"Table", "Create Table"}).
@@ -808,9 +887,41 @@ func (s *trackerSuite) TestReTrackDownStreamIndex(c *C) {
 	_, ok = tracker.dsTracker.tableInfos[tableID]
 	c.Assert(ok, IsTrue)
 
+	tracker.RemoveDownstreamSchema(targetTables)
+	_, ok = tracker.dsTracker.tableInfos[tableID]
+	c.Assert(ok, IsFalse)
+
+	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow("test", "create table t(a int primary key, b int, c varchar(10))"))
+	_, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
+	c.Assert(err, IsNil)
+	_, ok = tracker.dsTracker.tableInfos[tableID]
+	c.Assert(ok, IsTrue)
+
 	// just schema
 	targetTables = []*filter.Table{{Schema: "test", Name: "a"}, {Schema: "test", Name: ""}}
 	tracker.RemoveDownstreamSchema(targetTables)
 	_, ok = tracker.dsTracker.tableInfos[tableID]
 	c.Assert(ok, IsFalse)
+
+	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow("test", "create table t(a int, b int, c varchar(10), PRIMARY KEY (a,b))"))
+	_, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
+	c.Assert(err, IsNil)
+	_, ok = tracker.dsTracker.tableInfos[tableID]
+	c.Assert(ok, IsTrue)
+
+	tracker.RemoveDownstreamSchema(targetTables)
+	_, ok = tracker.dsTracker.tableInfos[tableID]
+	c.Assert(ok, IsFalse)
+
+	mock.ExpectQuery("SHOW CREATE TABLE " + tableID).WillReturnRows(
+		sqlmock.NewRows([]string{"Table", "Create Table"}).
+			AddRow("test", "create table t(a int primary key, b int, c varchar(10))"))
+	_, err = tracker.GetDownStreamIndexInfo(tcontext.Background(), tableID, oriTi)
+	c.Assert(err, IsNil)
+	_, ok = tracker.dsTracker.tableInfos[tableID]
+	c.Assert(ok, IsTrue)
 }

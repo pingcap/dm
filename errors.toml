@@ -2980,6 +2980,12 @@ description = ""
 workaround = ""
 tags = ["internal", "high"]
 
+[error.DM-schema-tracker-44016]
+message = "failed to fetch downstream table %v by show create table statement in schema tracker"
+description = ""
+workaround = ""
+tags = ["internal", "high"]
+
 [error.DM-scheduler-46001]
 message = "the scheduler has not started"
 description = ""

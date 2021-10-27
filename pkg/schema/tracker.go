@@ -366,7 +366,7 @@ func (tr *Tracker) GetDownStreamIndexInfo(tctx *tcontext.Context, tableID string
 	dti, ok := tr.dsTracker.tableInfos[tableID]
 	if !ok {
 		log.L().Info("Downstream schema tracker init. ", zap.String("tableID", tableID))
-		ti, err := tr.getTableInfoByCreateStmt(tctx, tableID, originTi.Name.O)
+		ti, err := tr.getTableInfoByCreateStmt(tctx, tableID)
 		if err != nil {
 			log.L().Error("Init dowstream schema info error. ", zap.String("tableID", tableID), zap.Error(err))
 			return nil, err
@@ -431,7 +431,7 @@ func (tr *Tracker) RemoveDownstreamSchema(targetTables []*filter.Table) {
 }
 
 // getTableInfoByCreateStmt get downstream tableInfo by "SHOW CREATE TABLE" stmt.
-func (tr *Tracker) getTableInfoByCreateStmt(tctx *tcontext.Context, tableID string, originTableName string) (*model.TableInfo, error) {
+func (tr *Tracker) getTableInfoByCreateStmt(tctx *tcontext.Context, tableID string) (*model.TableInfo, error) {
 	if tr.dsTracker.stmtParser == nil {
 		err := tr.initDownStreamSQLModeAndParser(tctx)
 		if err != nil {
@@ -442,7 +442,7 @@ func (tr *Tracker) getTableInfoByCreateStmt(tctx *tcontext.Context, tableID stri
 	querySQL := fmt.Sprintf("SHOW CREATE TABLE %s", tableID)
 	rows, err := tr.dsTracker.downstreamConn.QuerySQL(tctx, querySQL)
 	if err != nil {
-		return nil, dterror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, tableID, originTableName)
+		return nil, dterror.ErrSchemaTrackerCannotFetchDownstreamCreateTableStmt.Delegate(err, tableID)
 	}
 	defer rows.Close()
 	var tableName, createStr string
@@ -495,15 +495,19 @@ func getDownStreamTi(ti *model.TableInfo, originTi *model.TableInfo) *downstream
 	}
 
 	for _, idx := range ti.Indices {
+		indexRedict := redirectIndexKeys(idx, originTi)
+		if indexRedict == nil {
+			continue
+		}
 		if idx.Primary {
-			indexCache = idx
+			indexCache = indexRedict
 			hasPk = true
 		} else if idx.Unique {
 			// second check not null unique key
 			if !hasPk && isSpecifiedIndexColumn(idx, fn) {
-				indexCache = idx
+				indexCache = indexRedict
 			} else {
-				availableUKCache = append(availableUKCache, idx)
+				availableUKCache = append(availableUKCache, indexRedict)
 			}
 		}
 	}
@@ -511,16 +515,10 @@ func getDownStreamTi(ti *model.TableInfo, originTi *model.TableInfo) *downstream
 	// handle pk exceptional case.
 	// e.g. "create table t(a int primary key, b int)".
 	if !hasPk {
-		exPk := handlePkExCase(ti)
+		exPk := redirectIndexKeys(handlePkExCase(ti), originTi)
 		if exPk != nil {
 			indexCache = exPk
 		}
-	}
-
-	// redirect column offset as originTi
-	indexCache = redirectIndexKeys(indexCache, originTi)
-	for i, uk := range availableUKCache {
-		availableUKCache[i] = redirectIndexKeys(uk, originTi)
 	}
 
 	return &downstreamTableInfo{
