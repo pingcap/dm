@@ -47,7 +47,7 @@ func parseOneStmt(qec *queryEventContext) (stmt ast.StmtNode, err error) {
 }
 
 // processOneDDL processes already split ddl as following step:
-// 1. generate ddl info by split sql;
+// 1. generate ddl info;
 // 2. skip sql by skipQueryEvent;
 // 3. apply online ddl if onlineDDL is not nil:
 //    * specially, if skip, apply empty string;
