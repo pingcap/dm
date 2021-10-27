@@ -121,6 +121,10 @@ func (c *compactor) close() {
 func (c *compactor) flushBuffer() {
 	for _, item := range c.buffer {
 		if !item.compacted {
+			// set safemode for all jobs by first job in buffer.
+			if c.safeMode {
+				item.j.dml.safeMode = true
+			}
 			c.outCh <- item.j
 		}
 	}
