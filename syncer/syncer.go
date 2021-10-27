@@ -219,10 +219,12 @@ type Syncer struct {
 	secondsBehindMaster       atomic.Int64    // current task delay second behind upstream
 	workerJobTSArray          []*atomic.Int64 // worker's sync job TS array, note that idx=0 is skip idx and idx=1 is ddl idx,sql worker job idx=(queue id + 2)
 	lastCheckpointFlushedTime time.Time
+
+	notifier streamer.EventNotifier
 }
 
 // NewSyncer creates a new Syncer.
-func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
+func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client, notifier streamer.EventNotifier) *Syncer {
 	logger := log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"))
 	syncer := &Syncer{
 		pessimist: shardddl.NewPessimist(&logger, etcdClient, cfg.Name, cfg.SourceID),
@@ -260,6 +262,7 @@ func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
 		syncer.workerJobTSArray[i] = atomic.NewInt64(0)
 	}
 	syncer.lastCheckpointFlushedTime = time.Time{}
+	syncer.notifier = notifier
 	return syncer
 }
 
@@ -319,7 +322,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return terror.ErrSchemaTrackerInit.Delegate(err)
 	}
 
-	s.streamerController = NewStreamerController(s.syncCfg, s.cfg.EnableGTID, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
+	s.streamerController = NewStreamerController(s.notifier, s.syncCfg, s.cfg.EnableGTID, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
 
 	s.baList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BAList)
 	if err != nil {
@@ -2120,7 +2123,7 @@ type queryEventContext struct {
 	originSQL string         // before split
 	// split multi-schema change DDL into multiple one schema change DDL due to TiDB's limitation
 	splitDDLs      []string // after split before online ddl
-	needRouteDDLs  []string // after onlineDDL apply if onlineDDL != nil and track, before route
+	appliedDDLs    []string // after onlineDDL apply if onlineDDL != nil
 	needHandleDDLs []string // after route
 
 	shardingDDLInfo *ddlInfo
@@ -2167,12 +2170,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	}
 
 	qec := &queryEventContext{
-		eventContext:  &ec,
-		ddlSchema:     string(ev.Schema),
-		originSQL:     utils.TrimCtrlChars(originSQL),
-		splitDDLs:     make([]string, 0),
-		needRouteDDLs: make([]string, 0),
-		sourceTbls:    make(map[string]map[string]struct{}),
+		eventContext: &ec,
+		ddlSchema:    string(ev.Schema),
+		originSQL:    utils.TrimCtrlChars(originSQL),
+		splitDDLs:    make([]string, 0),
+		appliedDDLs:  make([]string, 0),
+		sourceTbls:   make(map[string]map[string]struct{}),
 	}
 	qec.p, err = event.GetParserForStatusVars(ev.StatusVars)
 	if err != nil {
@@ -2249,12 +2252,12 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 	for _, sql := range qec.splitDDLs {
 		sqls, err2 := s.processOneDDL(qec, sql)
 		if err2 != nil {
-			qec.tctx.L().Error("fail to split statement", zap.String("event", "query"), zap.Stringer("queryEventContext", qec), log.ShortError(err2))
+			qec.tctx.L().Error("fail to process ddl", zap.String("event", "query"), zap.Stringer("queryEventContext", qec), log.ShortError(err2))
 			return err2
 		}
-		qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
+		qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
 	}
-	qec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.Strings("needRouteDDLs", qec.needRouteDDLs), zap.Stringer("queryEventContext", qec))
+	qec.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.Strings("appliedDDLs", qec.appliedDDLs), zap.Stringer("queryEventContext", qec))
 
 	metrics.BinlogEventCost.WithLabelValues(metrics.BinlogEventCostStageGenQuery, s.cfg.Name, s.cfg.WorkerName, s.cfg.SourceID).Observe(time.Since(qec.startTime).Seconds())
 
@@ -2271,16 +2274,16 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext, o
 			* other rename: we don't allow user to execute more than one rename operation in one ddl event, then it would make no difference
 	*/
 
-	qec.needHandleDDLs = make([]string, 0, len(qec.needRouteDDLs))
-	qec.trackInfos = make([]*ddlInfo, 0, len(qec.needRouteDDLs))
+	qec.needHandleDDLs = make([]string, 0, len(qec.appliedDDLs))
+	qec.trackInfos = make([]*ddlInfo, 0, len(qec.appliedDDLs))
 
 	// handle one-schema change DDL
-	for _, sql := range qec.needRouteDDLs {
+	for _, sql := range qec.appliedDDLs {
 		if len(sql) == 0 {
 			continue
 		}
 		// We use default parser because sqls are came from above *Syncer.splitAndFilterDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
-		ddlInfo, err2 := s.routeDDL(qec.p, qec.ddlSchema, sql)
+		ddlInfo, err2 := s.genDDLInfo(qec.p, qec.ddlSchema, sql)
 		if err2 != nil {
 			return err2
 		}
@@ -3296,7 +3299,7 @@ func (s *Syncer) adjustGlobalPointGTID(tctx *tcontext.Context) (bool, error) {
 		return false, nil
 	}
 	// set enableGTID to false for new streamerController
-	streamerController := NewStreamerController(s.syncCfg, false, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
+	streamerController := NewStreamerController(s.notifier, s.syncCfg, false, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
 
 	endPos := binlog.AdjustPosition(location.Position)
 	startPos := mysql.Position{
