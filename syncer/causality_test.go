@@ -17,8 +17,10 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/model"
+	"github.com/pingcap/tidb/parser/types"
 	"github.com/pingcap/tidb/util/mock"
 
 	"github.com/pingcap/dm/dm/config"
@@ -57,6 +59,18 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	schema := "create table tb(a int primary key, b int unique);"
 	ti, err := createTableInfo(p, se, int64(0), schema)
 	c.Assert(err, IsNil)
+	tiIndex := &model.IndexInfo{
+		Table:   ti.Name,
+		Unique:  true,
+		Primary: true,
+		State:   model.StatePublic,
+		Tp:      model.IndexTypeBtree,
+		Columns: []*model.IndexColumn{{
+			Name:   ti.Columns[0].Name,
+			Offset: ti.Columns[0].Offset,
+			Length: types.UnspecifiedLength,
+		}},
+	}
 
 	jobCh := make(chan *job, 10)
 	syncer := &Syncer{
@@ -71,28 +85,30 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	}
 	causalityCh := causalityWrap(jobCh, syncer)
 	testCases := []struct {
-		op   opType
-		vals [][]interface{}
+		op      opType
+		oldVals []interface{}
+		vals    []interface{}
 	}{
 		{
 			op:   insert,
-			vals: [][]interface{}{{1, 2}},
+			vals: []interface{}{1, 2},
 		},
 		{
 			op:   insert,
-			vals: [][]interface{}{{2, 3}},
+			vals: []interface{}{2, 3},
 		},
 		{
-			op:   update,
-			vals: [][]interface{}{{2, 3}, {3, 4}},
+			op:      update,
+			oldVals: []interface{}{2, 3},
+			vals:    []interface{}{3, 4},
 		},
 		{
 			op:   del,
-			vals: [][]interface{}{{1, 2}},
+			vals: []interface{}{1, 2},
 		},
 		{
 			op:   insert,
-			vals: [][]interface{}{{1, 3}},
+			vals: []interface{}{1, 3},
 		},
 	}
 	results := []opType{insert, insert, update, del, conflict, insert}
@@ -101,11 +117,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	ec := &eventContext{startLocation: &location, currentLocation: &location, lastLocation: &location}
 
 	for _, tc := range testCases {
-		var keys []string
-		for _, val := range tc.vals {
-			keys = append(keys, genMultipleKeys(ti, val, "tb")...)
-		}
-		job := newDMLJob(tc.op, table, table, "", nil, keys, ec)
+		job := newDMLJob(tc.op, table, table, newDML(tc.op, false, "", table, tc.oldVals, tc.vals, tc.oldVals, tc.vals, ti.Columns, ti, tiIndex), ec)
 		jobCh <- job
 	}
 

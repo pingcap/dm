@@ -23,11 +23,11 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb/br/pkg/mock"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -98,20 +98,33 @@ func (s *testDDLSuite) TestCommentQuote(c *C) {
 	sql := "ALTER TABLE schemadb.ep_edu_course_message_auto_reply MODIFY answer JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容';"
 	expectedSQL := "ALTER TABLE `schemadb`.`ep_edu_course_message_auto_reply` MODIFY COLUMN `answer` JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容'"
 
-	parser := parser.New()
-
-	stmt, err := parser.ParseOneStmt(sql, "", "")
-	c.Assert(err, IsNil)
-
-	syncer := &Syncer{}
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestCommentQuote")))
-	ec := eventContext{
+	ec := &eventContext{
 		tctx: tctx,
 	}
-	sqls, _, err := syncer.splitAndFilterDDL(ec, parser, stmt, "schemadb")
+	qec := &queryEventContext{
+		eventContext: ec,
+		ddlSchema:    "schemadb",
+		originSQL:    sql,
+		p:            parser.New(),
+	}
+	stmt, err := parseOneStmt(qec)
 	c.Assert(err, IsNil)
-	c.Assert(len(sqls), Equals, 1)
-	c.Assert(sqls[0], Equals, expectedSQL)
+
+	qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
+	c.Assert(err, IsNil)
+
+	syncer := NewSyncer(&config.SubTaskConfig{}, nil)
+	syncer.tctx = tctx
+	c.Assert(syncer.genRouter(), IsNil)
+
+	for _, sql := range qec.splitDDLs {
+		sqls, err := syncer.processOneDDL(qec, sql)
+		c.Assert(err, IsNil)
+		qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
+	}
+	c.Assert(len(qec.needRouteDDLs), Equals, 1)
+	c.Assert(qec.needRouteDDLs[0], Equals, expectedSQL)
 }
 
 func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
@@ -196,8 +209,8 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 		{"ALTER TABLE `xs1`.`t1` ADD COLUMN `c1` INT"},
 		{"ALTER TABLE `xs1`.`t1` ADD COLUMN `c1` INT"},
 	}
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveDDLSQL")))
 
-	p := parser.New()
 	cfg := &config.SubTaskConfig{
 		BAList: &filter.Rules{
 			DoDBs: []string{"s1"},
@@ -205,6 +218,7 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 	}
 	var err error
 	syncer := NewSyncer(cfg, nil)
+	syncer.tctx = tctx
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 
@@ -216,152 +230,133 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveDDLSQL")))
-	ec := eventContext{
+	ec := &eventContext{
 		tctx: tctx,
 	}
 
 	for i, sql := range sqls {
-		result, err := syncer.parseDDLSQL(sql, p, "test")
+		qec := &queryEventContext{
+			eventContext:  ec,
+			ddlSchema:     "test",
+			originSQL:     sql,
+			needRouteDDLs: make([]string, 0),
+			p:             parser.New(),
+		}
+		stmt, err := parseOneStmt(qec)
 		c.Assert(err, IsNil)
-		c.Assert(result.needSkip, IsFalse)
-		c.Assert(result.isDDL, IsTrue)
 
-		statements, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, "test")
+		qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		c.Assert(statements, DeepEquals, expectedSQLs[i])
-		c.Assert(targetSQLs[i], HasLen, len(statements))
-
-		for j, statement := range statements {
-			ddlInfo, err := syncer.routeDDL(p, "test", statement)
+		for _, sql2 := range qec.splitDDLs {
+			sqls, err := syncer.processOneDDL(qec, sql2)
 			c.Assert(err, IsNil)
-			c.Assert(ddlInfo.sql, Equals, targetSQLs[i][j])
+			for _, sql3 := range sqls {
+				if len(sql3) == 0 {
+					continue
+				}
+				qec.needRouteDDLs = append(qec.needRouteDDLs, sql3)
+			}
+		}
+		c.Assert(qec.needRouteDDLs, DeepEquals, expectedSQLs[i])
+		c.Assert(targetSQLs[i], HasLen, len(qec.needRouteDDLs))
+		for j, sql2 := range qec.needRouteDDLs {
+			ddlInfo, err2 := syncer.routeDDL(qec.p, qec.ddlSchema, sql2)
+			c.Assert(err2, IsNil)
+			c.Assert(targetSQLs[i][j], Equals, ddlInfo.routedDDL)
 		}
 	}
 }
 
-func (s *testDDLSuite) TestParseDDLSQL(c *C) {
+func (s *testDDLSuite) TestParseOneStmt(c *C) {
 	cases := []struct {
 		sql      string
-		schema   string
-		needSkip bool
 		isDDL    bool
 		hasError bool
 	}{
 		{
 			sql:      "FLUSH",
-			schema:   "",
-			needSkip: true,
 			isDDL:    false,
-			hasError: false,
+			hasError: true,
 		},
 		{
 			sql:      "BEGIN",
-			schema:   "",
-			needSkip: false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "CREATE TABLE do_db.do_table (c1 INT)",
-			schema:   "",
-			needSkip: false,
 			isDDL:    true,
 			hasError: false,
 		},
 		{
 			sql:      "INSERT INTO do_db.do_table VALUES (1)",
-			schema:   "",
-			needSkip: false,
 			isDDL:    false,
-			hasError: true,
+			hasError: false,
 		},
 		{
 			sql:      "INSERT INTO ignore_db.ignore_table VALUES (1)",
-			schema:   "",
-			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "UPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
-			schema:   "ignore_db",
-			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "DELETE FROM `ignore_table` WHERE c1=2",
-			schema:   "ignore_db",
-			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "SELECT * FROM ignore_db.ignore_table",
-			schema:   "",
-			needSkip: false,
 			isDDL:    false,
-			hasError: true,
+			hasError: false,
 		},
 		{
 			sql:      "#",
-			schema:   "",
-			needSkip: false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "# this is a comment",
-			schema:   "",
-			needSkip: false,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "# a comment with DDL\nCREATE TABLE do_db.do_table (c1 INT)",
-			schema:   "",
-			needSkip: false,
 			isDDL:    true,
 			hasError: false,
 		},
 		{
 			sql:      "# a comment with DML\nUPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
-			schema:   "ignore_db",
-			needSkip: true,
 			isDDL:    false,
 			hasError: false,
 		},
 		{
 			sql:      "NOT A SQL",
-			schema:   "",
-			needSkip: false,
 			isDDL:    false,
 			hasError: true,
 		},
 	}
-
-	cfg := &config.SubTaskConfig{
-		BAList: &filter.Rules{
-			IgnoreDBs: []string{"ignore_db"},
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestparseOneStmt")))
+	qec := &queryEventContext{
+		eventContext: &eventContext{
+			tctx: tctx,
 		},
+		p: parser.New(),
 	}
-	var err error
-	syncer := NewSyncer(cfg, nil)
-	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
-	c.Assert(err, IsNil)
-
-	parser := parser.New()
 
 	for _, cs := range cases {
-		pr, err := syncer.parseDDLSQL(cs.sql, parser, cs.schema)
+		qec.originSQL = cs.sql
+		stmt, err := parseOneStmt(qec)
 		if cs.hasError {
 			c.Assert(err, NotNil)
 		} else {
 			c.Assert(err, IsNil)
 		}
-		c.Assert(pr.needSkip, Equals, cs.needSkip)
-		c.Assert(pr.isDDL, Equals, cs.isDDL)
+		_, ok := stmt.(ast.DDLNode)
+		c.Assert(ok, Equals, cs.isDDL)
 	}
 }
 
@@ -380,47 +375,75 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 		},
 	}
 
-	syncer := &Syncer{}
-	parser := parser.New()
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveGeneratedColumnSQL")))
-	ec := eventContext{
-		tctx: tctx,
-	}
-
+	syncer := NewSyncer(&config.SubTaskConfig{}, nil)
+	syncer.tctx = tctx
+	c.Assert(syncer.genRouter(), IsNil)
+	p := parser.New()
 	for _, tc := range testCases {
-		ast1, err := parser.ParseOneStmt(tc.sql, "", "")
+		qec := &queryEventContext{
+			eventContext: &eventContext{
+				tctx: tctx,
+			},
+			originSQL:     tc.sql,
+			needRouteDDLs: make([]string, 0),
+			ddlSchema:     "test",
+			p:             p,
+		}
+		stmt, err := parseOneStmt(qec)
 		c.Assert(err, IsNil)
 
-		sqls, _, err := syncer.splitAndFilterDDL(ec, parser, ast1, "test")
+		qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
+		for _, sql := range qec.splitDDLs {
+			sqls, err := syncer.processOneDDL(qec, sql)
+			c.Assert(err, IsNil)
+			qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
+		}
 
-		c.Assert(len(sqls), Equals, 1)
-		getSQL := sqls[0]
-		c.Assert(getSQL, Equals, tc.expected)
+		c.Assert(len(qec.needRouteDDLs), Equals, 1)
+		c.Assert(qec.needRouteDDLs[0], Equals, tc.expected)
 	}
 }
 
 func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	cases := []struct {
-		onlineType string
-		trashName  string
-		ghostname  string
+		sql       string
+		expectSQL string
 	}{
+		// *****GHOST*****
+		// real table
 		{
-			config.GHOST,
-			"_t1_del",
-			"_t1_gho",
+			sql:       "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+			expectSQL: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
 		},
+		// trash table
 		{
-			config.PT,
-			"_t1_old",
-			"_t1_new",
+			sql: "CREATE TABLE IF NOT EXISTS `test`.`_t1_del` (`n` INT)",
+		},
+		// ghost table
+		{
+			sql: "ALTER TABLE `test`.`_t1_gho` ADD COLUMN `n` INT",
+		},
+		// *****PT*****
+		// real table
+		{
+			sql:       "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+			expectSQL: "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT",
+		},
+		// trash table
+		{
+			sql: "CREATE TABLE IF NOT EXISTS `test`.`_t1_old` (`n` INT)",
+		},
+		// ghost table
+		{
+			sql: "ALTER TABLE `test`.`_t1_new` ADD COLUMN `n` INT",
 		},
 	}
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestResolveOnlineDDL")))
 	p := parser.New()
 
-	ec := eventContext{tctx: tctx}
+	ec := &eventContext{tctx: tctx}
 	cluster, err := mock.NewCluster()
 	c.Assert(err, IsNil)
 	c.Assert(cluster.Start(), IsNil)
@@ -432,49 +455,38 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 	dbCfg.Port = mockClusterPort
 	dbCfg.Password = ""
 	cfg := s.newSubTaskCfg(dbCfg)
+
+	var qec *queryEventContext
 	for _, ca := range cases {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
 		syncer := NewSyncer(cfg, nil)
+		syncer.tctx = tctx
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
-		// real table
-		sql := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
-		stmt, err := p.ParseOneStmt(sql, "", "")
+		c.Assert(syncer.genRouter(), IsNil)
+		qec = &queryEventContext{
+			eventContext:  ec,
+			ddlSchema:     "test",
+			needRouteDDLs: make([]string, 0),
+			p:             p,
+		}
+		qec.originSQL = ca.sql
+		stmt, err := parseOneStmt(qec)
 		c.Assert(err, IsNil)
-		sqls, tables, err := syncer.splitAndFilterDDL(ec, p, stmt, "test")
+		_, ok := stmt.(ast.DDLNode)
+		c.Assert(ok, IsTrue)
+		qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 		c.Assert(err, IsNil)
-		c.Assert(sqls, HasLen, 1)
-		c.Assert(sqls[0], Equals, sql)
-		c.Assert(tables, HasLen, 0)
-
-		// trash table
-		sql = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `test`.`%s` (`n` INT)", ca.trashName)
-		stmt, err = p.ParseOneStmt(sql, "", "")
-		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
-		c.Assert(err, IsNil)
-		c.Assert(sqls, HasLen, 0)
-		c.Assert(tables, HasLen, 0)
-
-		// ghost table
-		sql = fmt.Sprintf("ALTER TABLE `test`.`%s` ADD COLUMN `n` INT", ca.ghostname)
-		newSQL := "ALTER TABLE `test`.`t1` ADD COLUMN `n` INT"
-		stmt, err = p.ParseOneStmt(sql, "", "")
-		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
-		c.Assert(err, IsNil)
-		c.Assert(sqls, HasLen, 0)
-		c.Assert(tables, HasLen, 0)
-		sql = fmt.Sprintf("RENAME TABLE `test`.`t1` TO `test`.`%s`, `test`.`%s` TO `test`.`t1`", ca.trashName, ca.ghostname)
-		stmt, err = p.ParseOneStmt(sql, "", "")
-		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
-		c.Assert(err, IsNil)
-		c.Assert(sqls, HasLen, 1)
-		c.Assert(sqls[0], Equals, newSQL)
-		tableName := &filter.Table{Schema: "test", Name: ca.ghostname}
-		c.Assert(tables, DeepEquals, map[string]*filter.Table{tableName.String(): tableName})
+		for _, sql := range qec.splitDDLs {
+			sqls, err := syncer.processOneDDL(qec, sql)
+			c.Assert(err, IsNil)
+			qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
+		}
+		if len(ca.expectSQL) != 0 {
+			c.Assert(qec.needRouteDDLs, HasLen, 1)
+			c.Assert(qec.needRouteDDLs[0], Equals, ca.expectSQL)
+		}
 	}
 	cluster.Stop()
 }
@@ -530,16 +542,19 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 		plugin, err := onlineddl.NewRealOnlinePlugin(tctx, cfg)
 		c.Assert(err, IsNil)
 		syncer := NewSyncer(cfg, nil)
+		c.Assert(syncer.genRouter(), IsNil)
 		syncer.onlineDDL = plugin
 		c.Assert(plugin.Clear(tctx), IsNil)
 
 		// ghost table
 		sql := fmt.Sprintf("ALTER TABLE `test`.`%s` ADD COLUMN `n` INT", ca.ghostname)
-		stmt, err := p.ParseOneStmt(sql, "", "")
+		qec := &queryEventContext{
+			eventContext: &ec,
+			ddlSchema:    "test",
+			p:            p,
+		}
+		sqls, err := syncer.processOneDDL(qec, sql)
 		c.Assert(err, IsNil)
-		sqls, tables, err := syncer.splitAndFilterDDL(ec, p, stmt, "test")
-		c.Assert(err, IsNil)
-		c.Assert(tables, HasLen, 0)
 		table := ca.ghostname
 		matchRules := config.ShadowTableRules
 		if ca.matchGho {
@@ -551,12 +566,14 @@ func (s *testDDLSuite) TestMistakeOnlineDDLRegex(c *C) {
 			c.Assert(sqls[0], Equals, sql)
 		}
 		sql = fmt.Sprintf("RENAME TABLE `test`.`t1` TO `test`.`%s`, `test`.`%s` TO `test`.`t1`", ca.trashName, ca.ghostname)
-		stmt, err = p.ParseOneStmt(sql, "", "")
-		c.Assert(err, IsNil)
-		sqls, tables, err = syncer.splitAndFilterDDL(ec, p, stmt, "test")
+		qec = &queryEventContext{
+			eventContext: &ec,
+			ddlSchema:    "test",
+			p:            p,
+		}
+		sqls, err = syncer.processOneDDL(qec, sql)
 		c.Assert(terror.ErrConfigOnlineDDLMistakeRegex.Equal(err), IsTrue)
 		c.Assert(sqls, HasLen, 0)
-		c.Assert(tables, HasLen, 0)
 		c.Assert(err, ErrorMatches, ".*"+sql+".*"+table+".*"+matchRules+".*")
 	}
 	cluster.Stop()
@@ -624,7 +641,7 @@ type mockOnlinePlugin struct {
 	toFinish map[string]struct{}
 }
 
-func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, error) {
+func (m mockOnlinePlugin) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode, p *parser.Parser) ([]string, error) {
 	return nil, nil
 }
 
