@@ -47,6 +47,12 @@ type DummyRelay struct {
 	reloadErr     error
 }
 
+func (d *DummyRelay) RegisterListener(el relay.Listener) {
+}
+
+func (d *DummyRelay) UnRegisterListener(el relay.Listener) {
+}
+
 // NewDummyRelay creates an instance of dummy Relay.
 func NewDummyRelay(cfg *relay.Config) relay.Process {
 	return &DummyRelay{}
