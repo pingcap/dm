@@ -27,7 +27,6 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/syncer/dbconn"
 )
@@ -66,11 +65,7 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 
-	db, _, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	dbConn, err := db.Conn(context.Background())
-	c.Assert(err, IsNil)
-	syncer.ddlDBConn = &dbconn.DBConn{Cfg: syncer.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.ddlDBConn = &dbconn.DBConn{Cfg: syncer.cfg, BaseConn: s.baseConn}
 	syncer.schemaTracker, err = schema.NewTracker(context.Background(), syncer.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.BaseConn)
 	c.Assert(err, IsNil)
 	syncer.exprFilterGroup = NewExprFilterGroup(nil)
