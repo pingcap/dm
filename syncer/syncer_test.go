@@ -25,9 +25,6 @@ import (
 	"testing"
 	"time"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
-	"github.com/pingcap/failpoint"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -43,10 +40,12 @@ import (
 	streamer2 "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/syncer/dbconn"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -275,6 +274,9 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		Flags:     0x01,
 	}
 
+	qec := &queryEventContext{
+		p: p,
+	}
 	for _, cs := range cases {
 		e, err := event.GenQueryEvent(header, 123, 0, 0, 0, nil, cs.schema, cs.query)
 		c.Assert(err, IsNil)
@@ -282,11 +284,14 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		ev, ok := e.Event.(*replication.QueryEvent)
 		c.Assert(ok, IsTrue)
 
-		query := string(ev.Query)
-		ddlInfo, err := syncer.routeDDL(p, string(ev.Schema), query)
+		sql := string(ev.Query)
+		schema := string(ev.Schema)
+		ddlInfo, err := syncer.genDDLInfo(p, schema, sql)
 		c.Assert(err, IsNil)
 
-		needSkip, err := syncer.skipQueryEvent(query, ddlInfo)
+		qec.ddlSchema = schema
+		qec.originSQL = sql
+		needSkip, err := syncer.skipQueryEvent(qec, ddlInfo)
 		c.Assert(err, IsNil)
 		c.Assert(needSkip, Equals, cs.skip)
 	}
@@ -408,16 +413,23 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
 	i := 0
+
+	qec := &queryEventContext{
+		p: p,
+	}
 	for _, e := range allEvents {
 		ev, ok := e.Event.(*replication.QueryEvent)
 		if !ok {
 			continue
 		}
 		sql := string(ev.Query)
-		ddlInfo, err := syncer.routeDDL(p, string(ev.Schema), sql)
+		schema := string(ev.Schema)
+		ddlInfo, err := syncer.genDDLInfo(p, schema, sql)
 		c.Assert(err, IsNil)
 
-		needSkip, err := syncer.skipQueryEvent(sql, ddlInfo)
+		qec.ddlSchema = schema
+		qec.originSQL = sql
+		needSkip, err := syncer.skipQueryEvent(qec, ddlInfo)
 		c.Assert(err, IsNil)
 		c.Assert(needSkip, Equals, res[i])
 		i++
@@ -1277,7 +1289,7 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	}
 
 	for _, ca := range cases {
-		ddlInfo, err := syncer.routeDDL(qec.p, qec.ddlSchema, ca.sql)
+		ddlInfo, err := syncer.genDDLInfo(qec.p, qec.ddlSchema, ca.sql)
 		c.Assert(err, IsNil)
 		ca.callback()
 
@@ -1314,20 +1326,20 @@ func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.Bi
 			for _, sql := range qec.splitDDLs {
 				sqls, err := syncer.processOneDDL(qec, sql)
 				c.Assert(err, IsNil)
-				qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
+				qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
 			}
-			if len(qec.needRouteDDLs) == 0 {
+			if len(qec.appliedDDLs) == 0 {
 				c.Assert(res[i], HasLen, 1)
 				c.Assert(res[i][0], Equals, true)
 				i++
 				continue
 			}
 
-			for j, sql := range qec.needRouteDDLs {
-				ddlInfo, err := syncer.routeDDL(p, string(ev.Schema), sql)
+			for j, sql := range qec.appliedDDLs {
+				ddlInfo, err := syncer.genDDLInfo(p, string(ev.Schema), sql)
 				c.Assert(err, IsNil)
 
-				needSkip, err := syncer.skipQueryEvent(sql, ddlInfo)
+				needSkip, err := syncer.skipQueryEvent(qec, ddlInfo)
 				c.Assert(err, IsNil)
 				c.Assert(needSkip, Equals, res[i][j])
 			}

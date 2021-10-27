@@ -47,17 +47,15 @@ func parseOneStmt(qec *queryEventContext) (stmt ast.StmtNode, err error) {
 }
 
 // processOneDDL processes already split ddl as following step:
-// 1. track ddl no matter whether skip it; (TODO: will implement in https://github.com/pingcap/dm/pull/1975)
+// 1. generate ddl info;
 // 2. skip sql by skipQueryEvent;
 // 3. apply online ddl if onlineDDL is not nil:
 //    * specially, if skip, apply empty string;
 func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, error) {
-	ddlInfo, err := s.routeDDL(qec.p, qec.ddlSchema, sql)
+	ddlInfo, err := s.genDDLInfo(qec.p, qec.ddlSchema, sql)
 	if err != nil {
 		return nil, err
 	}
-	// TODO: add track ddl
-	// will implement in https://github.com/pingcap/dm/pull/1975
 
 	if s.onlineDDL != nil {
 		if err = s.onlineDDL.CheckRegex(ddlInfo.originStmt, qec.ddlSchema, s.SourceTableNamesFlavor); err != nil {
@@ -66,7 +64,7 @@ func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, er
 	}
 
 	qec.tctx.L().Debug("will skip query event", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("ddlInfo", ddlInfo))
-	shouldSkip, err := s.skipQueryEvent(qec.originSQL, ddlInfo)
+	shouldSkip, err := s.skipQueryEvent(qec, ddlInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -103,9 +101,9 @@ func (s *Syncer) processOneDDL(qec *queryEventContext, sql string) ([]string, er
 	return sqls, nil
 }
 
-// routeDDL route DDL from sourceTables to targetTables.
-func (s *Syncer) routeDDL(p *parser.Parser, schema, sql string) (*ddlInfo, error) {
-	s.tctx.L().Debug("route ddl", zap.String("event", "query"), zap.String("statement", sql))
+// genDDLInfo generates ddl info by given sql.
+func (s *Syncer) genDDLInfo(p *parser.Parser, schema, sql string) (*ddlInfo, error) {
+	s.tctx.L().Debug("begin generate ddl info", zap.String("event", "query"), zap.String("statement", sql))
 	stmt, err := p.ParseOneStmt(sql, "", "")
 	if err != nil {
 		return nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)

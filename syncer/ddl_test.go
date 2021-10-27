@@ -121,10 +121,10 @@ func (s *testDDLSuite) TestCommentQuote(c *C) {
 	for _, sql := range qec.splitDDLs {
 		sqls, err := syncer.processOneDDL(qec, sql)
 		c.Assert(err, IsNil)
-		qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
+		qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
 	}
-	c.Assert(len(qec.needRouteDDLs), Equals, 1)
-	c.Assert(qec.needRouteDDLs[0], Equals, expectedSQL)
+	c.Assert(len(qec.appliedDDLs), Equals, 1)
+	c.Assert(qec.appliedDDLs[0], Equals, expectedSQL)
 }
 
 func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
@@ -236,11 +236,11 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 
 	for i, sql := range sqls {
 		qec := &queryEventContext{
-			eventContext:  ec,
-			ddlSchema:     "test",
-			originSQL:     sql,
-			needRouteDDLs: make([]string, 0),
-			p:             parser.New(),
+			eventContext: ec,
+			ddlSchema:    "test",
+			originSQL:    sql,
+			appliedDDLs:  make([]string, 0),
+			p:            parser.New(),
 		}
 		stmt, err := parseOneStmt(qec)
 		c.Assert(err, IsNil)
@@ -254,13 +254,13 @@ func (s *testDDLSuite) TestResolveDDLSQL(c *C) {
 				if len(sql3) == 0 {
 					continue
 				}
-				qec.needRouteDDLs = append(qec.needRouteDDLs, sql3)
+				qec.appliedDDLs = append(qec.appliedDDLs, sql3)
 			}
 		}
-		c.Assert(qec.needRouteDDLs, DeepEquals, expectedSQLs[i])
-		c.Assert(targetSQLs[i], HasLen, len(qec.needRouteDDLs))
-		for j, sql2 := range qec.needRouteDDLs {
-			ddlInfo, err2 := syncer.routeDDL(qec.p, qec.ddlSchema, sql2)
+		c.Assert(qec.appliedDDLs, DeepEquals, expectedSQLs[i])
+		c.Assert(targetSQLs[i], HasLen, len(qec.appliedDDLs))
+		for j, sql2 := range qec.appliedDDLs {
+			ddlInfo, err2 := syncer.genDDLInfo(qec.p, qec.ddlSchema, sql2)
 			c.Assert(err2, IsNil)
 			c.Assert(targetSQLs[i][j], Equals, ddlInfo.routedDDL)
 		}
@@ -385,10 +385,10 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 			eventContext: &eventContext{
 				tctx: tctx,
 			},
-			originSQL:     tc.sql,
-			needRouteDDLs: make([]string, 0),
-			ddlSchema:     "test",
-			p:             p,
+			originSQL:   tc.sql,
+			appliedDDLs: make([]string, 0),
+			ddlSchema:   "test",
+			p:           p,
 		}
 		stmt, err := parseOneStmt(qec)
 		c.Assert(err, IsNil)
@@ -398,11 +398,11 @@ func (s *testDDLSuite) TestResolveGeneratedColumnSQL(c *C) {
 		for _, sql := range qec.splitDDLs {
 			sqls, err := syncer.processOneDDL(qec, sql)
 			c.Assert(err, IsNil)
-			qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
+			qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
 		}
 
-		c.Assert(len(qec.needRouteDDLs), Equals, 1)
-		c.Assert(qec.needRouteDDLs[0], Equals, tc.expected)
+		c.Assert(len(qec.appliedDDLs), Equals, 1)
+		c.Assert(qec.appliedDDLs[0], Equals, tc.expected)
 	}
 }
 
@@ -466,10 +466,10 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		c.Assert(plugin.Clear(tctx), IsNil)
 		c.Assert(syncer.genRouter(), IsNil)
 		qec = &queryEventContext{
-			eventContext:  ec,
-			ddlSchema:     "test",
-			needRouteDDLs: make([]string, 0),
-			p:             p,
+			eventContext: ec,
+			ddlSchema:    "test",
+			appliedDDLs:  make([]string, 0),
+			p:            p,
 		}
 		qec.originSQL = ca.sql
 		stmt, err := parseOneStmt(qec)
@@ -481,11 +481,11 @@ func (s *testDDLSuite) TestResolveOnlineDDL(c *C) {
 		for _, sql := range qec.splitDDLs {
 			sqls, err := syncer.processOneDDL(qec, sql)
 			c.Assert(err, IsNil)
-			qec.needRouteDDLs = append(qec.needRouteDDLs, sqls...)
+			qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
 		}
 		if len(ca.expectSQL) != 0 {
-			c.Assert(qec.needRouteDDLs, HasLen, 1)
-			c.Assert(qec.needRouteDDLs[0], Equals, ca.expectSQL)
+			c.Assert(qec.appliedDDLs, HasLen, 1)
+			c.Assert(qec.appliedDDLs[0], Equals, ca.expectSQL)
 		}
 	}
 	cluster.Stop()
