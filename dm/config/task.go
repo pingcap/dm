@@ -239,6 +239,7 @@ type SyncerConfig struct {
 	// checkpoint flush interval in seconds.
 	CheckpointFlushInterval int  `yaml:"checkpoint-flush-interval" toml:"checkpoint-flush-interval" json:"checkpoint-flush-interval"`
 	Compact                 bool `yaml:"compact" toml:"compact" json:"compact"`
+	MultipleRows            bool `yaml:"multiple-rows" toml:"multiple-rows" json:"multiple-rows"`
 
 	// deprecated
 	MaxRetry int `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
@@ -874,7 +875,8 @@ type SyncerConfigForDowngrade struct {
 	SafeMode                bool   `yaml:"safe-mode"`
 	EnableANSIQuotes        bool   `yaml:"enable-ansi-quotes"`
 
-	Compact bool `yaml:"compact,omitempty"`
+	Compact      bool `yaml:"compact,omitempty"`
+	MultipleRows bool `yaml:"multipleRows, omitempty"`
 }
 
 // NewSyncerConfigsForDowngrade converts SyncerConfig to SyncerConfigForDowngrade.
@@ -894,6 +896,7 @@ func NewSyncerConfigsForDowngrade(syncerConfigs map[string]*SyncerConfig) map[st
 			SafeMode:                syncerConfig.SafeMode,
 			EnableANSIQuotes:        syncerConfig.EnableANSIQuotes,
 			Compact:                 syncerConfig.Compact,
+			MultipleRows:            syncerConfig.MultipleRows,
 		}
 		syncerConfigsForDowngrade[configName] = newSyncerConfig
 	}
