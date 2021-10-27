@@ -771,7 +771,9 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	}
 
 	var err error
+	log.L().Info("Before Worker QueryStatus")
 	resp.SubTaskStatus, sourceStatus.RelayStatus, err = w.QueryStatus(ctx, req.Name)
+	log.L().Info("After Worker QueryStatus")
 
 	if err != nil {
 		resp.Msg = fmt.Sprintf("error when get master status: %v", err)
