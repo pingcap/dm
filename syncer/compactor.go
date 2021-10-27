@@ -88,7 +88,7 @@ func (c *compactor) run() {
 			continue
 		}
 
-		// if update job update its indentify keys, turn it into delete + insert
+		// if update job update its identify keys, turn it into delete + insert
 		if j.dml.op == update && j.dml.updateIdentify() {
 			delDML, insertDML := updateToDelAndInsert(j.dml)
 			delJob := j.clone()
