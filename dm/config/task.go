@@ -23,11 +23,11 @@ import (
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/dustin/go-humanize"
-	"github.com/pingcap/parser"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb/parser"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
 
@@ -245,7 +245,9 @@ type SyncerConfig struct {
 	// refine following configs to top level configs?
 	AutoFixGTID bool `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
 	EnableGTID  bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
-	SafeMode    bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
+	// deprecated
+	DisableCausality bool `yaml:"disable-detect" toml:"disable-detect" json:"disable-detect"`
+	SafeMode         bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
 	// deprecated, use `ansi-quotes` in top level config instead
 	EnableANSIQuotes bool `yaml:"enable-ansi-quotes" toml:"enable-ansi-quotes" json:"enable-ansi-quotes"`
 }
@@ -622,6 +624,9 @@ func (c *TaskConfig) adjust() error {
 		if inst.Syncer.EnableANSIQuotes {
 			log.L().Warn("DM could discover proper ANSI_QUOTES, `enable-ansi-quotes` is no longer take effect")
 		}
+		if inst.Syncer.DisableCausality {
+			log.L().Warn("`disable-causality` is no longer take effect")
+		}
 
 		for _, name := range inst.ExpressionFilters {
 			if _, ok := c.ExprFilter[name]; !ok {
@@ -720,105 +725,6 @@ func getGenerateName(rule interface{}, nameIdx int, namePrefix string, nameMap m
 		nameMap[string(ruleByte)] = ruleName
 		return ruleName, nameIdx + 1
 	}
-}
-
-// FromSubTaskConfigs constructs task configs from a list of valid subtask configs.
-func FromSubTaskConfigs(stCfgs ...*SubTaskConfig) *TaskConfig {
-	c := &TaskConfig{}
-	// global configs.
-	stCfg0 := stCfgs[0]
-	c.Name = stCfg0.Name
-	c.TaskMode = stCfg0.Mode
-	c.IsSharding = stCfg0.IsSharding
-	c.ShardMode = stCfg0.ShardMode
-	c.IgnoreCheckingItems = stCfg0.IgnoreCheckingItems
-	c.MetaSchema = stCfg0.MetaSchema
-	c.EnableHeartbeat = stCfg0.EnableHeartbeat
-	c.HeartbeatUpdateInterval = stCfg0.HeartbeatUpdateInterval
-	c.HeartbeatReportInterval = stCfg0.HeartbeatReportInterval
-	c.CaseSensitive = stCfg0.CaseSensitive
-	c.TargetDB = &stCfg0.To // just ref
-	c.OnlineDDL = stCfg0.OnlineDDL
-	c.OnlineDDLScheme = stCfg0.OnlineDDLScheme
-	c.CleanDumpFile = stCfg0.CleanDumpFile
-	c.MySQLInstances = make([]*MySQLInstance, 0, len(stCfgs))
-	c.BAList = make(map[string]*filter.Rules)
-	c.Routes = make(map[string]*router.TableRule)
-	c.Filters = make(map[string]*bf.BinlogEventRule)
-	c.ColumnMappings = make(map[string]*column.Rule)
-	c.Mydumpers = make(map[string]*MydumperConfig)
-	c.Loaders = make(map[string]*LoaderConfig)
-	c.Syncers = make(map[string]*SyncerConfig)
-	c.ExprFilter = make(map[string]*ExpressionFilter)
-
-	baListMap := make(map[string]string, len(stCfgs))
-	routeMap := make(map[string]string, len(stCfgs))
-	filterMap := make(map[string]string, len(stCfgs))
-	dumpMap := make(map[string]string, len(stCfgs))
-	loadMap := make(map[string]string, len(stCfgs))
-	syncMap := make(map[string]string, len(stCfgs))
-	cmMap := make(map[string]string, len(stCfgs))
-	exprFilterMap := make(map[string]string, len(stCfgs))
-	var baListIdx, routeIdx, filterIdx, dumpIdx, loadIdx, syncIdx, cmIdx, efIdx int
-	var baListName, routeName, filterName, dumpName, loadName, syncName, cmName, efName string
-
-	// NOTE:
-	// - we choose to ref global configs for instances now.
-	for _, stCfg := range stCfgs {
-		baListName, baListIdx = getGenerateName(stCfg.BAList, baListIdx, "balist", baListMap)
-		c.BAList[baListName] = stCfg.BAList
-
-		routeNames := make([]string, 0, len(stCfg.RouteRules))
-		for _, rule := range stCfg.RouteRules {
-			routeName, routeIdx = getGenerateName(rule, routeIdx, "route", routeMap)
-			routeNames = append(routeNames, routeName)
-			c.Routes[routeName] = rule
-		}
-
-		filterNames := make([]string, 0, len(stCfg.FilterRules))
-		for _, rule := range stCfg.FilterRules {
-			filterName, filterIdx = getGenerateName(rule, filterIdx, "filter", filterMap)
-			filterNames = append(filterNames, filterName)
-			c.Filters[filterName] = rule
-		}
-
-		dumpName, dumpIdx = getGenerateName(stCfg.MydumperConfig, dumpIdx, "dump", dumpMap)
-		c.Mydumpers[dumpName] = &stCfg.MydumperConfig
-
-		loadName, loadIdx = getGenerateName(stCfg.LoaderConfig, loadIdx, "load", loadMap)
-		c.Loaders[loadName] = &stCfg.LoaderConfig
-
-		syncName, syncIdx = getGenerateName(stCfg.SyncerConfig, syncIdx, "sync", syncMap)
-		c.Syncers[syncName] = &stCfg.SyncerConfig
-
-		exprFilterNames := make([]string, 0, len(stCfg.ExprFilter))
-		for _, f := range stCfg.ExprFilter {
-			efName, efIdx = getGenerateName(f, efIdx, "expr-filter", exprFilterMap)
-			exprFilterNames = append(exprFilterNames, efName)
-			c.ExprFilter[efName] = f
-		}
-
-		cmNames := make([]string, 0, len(stCfg.ColumnMappingRules))
-		for _, rule := range stCfg.ColumnMappingRules {
-			cmName, cmIdx = getGenerateName(rule, cmIdx, "cm", cmMap)
-			cmNames = append(cmNames, cmName)
-			c.ColumnMappings[cmName] = rule
-		}
-
-		c.MySQLInstances = append(c.MySQLInstances, &MySQLInstance{
-			SourceID:           stCfg.SourceID,
-			Meta:               stCfg.Meta,
-			FilterRules:        filterNames,
-			ColumnMappingRules: cmNames,
-			RouteRules:         routeNames,
-			BAListName:         baListName,
-			MydumperConfigName: dumpName,
-			LoaderConfigName:   loadName,
-			SyncerConfigName:   syncName,
-			ExpressionFilters:  exprFilterNames,
-		})
-	}
-	return c
 }
 
 // checkDuplicateString checks whether the given string array has duplicate string item

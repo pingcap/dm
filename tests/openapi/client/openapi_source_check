@@ -81,7 +81,7 @@ def start_relay_failed(source_name, worker_name):
     req = {
         "worker_name_list": [worker_name],
     }
-    resp = requests.patch(url=url, json=req)
+    resp = requests.post(url=url, json=req)
     print("start_relay_failed resp=", resp.json())
     assert resp.status_code == 400
 
@@ -92,7 +92,7 @@ def start_relay_success(source_name, worker_name):
         "worker_name_list": [worker_name],
         "purge": {"interval": 3600, "expires": 0, "remain_space": 15},
     }
-    resp = requests.patch(url=url, json=req)
+    resp = requests.post(url=url, json=req)
     assert resp.status_code == 200
 
 
@@ -102,7 +102,7 @@ def start_relay_success_with_two_worker(source_name, worker1_name, worker2_name)
         "worker_name_list": [worker1_name, worker2_name],
         "purge": {"interval": 3600, "expires": 0, "remain_space": 15},
     }
-    resp = requests.patch(url=url, json=req)
+    resp = requests.post(url=url, json=req)
     assert resp.status_code == 200
 
 
@@ -144,7 +144,7 @@ def stop_relay_failed(source_name, worker_name):
     req = {
         "worker_name_list": [worker_name],
     }
-    resp = requests.patch(url=url, json=req)
+    resp = requests.post(url=url, json=req)
     print("stop_relay_failed resp=", resp.json())
     assert resp.status_code == 400
 
@@ -154,7 +154,7 @@ def stop_relay_success(source_name, worker_name):
     req = {
         "worker_name_list": [worker_name],
     }
-    resp = requests.patch(url=url, json=req)
+    resp = requests.post(url=url, json=req)
     assert resp.status_code == 200
 
 

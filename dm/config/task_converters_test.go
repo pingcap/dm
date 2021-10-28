@@ -247,3 +247,93 @@ func testShardAndFilterTaskToSubTaskConfigs(c *check.C) {
 	}
 	c.Assert(subTask2Config.BAList, check.DeepEquals, bAListFromOpenAPITask)
 }
+
+func (t *testConfig) TestSubTaskConfigsToOpenAPITask(c *check.C) {
+	testNoShardSubTaskConfigsToOpenAPITask(c)
+	testShardAndFilterSubTaskConfigsToOpenAPITask(c)
+}
+
+func testNoShardSubTaskConfigsToOpenAPITask(c *check.C) {
+	task, err := fixtures.GenNoShardOpenAPITaskForTest()
+	c.Assert(err, check.IsNil)
+	sourceCfg1, err := LoadFromFile(sourceSampleFile)
+	c.Assert(err, check.IsNil)
+	source1Name := task.SourceConfig.SourceConf[0].SourceName
+	sourceCfg1.SourceID = task.SourceConfig.SourceConf[0].SourceName
+	sourceCfgMap := map[string]*SourceConfig{source1Name: sourceCfg1}
+	toDBCfg := &DBConfig{
+		Host:     task.TargetConfig.Host,
+		Port:     task.TargetConfig.Port,
+		User:     task.TargetConfig.User,
+		Password: task.TargetConfig.Password,
+	}
+	subTaskConfigList, err := OpenAPITaskToSubTaskConfigs(&task, toDBCfg, sourceCfgMap)
+	c.Assert(err, check.IsNil)
+	c.Assert(subTaskConfigList, check.HasLen, 1)
+
+	// prepare sub task config
+	subTaskConfigMap := make(map[string]map[string]SubTaskConfig)
+	subTaskConfigMap[task.Name] = make(map[string]SubTaskConfig)
+	subTaskConfigMap[task.Name][source1Name] = subTaskConfigList[0]
+
+	taskList := SubTaskConfigsToOpenAPITask(subTaskConfigMap)
+	c.Assert(taskList, check.HasLen, 1)
+	newTask := taskList[0]
+
+	c.Assert(task, check.DeepEquals, newTask)
+}
+
+func testShardAndFilterSubTaskConfigsToOpenAPITask(c *check.C) {
+	task, err := fixtures.GenShardAndFilterOpenAPITaskForTest()
+	c.Assert(err, check.IsNil)
+	sourceCfg1, err := LoadFromFile(sourceSampleFile)
+	c.Assert(err, check.IsNil)
+	source1Name := task.SourceConfig.SourceConf[0].SourceName
+	sourceCfg1.SourceID = source1Name
+	sourceCfg2, err := LoadFromFile(sourceSampleFile)
+	c.Assert(err, check.IsNil)
+	source2Name := task.SourceConfig.SourceConf[1].SourceName
+	sourceCfg2.SourceID = source2Name
+
+	toDBCfg := &DBConfig{
+		Host:     task.TargetConfig.Host,
+		Port:     task.TargetConfig.Port,
+		User:     task.TargetConfig.User,
+		Password: task.TargetConfig.Password,
+	}
+	sourceCfgMap := map[string]*SourceConfig{source1Name: sourceCfg1, source2Name: sourceCfg2}
+	subTaskConfigList, err := OpenAPITaskToSubTaskConfigs(&task, toDBCfg, sourceCfgMap)
+	c.Assert(err, check.IsNil)
+	c.Assert(subTaskConfigList, check.HasLen, 2)
+
+	// prepare sub task config
+	subTaskConfigMap := make(map[string]map[string]SubTaskConfig)
+	subTaskConfigMap[task.Name] = make(map[string]SubTaskConfig)
+	subTaskConfigMap[task.Name][source1Name] = subTaskConfigList[0]
+	subTaskConfigMap[task.Name][source2Name] = subTaskConfigList[1]
+
+	taskList := SubTaskConfigsToOpenAPITask(subTaskConfigMap)
+	c.Assert(taskList, check.HasLen, 1)
+	newTask := taskList[0]
+
+	// because subtask config not have filter-rule-name, so we need to add it manually
+	oldRuleName := "filterA"
+	newRuleName := genFilterRuleName(source1Name, 0)
+	oldRule, ok := task.BinlogFilterRule.Get(oldRuleName)
+	c.Assert(ok, check.IsTrue)
+	newRule := openapi.Task_BinlogFilterRule{}
+	newRule.Set(newRuleName, oldRule)
+	task.BinlogFilterRule = &newRule
+	task.TableMigrateRule[0].BinlogFilterRule = &[]string{newRuleName}
+
+	// because map key is not sorted, so generated array (source_conf and table_migrate_rule) order may not same with old one.
+	// so we need to fix it manually.
+	if task.SourceConfig.SourceConf[0].SourceName != newTask.SourceConfig.SourceConf[0].SourceName {
+		task.SourceConfig.SourceConf[0], task.SourceConfig.SourceConf[1] = task.SourceConfig.SourceConf[1], task.SourceConfig.SourceConf[0]
+	}
+	if task.TableMigrateRule[0].Source.SourceName != newTask.TableMigrateRule[0].Source.SourceName {
+		task.TableMigrateRule[0], task.TableMigrateRule[1] = task.TableMigrateRule[1], task.TableMigrateRule[0]
+	}
+
+	c.Assert(task, check.DeepEquals, newTask)
+}

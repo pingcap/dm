@@ -29,7 +29,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser"
+	"github.com/pingcap/tidb/parser"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog/event"
@@ -317,6 +317,30 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
 	_, latestGTIDs = r.meta.GTID()
 	c.Assert(latestGTIDs.Equal(recoverGTIDSet), IsTrue)
+}
+
+type dummyListener bool
+
+func (d *dummyListener) OnEvent(e *replication.BinlogEvent) {
+	*d = true
+}
+
+func (t *testRelaySuite) TestListener(c *C) {
+	relay := NewRelay(&Config{}).(*Relay)
+	c.Assert(len(relay.listeners), Equals, 0)
+
+	lis := dummyListener(false)
+	relay.RegisterListener(&lis)
+	c.Assert(len(relay.listeners), Equals, 1)
+
+	relay.notify(nil)
+	c.Assert(bool(lis), Equals, true)
+
+	relay.UnRegisterListener(&lis)
+	c.Assert(len(relay.listeners), Equals, 0)
+	lis = false
+	relay.notify(nil)
+	c.Assert(bool(lis), Equals, false)
 }
 
 // genBinlogEventsWithGTIDs generates some binlog events used by testFileUtilSuite and testFileWriterSuite.

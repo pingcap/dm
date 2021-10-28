@@ -25,11 +25,6 @@ import (
 	"testing"
 	"time"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
-	"github.com/pingcap/failpoint"
-	"github.com/pingcap/tidb/infoschema"
-	"github.com/pingcap/tidb/util/mock"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -45,15 +40,19 @@ import (
 	streamer2 "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/syncer/dbconn"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/parser"
+	"github.com/pingcap/failpoint"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb/infoschema"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
 	"go.uber.org/zap"
 )
 
@@ -261,8 +260,9 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	}
 
 	p := parser.New()
-	var err error
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	err = syncer.genRouter()
@@ -274,6 +274,9 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		Flags:     0x01,
 	}
 
+	qec := &queryEventContext{
+		p: p,
+	}
 	for _, cs := range cases {
 		e, err := event.GenQueryEvent(header, 123, 0, 0, 0, nil, cs.schema, cs.query)
 		c.Assert(err, IsNil)
@@ -281,14 +284,14 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		ev, ok := e.Event.(*replication.QueryEvent)
 		c.Assert(ok, IsTrue)
 
-		query := string(ev.Query)
-		stmt, err := p.ParseOneStmt(query, "", "")
+		sql := string(ev.Query)
+		schema := string(ev.Schema)
+		ddlInfo, err := syncer.genDDLInfo(p, schema, sql)
 		c.Assert(err, IsNil)
 
-		tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
-		c.Assert(err, IsNil)
-
-		needSkip, err := syncer.skipQueryEvent(tables, stmt, query)
+		qec.ddlSchema = schema
+		qec.originSQL = sql
+		needSkip, err := syncer.skipQueryEvent(qec, ddlInfo)
 		c.Assert(err, IsNil)
 		c.Assert(needSkip, Equals, cs.skip)
 	}
@@ -367,8 +370,9 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	}
 
 	p := parser.New()
-	var err error
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
@@ -402,24 +406,30 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	res := []bool{true, true, false, false, true, true, true, true, true, true, false, false}
 
 	p := parser.New()
-	var err error
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
 	i := 0
+
+	qec := &queryEventContext{
+		p: p,
+	}
 	for _, e := range allEvents {
 		ev, ok := e.Event.(*replication.QueryEvent)
 		if !ok {
 			continue
 		}
 		sql := string(ev.Query)
-		stmt, err := p.ParseOneStmt(sql, "", "")
+		schema := string(ev.Schema)
+		ddlInfo, err := syncer.genDDLInfo(p, schema, sql)
 		c.Assert(err, IsNil)
 
-		tables, err := parserpkg.FetchDDLTables(sql, stmt, syncer.SourceTableNamesFlavor)
-		c.Assert(err, IsNil)
-		needSkip, err := syncer.skipQueryEvent(tables, stmt, sql)
+		qec.ddlSchema = schema
+		qec.originSQL = sql
+		needSkip, err := syncer.skipQueryEvent(qec, ddlInfo)
 		c.Assert(err, IsNil)
 		c.Assert(needSkip, Equals, res[i])
 		i++
@@ -494,8 +504,9 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	}
 
 	p := parser.New()
-	var err error
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
 	c.Assert(syncer.genRouter(), IsNil)
@@ -587,7 +598,9 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 	p := parser.New()
 	var err error
 
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil, nil)
 	c.Assert(syncer.genRouter(), IsNil)
 
 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, s.cfg.FilterRules)
@@ -704,72 +717,11 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 }
 
 func (s *testSyncerSuite) TestcheckpointID(c *C) {
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil, nil)
 	checkpointID := syncer.checkpointID()
 	c.Assert(checkpointID, Equals, "101")
-}
-
-func (s *testSyncerSuite) TestCasuality(c *C) {
-	p := parser.New()
-	se := mock.NewContext()
-	schema := "create table tb(a int primary key, b int unique);"
-	ti, err := createTableInfo(p, se, int64(0), schema)
-	c.Assert(err, IsNil)
-	insertValues := [][]interface{}{
-		{1, 2},
-		{3, 4},
-		{4, 1},
-		{1, 4}, // this insert conflict with the first one
-	}
-	keys := make([][]string, len(insertValues))
-	for i := range insertValues {
-		keys[i] = genMultipleKeys(ti, insertValues[i], "tb")
-	}
-
-	s.cfg.WorkerCount = 1
-	syncer := NewSyncer(s.cfg, nil)
-	syncer.jobs = []chan *job{make(chan *job, 1)}
-	syncer.queueBucketMapping = []string{"queue_0", adminQueueName}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		job := <-syncer.jobs[0]
-		c.Assert(job.tp, Equals, flush)
-		syncer.jobWg.Done()
-	}()
-
-	// no conflict
-	key1, err := syncer.resolveCasuality(keys[0])
-	c.Assert(err, IsNil)
-	c.Assert(key1, Equals, keys[0][0])
-
-	key2, err := syncer.resolveCasuality(keys[1])
-	c.Assert(err, IsNil)
-	c.Assert(key2, Equals, keys[1][0])
-
-	key3, err := syncer.resolveCasuality(keys[2])
-	c.Assert(err, IsNil)
-	c.Assert(key3, Equals, keys[2][0])
-
-	// will detect casuality and add a flush job
-	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	dbConn, err := db.Conn(context.Background())
-	c.Assert(err, IsNil)
-
-	syncer.setupMockCheckpoint(c, dbConn, mock)
-	mock.ExpectBegin()
-	mock.ExpectExec(".*INSERT INTO .* VALUES.* ON DUPLICATE KEY UPDATE.*").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectCommit()
-	key4, err := syncer.resolveCasuality(keys[3])
-	c.Assert(err, IsNil)
-	c.Assert(key4, Equals, keys[3][0])
-	if err := mock.ExpectationsWereMet(); err != nil {
-		c.Errorf("checkpoint db unfulfilled expectations: %s", err)
-	}
-	wg.Wait()
 }
 
 // TODO: add `TestSharding` later.
@@ -816,7 +768,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.WorkerCount = 2
 	s.cfg.MaxRetry = 1
 
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.cfg.CheckpointFlushInterval = 30
 	syncer.fromDB = &dbconn.UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
 	syncer.toDBConns = []*dbconn.DBConn{
@@ -872,85 +826,80 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		// now every ddl job will start with a flush job
 		{
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE DATABASE IF NOT EXISTS `test_1`",
+			[]string{"CREATE DATABASE IF NOT EXISTS `test_1`"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int64(580981944116838401), "a"},
+			[]string{"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`name`=VALUES(`name`)"},
+			[][]interface{}{{int64(580981944116838401), "a"}},
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`name`)",
+			[]string{"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`name`)"},
 			nil,
 		}, {
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int64(580981944116838402), "b"},
+			[]string{"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`name`=VALUES(`name`)"},
+			[][]interface{}{{int64(580981944116838402), "b"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int64(580981944116838401)},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int64(580981944116838401)}},
 		}, {
-			flush,
-			"",
-			nil,
-		}, {
-			// in the first minute, safe mode is true, will split update to delete + replace
+			// safe mode is true, will split update to delete + replace
 			update,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int64(580981944116838402)},
-		}, {
-			// in the first minute, safe mode is true, will split update to delete + replace
-			update,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int64(580981944116838401), "b"},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1", "INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`name`=VALUES(`name`)"},
+			[][]interface{}{{int64(580981944116838402)}, {int64(580981944116838401), "b"}},
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_3` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_3` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"ALTER TABLE `test_1`.`t_3` DROP PRIMARY KEY",
+			[]string{"ALTER TABLE `test_1`.`t_3` DROP PRIMARY KEY"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"ALTER TABLE `test_1`.`t_3` ADD PRIMARY KEY(`id`, `name`)",
+			[]string{"ALTER TABLE `test_1`.`t_3` ADD PRIMARY KEY(`id`, `name`)"},
+			nil,
+		}, {
+			flush,
+			nil,
 			nil,
 		},
 	}
@@ -1006,12 +955,16 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	expectJobs2 := []*expectJob{
 		{
 			insert,
-			"INSERT INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(3), "c"},
+			[]string{"INSERT INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?)"},
+			[][]interface{}{{int32(3), "c"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(3)},
+			[]string{"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(3)}},
+		}, {
+			flush,
+			nil,
+			nil,
 		},
 	}
 
@@ -1058,7 +1011,9 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 		},
 	}
 
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.fromDB = &dbconn.UpStreamConn{BaseDB: conn.NewBaseDB(db, func() {})}
 	syncer.toDBConns = []*dbconn.DBConn{
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
@@ -1128,49 +1083,49 @@ func (s *testSyncerSuite) TestExitSafeModeByConfig(c *C) {
 		// now every ddl job will start with a flush job
 		{
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE DATABASE IF NOT EXISTS `test_1`",
+			[]string{"CREATE DATABASE IF NOT EXISTS `test_1`"},
 			nil,
 		}, {
 			flush,
-			"",
+			nil,
 			nil,
 		}, {
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
+			[]string{"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))"},
 			nil,
 		}, {
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(1), "a"},
+			[]string{"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`name`=VALUES(`name`)"},
+			[][]interface{}{{int32(1), "a"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(1)},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(1)}},
 		}, {
 			update,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(2)},
-		}, {
-			update,
-			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(1), "b"},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1", "INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `id`=VALUES(`id`),`name`=VALUES(`name`)"},
+			[][]interface{}{{int32(2)}, {int32(1), "b"}},
 		}, {
 			// start from this event, location passes safeModeExitLocation and safe mode should exit
 			insert,
-			"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)",
-			[]interface{}{int32(1), "a"},
+			[]string{"INSERT INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?)"},
+			[][]interface{}{{int32(1), "a"}},
 		}, {
 			del,
-			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(1)},
+			[]string{"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(1)}},
 		}, {
 			update,
-			"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1",
-			[]interface{}{int32(1), "b", int32(2)},
+			[]string{"UPDATE `test_1`.`t_1` SET `id` = ?, `name` = ? WHERE `id` = ? LIMIT 1"},
+			[][]interface{}{{int32(1), "b", int32(2)}},
+		}, {
+			flush,
+			nil,
+			nil,
 		},
 	}
 
@@ -1201,7 +1156,7 @@ func (s *testSyncerSuite) TestRemoveMetadataIsFine(c *C) {
 	cfg, err := s.cfg.Clone()
 	c.Assert(err, IsNil)
 	cfg.Mode = config.ModeAll
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	fresh, err := syncer.IsFreshTask(context.Background())
 	c.Assert(err, IsNil)
 	c.Assert(fresh, IsTrue)
@@ -1229,6 +1184,11 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		testTbl  = "test_tbl"
 		testTbl2 = "test_tbl2"
 		ec       = &eventContext{tctx: tcontext.Background()}
+		qec      = &queryEventContext{
+			eventContext: ec,
+			ddlSchema:    testDB,
+			p:            parser.New(),
+		}
 	)
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
@@ -1240,7 +1200,9 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 	checkPointDBConn, err := checkPointDB.Conn(context.Background())
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg, nil)
+	cfg, err := s.cfg.Clone()
+	c.Assert(err, IsNil)
+	syncer := NewSyncer(cfg, nil, nil)
 	syncer.toDBConns = []*dbconn.DBConn{
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{Cfg: s.cfg, BaseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
@@ -1326,11 +1288,9 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 		}},
 	}
 
-	p := parser.New()
 	for _, ca := range cases {
-		ddlInfo, err := syncer.routeDDL(p, testDB, ca.sql)
+		ddlInfo, err := syncer.genDDLInfo(qec.p, qec.ddlSchema, ca.sql)
 		c.Assert(err, IsNil)
-
 		ca.callback()
 
 		c.Assert(syncer.trackDDL(testDB, ddlInfo, ec), IsNil)
@@ -1343,37 +1303,45 @@ func (s *testSyncerSuite) TestTrackDDL(c *C) {
 func checkEventWithTableResult(c *C, syncer *Syncer, allEvents []*replication.BinlogEvent, p *parser.Parser, res [][]bool) {
 	i := 0
 	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "checkEventWithTableResult")))
-	ec := eventContext{
+	ec := &eventContext{
 		tctx: tctx,
 	}
 	for _, e := range allEvents {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
-			query := string(ev.Query)
-
-			result, err := syncer.parseDDLSQL(query, p, string(ev.Schema))
+			qec := &queryEventContext{
+				eventContext: ec,
+				originSQL:    string(ev.Query),
+				ddlSchema:    string(ev.Schema),
+				p:            p,
+			}
+			stmt, err := parseOneStmt(qec)
 			c.Assert(err, IsNil)
-			if !result.isDDL {
+
+			if _, ok := stmt.(ast.DDLNode); !ok {
 				continue // BEGIN event
 			}
-			querys, _, err := syncer.splitAndFilterDDL(ec, p, result.stmt, string(ev.Schema))
+			qec.splitDDLs, err = parserpkg.SplitDDL(stmt, qec.ddlSchema)
 			c.Assert(err, IsNil)
-			if len(querys) == 0 {
+			for _, sql := range qec.splitDDLs {
+				sqls, err := syncer.processOneDDL(qec, sql)
+				c.Assert(err, IsNil)
+				qec.appliedDDLs = append(qec.appliedDDLs, sqls...)
+			}
+			if len(qec.appliedDDLs) == 0 {
 				c.Assert(res[i], HasLen, 1)
 				c.Assert(res[i][0], Equals, true)
 				i++
 				continue
 			}
 
-			for j, sql := range querys {
-				stmt, err := p.ParseOneStmt(sql, "", "")
+			for j, sql := range qec.appliedDDLs {
+				ddlInfo, err := syncer.genDDLInfo(p, string(ev.Schema), sql)
 				c.Assert(err, IsNil)
 
-				tables, err := parserpkg.FetchDDLTables(string(ev.Schema), stmt, syncer.SourceTableNamesFlavor)
+				needSkip, err := syncer.skipQueryEvent(qec, ddlInfo)
 				c.Assert(err, IsNil)
-				r, err := syncer.skipQueryEvent(tables, stmt, sql)
-				c.Assert(err, IsNil)
-				c.Assert(r, Equals, res[i][j])
+				c.Assert(needSkip, Equals, res[i][j])
 			}
 		case *replication.RowsEvent:
 			table := &filter.Table{
@@ -1406,21 +1374,20 @@ func executeSQLAndWait(expectJobNum int) {
 
 type expectJob struct {
 	tp       opType
-	sqlInJob string
-	args     []interface{}
+	sqlInJob []string
+	args     [][]interface{}
 }
 
 func checkJobs(c *C, jobs []*job, expectJobs []*expectJob) {
 	c.Assert(len(jobs), Equals, len(expectJobs), Commentf("jobs = %q", jobs))
 	for i, job := range jobs {
-		c.Log(i, job.tp, job.ddls, job.sql, job.args)
-
 		c.Assert(job.tp, Equals, expectJobs[i].tp)
 		if job.tp == ddl {
-			c.Assert(job.ddls[0], Equals, expectJobs[i].sqlInJob)
-		} else {
-			c.Assert(job.sql, Equals, expectJobs[i].sqlInJob)
-			c.Assert(job.args, DeepEquals, expectJobs[i].args)
+			c.Assert(job.ddls, DeepEquals, expectJobs[i].sqlInJob)
+		} else if job.tp == insert || job.tp == update || job.tp == del {
+			sqls, args := job.dml.genSQL()
+			c.Assert(sqls, DeepEquals, expectJobs[i].sqlInJob)
+			c.Assert(args, DeepEquals, expectJobs[i].args)
 		}
 	}
 }

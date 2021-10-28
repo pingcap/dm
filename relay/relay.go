@@ -27,8 +27,8 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser"
 	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pingcap/tidb/parser"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
@@ -39,7 +39,6 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/common"
 	binlogReader "github.com/pingcap/dm/pkg/binlog/reader"
 	"github.com/pingcap/dm/pkg/conn"
-	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
@@ -69,12 +68,18 @@ var NewRelay = NewRealRelay
 
 var _ Process = &Relay{}
 
+// Listener defines a binlog event listener of relay log.
+type Listener interface {
+	// OnEvent get called when relay processed an event successfully.
+	OnEvent(e *replication.BinlogEvent)
+}
+
 // Process defines mysql-like relay log process unit.
 type Process interface {
 	// Init initial relat log unit
 	Init(ctx context.Context) (err error)
 	// Process run background logic of relay log unit
-	Process(ctx context.Context, pr chan pb.ProcessResult)
+	Process(ctx context.Context) pb.ProcessResult
 	// ActiveRelayLog returns the earliest active relay log info in this operator
 	ActiveRelayLog() *pkgstreamer.RelayLogInfo
 	// Reload reloads config
@@ -99,6 +104,10 @@ type Process interface {
 	ResetMeta()
 	// PurgeRelayDir will clear all contents under w.cfg.RelayDir
 	PurgeRelayDir() error
+	// RegisterListener registers a relay listener
+	RegisterListener(el Listener)
+	// UnRegisterListener unregisters a relay listener
+	UnRegisterListener(el Listener)
 }
 
 // Relay relays mysql binlog to local file.
@@ -117,53 +126,27 @@ type Relay struct {
 		sync.RWMutex
 		info *pkgstreamer.RelayLogInfo
 	}
+	listeners map[Listener]struct{} // make it a set to make it easier to remove listener
 }
 
 // NewRealRelay creates an instance of Relay.
 func NewRealRelay(cfg *Config) Process {
 	return &Relay{
-		cfg:    cfg,
-		meta:   NewLocalMeta(cfg.Flavor, cfg.RelayDir),
-		logger: log.With(zap.String("component", "relay log")),
+		cfg:       cfg,
+		meta:      NewLocalMeta(cfg.Flavor, cfg.RelayDir),
+		logger:    log.With(zap.String("component", "relay log")),
+		listeners: make(map[Listener]struct{}),
 	}
 }
 
 // Init implements the dm.Unit interface.
+// NOTE when Init encounters an error, it will make DM-worker exit when it boots up and assigned relay.
 func (r *Relay) Init(ctx context.Context) (err error) {
-	rollbackHolder := fr.NewRollbackHolder("relay")
-	defer func() {
-		if err != nil {
-			rollbackHolder.RollbackReverseOrder()
-		}
-	}()
-
-	err = r.setSyncConfig()
-	if err != nil {
-		return err
-	}
-
-	db, err := conn.DefaultDBProvider.Apply(r.cfg.From)
-	if err != nil {
-		return terror.WithScope(err, terror.ScopeUpstream)
-	}
-
-	r.db = db
-	rollbackHolder.Add(fr.FuncRollback{Name: "close-DB", Fn: r.closeDB})
-
-	if err2 := os.MkdirAll(r.cfg.RelayDir, 0o755); err2 != nil {
-		return terror.ErrRelayMkdir.Delegate(err2)
-	}
-
-	err = r.meta.Load()
-	if err != nil {
-		return err
-	}
-
 	return reportRelayLogSpaceInBackground(ctx, r.cfg.RelayDir)
 }
 
 // Process implements the dm.Unit interface.
-func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
+func (r *Relay) Process(ctx context.Context) pb.ProcessResult {
 	errs := make([]*pb.ProcessError, 0, 1)
 	err := r.process(ctx)
 	if err != nil && errors.Cause(err) != replication.ErrSyncClosed {
@@ -181,13 +164,33 @@ func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		default:
 		}
 	}
-	pr <- pb.ProcessResult{
+	return pb.ProcessResult{
 		IsCanceled: isCanceled,
 		Errors:     errs,
 	}
 }
 
 func (r *Relay) process(ctx context.Context) error {
+	err := r.setSyncConfig()
+	if err != nil {
+		return err
+	}
+
+	db, err := conn.DefaultDBProvider.Apply(r.cfg.From)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeUpstream)
+	}
+	r.db = db
+
+	if err2 := os.MkdirAll(r.cfg.RelayDir, 0o755); err2 != nil {
+		return terror.ErrRelayMkdir.Delegate(err2)
+	}
+
+	err = r.meta.Load()
+	if err != nil {
+		return err
+	}
+
 	parser2, err := utils.GetParser(ctx, r.db.DB) // refine to use user config later
 	if err != nil {
 		return err
@@ -569,6 +572,9 @@ func (r *Relay) handleEvents(
 			r.tryUpdateActiveRelayLog(e, lastPos.Name) // even the event ignored we still need to try this update.
 			continue
 		}
+
+		r.notify(e)
+
 		relayLogWriteDurationHistogram.Observe(time.Since(writeTimer).Seconds())
 		r.tryUpdateActiveRelayLog(e, lastPos.Name) // wrote a event, try update the current active relay log.
 
@@ -1086,4 +1092,26 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 	}
 	defer dbConn.Close()
 	return utils.AddGSetWithPurged(ctx, resultGs, dbConn)
+}
+
+func (r *Relay) notify(e *replication.BinlogEvent) {
+	r.RLock()
+	defer r.RUnlock()
+	for el := range r.listeners {
+		el.OnEvent(e)
+	}
+}
+
+// RegisterListener implements Process.RegisterListener.
+func (r *Relay) RegisterListener(el Listener) {
+	r.Lock()
+	defer r.Unlock()
+	r.listeners[el] = struct{}{}
+}
+
+// UnRegisterListener implements Process.UnRegisterListener.
+func (r *Relay) UnRegisterListener(el Listener) {
+	r.Lock()
+	defer r.Unlock()
+	delete(r.listeners, el)
 }

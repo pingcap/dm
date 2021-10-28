@@ -215,7 +215,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	defer func() {
 		cancel()
 		s.Close()
-		defer ctrl.Finish()
+		ctrl.Finish()
 	}()
 
 	baseURL := "/api/v1/sources"
@@ -277,7 +277,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	// start relay
 	startRelayURL := fmt.Sprintf("%s/%s/start-relay", baseURL, source1.SourceName)
 	openAPIStartRelayReq := openapi.StartRelayRequest{WorkerNameList: []string{workerName1}}
-	result4 := testutil.NewRequest().Patch(startRelayURL).WithJsonBody(openAPIStartRelayReq).Go(t.testT, s.echo)
+	result4 := testutil.NewRequest().Post(startRelayURL).WithJsonBody(openAPIStartRelayReq).Go(t.testT, s.echo)
 	// check http status code
 	c.Assert(result4.Code(), check.Equals, http.StatusOK)
 	relayWorkers, err := s.scheduler.GetRelayWorkers(source1Name)
@@ -312,7 +312,7 @@ func (t *openAPISuite) TestRelayAPI(c *check.C) {
 	// test stop relay
 	stopRelayURL := fmt.Sprintf("%s/%s/stop-relay", baseURL, source1.SourceName)
 	stopRelayReq := openapi.StopRelayRequest{WorkerNameList: []string{workerName1}}
-	result7 := testutil.NewRequest().Patch(stopRelayURL).WithJsonBody(stopRelayReq).Go(t.testT, s.echo)
+	result7 := testutil.NewRequest().Post(stopRelayURL).WithJsonBody(stopRelayReq).Go(t.testT, s.echo)
 	c.Assert(result7.Code(), check.Equals, http.StatusOK)
 	relayWorkers, err = s.scheduler.GetRelayWorkers(source1Name)
 	c.Assert(err, check.IsNil)
@@ -341,10 +341,12 @@ func (t *openAPISuite) TestTaskAPI(c *check.C) {
 	s := setupServer(ctx, c)
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/master/MockSkipAdjustTargetDB", `return(true)`), check.IsNil)
 	checker.CheckSyncConfigFunc = mockCheckSyncConfig
+	ctrl := gomock.NewController(c)
 	defer func() {
 		checker.CheckSyncConfigFunc = checker.CheckSyncConfig
 		cancel()
 		s.Close()
+		ctrl.Finish()
 	}()
 
 	dbCfg := config.GetDBConfigForTest()
@@ -398,12 +400,131 @@ func (t *openAPISuite) TestTaskAPI(c *check.C) {
 	c.Assert(len(subTaskM) == 1, check.IsTrue)
 	c.Assert(subTaskM[source1Name].Name, check.Equals, task.Name)
 
+	// list tasks
+	result3 := testutil.NewRequest().Get(taskURL).Go(t.testT, s.echo)
+	c.Assert(result3.Code(), check.Equals, http.StatusOK)
+	var resultTaskList openapi.GetTaskListResponse
+	err = result3.UnmarshalBodyToObject(&resultTaskList)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultTaskList.Total, check.Equals, 1)
+	c.Assert(resultTaskList.Data[0].Name, check.Equals, task.Name)
+
+	// get task status
+	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+	mockTaskQueryStatus(mockWorkerClient, task.Name, source1.SourceName, workerName1)
+	s.scheduler.SetWorkerClientForTest(workerName1, newMockRPCClient(mockWorkerClient))
+	taskStatusURL := fmt.Sprintf("%s/%s/status", taskURL, task.Name)
+	result4 := testutil.NewRequest().Get(taskStatusURL).Go(t.testT, s.echo)
+	c.Assert(result4.Code(), check.Equals, http.StatusOK)
+	var resultTaskStatus openapi.GetTaskStatusResponse
+	err = result4.UnmarshalBodyToObject(&resultTaskStatus)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultTaskStatus.Total, check.Equals, 1) // only 1 subtask
+	c.Assert(resultTaskStatus.Data[0].Name, check.Equals, task.Name)
+	c.Assert(resultTaskStatus.Data[0].Stage, check.Equals, pb.Stage_Running.String())
+	c.Assert(resultTaskStatus.Data[0].WorkerName, check.Equals, workerName1)
+
 	// stop task
-	result3 := testutil.NewRequest().Delete(fmt.Sprintf("%s/%s", taskURL, task.Name)).Go(t.testT, s.echo)
-	c.Assert(result3.Code(), check.Equals, http.StatusNoContent)
+	result5 := testutil.NewRequest().Delete(fmt.Sprintf("%s/%s", taskURL, task.Name)).Go(t.testT, s.echo)
+	c.Assert(result5.Code(), check.Equals, http.StatusNoContent)
 	subTaskM = s.scheduler.GetSubTaskCfgsByTask(task.Name)
 	c.Assert(len(subTaskM) == 0, check.IsTrue)
 	c.Assert(failpoint.Disable("github.com/pingcap/dm/dm/master/MockSkipAdjustTargetDB"), check.IsNil)
+
+	// list tasks
+	result6 := testutil.NewRequest().Get(taskURL).Go(t.testT, s.echo)
+	c.Assert(result6.Code(), check.Equals, http.StatusOK)
+	var resultTaskList2 openapi.GetTaskListResponse
+	err = result6.UnmarshalBodyToObject(&resultTaskList2)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultTaskList2.Total, check.Equals, 0)
+}
+
+func (t *openAPISuite) TestClusterAPI(c *check.C) {
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	s1 := setupServer(ctx1, c)
+	defer func() {
+		cancel1()
+		s1.Close()
+	}()
+
+	// join a new master node to an existing cluster
+	cfg2 := NewConfig()
+	c.Assert(cfg2.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg2.Name = "dm-master-2"
+	cfg2.DataDir = c.MkDir()
+	cfg2.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg2.PeerUrls = tempurl.Alloc()
+	cfg2.AdvertisePeerUrls = cfg2.PeerUrls
+	cfg2.Join = s1.cfg.MasterAddr // join to an existing cluster
+	cfg2.AdvertiseAddr = cfg2.MasterAddr
+	s2 := NewServer(cfg2)
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	c.Assert(s2.Start(ctx2), check.IsNil)
+	defer func() {
+		s2.Close()
+		cancel2()
+	}()
+
+	baseURL := "/api/v1/cluster/"
+	masterURL := baseURL + "masters"
+
+	result := testutil.NewRequest().Get(masterURL).Go(t.testT, s1.echo)
+	c.Assert(result.Code(), check.Equals, http.StatusOK)
+	var resultMasters openapi.GetClusterMasterListResponse
+	err := result.UnmarshalBodyToObject(&resultMasters)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultMasters.Total, check.Equals, 2)
+	c.Assert(resultMasters.Data[0].Name, check.Equals, s1.cfg.Name)
+	c.Assert(resultMasters.Data[0].Addr, check.Equals, s1.cfg.PeerUrls)
+	c.Assert(resultMasters.Data[0].Leader, check.IsTrue)
+	c.Assert(resultMasters.Data[0].Alive, check.IsTrue)
+
+	// offline master-2 with retry
+	// operate etcd cluster may met `etcdserver: unhealthy cluster`, add some retry
+	for i := 0; i < 20; i++ {
+		result = testutil.NewRequest().Delete(fmt.Sprintf("%s/%s", masterURL, s2.cfg.Name)).Go(t.testT, s1.echo)
+		if result.Code() == http.StatusBadRequest {
+			c.Assert(result.Code(), check.Equals, http.StatusBadRequest)
+			errResp := &openapi.ErrorWithMessage{}
+			err = result.UnmarshalBodyToObject(&errResp)
+			c.Assert(err, check.IsNil)
+			c.Assert(errResp.ErrorMsg, check.Matches, "etcdserver: unhealthy cluster")
+			time.Sleep(time.Second)
+		} else {
+			c.Assert(result.Code(), check.Equals, http.StatusNoContent)
+			break
+		}
+	}
+	cancel2() // stop dm-master-2
+
+	// list master again get one node
+	result = testutil.NewRequest().Get(masterURL).Go(t.testT, s1.echo)
+	c.Assert(result.Code(), check.Equals, http.StatusOK)
+	err = result.UnmarshalBodyToObject(&resultMasters)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultMasters.Total, check.Equals, 1)
+
+	workerName1 := "worker1"
+	c.Assert(s1.scheduler.AddWorker(workerName1, "172.16.10.72:8262"), check.IsNil)
+	// list worker node
+	workerURL := baseURL + "workers"
+	result = testutil.NewRequest().Get(workerURL).Go(t.testT, s1.echo)
+	var resultWorkers openapi.GetClusterWorkerListResponse
+	err = result.UnmarshalBodyToObject(&resultWorkers)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultWorkers.Total, check.Equals, 1)
+
+	// offline worker-1
+	result = testutil.NewRequest().Delete(fmt.Sprintf("%s/%s", workerURL, workerName1)).Go(t.testT, s1.echo)
+	c.Assert(result.Code(), check.Equals, http.StatusNoContent)
+	// after offline, no worker node
+	result = testutil.NewRequest().Get(workerURL).Go(t.testT, s1.echo)
+	err = result.UnmarshalBodyToObject(&resultWorkers)
+	c.Assert(err, check.IsNil)
+	c.Assert(resultWorkers.Total, check.Equals, 0)
+
+	cancel1()
 }
 
 func setupServer(ctx context.Context, c *check.C) *Server {
@@ -415,6 +536,7 @@ func setupServer(ctx context.Context, c *check.C) *Server {
 	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
 	cfg1.PeerUrls = tempurl.Alloc()
 	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
+	cfg1.AdvertiseAddr = cfg1.MasterAddr
 	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
 
 	s1 := NewServer(cfg1)
@@ -446,6 +568,43 @@ func mockRelayQueryStatus(
 	mockWorkerClient.EXPECT().QueryStatus(
 		gomock.Any(),
 		&pb.QueryStatusRequest{Name: ""},
+	).Return(queryResp, nil).MaxTimes(maxRetryNum)
+}
+
+func mockTaskQueryStatus(
+	mockWorkerClient *pbmock.MockWorkerClient, taskName, sourceName, workerName string) {
+	queryResp := &pb.QueryStatusResponse{
+		Result: true,
+		SourceStatus: &pb.SourceStatus{
+			Worker: workerName,
+			Source: sourceName,
+		},
+		SubTaskStatus: []*pb.SubTaskStatus{
+			{
+				Stage: pb.Stage_Running,
+				Name:  taskName,
+				Status: &pb.SubTaskStatus_Sync{
+					Sync: &pb.SyncStatus{
+						TotalEvents:         0,
+						TotalTps:            0,
+						RecentTps:           0,
+						MasterBinlog:        "",
+						MasterBinlogGtid:    "",
+						SyncerBinlog:        "",
+						SyncerBinlogGtid:    "",
+						BlockingDDLs:        nil,
+						UnresolvedGroups:    nil,
+						Synced:              false,
+						BinlogType:          "",
+						SecondsBehindMaster: 0,
+					},
+				},
+			},
+		},
+	}
+	mockWorkerClient.EXPECT().QueryStatus(
+		gomock.Any(),
+		&pb.QueryStatusRequest{Name: taskName},
 	).Return(queryResp, nil).MaxTimes(maxRetryNum)
 }
 

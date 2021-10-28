@@ -20,9 +20,9 @@ import (
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/errno"
 	"github.com/pingcap/tidb/infoschema"
+	tmysql "github.com/pingcap/tidb/parser/mysql"
 
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -54,7 +54,7 @@ func (s *testSyncerSuite) TestIgnoreDDLError(c *C) {
 
 func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 	var (
-		syncer = NewSyncer(s.cfg, nil)
+		syncer = NewSyncer(s.cfg, nil, nil)
 		tctx   = tcontext.Background()
 		conn2  = &dbconn.DBConn{Cfg: s.cfg, ResetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
 			return nil, nil

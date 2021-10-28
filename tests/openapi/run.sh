@@ -172,11 +172,23 @@ function test_shard_task() {
 	run_sql "INSERT INTO openapi.t(i,j) VALUES (5, 5);" $MYSQL_PORT1 $MYSQL_PASSWORD1
 	run_sql_tidb_with_retry "select count(1) from openapi.t;" "count(1): 3"
 
+	# get task status failed
+	openapi_task_check "get_task_status_failed" "not a task name"
+
+	# get task status success
+	openapi_task_check "get_task_status_success" "$task_name" 2
+
+	# get task list
+	openapi_task_check "get_task_list" 1
+
 	# stop task success
 	openapi_task_check "stop_task_success" "$task_name"
 
 	# stop task failed
 	openapi_task_check "stop_task_failed" "$task_name"
+
+	# get task list
+	openapi_task_check "get_task_list" 0
 
 	# delete source success
 	openapi_source_check "delete_source_success" "mysql-01"
@@ -219,6 +231,14 @@ function test_noshard_task() {
 	init_noshard_data
 	check_sync_diff $WORK_DIR $cur/conf/diff_config_no_shard.toml
 
+	# get task status failed
+	openapi_task_check "get_task_status_failed" "not a task name"
+
+	# get task status success
+	openapi_task_check "get_task_status_success" "$task_name" 2
+
+	# get task list
+	openapi_task_check "get_task_list" 1
 	# stop task success
 	openapi_task_check "stop_task_success" "$task_name"
 
@@ -227,12 +247,31 @@ function test_noshard_task() {
 	openapi_source_check "delete_source_success" "mysql-02"
 	openapi_source_check "list_source_success" 0
 	run_sql_tidb "DROP DATABASE if exists openapi;"
+	openapi_task_check "get_task_list" 0
 	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: NO SHARD TASK SUCCESS"
 }
 
-function run() {
-	make install_test_python_dep
+function test_cluster() {
+	# list master and worker node
+	openapi_cluster_check "list_master_success" 2
 
+	openapi_cluster_check "list_worker_success" 2
+
+	# delete master node
+	openapi_cluster_check "delete_master_with_retry_success" "master2"
+	openapi_cluster_check "list_master_success" 1
+
+	# delete worker node fialed because of worker is still online
+	openapi_cluster_check "delete_worker_failed" "worker1"
+	kill_dm_worker
+	check_port_offline $WORKER1_PORT 20
+	check_port_offline $WORKER2_PORT 20
+
+	openapi_cluster_check "delete_worker_with_retry_success" "worker1"
+	openapi_cluster_check "list_worker_success" 1
+}
+
+function run() {
 	# run dm-master1
 	run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
@@ -251,6 +290,8 @@ function run() {
 
 	test_shard_task
 	test_noshard_task
+
+	test_cluster
 }
 
 cleanup_data openapi

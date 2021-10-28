@@ -146,8 +146,6 @@ fmt: tools_setup
 		tools/bin/shfmt -l -w -d "tests/" ; \
 		echo "gofumports"; \
 		tools/bin/gofumports -w -d -local $(PACKAGE_NAME) $(PACKAGE_DIRECTORIES) 2>&1 | awk "{print} END{if(NR>0) {exit 1}}" ;\
-		echo "golangci-lint"; \
-		tools/bin/golangci-lint run --config=$(CURDIR)/.golangci.yml --issues-exit-code=1 $(PACKAGE_DIRECTORIES) ;\
 	fi
 
 lint: tools_setup
@@ -210,7 +208,7 @@ check_third_party_binary:
 	@which bin/tidb-server
 	@which bin/sync_diff_inspector
 
-integration_test: check_third_party_binary
+integration_test: check_third_party_binary install_test_python_dep
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
 	@which bin/dm-syncer.test

@@ -20,13 +20,13 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
-	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	tddl "github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/errno"
 	"github.com/pingcap/tidb/infoschema"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
+	tmysql "github.com/pingcap/tidb/parser/mysql"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -68,7 +68,7 @@ func isDropColumnWithIndexError(err error) bool {
 
 // handleSpecialDDLError handles special errors for DDL execution.
 func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls []string, index int, conn *dbconn.DBConn) error {
-	// We use default parser because ddls are came from *Syncer.routeDDL, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
+	// We use default parser because ddls are came from *Syncer.genDDLInfo, which is StringSingleQuotes, KeyWordUppercase and NameBackQuotes
 	parser2 := parser.New()
 
 	// it only ignore `invalid connection` error (timeout or other causes) for `ADD INDEX`.
