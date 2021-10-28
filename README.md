@@ -1,4 +1,4 @@
-## :warning: End of project :warning:
+## :warning: Project moved :warning:
 
 This repository has been moved to <https://github.com/pingcap/ticdc/tree/master/dm>.
 
