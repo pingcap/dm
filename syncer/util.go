@@ -16,10 +16,10 @@ package syncer
 import (
 	"fmt"
 
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	dcontext "github.com/pingcap/tidb/dumpling/context"
 	"github.com/pingcap/tidb/dumpling/export"
 	dlog "github.com/pingcap/tidb/dumpling/log"
-	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/parser/ast"
 	"go.uber.org/zap"
 

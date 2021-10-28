@@ -15,7 +15,6 @@ package loader
 
 import (
 	"context"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -30,6 +29,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/br/pkg/lightning"
 	"github.com/pingcap/tidb/br/pkg/lightning/common"
 	lcfg "github.com/pingcap/tidb/br/pkg/lightning/config"
@@ -141,6 +141,7 @@ func (l *LightningLoader) runLightning(ctx context.Context, cfg *lcfg.Config) er
 	l.logger.Info("start RunOnce")
 	err := l.core.RunOnce(taskCtx, cfg, nil)
 	l.logger.Info("end RunOnce")
+	failpoint.Inject("LightningLoadDataSlowDown", nil)
 	failpoint.Inject("LightningLoadDataSlowDownByTask", func(val failpoint.Value) {
 		tasks := val.(string)
 		taskNames := strings.Split(tasks, ",")
@@ -218,7 +219,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 			err = l.toDBConns[0].executeSQL(tctx, []string{offsetSQL})
 			_ = l.checkPoint.UpdateOffset(lightningCheckpointFile, 1)
 		} else {
-			l.logger.Error("runlightning error: ", zap.Error(err))
+			l.logger.Error("runlightning", zap.Error(err))
 		}
 	} else {
 		l.finish.Store(true)
@@ -256,6 +257,7 @@ func (l *LightningLoader) Process(ctx context.Context, pr chan pb.ProcessResult)
 	}
 
 	if err := l.restore(ctx); err != nil && !utils.IsContextCanceledError(err) {
+		l.logger.Error("process error", zap.Error(err))
 		errs = append(errs, unit.NewProcessError(err))
 	}
 	isCanceled := false
@@ -264,7 +266,7 @@ func (l *LightningLoader) Process(ctx context.Context, pr chan pb.ProcessResult)
 		isCanceled = true
 	default:
 	}
-	l.logger.Info("lightning load end")
+	l.logger.Info("lightning load end", zap.Bool("IsCanceled", isCanceled))
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
 		Errors:     errs,
