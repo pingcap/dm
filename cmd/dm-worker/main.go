@@ -25,12 +25,13 @@ import (
 	globalLog "github.com/pingcap/log"
 	"go.uber.org/zap"
 
+	lightningLog "github.com/pingcap/tidb/br/pkg/lightning/log"
+
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/worker"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	lightningLog "github.com/pingcap/tidb/br/pkg/lightning/log"
 )
 
 func main() {

@@ -26,6 +26,9 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 type testFilterSuite struct {
@@ -56,11 +59,16 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 			IgnoreTables: []*filter.Table{{Schema: "s1", Name: "test"}},
 		},
 	}
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	c.Assert(syncer.genRouter(), IsNil)
 	var err error
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
+
+	syncer.ddlDBConn = &dbconn.DBConn{Cfg: syncer.cfg, BaseConn: s.baseConn}
+	syncer.schemaTracker, err = schema.NewTracker(context.Background(), syncer.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.BaseConn)
+	c.Assert(err, IsNil)
+	syncer.exprFilterGroup = NewExprFilterGroup(nil)
 
 	// test binlog filter
 	filterRules := []*bf.BinlogEventRule{
@@ -116,10 +124,16 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 		},
 	}
 	p := parser.New()
+	qec := &queryEventContext{
+		eventContext: &eventContext{tctx: tcontext.Background()},
+		p:            p,
+	}
 	for _, ca := range cases {
-		ddlInfo, err := syncer.routeDDL(p, ca.schema, ca.sql)
+		ddlInfo, err := syncer.genDDLInfo(p, ca.schema, ca.sql)
 		c.Assert(err, IsNil)
-		skipped, err2 := syncer.skipQueryEvent(ca.sql, ddlInfo)
+		qec.ddlSchema = ca.schema
+		qec.originSQL = ca.sql
+		skipped, err2 := syncer.skipQueryEvent(qec, ddlInfo)
 		c.Assert(err2, IsNil)
 		c.Assert(skipped, Equals, ca.expectSkipped)
 		c.Assert(len(ddlInfo.originDDL) == 0, Equals, ca.isEmptySQL)
@@ -180,7 +194,7 @@ func (s *testFilterSuite) TestSkipByFilter(c *C) {
 			IgnoreDBs: []string{"s1"},
 		},
 	}
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	var err error
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
@@ -250,7 +264,7 @@ func (s *testFilterSuite) TestSkipByTable(c *C) {
 			IgnoreDBs: []string{"s1"},
 		},
 	}
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	var err error
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)

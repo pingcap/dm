@@ -20,9 +20,10 @@ import (
 
 	"google.golang.org/grpc"
 
+	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
+
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/tests/utils"
-	toolutils "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 // use query status request to test DM-worker is online
