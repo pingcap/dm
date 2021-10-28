@@ -114,13 +114,13 @@ def start_relay_success(source_name, worker_name):
 
 def pause_relay_success(source_name):
     url = API_ENDPOINT + "/" + source_name + "/pause-relay"
-    resp = requests.patch(url=url)
+    resp = requests.post(url=url)
     assert resp.status_code == 200
 
 
 def resume_relay_success(source_name):
     url = API_ENDPOINT + "/" + source_name + "/resume-relay"
-    resp = requests.patch(url=url)
+    resp = requests.post(url=url)
     assert resp.status_code == 200
 
 
@@ -191,7 +191,7 @@ def transfer_source_success(source_name, worker_name):
     req = {
         "worker_name": worker_name,
     }
-    resp = requests.patch(url=url, json=req)
+    resp = requests.post(url=url, json=req)
     assert resp.status_code == 200
 
 
