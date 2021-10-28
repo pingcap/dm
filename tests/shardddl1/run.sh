@@ -631,7 +631,7 @@ function DM_MULTIPLE_ROWS_CASE() {
 	deleteMergeCnt=$(cat $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log | grep '"original op"=delete' | wc -l)
 	if [[ "$insertMergeCnt" -le 5 || "$updateMergeCnt" -le 5 || "$deleteMergeCnt" -le 5 ]]; then
 		echo "merge dmls less than 5, insertMergeCnt: $insertMergeCnt, updateMergeCnt: $updateMergeCnt, deleteMergeCnt: $deleteMergeCnt"
-		exit
+		exit 1
 	fi
 }
 
