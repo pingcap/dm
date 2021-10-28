@@ -623,7 +623,7 @@ function DM_MULTIPLE_ROWS_CASE() {
 		run_sql_source1 "update ${shardddl1}.${tb1} set a = 0 - a where a>=$i and a<$((i + 10))"
 	done
 	for i in $(seq 1 10 $END); do
-		run_sql_source1 "delete from ${shardddl1}.${tb1} where a<=$((0-i)) and a>$((-10 - i))"
+		run_sql_source1 "delete from ${shardddl1}.${tb1} where a<=$((0 - i)) and a>$((-10 - i))"
 	done
 	check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 30
 	insertMergeCnt=$(cat $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log | grep '"original op"=insert' | wc -l)

@@ -876,7 +876,7 @@ type SyncerConfigForDowngrade struct {
 	EnableANSIQuotes        bool   `yaml:"enable-ansi-quotes"`
 
 	Compact      bool `yaml:"compact,omitempty"`
-	MultipleRows bool `yaml:"multipleRows, omitempty"`
+	MultipleRows bool `yaml:"multipleRows,omitempty"`
 }
 
 // NewSyncerConfigsForDowngrade converts SyncerConfig to SyncerConfigForDowngrade.
