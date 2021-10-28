@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
@@ -41,6 +42,7 @@ var upgrades = []func(cli *clientv3.Client, uctx Context) error{
 
 // upgradesBeforeScheduler records all upgrade functions before scheduler start. e.g. etcd key changed.
 var upgradesBeforeScheduler = []func(ctx context.Context, cli *clientv3.Client) error{
+	recordRelayEnabledSource, // this should be put before Ver3 because we only want to record sources added before Ver3(v2.0.2)
 	upgradeToVer3,
 }
 
@@ -276,4 +278,42 @@ func upgradeToVer4(cli *clientv3.Client, uctx Context) error {
 	return nil
 }
 
-// TODO: should we set UpstreamEnableRelayKeyAdapter when upgrading from <2.0.2
+// RelayEnabledSource is used to record which source has `enable-relay: true` when upgrade from <v2.0.2.
+var RelayEnabledSource []string
+
+// recordRelayEnabledSource writes the `enable-relay: true` sources in <v2.0.2 to RelayEnabledSource.
+// This function should not return error even if it meets error, because user can manually start-relay later.
+func recordRelayEnabledSource(ctx context.Context, cli *clientv3.Client) error {
+	type enableRelay struct {
+		EnableRelay bool `toml:"enable-relay"`
+	}
+
+	resp, err := cli.Get(ctx, common.UpstreamConfigKeyAdapterV1.Path(), clientv3.WithPrefix())
+	if err != nil {
+		log.L().Error("failed to read source config from etcd", zap.Error(err))
+		return nil
+	}
+	for _, kv := range resp.Kvs {
+		key, err2 := common.UpstreamConfigKeyAdapterV1.Decode(string(kv.Key))
+		if err2 != nil {
+			log.L().Error("can't decode source ID for config saved in etcd",
+				zap.ByteString("raw key", kv.Key),
+				zap.Error(err))
+			continue
+		}
+		// we have checked length of key in `Decode`
+		sourceID := key[0]
+		tmp := enableRelay{}
+		_, err3 := toml.Decode(string(kv.Value), &tmp)
+		if err3 != nil {
+			log.L().Error("can't decode source config",
+				zap.String("source ID", sourceID),
+				zap.Error(err))
+			continue
+		}
+		if tmp.EnableRelay {
+			RelayEnabledSource = append(RelayEnabledSource, sourceID)
+		}
+	}
+	return nil
+}

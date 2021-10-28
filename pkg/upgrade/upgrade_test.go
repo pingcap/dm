@@ -16,6 +16,7 @@ package upgrade
 import (
 	"context"
 	"fmt"
+	"sort"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -23,6 +24,8 @@ import (
 	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 var (
@@ -161,4 +164,47 @@ func (t *testForEtcd) TestUpgradeToVer3(c *C) {
 		c.Assert(err, IsNil)
 	}
 	c.Assert(upgradeToVer3(ctx, bigTxnTestCli), IsNil)
+}
+
+func (t *testForEtcd) TestRecordRelayEnabledSource(c *C) {
+	defer func() {
+		RelayEnabledSource = nil
+	}()
+	err := log.InitLogger(&log.Config{})
+	c.Assert(err, IsNil)
+	ctx := context.Background()
+
+	relaySource1 := "source1"
+	relaySource2 := "source2"
+	notRelaySource := "source3"
+	wrongContentSource := "source4"
+	toPut := [][2]string{}
+
+	cfg := config.SourceConfig{}
+	cfg.EnableRelay = true
+	content, err := cfg.Toml()
+	c.Assert(err, IsNil)
+	toPut = append(toPut, [2]string{relaySource1, content})
+
+	content = "enable-relay = true"
+	toPut = append(toPut, [2]string{relaySource2, content})
+
+	cfg.EnableRelay = false
+	content, err = cfg.Toml()
+	c.Assert(err, IsNil)
+	toPut = append(toPut, [2]string{notRelaySource, content})
+
+	content = "not a TOML file :P"
+	toPut = append(toPut, [2]string{wrongContentSource, content})
+
+	for _, v := range toPut {
+		key := common.UpstreamConfigKeyAdapterV1.Encode(v[0])
+		_, err = etcdTestCli.Put(ctx, key, v[1])
+		c.Assert(err, IsNil)
+	}
+
+	c.Assert(recordRelayEnabledSource(ctx, etcdTestCli), IsNil)
+	c.Assert(RelayEnabledSource, HasLen, 2)
+	sort.Strings(RelayEnabledSource)
+	c.Assert(RelayEnabledSource, DeepEquals, []string{relaySource1, relaySource2})
 }

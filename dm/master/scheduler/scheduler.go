@@ -32,6 +32,7 @@ import (
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/upgrade"
 )
 
 // Scheduler schedules tasks for DM-worker instances, including:
@@ -155,6 +156,7 @@ type Scheduler struct {
 	// - recover from etcd (calling `recoverRelayConfigs`)
 	// delete:
 	// - stop-relay
+	// TODO: maintain it for existing sources.
 	enableRelaySources map[string]struct{}
 
 	// workers in load stage
@@ -1506,6 +1508,9 @@ func (s *Scheduler) recoverRelayConfigs(cli *clientv3.Client) error {
 		return err
 	}
 	s.enableRelaySources = sources
+	for _, source := range upgrade.RelayEnabledSource {
+		s.enableRelaySources[source] = struct{}{}
+	}
 	return nil
 }
 
