@@ -307,9 +307,9 @@ func (s *Server) DMAPIGetSourceTableList(ctx echo.Context, sourceName string, sc
 }
 
 func (s *Server) getSourceStatusListFromWorker(ctx context.Context, sourceName string) ([]openapi.SourceStatus, error) {
-	workerRespList := s.getStatusFromWorkers(ctx, []string{sourceName}, "", true)
-	sourceStatusList := []openapi.SourceStatus{}
-	for _, workerStatus := range workerRespList {
+	workerStatusList := s.getStatusFromWorkers(ctx, []string{sourceName}, "", true)
+	sourceStatusList := make([]openapi.SourceStatus, len(workerStatusList))
+	for i, workerStatus := range workerStatusList {
 		if workerStatus == nil {
 			// this should not happen unless the rpc in the worker server has been modified
 			return nil, terror.ErrOpenAPICommonError.New("worker's query-status response is nil")
@@ -327,7 +327,7 @@ func (s *Server) getSourceStatusListFromWorker(ctx context.Context, sourceName s
 				Stage:              relayStatus.Stage.String(),
 			}
 		}
-		sourceStatusList = append(sourceStatusList, sourceStatus)
+		sourceStatusList[i] = sourceStatus
 	}
 	return sourceStatusList, nil
 }
@@ -485,9 +485,9 @@ func (s *Server) DMAPIGetTaskStatus(ctx echo.Context, taskName string, params op
 		return terror.ErrSchedulerTaskNotExist.Generate(taskName)
 	}
 	// 2. get status from workers
-	workerRespList := s.getStatusFromWorkers(ctx.Request().Context(), sourceList, taskName, true)
-	subTaskStatusList := make([]openapi.SubTaskStatus, len(workerRespList))
-	for i, workerStatus := range workerRespList {
+	workerStatusList := s.getStatusFromWorkers(ctx.Request().Context(), sourceList, taskName, true)
+	subTaskStatusList := make([]openapi.SubTaskStatus, len(workerStatusList))
+	for i, workerStatus := range workerStatusList {
 		if workerStatus == nil || workerStatus.SourceStatus == nil {
 			// this should not happen unless the rpc in the worker server has been modified
 			return terror.ErrOpenAPICommonError.New("worker's query-status response is nil")
