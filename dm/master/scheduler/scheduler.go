@@ -1095,6 +1095,8 @@ func (s *Scheduler) StartRelay(source string, workers []string) error {
 		// below two list means the worker that requested start-relay has bound to another source
 		boundWorkers, boundSources []string
 		alreadyStarted             []string
+		// currently we forbid one worker starting multiple relay
+		busyWorkers, busySources []string
 	)
 	for _, workerName := range workers {
 		var (
@@ -1114,6 +1116,10 @@ func (s *Scheduler) StartRelay(source string, workers []string) error {
 			boundWorkers = append(boundWorkers, workerName)
 			boundSources = append(boundSources, worker.Bound().Source)
 		}
+		if relaySource := worker.RelaySourceID(); relaySource != "" && relaySource != source {
+			busyWorkers = append(busyWorkers, workerName)
+			busySources = append(busySources, relaySource)
+		}
 	}
 
 	if len(notExistWorkers) > 0 {
@@ -1122,23 +1128,13 @@ func (s *Scheduler) StartRelay(source string, workers []string) error {
 	if len(boundWorkers) > 0 {
 		return terror.ErrSchedulerRelayWorkersWrongBound.Generate(boundWorkers, boundSources)
 	}
+	if len(busyWorkers) > 0 {
+		return terror.ErrSchedulerRelayWorkersBusy.Generate(busyWorkers, busySources)
+	}
 	if len(alreadyStarted) > 0 {
 		s.logger.Warn("some workers already started relay",
 			zap.String("source", source),
 			zap.Strings("already started workers", alreadyStarted))
-	}
-
-	// currently we forbid one worker starting multiple relay
-	var busyWorkers, busySources []string
-	for _, workerName := range workers {
-		worker := s.workers[workerName]
-		if relaySource := worker.RelaySourceID(); relaySource != "" && relaySource != source {
-			busyWorkers = append(busyWorkers, workerName)
-			busySources = append(busySources, relaySource)
-		}
-	}
-	if len(busyWorkers) > 0 {
-		return terror.ErrSchedulerRelayWorkersBusy.Generate(busyWorkers, busySources)
 	}
 
 	// 2. put etcd and update memory cache
@@ -2122,7 +2118,7 @@ func (s *Scheduler) updateStatusForUnbound(source string) {
 		return
 	}
 	if err := w.Unbound(); err != nil {
-		s.logger.DPanic("can updateStatusForUnbound", zap.Error(err))
+		s.logger.DPanic("cannot updateStatusForUnbound", zap.Error(err))
 	}
 	delete(s.bounds, source)
 }
