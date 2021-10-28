@@ -877,8 +877,8 @@ type SyncerConfigForDowngrade struct {
 	Compact bool `yaml:"compact,omitempty"`
 }
 
-// NewSyncerConfigForDowngrade converts SyncerConfig to SyncerConfigForDowngrade.
-func NewSyncerConfigs(syncerConfigs map[string]*SyncerConfig) map[string]*SyncerConfigForDowngrade {
+// NewSyncerConfigsForDowngrade converts SyncerConfig to SyncerConfigForDowngrade.
+func NewSyncerConfigsForDowngrade(syncerConfigs map[string]*SyncerConfig) map[string]*SyncerConfigForDowngrade {
 	syncerConfigsForDowngrade := make(map[string]*SyncerConfigForDowngrade, len(syncerConfigs))
 	for configName, syncerConfig := range syncerConfigs {
 		newSyncerConfig := &SyncerConfigForDowngrade{
@@ -959,7 +959,7 @@ func NewTaskConfigForDowngrade(taskConfig *TaskConfig) *TaskConfigForDowngrade {
 		BAList:                  taskConfig.BAList,
 		Mydumpers:               taskConfig.Mydumpers,
 		Loaders:                 taskConfig.Loaders,
-		Syncers:                 NewSyncerConfigs(taskConfig.Syncers),
+		Syncers:                 NewSyncerConfigsForDowngrade(taskConfig.Syncers),
 		CleanDumpFile:           taskConfig.CleanDumpFile,
 		EnableANSIQuotes:        taskConfig.EnableANSIQuotes,
 		RemoveMeta:              taskConfig.RemoveMeta,

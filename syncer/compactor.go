@@ -110,8 +110,8 @@ func (c *compactor) run() {
 		failpoint.Inject("SkipFlushCompactor", func() {
 			failpoint.Continue()
 		})
-		// if no inner jobs, buffer is full or outer jobs less than half of bufferSize(chanSize), flush the buffer
-		if len(c.inCh) == 0 || len(c.buffer) >= c.bufferSize || len(c.outCh) < c.bufferSize/2 {
+		// if no inner jobs, buffer is full or outer channel empty, flush the buffer
+		if len(c.inCh) == 0 || len(c.buffer) >= c.bufferSize || len(c.outCh) == 0 {
 			c.flushBuffer()
 		}
 	}
