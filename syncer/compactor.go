@@ -14,24 +14,12 @@
 package syncer
 
 import (
-	"go.uber.org/zap"
-
 	"github.com/pingcap/failpoint"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/syncer/metrics"
 )
-
-// compactItem represents whether a job is compacted.
-type compactItem struct {
-	j         *job
-	compacted bool
-}
-
-// newCompactItem creates a compactItem.
-func newCompactItem(j *job) *compactItem {
-	return &compactItem{j: j}
-}
 
 // compactor compacts multiple statements into one statement.
 type compactor struct {
@@ -42,7 +30,7 @@ type compactor struct {
 	safeMode   bool
 
 	keyMap map[string]map[string]int // table -> key(pk or (uk + not null)) -> index in buffer
-	buffer []*compactItem
+	buffer []*job
 
 	// for metrics
 	task   string
@@ -58,7 +46,7 @@ func compactorWrap(inCh chan *job, syncer *Syncer) chan *job {
 		bufferSize: bufferSize,
 		logger:     syncer.tctx.Logger.WithFields(zap.String("component", "compactor")),
 		keyMap:     make(map[string]map[string]int),
-		buffer:     make([]*compactItem, 0, bufferSize),
+		buffer:     make([]*job, 0, bufferSize),
 		task:       syncer.cfg.Name,
 		source:     syncer.cfg.SourceID,
 	}
@@ -86,7 +74,7 @@ func (c *compactor) run() {
 		}
 		// if dml has no PK/NOT NULL UK, do not compact it.
 		if j.dml.identifyColumns() == nil {
-			c.buffer = append(c.buffer, newCompactItem(j))
+			c.buffer = append(c.buffer, j)
 			continue
 		}
 
@@ -124,13 +112,13 @@ func (c *compactor) close() {
 
 // flushBuffer flush buffer and reset compactor.
 func (c *compactor) flushBuffer() {
-	for _, item := range c.buffer {
-		if !item.compacted {
+	for _, j := range c.buffer {
+		if j != nil {
 			// set safemode for all jobs by first job in buffer.
 			if c.safeMode {
-				item.j.dml.safeMode = true
+				j.dml.safeMode = true
 			}
-			c.outCh <- item.j
+			c.outCh <- j
 		}
 	}
 	c.keyMap = make(map[string]map[string]int)
@@ -161,17 +149,15 @@ func (c *compactor) compactJob(j *job) {
 	// if no such key in the buffer, add it
 	if !ok || prevPos >= len(c.buffer) {
 		// should not happen, avoid panic
-		if ok && prevPos >= len(c.buffer) {
+		if ok {
 			c.logger.Error("cannot find previous job by key", zap.String("key", key), zap.Int("pos", prevPos))
 		}
 		tableKeyMap[key] = len(c.buffer)
-		c.buffer = append(c.buffer, newCompactItem(j))
+		c.buffer = append(c.buffer, j)
 		return
 	}
 
-	prevItem := c.buffer[prevPos]
-	prevJob := prevItem.j
-
+	prevJob := c.buffer[prevPos]
 	c.logger.Debug("start to compact", zap.Stringer("previous dml", prevJob.dml), zap.Stringer("current dml", j.dml))
 
 	if j.tp == update {
@@ -188,9 +174,9 @@ func (c *compactor) compactJob(j *job) {
 		}
 	}
 
-	// mark previous job as compacted, add new job
-	prevItem.compacted = true
+	// mark previous job as compacted(nil), add new job
+	c.buffer[prevPos] = nil
 	tableKeyMap[key] = len(c.buffer)
-	c.buffer = append(c.buffer, newCompactItem(j))
+	c.buffer = append(c.buffer, j)
 	c.logger.Debug("finish to compact", zap.Stringer("dml", j.dml))
 }

@@ -62,7 +62,7 @@ func (s *testSyncerSuite) TestCompactJob(c *C) {
 		bufferSize: 10000,
 		logger:     log.L(),
 		keyMap:     make(map[string]map[string]int),
-		buffer:     make([]*compactItem, 0, 10000),
+		buffer:     make([]*job, 0, 10000),
 	}
 
 	location := binlog.NewLocation("")
@@ -153,11 +153,11 @@ func (s *testSyncerSuite) TestCompactJob(c *C) {
 		for _, dml := range dmls[i:end] {
 			c.Logf("before compact, dml: %s", dml.String())
 		}
-		for _, compactItem := range compactor.buffer {
-			if !compactItem.compacted {
-				compactKV = mockExecute(compactKV, []*DML{compactItem.j.dml})
+		for _, j := range compactor.buffer {
+			if j != nil {
+				compactKV = mockExecute(compactKV, []*DML{j.dml})
 				compactNumber++
-				c.Logf("after compact, dml: %s", compactItem.j.dml.String())
+				c.Logf("after compact, dml: %s", j.dml.String())
 			}
 		}
 		c.Logf("before compcat: %d, after compact: %d", noCompactNumber, compactNumber)

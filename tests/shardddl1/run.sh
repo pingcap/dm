@@ -588,7 +588,7 @@ function DM_COMPACT_CASE() {
 	compactCnt=$(cat $WORK_DIR/worker1/log/dm-worker.log $WORK_DIR/worker2/log/dm-worker.log | grep "finish to compact" | wc -l)
 	if [[ "$compactCnt" -le 100 ]]; then
 		echo "compact $compactCnt dmls which is less than 100"
-		exit
+		exit 1
 	fi
 }
 
