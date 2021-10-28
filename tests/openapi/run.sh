@@ -150,8 +150,6 @@ function test_relay() {
 	# delete source success
 	openapi_source_check "delete_source_success" "mysql-01"
 
-	# TODO add transfer-source test when openapi support this
-
 	echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>TEST OPENAPI: RELAY SUCCESS"
 
 }
@@ -317,10 +315,10 @@ function run() {
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-	# test_source
-	# test_relay
+	test_source
+	test_relay
 
-	# test_shard_task
+	test_shard_task
 	test_noshard_task
 
 	test_cluster
