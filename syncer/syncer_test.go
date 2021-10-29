@@ -12,11 +12,11 @@
 // limitations under the License.
 
 package syncer
+
 import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/pingcap/dm/pkg/utils"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -38,6 +38,7 @@ import (
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/schema"
 	streamer2 "github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer/dbconn"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
