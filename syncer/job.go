@@ -85,7 +85,7 @@ type job struct {
 	eventHeader *replication.EventHeader
 	jobAddTime  time.Time       // job commit time
 	seq         int64           // sequence number for this job
-	sync 		bool			// whether the flush job is sync or async
+	sync        bool            // whether the flush job is sync or async
 	wg          *sync.WaitGroup // wait group for flush job
 }
 

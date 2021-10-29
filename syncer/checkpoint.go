@@ -185,7 +185,7 @@ func (b *binlogPoint) String() string {
 	return fmt.Sprintf("%v(flushed %v)", b.location.location, b.flushedLocation.location)
 }
 
-//
+// SnapshotID is a tuple of (ID, global checkpoint).
 type SnapshotID struct {
 	// the corresponding snapshot id
 	id int
@@ -393,7 +393,7 @@ func (cp *RemoteCheckPoint) Snapshot() SnapshotID {
 	if cp.globalPoint != nil {
 		globalLocation := &tablePoint{
 			location: cp.globalPoint.location.location.Clone(),
-			ti: cp.globalPoint.location.ti,
+			ti:       cp.globalPoint.location.ti,
 		}
 		snapshot.globalPoint = globalLocation
 	}
