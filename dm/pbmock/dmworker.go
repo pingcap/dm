@@ -9,8 +9,9 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	pb "github.com/pingcap/dm/dm/pb"
 	grpc "google.golang.org/grpc"
+
+	pb "github.com/pingcap/dm/dm/pb"
 )
 
 // MockWorkerClient is a mock of WorkerClient interface.

@@ -26,7 +26,7 @@ import (
 
 func (s *testSyncerSuite) TestHandleError(c *C) {
 	var (
-		syncer = NewSyncer(s.cfg, nil)
+		syncer = NewSyncer(s.cfg, nil, nil)
 		task   = "test"
 		ctx    = context.Background()
 		cases  = []struct {

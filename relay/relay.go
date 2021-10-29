@@ -68,6 +68,12 @@ var NewRelay = NewRealRelay
 
 var _ Process = &Relay{}
 
+// Listener defines a binlog event listener of relay log.
+type Listener interface {
+	// OnEvent get called when relay processed an event successfully.
+	OnEvent(e *replication.BinlogEvent)
+}
+
 // Process defines mysql-like relay log process unit.
 type Process interface {
 	// Init initial relat log unit
@@ -98,6 +104,10 @@ type Process interface {
 	ResetMeta()
 	// PurgeRelayDir will clear all contents under w.cfg.RelayDir
 	PurgeRelayDir() error
+	// RegisterListener registers a relay listener
+	RegisterListener(el Listener)
+	// UnRegisterListener unregisters a relay listener
+	UnRegisterListener(el Listener)
 }
 
 // Relay relays mysql binlog to local file.
@@ -116,14 +126,16 @@ type Relay struct {
 		sync.RWMutex
 		info *pkgstreamer.RelayLogInfo
 	}
+	listeners map[Listener]struct{} // make it a set to make it easier to remove listener
 }
 
 // NewRealRelay creates an instance of Relay.
 func NewRealRelay(cfg *Config) Process {
 	return &Relay{
-		cfg:    cfg,
-		meta:   NewLocalMeta(cfg.Flavor, cfg.RelayDir),
-		logger: log.With(zap.String("component", "relay log")),
+		cfg:       cfg,
+		meta:      NewLocalMeta(cfg.Flavor, cfg.RelayDir),
+		logger:    log.With(zap.String("component", "relay log")),
+		listeners: make(map[Listener]struct{}),
 	}
 }
 
@@ -560,6 +572,9 @@ func (r *Relay) handleEvents(
 			r.tryUpdateActiveRelayLog(e, lastPos.Name) // even the event ignored we still need to try this update.
 			continue
 		}
+
+		r.notify(e)
+
 		relayLogWriteDurationHistogram.Observe(time.Since(writeTimer).Seconds())
 		r.tryUpdateActiveRelayLog(e, lastPos.Name) // wrote a event, try update the current active relay log.
 
@@ -1077,4 +1092,26 @@ func (r *Relay) adjustGTID(ctx context.Context, gset gtid.Set) (gtid.Set, error)
 	}
 	defer dbConn.Close()
 	return utils.AddGSetWithPurged(ctx, resultGs, dbConn)
+}
+
+func (r *Relay) notify(e *replication.BinlogEvent) {
+	r.RLock()
+	defer r.RUnlock()
+	for el := range r.listeners {
+		el.OnEvent(e)
+	}
+}
+
+// RegisterListener implements Process.RegisterListener.
+func (r *Relay) RegisterListener(el Listener) {
+	r.Lock()
+	defer r.Unlock()
+	r.listeners[el] = struct{}{}
+}
+
+// UnRegisterListener implements Process.UnRegisterListener.
+func (r *Relay) UnRegisterListener(el Listener) {
+	r.Lock()
+	defer r.Unlock()
+	delete(r.listeners, el)
 }

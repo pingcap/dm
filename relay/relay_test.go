@@ -319,6 +319,30 @@ func (t *testRelaySuite) TestTryRecoverMeta(c *C) {
 	c.Assert(latestGTIDs.Equal(recoverGTIDSet), IsTrue)
 }
 
+type dummyListener bool
+
+func (d *dummyListener) OnEvent(e *replication.BinlogEvent) {
+	*d = true
+}
+
+func (t *testRelaySuite) TestListener(c *C) {
+	relay := NewRelay(&Config{}).(*Relay)
+	c.Assert(len(relay.listeners), Equals, 0)
+
+	lis := dummyListener(false)
+	relay.RegisterListener(&lis)
+	c.Assert(len(relay.listeners), Equals, 1)
+
+	relay.notify(nil)
+	c.Assert(bool(lis), Equals, true)
+
+	relay.UnRegisterListener(&lis)
+	c.Assert(len(relay.listeners), Equals, 0)
+	lis = false
+	relay.notify(nil)
+	c.Assert(bool(lis), Equals, false)
+}
+
 // genBinlogEventsWithGTIDs generates some binlog events used by testFileUtilSuite and testFileWriterSuite.
 // now, its generated events including 3 DDL and 10 DML.
 func genBinlogEventsWithGTIDs(c *C, flavor string, previousGTIDSet, latestGTID1, latestGTID2 gtid.Set) (*event.Generator, []*replication.BinlogEvent, []byte) {

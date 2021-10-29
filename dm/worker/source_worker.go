@@ -353,6 +353,8 @@ func (w *SourceWorker) EnableRelay() (err error) {
 		w.observeRelayStage(w.relayCtx, w.etcdClient, revRelay)
 	}()
 
+	w.relayHolder.RegisterListener(w.subTaskHolder)
+
 	w.relayEnabled.Store(true)
 	w.l.Info("relay enabled")
 	w.subTaskHolder.resetAllSubTasks(true)
@@ -385,6 +387,7 @@ func (w *SourceWorker) DisableRelay() {
 	if w.relayHolder != nil {
 		r := w.relayHolder
 		w.relayHolder = nil
+		r.UnRegisterListener(w.subTaskHolder)
 		r.Close()
 	}
 	if w.relayPurger != nil {
