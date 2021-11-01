@@ -75,14 +75,14 @@ function test_transfer_two_sources() {
 
 	# start load task for worker3
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"start-task $CONF_DIR/dm-task3.yaml --remove-meta" \
+		"start-task $cur/conf/dm-task3.yaml --remove-meta" \
 		"\"result\": true" 2
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status load_task3" \
 		"\"unit\": \"Load\"" 1
 
 	# worker2 online
-	export GO_FAILPOINTS="github.com/pingcap/dm/loader/LoadDataSlowDown=sleep(15000)"
+	export GO_FAILPOINTS="github.com/pingcap/dm/loader/LightningLoadDataSlowDown=sleep(15000)"
 	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $CONF_DIR/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
@@ -103,7 +103,7 @@ function test_transfer_two_sources() {
 
 	# start load_task4 on worker2
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"start-task $CONF_DIR/dm-task4.yaml --remove-meta" \
+		"start-task $cur/conf/dm-task4.yaml --remove-meta" \
 		"\"result\": true" 2
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status load_task4" \
@@ -205,8 +205,8 @@ function run() {
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
 
 	echo "start DM task"
-	dmctl_start_task "$CONF_DIR/dm-task.yaml" "--remove-meta"
-	dmctl_start_task "$CONF_DIR/dm-task2.yaml" "--remove-meta"
+	dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
+	dmctl_start_task "$cur/conf/dm-task2.yaml" "--remove-meta"
 
 	check_log_contain_with_retry 'inject failpoint LightningLoadDataSlowDownByTask' $WORK_DIR/worker1/log/dm-worker.log
 	check_log_contain_with_retry 'inject failpoint LightningLoadDataSlowDownByTask' $WORK_DIR/worker2/log/dm-worker.log
