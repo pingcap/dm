@@ -26,6 +26,9 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/syncer/dbconn"
 )
 
 type testFilterSuite struct {
@@ -56,10 +59,16 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 			IgnoreTables: []*filter.Table{{Schema: "s1", Name: "test"}},
 		},
 	}
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
+	c.Assert(syncer.genRouter(), IsNil)
 	var err error
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
+
+	syncer.ddlDBConn = &dbconn.DBConn{Cfg: syncer.cfg, BaseConn: s.baseConn}
+	syncer.schemaTracker, err = schema.NewTracker(context.Background(), syncer.cfg.Name, defaultTestSessionCfg, syncer.ddlDBConn.BaseConn)
+	c.Assert(err, IsNil)
+	syncer.exprFilterGroup = NewExprFilterGroup(nil)
 
 	// test binlog filter
 	filterRules := []*bf.BinlogEventRule{
@@ -76,44 +85,58 @@ func (s *testFilterSuite) TestSkipQueryEvent(c *C) {
 
 	cases := []struct {
 		sql           string
-		tables        []*filter.Table
+		schema        string
 		expectSkipped bool
+		isEmptySQL    bool
 	}{
 		{
 			// system table
 			"create table mysql.test (id int)",
-			[]*filter.Table{{Schema: "mysql", Name: "test"}},
+			"mysql",
 			true,
+			false,
 		}, {
 			// test filter one event
 			"drop table foo.test",
-			[]*filter.Table{{Schema: "foo", Name: "test"}},
+			"foo",
+			false,
 			false,
 		}, {
 			"create table foo.test (id int)",
-			[]*filter.Table{{Schema: "foo", Name: "test"}},
+			"foo",
+			true,
 			true,
 		}, {
 			"rename table s1.test to s1.test1",
-			[]*filter.Table{{Schema: "s1", Name: "test"}, {Schema: "s1", Name: "test1"}},
+			"s1",
 			true,
+			false,
 		}, {
 			"rename table s1.test1 to s1.test",
-			[]*filter.Table{{Schema: "s1", Name: "test1"}, {Schema: "s1", Name: "test"}},
+			"s1",
 			true,
+			false,
 		}, {
 			"rename table s1.test1 to s1.test2",
-			[]*filter.Table{{Schema: "s1", Name: "test1"}, {Schema: "s1", Name: "test2"}},
+			"s1",
+			false,
 			false,
 		},
 	}
 	p := parser.New()
+	qec := &queryEventContext{
+		eventContext: &eventContext{tctx: tcontext.Background()},
+		p:            p,
+	}
 	for _, ca := range cases {
-		stmt, err := p.ParseOneStmt(ca.sql, "", "")
+		ddlInfo, err := syncer.genDDLInfo(p, ca.schema, ca.sql)
 		c.Assert(err, IsNil)
-		skipped, err2 := syncer.skipQueryEvent(ca.tables, stmt, ca.sql)
+		qec.ddlSchema = ca.schema
+		qec.originSQL = ca.sql
+		skipped, err2 := syncer.skipQueryEvent(qec, ddlInfo)
 		c.Assert(err2, IsNil)
 		c.Assert(skipped, Equals, ca.expectSkipped)
+		c.Assert(len(ddlInfo.originDDL) == 0, Equals, ca.isEmptySQL)
 	}
 }
 
@@ -165,13 +188,13 @@ func (s *testFilterSuite) TestSkipRowsEvent(c *C) {
 	}
 }
 
-func (s *testFilterSuite) TestFilterOneEvent(c *C) {
+func (s *testFilterSuite) TestSkipByFilter(c *C) {
 	cfg := &config.SubTaskConfig{
 		BAList: &filter.Rules{
 			IgnoreDBs: []string{"s1"},
 		},
 	}
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	var err error
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)
@@ -211,12 +234,6 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 		expectSkipped bool
 	}{
 		{
-			// system table
-			"create table mysql.test (id int)",
-			&filter.Table{Schema: "mysql", Name: "test"},
-			"",
-			true,
-		}, {
 			// test binlog filter
 			"drop table tx.test",
 			&filter.Table{Schema: "tx", Name: "test"},
@@ -232,16 +249,10 @@ func (s *testFilterSuite) TestFilterOneEvent(c *C) {
 			&filter.Table{Schema: "foo", Name: "bar"},
 			bf.CreateTable,
 			true,
-		}, {
-			// test balist
-			"create table s1.test (id int)",
-			&filter.Table{Schema: "s1", Name: "test"},
-			bf.CreateTable,
-			true,
 		},
 	}
 	for _, ca := range cases {
-		skipped, err2 := syncer.skipOneEvent(ca.table, ca.eventType, ca.sql)
+		skipped, err2 := syncer.skipByFilter(ca.table, ca.eventType, ca.sql)
 		c.Assert(err2, IsNil)
 		c.Assert(skipped, Equals, ca.expectSkipped)
 	}
@@ -253,7 +264,7 @@ func (s *testFilterSuite) TestSkipByTable(c *C) {
 			IgnoreDBs: []string{"s1"},
 		},
 	}
-	syncer := NewSyncer(cfg, nil)
+	syncer := NewSyncer(cfg, nil, nil)
 	var err error
 	syncer.baList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BAList)
 	c.Assert(err, IsNil)

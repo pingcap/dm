@@ -16,6 +16,8 @@ package worker
 import (
 	"context"
 	"sync"
+
+	"github.com/go-mysql-org/go-mysql/replication"
 )
 
 // subTaskHolder holds subtask instances.
@@ -87,4 +89,15 @@ func (h *subTaskHolder) getAllSubTasks() map[string]*SubTask {
 		result[name] = st
 	}
 	return result
+}
+
+// OnEvent implements relay.Listener
+// only syncer unit of subtask need to be notified, but it's much simpler and less error-prone to manage it here
+// as relay event need to broadcast to every syncer(most subtask have a syncer).
+func (h *subTaskHolder) OnEvent(e *replication.BinlogEvent) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, s := range h.subTasks {
+		s.relayNotify()
+	}
 }

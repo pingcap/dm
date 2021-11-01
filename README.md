@@ -1,3 +1,8 @@
+# :warning: Project moved :warning:
+
+This repository has been moved to <https://github.com/pingcap/ticdc/tree/master/dm>.
+Discussions before: <https://internals.tidb.io/t/topic/461>.
+
 # TiDB Data Migration Platform
 
 [![Build Status](https://internal.pingcap.net/idc-jenkins/job/build_dm_multi_branch/job/master/badge/icon)](https://internal.pingcap.net/idc-jenkins/job/build_dm_multi_branch/job/master)
