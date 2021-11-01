@@ -211,10 +211,12 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		}
 		err = l.runLightning(ctx, cfg)
 		if err == nil {
-			l.finish.Store(true)
 			l.logger.Info("Before remove checkpoint")
-			lightning.CheckpointRemove(ctx, cfg, "all")
+			err = lightning.CheckpointRemove(ctx, cfg, "all")
 			l.logger.Info("After remove checkpoint")
+		}
+		if err == nil {
+			l.finish.Store(true)
 			offsetSQL := l.checkPoint.GenSQL(lightningCheckpointFile, 1)
 			err = l.toDBConns[0].executeSQL(tctx, []string{offsetSQL})
 			_ = l.checkPoint.UpdateOffset(lightningCheckpointFile, 1)
@@ -224,7 +226,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 	} else {
 		l.finish.Store(true)
 	}
-	if l.cfg.Mode == config.ModeFull {
+	if err == nil && l.finish.Load() && l.cfg.Mode == config.ModeFull {
 		if err = delLoadTask(l.cli, l.cfg, l.workerName); err != nil {
 			return err
 		}
