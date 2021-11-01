@@ -3,6 +3,8 @@
 set -eu
 
 cur=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+DATA_DIR=$cur/../load_task/data
+CONF_DIR=$cur/../load_task/conf
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
@@ -32,7 +34,7 @@ function test_worker_restart() {
 
 	# worker1 online
 	export GO_FAILPOINTS="github.com/pingcap/dm/loader/LightningLoadDataSlowDownByTask=return(\"load_task1\")"
-	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $CONF_DIR/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
 	# transfer to worker1
@@ -73,7 +75,7 @@ function test_transfer_two_sources() {
 
 	# start load task for worker3
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"start-task $cur/conf/dm-task3.yaml --remove-meta" \
+		"start-task $CONF_DIR/dm-task3.yaml --remove-meta" \
 		"\"result\": true" 2
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status load_task3" \
@@ -81,7 +83,7 @@ function test_transfer_two_sources() {
 
 	# worker2 online
 	export GO_FAILPOINTS="github.com/pingcap/dm/loader/LoadDataSlowDown=sleep(15000)"
-	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $CONF_DIR/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
 	# worker2 free since (worker3, source2) has load task(load_task3)
@@ -101,7 +103,7 @@ function test_transfer_two_sources() {
 
 	# start load_task4 on worker2
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-		"start-task $cur/conf/dm-task4.yaml --remove-meta" \
+		"start-task $CONF_DIR/dm-task4.yaml --remove-meta" \
 		"\"result\": true" 2
 	run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
 		"query-status load_task4" \
@@ -109,7 +111,7 @@ function test_transfer_two_sources() {
 
 	# worker1 online
 	export GO_FAILPOINTS=""
-	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $CONF_DIR/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
 	# worker1 free since (worker2, source1) has load task(load_task4)
@@ -155,7 +157,7 @@ function test_transfer_two_sources() {
 
 	# worker3 online
 	export GO_FAILPOINTS=""
-	run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
+	run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $CONF_DIR/dm-worker3.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
 
 	# source2 bound to worker3 since load_task3
@@ -172,39 +174,39 @@ function test_transfer_two_sources() {
 
 function run() {
 	echo "import prepare data"
-	run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_file $DATA_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 	check_contains 'Query OK, 2 rows affected'
-	run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+	run_sql_file $DATA_DIR/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 	check_contains 'Query OK, 3 rows affected'
 
 	echo "start DM master, workers and sources"
-	run_dm_master $WORK_DIR/master $MASTER_PORT1 $cur/conf/dm-master.toml
+	run_dm_master $WORK_DIR/master $MASTER_PORT1 $CONF_DIR/dm-master.toml
 	check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
 
 	# worker1 loading load_task1
 	export GO_FAILPOINTS="github.com/pingcap/dm/loader/LightningLoadDataSlowDownByTask=return(\"load_task1\")"
-	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+	run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $CONF_DIR/dm-worker1.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-	cp $cur/conf/source1.yaml $WORK_DIR/source1.yaml
+	cp $CONF_DIR/source1.yaml $WORK_DIR/source1.yaml
 	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker1/relay_log" $WORK_DIR/source1.yaml
 	dmctl_operate_source create $WORK_DIR/source1.yaml $SOURCE_ID1
 
 	# worker2 loading load_task2
 	export GO_FAILPOINTS="github.com/pingcap/dm/loader/LightningLoadDataSlowDownByTask=return(\"load_task2\")"
-	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+	run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $CONF_DIR/dm-worker2.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-	cp $cur/conf/source2.yaml $WORK_DIR/source2.yaml
+	cp $CONF_DIR/source2.yaml $WORK_DIR/source2.yaml
 	sed -i "/relay-binlog-name/i\relay-dir: $WORK_DIR/worker2/relay_log" $WORK_DIR/source2.yaml
 	dmctl_operate_source create $WORK_DIR/source2.yaml $SOURCE_ID2
 
 	# worker3 loading load_task3
 	export GO_FAILPOINTS="github.com/pingcap/dm/loader/LightningLoadDataSlowDownByTask=return(\"load_task3\")"
-	run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
+	run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $CONF_DIR/dm-worker3.toml
 	check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
 
 	echo "start DM task"
-	dmctl_start_task "$cur/conf/dm-task.yaml" "--remove-meta"
-	dmctl_start_task "$cur/conf/dm-task2.yaml" "--remove-meta"
+	dmctl_start_task "$CONF_DIR/dm-task.yaml" "--remove-meta"
+	dmctl_start_task "$CONF_DIR/dm-task2.yaml" "--remove-meta"
 
 	check_log_contain_with_retry 'inject failpoint LightningLoadDataSlowDownByTask' $WORK_DIR/worker1/log/dm-worker.log
 	check_log_contain_with_retry 'inject failpoint LightningLoadDataSlowDownByTask' $WORK_DIR/worker2/log/dm-worker.log
@@ -221,12 +223,12 @@ function run() {
 
 	test_transfer_two_sources
 
-	run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
-	run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
-	check_sync_diff $WORK_DIR $cur/conf/diff_config1.toml
-	check_sync_diff $WORK_DIR $cur/conf/diff_config2.toml
-	check_sync_diff $WORK_DIR $cur/conf/diff_config3.toml
-	check_sync_diff $WORK_DIR $cur/conf/diff_config4.toml
+	run_sql_file $DATA_DIR/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+	run_sql_file $DATA_DIR/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
+	check_sync_diff $WORK_DIR $CONF_DIR/diff_config1.toml
+	check_sync_diff $WORK_DIR $CONF_DIR/diff_config2.toml
+	check_sync_diff $WORK_DIR $CONF_DIR/diff_config3.toml
+	check_sync_diff $WORK_DIR $CONF_DIR/diff_config4.toml
 }
 
 cleanup_data load_task1
