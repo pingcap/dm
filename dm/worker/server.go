@@ -752,17 +752,14 @@ func (s *Server) disableRelay(source string) error {
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
 	log.L().Info("", zap.String("request", "QueryStatus"), zap.Stringer("payload", req))
 
-	log.L().Info("Before getSourceStatus")
 	sourceStatus := s.getSourceStatus(true)
 	sourceStatus.Worker = s.cfg.Name
 	resp := &pb.QueryStatusResponse{
 		Result:       true,
 		SourceStatus: &sourceStatus,
 	}
-	log.L().Info("Before getWorker")
 
 	w := s.getWorker(true)
-	log.L().Info("After getWorker")
 	if w == nil {
 		log.L().Warn("fail to call QueryStatus, because no mysql source is being handled in the worker")
 		resp.Result = false
@@ -771,9 +768,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	}
 
 	var err error
-	log.L().Info("Before Worker QueryStatus")
 	resp.SubTaskStatus, sourceStatus.RelayStatus, err = w.QueryStatus(ctx, req.Name)
-	log.L().Info("After Worker QueryStatus")
 
 	if err != nil {
 		resp.Msg = fmt.Sprintf("error when get master status: %v", err)

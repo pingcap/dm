@@ -211,9 +211,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 		}
 		err = l.runLightning(ctx, cfg)
 		if err == nil {
-			l.logger.Info("Before remove checkpoint")
 			err = lightning.CheckpointRemove(ctx, cfg, "all")
-			l.logger.Info("After remove checkpoint")
 		}
 		if err == nil {
 			l.finish.Store(true)
@@ -221,7 +219,7 @@ func (l *LightningLoader) restore(ctx context.Context) error {
 			err = l.toDBConns[0].executeSQL(tctx, []string{offsetSQL})
 			_ = l.checkPoint.UpdateOffset(lightningCheckpointFile, 1)
 		} else {
-			l.logger.Error("runlightning", zap.Error(err))
+			l.logger.Error("failed to runlightning", zap.Error(err))
 		}
 	} else {
 		l.finish.Store(true)
@@ -332,8 +330,6 @@ func (l *LightningLoader) Update(cfg *config.SubTaskConfig) error {
 // Status returns the unit's current status.
 func (l *LightningLoader) Status(_ *binlog.SourceStatus) interface{} {
 	finished, total := l.core.Status()
-	l.logger.Debug("QueryStatus", zap.Int64("finished", finished),
-		zap.Int64("total", total), zap.Bool("finish", l.finish.Load()))
 	progress := percent(finished, total, l.finish.Load())
 	s := &pb.LoadStatus{
 		FinishedBytes:  finished,

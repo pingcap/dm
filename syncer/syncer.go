@@ -1337,9 +1337,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	tctx.L().Info("run syncer", zap.Bool("IsFreshTask", fresh))
 	if s.cfg.Mode == config.ModeAll && fresh {
-		tctx.L().Info("del load task and flush checkpoint")
 		delLoadTask = true
 		flushCheckpoint = true
 		// TODO: loadTableStructureFromDump in future
@@ -1354,7 +1352,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}
 	if delLoadTask {
-		tctx.L().Info("del load task")
 		if err = s.delLoadTask(); err != nil {
 			tctx.L().Warn("error when del load task in etcd", zap.Error(err))
 		}
