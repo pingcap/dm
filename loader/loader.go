@@ -365,7 +365,7 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 				continue
 			}
 
-			if w.loader.columnMapping != nil || len(table.transferCol) > 0 {
+			if w.loader.columnMapping != nil || len(table.extendCol) > 0 {
 				// column mapping and route table
 				query, err = reassemble(data, table, w.loader.columnMapping)
 				if err != nil {
@@ -410,8 +410,8 @@ type tableInfo struct {
 	targetTable    string
 	columnNameList []string
 	insertHeadStmt string
-	transferCol    []string
-	transferVal    []string
+	extendCol      []string
+	extendVal      []string
 }
 
 // Loader can load your mydumper data into TiDB database.

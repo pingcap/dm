@@ -180,8 +180,8 @@ func parseRowValues(str []byte, table *tableInfo, columnMapping *cm.Mapping) ([]
 			row = append(row, val)
 		}
 	}
-	if len(table.transferCol) > 0 {
-		for _, v := range table.transferVal {
+	if len(table.extendCol) > 0 {
+		for _, v := range table.extendVal {
 			row = append(row, "'"+v+"'")
 		}
 	}
@@ -282,11 +282,11 @@ func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file, sql
 			columns = append(columns, col.Name.Name.O)
 		}
 	}
-	transferCol, transferVal := utils.FetchTableTransferColumnRule(r, schema, table, sourceID)
-	if len(transferCol) > 0 {
-		columns = append(columns, transferCol...)
+	extendCol, extendVal := r.FetchExtendColumn(schema, table, sourceID)
+	if len(extendCol) > 0 {
+		columns = append(columns, extendCol...)
 	}
-	if hasGeneragedCols || len(transferCol) > 0 {
+	if hasGeneragedCols || len(extendCol) > 0 {
 		var escapeColumns []string
 		for _, column := range columns {
 			escapeColumns = append(escapeColumns, fmt.Sprintf("`%s`", column))
@@ -302,8 +302,8 @@ func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file, sql
 		targetTable:    dstTable,
 		columnNameList: columns,
 		insertHeadStmt: fmt.Sprintf("INSERT INTO `%s` %sVALUES", dstTable, columnNameFields),
-		transferCol:    transferCol,
-		transferVal:    transferVal,
+		extendCol:      extendCol,
+		extendVal:      extendVal,
 	}, nil
 }
 

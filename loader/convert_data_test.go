@@ -259,8 +259,8 @@ func (t *testConvertDataSuite) TestReassembleExtractor(c *C) {
 			"source_name",
 		},
 		insertHeadStmt: "INSERT INTO t VALUES",
-		transferCol:    []string{"table_name", "schema_name", "source_name"},
-		transferVal:    []string{"table1", "schema1", "source1"},
+		extendCol:      []string{"table_name", "schema_name", "source_name"},
+		extendVal:      []string{"table1", "schema1", "source1"},
 	}
 
 	// nolint:stylecheck
@@ -326,8 +326,8 @@ func (t *testConvertDataSuite) TestReassembleWithGeneratedColumnExtractor(c *C) 
 			"source_name",
 		},
 		insertHeadStmt: "INSERT INTO t (`id`,`t_json`,`table_name`,`schema_name`,`source_name`) VALUES",
-		transferCol:    []string{"table_name", "schema_name", "source_name"},
-		transferVal:    []string{"table1", "schema1", "source1"},
+		extendCol:      []string{"table_name", "schema_name", "source_name"},
+		extendVal:      []string{"table1", "schema1", "source1"},
 	}
 	sql := `INSERT INTO t1 (id,t_json) VALUES
 (10,'{}'),
@@ -358,25 +358,23 @@ func (t *testConvertDataSuite) TestReassembleWithGeneratedColumnExtractor(c *C) 
 	c.Assert(query2, Equals, expected2)
 }
 
-func (t *testConvertDataSuite) TestParseTableExtractor(c *C) {
+func (t *testConvertDataSuite) TestParseTableWithExtendColumn(c *C) {
 	rules := []*router.TableRule{{
 		SchemaPattern: "test*",
 		TablePattern:  "t*",
 		TargetSchema:  "test",
 		TargetTable:   "t",
-		Extractors: router.Extractors{
-			TableExtractor: &router.TableExtractor{
-				TargetColumn: "table_name",
-				TableRegexp:  "(.*)",
-			},
-			SchemaExtractor: &router.SchemaExtractor{
-				TargetColumn: "schema_name",
-				SchemaRegexp: "(.*)",
-			},
-			SourceExtractor: &router.SourceExtractor{
-				TargetColumn: "source_name",
-				SourceRegexp: "(.*)",
-			},
+		TableExtractor: &router.TableExtractor{
+			TargetColumn: "table_name",
+			TableRegexp:  "(.*)",
+		},
+		SchemaExtractor: &router.SchemaExtractor{
+			TargetColumn: "schema_name",
+			SchemaRegexp: "(.*)",
+		},
+		SourceExtractor: &router.SourceExtractor{
+			TargetColumn: "source_name",
+			SourceRegexp: "(.*)",
 		},
 	}}
 
@@ -409,8 +407,8 @@ func (t *testConvertDataSuite) TestParseTableExtractor(c *C) {
 			"source_name",
 		},
 		insertHeadStmt: "INSERT INTO `t` (`id`,`t_boolean`,`t_bigint`,`t_double`,`t_decimal`,`t_bit`,`t_date`,`t_datetime`,`t_timestamp`,`t_time`,`t_year`,`t_char`,`t_varchar`,`t_blob`,`t_text`,`t_enum`,`t_set`,`t_json`,`table_name`,`schema_name`,`source_name`) VALUES",
-		transferCol:    []string{"table_name", "schema_name", "source_name"},
-		transferVal:    []string{"t2", "test1", "source1"},
+		extendCol:      []string{"table_name", "schema_name", "source_name"},
+		extendVal:      []string{"t2", "test1", "source1"},
 	}
 
 	r, err := router.NewTableRouter(false, rules)
@@ -421,25 +419,23 @@ func (t *testConvertDataSuite) TestParseTableExtractor(c *C) {
 	c.Assert(tableInfo, DeepEquals, expectedTableInfo)
 }
 
-func (t *testConvertDataSuite) TestParseTableWithGeneratedColumnExtractor(c *C) {
+func (t *testConvertDataSuite) TestParseTableWithGeneratedColumnExtendColumn(c *C) {
 	rules := []*router.TableRule{{
 		SchemaPattern: "test*",
 		TablePattern:  "t*",
 		TargetSchema:  "test",
 		TargetTable:   "t",
-		Extractors: router.Extractors{
-			TableExtractor: &router.TableExtractor{
-				TargetColumn: "table_name",
-				TableRegexp:  "(.*)",
-			},
-			SchemaExtractor: &router.SchemaExtractor{
-				TargetColumn: "schema_name",
-				SchemaRegexp: "(.*)",
-			},
-			SourceExtractor: &router.SourceExtractor{
-				TargetColumn: "source_name",
-				SourceRegexp: "(.*)",
-			},
+		TableExtractor: &router.TableExtractor{
+			TargetColumn: "table_name",
+			TableRegexp:  "(.*)",
+		},
+		SchemaExtractor: &router.SchemaExtractor{
+			TargetColumn: "schema_name",
+			SchemaRegexp: "(.*)",
+		},
+		SourceExtractor: &router.SourceExtractor{
+			TargetColumn: "source_name",
+			SourceRegexp: "(.*)",
 		},
 	}}
 
@@ -456,8 +452,8 @@ func (t *testConvertDataSuite) TestParseTableWithGeneratedColumnExtractor(c *C) 
 			"source_name",
 		},
 		insertHeadStmt: "INSERT INTO `t` (`id`,`t_json`,`table_name`,`schema_name`,`source_name`) VALUES",
-		transferCol:    []string{"table_name", "schema_name", "source_name"},
-		transferVal:    []string{"t3", "test1", "source1"},
+		extendCol:      []string{"table_name", "schema_name", "source_name"},
+		extendVal:      []string{"t3", "test1", "source1"},
 	}
 
 	r, err := router.NewTableRouter(false, rules)
