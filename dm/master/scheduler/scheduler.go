@@ -291,23 +291,24 @@ func (s *Scheduler) CloseAllWorkers() {
 	}
 }
 
-// AddSourceCfg adds the upstream source config to the cluster.
+// AddSourceCfg adds the upstream source config to the cluster, and try to bound source to worker
 // NOTE: please verify the config before call this.
 func (s *Scheduler) AddSourceCfg(cfg *config.SourceConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// 1. add source cfg
 	err := s.startSource(cfg)
 	if err != nil {
 		return err
 	}
 
-	// 4. try to bound it to a Free worker.
+	// 2. try to bound it to a Free worker.
 	bounded, err := s.tryBoundForSource(cfg.SourceID)
 	if err != nil {
 		return err
 	} else if !bounded {
-		// 5. record the source as unbounded.
+		// 3. record the source as unbounded.
 		s.unbounds[cfg.SourceID] = struct{}{}
 	}
 
@@ -324,22 +325,25 @@ func (s *Scheduler) AddSourceCfgWithWorker(cfg *config.SourceConfig, workerName 
 		return terror.ErrSchedulerWorkerNotExist.Generate(workerName)
 	}
 
+	// 2. add source cfg
 	err := s.startSource(cfg)
 	if err != nil {
 		return err
 	}
 
+	// 3. try bound source to specify worker
 	bounded, err := s.tryBoundForSourceWorker(cfg.SourceID, w)
 	if err != nil {
 		return err
 	} else if !bounded {
-		// 5. record the source as unbounded.
+		// 4. record the source as unbounded.
 		s.unbounds[cfg.SourceID] = struct{}{}
 	}
 
 	return nil
 }
 
+// startSource add the upstream source config to the cluster
 func (s *Scheduler) startSource(cfg *config.SourceConfig) error {
 	if !s.started {
 		return terror.ErrSchedulerNotStarted.Generate()
