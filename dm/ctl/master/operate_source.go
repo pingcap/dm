@@ -37,6 +37,7 @@ func NewOperateSourceCmd() *cobra.Command {
 		RunE:  operateSourceFunc,
 	}
 	cmd.Flags().BoolP("print-sample-config", "p", false, "print sample config file of source")
+	cmd.Flags().StringP("worker", "w", "", "specify bound worker for created source")
 	return cmd
 }
 
@@ -83,6 +84,21 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) error {
 	if op != pb.SourceOp_ShowSource && len(cmd.Flags().Args()) == 1 {
 		common.PrintLinesf("operate-source create/update/stop should specify config-file(s)")
 		return errors.New("please check output to see error")
+	}
+
+	var specifyWorker string
+	if op == pb.SourceOp_StartSource {
+		specifyWorker, err = cmd.Flags().GetString("worker")
+		if err != nil {
+			common.PrintLinesf("error in parse `--worker`")
+			return err
+		}
+		if specifyWorker != "" {
+			if len(cmd.Flags().Args()) > 2 {
+				common.PrintLinesf("operate-source create can't use multi config when specify worker")
+			}
+		}
+
 	}
 
 	contents := make([]string, 0, len(cmd.Flags().Args())-1)
@@ -135,6 +151,7 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) error {
 			Config:   contents,
 			Op:       op,
 			SourceID: sourceID,
+			WorkerName: specifyWorker,
 		},
 		&resp,
 	)

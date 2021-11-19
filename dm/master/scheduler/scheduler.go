@@ -297,6 +297,50 @@ func (s *Scheduler) AddSourceCfg(cfg *config.SourceConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	err := s.startSource(cfg)
+	if err != nil {
+		return err
+	}
+
+	// 4. try to bound it to a Free worker.
+	bounded, err := s.tryBoundForSource(cfg.SourceID)
+	if err != nil {
+		return err
+	} else if !bounded {
+		// 5. record the source as unbounded.
+		s.unbounds[cfg.SourceID] = struct{}{}
+	}
+
+	return nil
+}
+
+func (s *Scheduler) AddSourceCfgWithWorker(cfg *config.SourceConfig, workerName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 1. check whether worker exists.
+	w, ok := s.workers[workerName]
+	if !ok {
+		return terror.ErrSchedulerWorkerNotExist.Generate(workerName)
+	}
+
+	err := s.startSource(cfg)
+	if err != nil {
+		return err
+	}
+
+	bounded, err := s.tryBoundForSourceWorker(cfg.SourceID, w)
+	if err != nil {
+		return err
+	} else if !bounded {
+		// 5. record the source as unbounded.
+		s.unbounds[cfg.SourceID] = struct{}{}
+	}
+
+	return nil
+}
+
+func (s *Scheduler) startSource(cfg *config.SourceConfig) error {
 	if !s.started {
 		return terror.ErrSchedulerNotStarted.Generate()
 	}
@@ -314,15 +358,6 @@ func (s *Scheduler) AddSourceCfg(cfg *config.SourceConfig) error {
 
 	// 3. record the config in the scheduler.
 	s.sourceCfgs[cfg.SourceID] = cfg
-
-	// 4. try to bound it to a Free worker.
-	bounded, err := s.tryBoundForSource(cfg.SourceID)
-	if err != nil {
-		return err
-	} else if !bounded {
-		// 5. record the source as unbounded.
-		s.unbounds[cfg.SourceID] = struct{}{}
-	}
 	return nil
 }
 
@@ -1937,6 +1972,25 @@ func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// tryBoundForWorker tries to bound a source to the worker. first try last source of this worker, then randomly pick one
+// returns (true, nil) after bounded.
+func (s *Scheduler) tryBoundForSourceWorker(source string, w *Worker) (bool, error) {
+	boundedSource := ""
+	for s, worker := range s.bounds {
+		if worker.baseInfo.Name == w.baseInfo.Name {
+			boundedSource = s
+			break
+		}
+	}
+
+	if boundedSource != "" {
+		return false, nil
+	}
+
+	err := s.boundSourceToWorker(source, w)
+	return err == nil, err
 }
 
 // tryBoundForSource tries to bound a source to a random Free worker. The order of picking worker is
