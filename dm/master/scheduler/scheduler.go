@@ -298,8 +298,7 @@ func (s *Scheduler) AddSourceCfg(cfg *config.SourceConfig) error {
 	defer s.mu.Unlock()
 
 	// 1. add source cfg
-	err := s.startSource(cfg)
-	if err != nil {
+	if err := s.startSource(cfg); err != nil {
 		return err
 	}
 
@@ -315,6 +314,8 @@ func (s *Scheduler) AddSourceCfg(cfg *config.SourceConfig) error {
 	return nil
 }
 
+// AddSourceCfgWithWorker adds the upstream source config to the cluster, and try to bound source to specify worker
+// NOTE: please verify the config before call this.
 func (s *Scheduler) AddSourceCfgWithWorker(cfg *config.SourceConfig, workerName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -326,8 +327,7 @@ func (s *Scheduler) AddSourceCfgWithWorker(cfg *config.SourceConfig, workerName 
 	}
 
 	// 2. add source cfg
-	err := s.startSource(cfg)
-	if err != nil {
+	if err := s.startSource(cfg); err != nil {
 		return err
 	}
 
@@ -343,7 +343,7 @@ func (s *Scheduler) AddSourceCfgWithWorker(cfg *config.SourceConfig, workerName 
 	return nil
 }
 
-// startSource add the upstream source config to the cluster
+// startSource add the upstream source config to the cluster.
 func (s *Scheduler) startSource(cfg *config.SourceConfig) error {
 	if !s.started {
 		return terror.ErrSchedulerNotStarted.Generate()

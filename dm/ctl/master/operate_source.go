@@ -98,7 +98,6 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) error {
 				common.PrintLinesf("operate-source create can't use multi config when specify worker")
 			}
 		}
-
 	}
 
 	contents := make([]string, 0, len(cmd.Flags().Args())-1)
@@ -148,9 +147,9 @@ func operateSourceFunc(cmd *cobra.Command, _ []string) error {
 		ctx,
 		"OperateSource",
 		&pb.OperateSourceRequest{
-			Config:   contents,
-			Op:       op,
-			SourceID: sourceID,
+			Config:     contents,
+			Op:         op,
+			SourceID:   sourceID,
 			WorkerName: specifyWorker,
 		},
 		&resp,
