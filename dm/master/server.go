@@ -1504,6 +1504,7 @@ func (s *Server) waitOperationOk(
 	masterReq interface{},
 ) (bool, string, *pb.QueryStatusResponse, error) {
 	var expect pb.Stage
+	var workerStatus *pb.QueryStatusResponse
 	switch req := masterReq.(type) {
 	case *pb.OperateSourceRequest:
 		switch req.Op {
@@ -1546,14 +1547,9 @@ func (s *Server) waitOperationOk(
 		// check whether source relative worker has been removed by scheduler
 		if _, ok := masterReq.(*pb.OperateSourceRequest); ok {
 			if expect == pb.Stage_Stopped {
-				resp := &pb.QueryStatusResponse{
-					Result:       true,
-					SourceStatus: &pb.SourceStatus{Source: sourceID, Worker: cli.BaseInfo().Name},
-				}
-				if w := s.scheduler.GetWorkerByName(cli.BaseInfo().Name); w == nil {
-					return true, "", resp, nil
-				} else if cli.Stage() == scheduler.WorkerOffline {
-					return true, "", resp, nil
+				workerStatus = s.checkWorkerStatus(sourceID, cli)
+				if workerStatus != nil {
+					return true, "", workerStatus, nil
 				}
 			}
 		}
@@ -1599,7 +1595,10 @@ func (s *Server) waitOperationOk(
 				}
 			case *pb.StartTaskRequest, *pb.UpdateTaskRequest, *pb.OperateTaskRequest:
 				if expect == pb.Stage_Stopped && len(queryResp.SubTaskStatus) == 0 {
-					return true, "", queryResp, nil
+					workerStatus = s.checkWorkerStatus(sourceID, cli)
+					if workerStatus != nil {
+						return true, "", queryResp, nil
+					}
 				}
 				if len(queryResp.SubTaskStatus) == 1 {
 					if subtaskStatus := queryResp.SubTaskStatus[0]; subtaskStatus != nil {
@@ -1614,7 +1613,8 @@ func (s *Server) waitOperationOk(
 							finished = pb.Stage_Finished
 						}
 						if expect == pb.Stage_Stopped {
-							if st, ok2 := subtaskStatus.Status.(*pb.SubTaskStatus_Msg); ok2 && st.Msg == dmcommon.NoSubTaskMsg(taskName) {
+							workerStatus = s.checkWorkerStatus(sourceID, cli)
+							if st, ok2 := subtaskStatus.Status.(*pb.SubTaskStatus_Msg); ok2 && st.Msg == dmcommon.NoSubTaskMsg(taskName) && workerStatus != nil {
 								ok = true
 							}
 						} else if subtaskStatus.Name == taskName && (subtaskStatus.Stage == expect || subtaskStatus.Stage == finished) {
@@ -2292,4 +2292,19 @@ func (s *Server) sharedLogic(ctx context.Context, req interface{}, respPointer i
 	reflect.ValueOf(respPointer).Elem().Set(reflect.Zero(respType))
 	*errPointer = terror.ErrMasterRequestIsNotForwardToLeader
 	return true
+}
+
+// checkWorkerStatus when op is stop-task, need check worker status.
+func (s *Server) checkWorkerStatus(sourceID string, cli *scheduler.Worker) *pb.QueryStatusResponse {
+	resp := &pb.QueryStatusResponse{
+		Result:       true,
+		SourceStatus: &pb.SourceStatus{Source: sourceID, Worker: cli.BaseInfo().Name},
+	}
+	// worker is not exists or worker offline
+	if w := s.scheduler.GetWorkerByName(cli.BaseInfo().Name); w == nil {
+		return resp
+	} else if cli.Stage() == scheduler.WorkerOffline {
+		return resp
+	}
+	return nil
 }
