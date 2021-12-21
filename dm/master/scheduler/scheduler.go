@@ -320,6 +320,10 @@ func (s *Scheduler) AddSourceCfgWithWorker(cfg *config.SourceConfig, workerName 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
 	// 1. check whether worker exists.
 	w, ok := s.workers[workerName]
 	if !ok {
