@@ -820,8 +820,8 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"UPDATE `gctest_1`.`t_3` SET `id` = ?, `cfg` = ? WHERE `gen_id` = ? LIMIT 1",
 			},
 			[][]interface{}{
-				{int32(1), int32(21), "{\"a\": 12}", int32(1), int32(18), "{}", []uint8("{}")},
-				{int32(2), int32(19), "{}", int32(2), int32(19), "{\"key\": \"value\"}", []uint8("{\"key\":\"value\"}")},
+				{int32(1), int32(21), "{\"a\": 12}", int32(1), int32(18), "{}", "{}"},
+				{int32(2), int32(19), "{}", int32(2), int32(19), "{\"key\": \"value\"}", "{\"key\":\"value\"}"},
 				{int32(3), int32(20), nil, int32(3), int32(17), nil, nil},
 				{int32(1), int32(21), "{\"a\": 12}", int32(1)},
 				{int32(2), int32(19), "{}", int32(2)},
@@ -852,8 +852,8 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"DELETE FROM `gctest_1`.`t_3` WHERE `gen_id` = ? LIMIT 1",
 			},
 			[][]interface{}{
-				{int32(1), int32(21), "{\"a\": 12}", []uint8("{\"a\":12}")},
-				{int32(2), int32(19), "{}", []uint8("{}")},
+				{int32(1), int32(21), "{\"a\": 12}", "{\"a\":12}"},
+				{int32(2), int32(19), "{}", "{}"},
 				{int32(3), int32(20), nil, nil},
 				{int32(1)},
 				{int32(2)},
