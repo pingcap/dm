@@ -1,6 +1,6 @@
 # :warning: Project moved :warning:
 
-This repository has been moved to <https://github.com/pingcap/ticdc/tree/master/dm>.
+This repository has been moved to <https://github.com/pingcap/tiflow/tree/master/dm>.
 Discussions before: <https://internals.tidb.io/t/topic/461>.
 
 # TiDB Data Migration Platform
