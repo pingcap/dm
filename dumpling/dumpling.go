@@ -19,10 +19,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/dumpling/v4/export"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
+	"github.com/pingcap/tidb/dumpling/export"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"

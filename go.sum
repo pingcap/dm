@@ -608,8 +608,6 @@ github.com/pingcap/check v0.0.0-20191107115940-caf2b9e6ccf4/go.mod h1:PYMCGwN0JH
 github.com/pingcap/check v0.0.0-20191216031241-8a5a85928f12/go.mod h1:PYMCGwN0JHjoqGr3HrZoD+b8Tgx8bKnArhSq8YVzUMc=
 github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712 h1:R8gStypOBmpnHEx1qi//SaqxJVI4inOqljg/Aj5/390=
 github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712/go.mod h1:PYMCGwN0JHjoqGr3HrZoD+b8Tgx8bKnArhSq8YVzUMc=
-github.com/pingcap/dumpling v0.0.0-20211025035249-dc2cee7df4a1 h1:ivchAmico+rkqbdboAX3KOidlGJEp/x1IH697U0/cZk=
-github.com/pingcap/dumpling v0.0.0-20211025035249-dc2cee7df4a1/go.mod h1:o0a2u0xBlyY0zqFxd/NxAPKNKTHLIDXehymMnVbJYOE=
 github.com/pingcap/errcode v0.3.0 h1:IF6LC/4+b1KNwrMlr2rBTUrojFPMexXBcDWZSpNwxjg=
 github.com/pingcap/errcode v0.3.0/go.mod h1:4b2X8xSqxIroj/IZ9MX/VGZhAwc11wB9wRIzHvz6SeM=
 github.com/pingcap/errors v0.11.0/go.mod h1:Oi8TUi2kEtXXLMJk9l1cGmz20kV3TaQ0usTwv5KuLY8=
@@ -650,8 +648,8 @@ github.com/pingcap/sysutil v0.0.0-20210315073920-cc0985d983a3/go.mod h1:tckvA041
 github.com/pingcap/sysutil v0.0.0-20210730114356-fcd8a63f68c5 h1:7rvAtZe/ZUzOKzgriNPQoBNvleJXBk4z7L3Z47+tS98=
 github.com/pingcap/sysutil v0.0.0-20210730114356-fcd8a63f68c5/go.mod h1:XsOaV712rUk63aOEKYP9PhXTIE3FMNHmC2r1wX5wElY=
 github.com/pingcap/tidb v1.1.0-beta.0.20211023132847-efa94595c071/go.mod h1:Ci7ABF58a4jn6YtaHi7655jP409edqC2JxWWFRqOubg=
-github.com/pingcap/tidb v1.1.0-beta.0.20211025024448-36e694bfc536 h1:J7+2HNfbM19h1x3MScwWiq8dti6zWUtAhPgx+4i/9Bk=
-github.com/pingcap/tidb v1.1.0-beta.0.20211025024448-36e694bfc536/go.mod h1:nAzxGAGr6oO6muhwcjwI4EgT23lRZB7bqgaYqiFLVhQ=
+github.com/pingcap/tidb v1.1.0-beta.0.20211026030648-c497d5c06348 h1:DVcIszrlW/71/VA1Vpu0Sl6kY1oJiGRRHEpP+LqNrw0=
+github.com/pingcap/tidb v1.1.0-beta.0.20211026030648-c497d5c06348/go.mod h1:0x9V4RDM9rVr1FduK7jZLG3E6gp4ggqB896y1l2HFUI=
 github.com/pingcap/tidb-dashboard v0.0.0-20210312062513-eef5d6404638/go.mod h1:OzFN8H0EDMMqeulPhPMw2i2JaiZWOKFQ7zdRPhENNgo=
 github.com/pingcap/tidb-dashboard v0.0.0-20210716172320-2226872e3296/go.mod h1:OCXbZTBTIMRcIt0jFsuCakZP+goYRv6IjawKbwLS2TQ=
 github.com/pingcap/tidb-tools v5.0.3+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
@@ -659,8 +657,8 @@ github.com/pingcap/tidb-tools v5.2.2-0.20211019062242-37a8bef2fa17+incompatible 
 github.com/pingcap/tidb-tools v5.2.2-0.20211019062242-37a8bef2fa17+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
 github.com/pingcap/tidb/parser v0.0.0-20211011031125-9b13dc409c5e/go.mod h1:e1MGCA9Sg3T8jid8PKAEq5eYVuMMCq4n8gJ+Kqp4Plg=
 github.com/pingcap/tidb/parser v0.0.0-20211023132847-efa94595c071/go.mod h1:e1MGCA9Sg3T8jid8PKAEq5eYVuMMCq4n8gJ+Kqp4Plg=
-github.com/pingcap/tidb/parser v0.0.0-20211025024448-36e694bfc536 h1:pwacrgkhtURkMdwZfq1Qz4NzYxs+ktLHRVojZ8nI7nY=
-github.com/pingcap/tidb/parser v0.0.0-20211025024448-36e694bfc536/go.mod h1:e1MGCA9Sg3T8jid8PKAEq5eYVuMMCq4n8gJ+Kqp4Plg=
+github.com/pingcap/tidb/parser v0.0.0-20211026030648-c497d5c06348 h1:Dt7Lsp9i6pMF/eKp/wMG2lO9ZsTM/gLSwRfeLUI3SDk=
+github.com/pingcap/tidb/parser v0.0.0-20211026030648-c497d5c06348/go.mod h1:e1MGCA9Sg3T8jid8PKAEq5eYVuMMCq4n8gJ+Kqp4Plg=
 github.com/pingcap/tipb v0.0.0-20211008080435-3fd327dfce0e h1:fZY5T65QWiPc9noQJ1UkdwejZyBZjNfxzSyTcBjKrEU=
 github.com/pingcap/tipb v0.0.0-20211008080435-3fd327dfce0e/go.mod h1:A7mrd7WHBl1o63LE2bIBGEJMTNWXqhgmYiOvMLxozfs=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
@@ -852,9 +850,8 @@ github.com/xeipuuv/gojsonschema v1.2.0/go.mod h1:anYRn/JVcOK2ZgGU+IjEV4nwlhoK5sQ
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 h1:eY9dn8+vbi4tKz5Qo6v2eYzo7kUS51QINcR5jNpbZS8=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xitongsys/parquet-go v1.5.1/go.mod h1:xUxwM8ELydxh4edHGegYq1pA8NnMKDx0K/GyB0o2bww=
+github.com/xitongsys/parquet-go v1.5.5-0.20201110004701-b09c49d6d457 h1:tBbuFCtyJNKT+BFAv6qjvTFpVdy97IYNaBwGUXifIUs=
 github.com/xitongsys/parquet-go v1.5.5-0.20201110004701-b09c49d6d457/go.mod h1:pheqtXeHQFzxJk45lRQ0UIGIivKnLXvialZSFWs81A8=
-github.com/xitongsys/parquet-go v1.6.0 h1:j6YrTVZdQx5yywJLIOklZcKVsCoSD1tqOVRXyTBFSjs=
-github.com/xitongsys/parquet-go v1.6.0/go.mod h1:pheqtXeHQFzxJk45lRQ0UIGIivKnLXvialZSFWs81A8=
 github.com/xitongsys/parquet-go-source v0.0.0-20190524061010-2b72cbee77d5/go.mod h1:xxCx7Wpym/3QCo6JhujJX51dzSXrwmb0oH6FQb39SEA=
 github.com/xitongsys/parquet-go-source v0.0.0-20200817004010-026bad9b25d0 h1:a742S4V5A15F93smuVxA60LQWsrCnN8bKeWDBARU1/k=
 github.com/xitongsys/parquet-go-source v0.0.0-20200817004010-026bad9b25d0/go.mod h1:HYhIKsdns7xz80OgkbgJYrtQY7FjHWHKH6cvN7+czGE=

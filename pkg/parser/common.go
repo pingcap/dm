@@ -31,7 +31,7 @@ import (
 
 const (
 	// SingleRenameTableNameNum stands for number of TableNames in a single table renaming. it's 2 after
-	// https://github.com/pingcap/parser/pull/1021
+	// https://github.com/pingcap/tidb/parser/pull/1021
 	SingleRenameTableNameNum = 2
 )
 
