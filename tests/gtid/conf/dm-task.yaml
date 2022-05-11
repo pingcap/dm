@@ -16,6 +16,14 @@ mysql-instances:
 
   - source-id: "mysql-replica-02"
     block-allow-list:  "instance"
+    syncer-config-name: "global1"
+    loader-config-name: "global2"
+
+loaders:
+  global2:
+
+syncers:
+  global1:
 
 black-white-list: # compatible with deprecated config
   instance:

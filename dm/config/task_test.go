@@ -302,16 +302,61 @@ mysql-instances:
     loader-config-name: "global"
     syncer-config-name: "global"
 `
-	taskConfig := NewTaskConfig()
-	err := taskConfig.Decode(errorTaskConfig1)
+	errorTaskConfig3 := `---
+name: test
+task-mode: all
+
+target-database:
+  host: "127.0.0.1"
+  port: 4000
+  user: "root"
+  password: ""
+
+mysql-instances:
+  - source-id: "mysql-replica-01"
+    mydumper-config-name: "global"
+
+mydumpers:
+  global:
+`
+
+	dontPanicTaskConfig := `---
+name: test
+task-mode: all
+
+target-database:
+  host: "127.0.0.1"
+  port: 4000
+  user: "root"
+  password: ""
+
+mysql-instances:
+  - source-id: "mysql-replica-01"
+    syncer-config-name: "global1"
+    loader-config-name: "global2"
+
+loaders:
+  global2:
+
+syncers:
+  global1:
+`
+	err := NewTaskConfig().Decode(errorTaskConfig1)
 	// field server-id is not a member of TaskConfig
 	c.Check(err, NotNil)
 	c.Assert(err, ErrorMatches, "*line 18: field server-id not found in type config.MySQLInstance.*")
 
-	err = taskConfig.Decode(errorTaskConfig2)
+	err = NewTaskConfig().Decode(errorTaskConfig2)
 	// field name duplicate
 	c.Check(err, NotNil)
 	c.Assert(err, ErrorMatches, "*line 3: field name already set in type config.TaskConfig.*")
+
+	err = NewTaskConfig().Decode(errorTaskConfig3)
+	c.Check(err, NotNil)
+	c.Assert(err, ErrorMatches, "*Please check the `mydumper-path` config in task configuration file.*")
+
+	err = NewTaskConfig().Decode(dontPanicTaskConfig)
+	c.Check(err, IsNil)
 
 	filepath := path.Join(c.MkDir(), "test_invalid_task.yaml")
 	configContent := []byte(`---
@@ -325,7 +370,7 @@ ignore-checking-items: ["all"]
 `)
 	err = os.WriteFile(filepath, configContent, 0o644)
 	c.Assert(err, IsNil)
-	taskConfig = NewTaskConfig()
+	taskConfig := NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, "*line 2: field aaa not found in type config.TaskConfig.*")

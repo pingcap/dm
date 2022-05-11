@@ -559,7 +559,9 @@ func (c *TaskConfig) adjust() error {
 			}
 			globalConfigReferCount[configRefPrefixes[mydumperIdx]+inst.MydumperConfigName]++
 			inst.Mydumper = new(MydumperConfig)
-			*inst.Mydumper = *rule // ref mydumper config
+			if rule != nil {
+				*inst.Mydumper = *rule // ref mydumper config
+			}
 		}
 		if inst.Mydumper == nil {
 			if len(c.Mydumpers) != 0 {
@@ -587,7 +589,9 @@ func (c *TaskConfig) adjust() error {
 			}
 			globalConfigReferCount[configRefPrefixes[loaderIdx]+inst.LoaderConfigName]++
 			inst.Loader = new(LoaderConfig)
-			*inst.Loader = *rule // ref loader config
+			if rule != nil {
+				*inst.Loader = *rule // ref loader config
+			}
 		}
 		if inst.Loader == nil {
 			if len(c.Loaders) != 0 {
@@ -607,7 +611,9 @@ func (c *TaskConfig) adjust() error {
 			}
 			globalConfigReferCount[configRefPrefixes[syncerIdx]+inst.SyncerConfigName]++
 			inst.Syncer = new(SyncerConfig)
-			*inst.Syncer = *rule // ref syncer config
+			if rule != nil {
+				*inst.Syncer = *rule // ref syncer config
+			}
 		}
 		if inst.Syncer == nil {
 			if len(c.Syncers) != 0 {
